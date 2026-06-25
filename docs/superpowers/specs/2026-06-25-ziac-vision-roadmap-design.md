@@ -129,8 +129,8 @@ Alchemy-style infrastructure as effects, powered by zigeffect.
 
 Pulumi AWSx packages well-architected AWS patterns, such as a VPC with sensible
 defaults and useful outputs, into component resources. Ziac should do the same
-for Google and later Cloudflare, but with Zig and zigeffect as the language and
-runtime foundation.
+for Google Cloud deployments and CockroachDB-backed application data, but with
+Zig and zigeffect as the language and runtime foundation.
 
 AWSx-style mental model:
 
@@ -156,14 +156,16 @@ outcome into a plan with raw cloud operations, clear outputs, and a causal trace
 Make this workflow easy:
 
 1. Write a Zig HTTP backend.
-2. Declare one Ziac global service component.
+2. Declare one Ziac global service component and, when needed, one CockroachDB
+   data binding.
 3. Run `ziac plan` and see exactly what GCP resources will be created.
 4. Run `ziac deploy`.
 5. Receive a global HTTPS URL.
 6. Requests route through a global load balancer to the nearest healthy Cloud Run
    region.
-7. The app's declared environment contract is checked against configured secrets,
-   bindings, ports, and outputs before deployment.
+7. The app's declared environment contract is checked against configured
+   CockroachDB connection secrets, resource bindings, ports, and outputs before
+   deployment.
 
 The first valuable demo is not a resource catalog. It is:
 
@@ -174,6 +176,7 @@ const ziac = @import("ziac");
 const Api = struct {
     pub const Env = struct {
         DATABASE_URL: ziac.Secret,
+        DB_CA_CERT: ziac.Secret,
         SERVICE_REGION: []const u8,
     };
 };
@@ -184,19 +187,27 @@ pub fn main() !void {
         .stage = "dev",
     }, struct {
         pub fn stack(ctx: *ziac.StackContext) !ziac.Outputs {
+            const database = try ziac.cockroach.Database(.{
+                .name = "api-db",
+                .cluster = ziac.cockroach.clusterRef("dev-primary"),
+                .database = "api_dev",
+            });
+
             const service = try ziac.gcp.global.ZigService(.{
                 .name = "api",
                 .source = .{ .path = "src/main.zig", .app = Api },
                 .regions = .{ "us-central1", "europe-west1" },
                 .port = 8080,
                 .env = .{
-                    .DATABASE_URL = ziac.secretRef("database-url"),
+                    .DATABASE_URL = database.connection_url,
+                    .DB_CA_CERT = database.ca_cert,
                     .SERVICE_REGION = ziac.gcp.runtimeRegion(),
                 },
             });
 
             return .{
                 .url = service.url,
+                .database = database.name,
             };
         }
     });
@@ -204,9 +215,10 @@ pub fn main() !void {
 ```
 
 If `Api.Env` requires `DATABASE_URL` and the stack omits it, compilation should
-fail before any deploy command can run. If the service declares port `8080` but
-the container contract cannot expose that port, planning should fail before the
-provider is called.
+fail before any deploy command can run. If the stack wires a plain string where a
+CockroachDB secret output is required, the same contract check should fail. If
+the service declares port `8080` but the container contract cannot expose that
+port, planning should fail before the provider is called.
 
 ## Provider Strategy
 
@@ -238,24 +250,30 @@ Global forwarding rule
 Outputs
 ```
 
-### Provider 2: Cloudflare
+### Data Provider: CockroachDB
 
-Cloudflare is the second provider because the developer experience is exciting
-but the current container routing model is less ready for a "nearest healthy
-container" default. The eventual Cloudflare component should target:
+CockroachDB is the first data provider because the flagship backend story should
+include durable application data from the beginning. Ziac should make the common
+database wiring path as boring as the compute path:
 
 ```zig
-const service = try ziac.cloudflare.edge.ZigService(.{
-    .name = "api",
-    .source = .{ .path = "src/main.zig" },
-    .instance_type = .basic,
-    .placement = .global,
+const database = try ziac.cockroach.Database(.{
+    .name = "api-db",
+    .cluster = ziac.cockroach.clusterRef("dev-primary"),
+    .database = "api_dev",
 });
 ```
 
-Early Cloudflare support should remain experimental until either Cloudflare's
-built-in autoscaling/routing matures or Ziac supplies its own regional pool
-router through Workers, Durable Objects, and container placement constraints.
+The first CockroachDB surface should support:
+
+1. Existing cluster references.
+2. Database and user resources where the provider can safely manage them.
+3. Connection URL secret outputs.
+4. TLS certificate secret outputs.
+5. Stage-aware database names.
+6. App environment contract validation for `DATABASE_URL` and related secrets.
+7. Optional migration hooks as a follow-up, not as a blocker for the first
+   global service demo.
 
 ### Explicit Non-Goal: AWS First
 
@@ -326,10 +344,12 @@ The product should prioritize components like:
 
 ```zig
 ziac.gcp.global.ZigService
+ziac.gcp.global.ContainerService
 ziac.gcp.global.StaticSite
-ziac.gcp.global.ApiWithPostgres
+ziac.gcp.global.ApiWithCockroach
 ziac.gcp.global.WorkerPool
-ziac.cloudflare.edge.ZigService
+ziac.cockroach.Database
+ziac.cockroach.ConnectionSecret
 ```
 
 Raw resources are still needed, but they are not the initial product promise.
@@ -341,12 +361,17 @@ clearly. The failure should be caught as early as possible:
 
 ```zig
 const stack = ziac.Stack(.{
-    .providers = .{ ziac.gcp.Provider(...) },
+    .providers = .{
+        ziac.gcp.Provider(...),
+        ziac.cockroach.Provider(...),
+    },
 }, myProgram);
 ```
 
-If `ziac.cloudflare.edge.ZigService` appears without a Cloudflare provider, Ziac
-should produce a precise diagnostic.
+If `ziac.gcp.global.ApiWithCockroach` appears without both the Google provider
+and the CockroachDB provider, Ziac should produce a precise diagnostic. If an
+app declares `DATABASE_URL: ziac.Secret` but the stack wires a non-secret
+CockroachDB output, Ziac should fail before planning reaches provider calls.
 
 ## Architecture
 
@@ -373,12 +398,15 @@ packages/ziac/
     build/
     providers/
       gcp/
-      cloudflare/
+      cockroach/
     components/
       gcp/
         global_zig_service.zig
-      cloudflare/
-        edge_zig_service.zig
+        global_container_service.zig
+        api_with_cockroach.zig
+      cockroach/
+        database.zig
+        connection.zig
   test/
   examples/
   docs/
@@ -533,9 +561,8 @@ Later state stores:
 
 ```text
 GCS bucket
-Cloudflare Durable Object
 CockroachDB
-Postgres
+Postgres-compatible database
 ```
 
 #### `plan/`
@@ -1183,7 +1210,32 @@ Acceptance:
 3. Invalid port or region fails before provider calls.
 4. Plan and apply emit causal traces.
 
-### Phase 12: CLI V1
+### Phase 12: CockroachDB Data Components
+
+Goal:
+
+Make CockroachDB a first-class data binding for GCP-hosted Zig backends.
+
+Deliverables:
+
+1. `ziac.cockroach.Provider`.
+2. Existing cluster reference support.
+3. `ziac.cockroach.Database`.
+4. Connection URL and TLS certificate secret outputs.
+5. Stage-aware naming conventions.
+6. `ziac.gcp.global.ApiWithCockroach` preset.
+7. Env contract validation between app structs and database outputs.
+
+Acceptance:
+
+1. A global Zig service can receive CockroachDB secrets without hand-written env
+   plumbing.
+2. Missing database bindings fail before provider calls.
+3. Non-secret database connection values are rejected for secret env fields.
+4. Plan output shows database resources and service resources with dependency
+   ordering.
+
+### Phase 13: CLI V1
 
 Goal:
 
@@ -1204,7 +1256,7 @@ Acceptance:
 3. Destroy works from persisted state.
 4. Trace command can inspect the latest apply.
 
-### Phase 13: Multi-Stack References
+### Phase 14: Multi-Stack References
 
 Goal:
 
@@ -1223,25 +1275,6 @@ Acceptance:
 1. Frontend stack can consume backend URL.
 2. Missing referenced stack fails clearly.
 3. Cross-stage references require explicit stage.
-
-### Phase 14: Cloudflare Experimental Provider
-
-Goal:
-
-Prototype Cloudflare Containers as the second provider without promising mature
-global routing defaults too early.
-
-Deliverables:
-
-1. Cloudflare provider config.
-2. Worker + Container resource shape.
-3. Durable Object backed container controller.
-4. Experimental `ziac.cloudflare.edge.ZigService`.
-
-Acceptance:
-
-1. Component can deploy a small container-backed Worker in a fake provider test.
-2. Docs clearly state routing limitations and experimental status.
 
 ### Phase 15: Production Hardening
 
@@ -1299,12 +1332,14 @@ Mitigation:
 Use comptime for contract validation and diagnostics, not for hiding runtime
 cloud behavior. Keep resource graphs inspectable.
 
-### Risk: Cloudflare Containers Product Changes
+### Risk: CockroachDB Credentials And Network Wiring
 
 Mitigation:
 
-Keep Cloudflare in an experimental phase until the platform routing behavior is
-stable enough for Ziac's "nearest healthy container" promise.
+Keep the first CockroachDB surface focused on explicit cluster references,
+secret outputs, and application env validation. Treat network topology,
+private connectivity, and migration orchestration as deliberate follow-up
+milestones instead of burying them inside the first provider pass.
 
 ## Open Design Decisions For Implementation Planning
 
@@ -1320,6 +1355,8 @@ defaults before code edits begin.
 4. Whether local state uses one JSON file per resource or a single stage file.
 5. Whether live GCP tests are manual-only or gated by environment variables in
    CI.
+6. Whether the first CockroachDB provider manages databases/users directly or
+   starts with existing cluster references plus generated secret bindings.
 
 ## Acceptance Criteria For This Spec
 
@@ -1332,5 +1369,5 @@ The spec is accepted when:
 5. The first flagship component is a global Cloud Run service for Zig backends.
 6. The product model is AWSx-like high-level components in Alchemy-style stacks.
 7. Comptime app-to-infrastructure validation is the signature differentiator.
-8. Cloudflare Containers are planned as the second provider, not the first
-   milestone.
+8. CockroachDB is the first data provider and is part of the initial product
+   direction with GCP.

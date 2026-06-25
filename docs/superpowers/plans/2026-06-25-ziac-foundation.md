@@ -12,7 +12,10 @@
 
 ## Scope Check
 
-The approved Ziac vision covers multiple subsystems: core engine, GCP provider, Cloud Run global load balancing, CLI, multi-stack references, Cloudflare provider, and production hardening. This plan intentionally implements only the first standalone foundation slice:
+The approved Ziac vision covers multiple subsystems: core engine, GCP provider,
+Cloud Run global load balancing, CockroachDB data bindings, CLI, multi-stack
+references, and production hardening. This plan intentionally implements only
+the first standalone foundation slice:
 
 ```text
 packages/ziac scaffold
@@ -26,7 +29,8 @@ apply engine skeleton
 docs seeded inside packages/ziac/docs
 ```
 
-Live GCP, image building, Cloud Run, load balancers, CLI binaries, and Cloudflare are separate follow-up plans.
+Live GCP, image building, Cloud Run, load balancers, CockroachDB provider/data
+components, and CLI binaries are separate follow-up plans.
 
 ## File Structure
 
@@ -1420,8 +1424,9 @@ resources second. The first high-level components are:
 - `ziac.gcp.global.ContainerService`
 - `ziac.gcp.global.ZigService`
 
-Cloudflare Containers are planned as the second provider once the routing and
-autoscaling story is ready for the same "nearest healthy container" promise.
+CockroachDB is the first data provider. Ziac should make database connection
+secrets, TLS certificates, and app environment contracts part of the same
+comptime-validated graph as the GCP service.
 ```
 
 Create `packages/ziac/docs/architecture.md`:
@@ -1481,11 +1486,14 @@ Create `packages/ziac/docs/roadmap.md`:
 - Zig source to image to global service.
 - Comptime environment validation.
 
-## Phase 6: Cloudflare Experimental
+## Phase 6: CockroachDB Data Components
 
-- Worker plus Container component.
-- Durable Object control plane.
-- Routing limitations documented clearly.
+- CockroachDB provider config.
+- Existing cluster references.
+- Database and user resources where safe.
+- Connection URL and TLS certificate secret bindings.
+- GCP service env validation against CockroachDB outputs.
+- Migration hook planning.
 ```
 
 - [ ] **Step 2: Include docs in the package manifest**
