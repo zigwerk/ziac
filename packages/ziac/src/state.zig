@@ -55,4 +55,22 @@ pub const InMemoryStateStore = struct {
         record.status = .failed;
         try self.records.put(resource_id, record);
     }
+
+    pub fn recordsAlloc(self: *InMemoryStateStore, allocator: std.mem.Allocator) StateError![]StateRecord {
+        var records = std.ArrayList(StateRecord).empty;
+        errdefer records.deinit(allocator);
+
+        var iterator = self.records.valueIterator();
+        while (iterator.next()) |record| {
+            try records.append(allocator, record.*);
+        }
+
+        const owned = try records.toOwnedSlice(allocator);
+        std.mem.sort(StateRecord, owned, {}, lessThanRecordId);
+        return owned;
+    }
 };
+
+fn lessThanRecordId(_: void, left: StateRecord, right: StateRecord) bool {
+    return std.mem.lessThan(u8, left.resource_id, right.resource_id);
+}
