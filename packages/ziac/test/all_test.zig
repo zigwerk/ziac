@@ -6,4 +6,5 @@ comptime {
     _ = @import("state_test.zig");
     _ = @import("plan_test.zig");
     _ = @import("provider_apply_test.zig");
+    _ = @import("stack_registry_test.zig");
 }
