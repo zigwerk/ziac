@@ -5,4 +5,5 @@ comptime {
     _ = @import("resource_graph_test.zig");
     _ = @import("state_test.zig");
     _ = @import("plan_test.zig");
+    _ = @import("provider_apply_test.zig");
 }
