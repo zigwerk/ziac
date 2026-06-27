@@ -55,3 +55,31 @@ pub fn buildPlan(
         .operations = try operations.toOwnedSlice(allocator),
     };
 }
+
+pub fn buildDestroyPlan(
+    allocator: std.mem.Allocator,
+    store: *state.InMemoryStateStore,
+) (PlanError || state.StateError)!Plan {
+    const records = try store.recordsAlloc(allocator);
+    defer allocator.free(records);
+
+    var operations = std.ArrayList(PlanOperation).empty;
+    errdefer operations.deinit(allocator);
+
+    for (records) |record| {
+        if (record.status == .deleted) continue;
+        try operations.append(allocator, .{
+            .kind = .delete,
+            .resource = .{
+                .id = record.resource_id,
+                .type_name = record.type_name,
+                .logical_id = record.logical_id,
+            },
+        });
+    }
+
+    return .{
+        .allocator = allocator,
+        .operations = try operations.toOwnedSlice(allocator),
+    };
+}
