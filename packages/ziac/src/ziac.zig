@@ -11,6 +11,7 @@ pub const plan = @import("plan.zig");
 pub const provider = @import("provider.zig");
 pub const apply = @import("apply.zig");
 pub const stack_registry = @import("stack_registry.zig");
+pub const local_state = @import("local_state.zig");
 
 pub const Output = output.Output;
 pub const OutputRef = output.OutputRef;
