@@ -38,14 +38,14 @@ test "local state loads resources from JSON" {
     var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer fs.deinit();
     try fs.writeFile(".ziac/state/hello-global/dev/resources.json",
-        \\{"resources":[{"resource_id":"gcp.run.Service.api","type_name":"gcp.run.Service","logical_id":"api","inputs_hash":"v1","status":"created"}]}
+        \\{"resources":[{"resource_id":"gcp.run.Service.europe-west1.api","type_name":"gcp.run.Service","logical_id":"api","inputs_hash":"v1","status":"created"}]}
     );
 
     var store = ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(&fs));
     var loaded = try store.loadResources("hello-global", "dev");
     defer loaded.deinit();
 
-    const record = loaded.store.get("gcp.run.Service.api") orelse return error.MissingRecord;
+    const record = loaded.store.get("gcp.run.Service.europe-west1.api") orelse return error.MissingRecord;
     try std.testing.expectEqual(ziac.ResourceStatus.created, record.status);
     try std.testing.expectEqualStrings("api", record.logical_id);
 }
