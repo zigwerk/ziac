@@ -13,9 +13,13 @@
 
 ## Phase 3: GCP Provider
 
-- GCP provider config.
-- Artifact Registry.
-- Existing-image Cloud Run service.
+- GCP provider config. Foundation implemented as plan-only validation.
+- Artifact Registry Docker repository. Foundation implemented as plan-only
+  resource builder.
+- Existing-image Cloud Run service. Foundation implemented as plan-only resource
+  builder.
+- Live GCP API adapter, authentication, read/adopt, and drift detection remain
+  future Phase 3 work.
 
 ## Phase 4: Global GCP Components
 

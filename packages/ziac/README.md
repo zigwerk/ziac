@@ -27,3 +27,12 @@ zig-out/bin/ziac destroy --stack hello-global --stage dev
 The local CLI currently uses the fixture `hello-global` stack, deterministic
 JSON files under `.ziac/state/<stack>/<stage>/`, and a fake provider. Secret
 outputs are persisted and printed as `[REDACTED]`.
+
+## GCP Provider Foundation
+
+The current GCP support is plan-only. `hello-global` now models an Artifact
+Registry Docker repository and Cloud Run service, then runs through the local
+planner, JSON state store, and fake provider.
+
+Live Google API calls, Cloud Run deployment, load balancers, and CockroachDB
+resources are intentionally deferred until the typed provider model is stable.

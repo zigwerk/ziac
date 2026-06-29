@@ -31,8 +31,9 @@ test "local CLI example plans deploys and prints redacted outputs" {
     const output = try runLocalCliExample(std.testing.allocator);
     defer std.testing.allocator.free(output);
 
-    try std.testing.expect(std.mem.indexOf(u8, output, "Plan: 1 create") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "Plan: 2 create") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "Deploy complete") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "repository_url=europe-west1-docker.pkg.dev/ziac-dev/hello-global") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "database_url=[REDACTED]") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "sentinel-secret-for-tests") == null);
 }
