@@ -10,4 +10,5 @@ comptime {
     _ = @import("local_state_test.zig");
     _ = @import("cli_test.zig");
     _ = @import("gcp_config_test.zig");
+    _ = @import("gcp_artifact_registry_test.zig");
 }
