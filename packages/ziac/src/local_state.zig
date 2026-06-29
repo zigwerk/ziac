@@ -204,7 +204,7 @@ fn emptyResources(allocator: std.mem.Allocator) !LoadedResources {
 
     return .{
         .arena = arena,
-        .store = state_mod.InMemoryStateStore.init(arena.allocator()),
+        .store = state_mod.InMemoryStateStore.init(allocator),
     };
 }
 
@@ -316,7 +316,7 @@ fn parseResources(allocator: std.mem.Allocator, content: []const u8) !LoadedReso
         else => return error.InvalidStateFile,
     };
 
-    var store = state_mod.InMemoryStateStore.init(arena_allocator);
+    var store = state_mod.InMemoryStateStore.init(allocator);
     errdefer store.deinit();
 
     for (items) |item| {
