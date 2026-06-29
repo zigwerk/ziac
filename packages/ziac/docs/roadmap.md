@@ -7,8 +7,9 @@
 
 ## Phase 2: Local State And CLI
 
-- Local JSON state store.
-- `ziac plan`, `ziac deploy`, `ziac destroy`, `ziac outputs`.
+- Local JSON resource and output state store. Implemented for the fixture stack.
+- `ziac plan`, `ziac deploy`, `ziac destroy`, `ziac outputs`, and `ziac state`.
+  Implemented locally through deterministic state files and a fake provider.
 
 ## Phase 3: GCP Provider
 

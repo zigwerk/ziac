@@ -81,6 +81,9 @@ pub const localFiles = struct {
 
     fn localWriteFile(raw: *anyopaque, path: []const u8, content: []const u8) anyerror!void {
         const fs: *zstd.FileSystem.LocalFileSystem = @ptrCast(@alignCast(raw));
+        if (std.mem.lastIndexOfScalar(u8, path, '/')) |slash| {
+            try fs.dir.createDirPath(fs.io, path[0..slash]);
+        }
         try fs.writeFile(path, content);
     }
 
