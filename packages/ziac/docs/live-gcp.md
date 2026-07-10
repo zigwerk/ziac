@@ -100,3 +100,9 @@ Scripted transports cover the complete M4/M5 resource surface and the
 production binary compiles with native HTTP and ADC. The authenticated
 disposable-project gates remain environment-dependent and must not be reported
 as passed unless their scripts complete against configured cloud resources.
+
+The authoritative list of authenticated commands, required environment names,
+safety constraints, and permitted evidence is `release/live-tests.json`. The
+manifest is strictly parsed by `zig build test`; values belong in the operator
+environment, never in the manifest. See `release.md` for the complete release
+decision procedure.

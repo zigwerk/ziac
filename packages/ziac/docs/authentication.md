@@ -86,3 +86,9 @@ subject-token or bearer-header buffers are zeroed before release.
 All auth paths use the shared `zigeffect-std` HTTP client interface. Scripted
 tests therefore exercise the same request bodies, headers, status handling,
 body limits, cancellation, and redaction boundaries used by live providers.
+
+Release evidence records only the selected credential mode and `auth doctor`
+outcome. ADC files, WIF subject tokens, STS responses, impersonated tokens, and
+authorization headers are forbidden from `release-evidence`. The release gate
+also rejects generated `gha-creds-*.json` files in the package tree. See
+`release.md` for the full evidence policy.

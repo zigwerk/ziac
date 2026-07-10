@@ -1,262 +1,158 @@
 # Ziac
 
-Ziac is a comptime-checked Infrastructure-as-Code engine for Zig backends,
-powered by zigeffect and the zigeffect standard library.
+Ziac is a comptime-checked Infrastructure-as-Code engine for globally deployed
+Zig services on Google Cloud, powered by zigeffect. It combines an Engine V2
+resource lifecycle with high-level GCP and CockroachDB components.
 
-The first product target is an AWSx-style high-level GCP component for globally
-routed Cloud Run deployments of Zig HTTP services with CockroachDB data
-bindings.
+The defining contract is static: an application `Env` struct, typed resource
+outputs, provider availability, secrecy, scope, and dependency wiring must agree
+before provider code can run.
+
+## Status
+
+The credential-free release gate is implemented. Native GCP and CockroachDB
+providers have deterministic lifecycle and failure tests, the complete
+production graph compiles, and local CockroachDB transport passes verified TLS.
+Authenticated GCP and Cockroach Cloud acceptance remains an explicit external
+gate until disposable account configuration is supplied.
+
+## Quickstart
+
+From this package directory:
 
 ```sh
-cd packages/ziac
-zig build test
-zig build examples
-zig build container-e2e-all
+zig build release-gate --summary all
 ```
 
-`container-e2e-all` generates the same pinned container recipe used by
-`gcp.global.ZigService`, builds it for amd64 and arm64 with Zig 0.15.2, and
-probes the sample backend as a distroless nonroot container.
+The gate checks formatting, all unit and compile-fail contracts, provider
+lifecycles, interruption and state migration behavior, examples, the CLI,
+secret leakage, and a native source-built Zig container. Docker is required for
+the container probe.
 
-## Local CLI
+For a faster edit loop:
 
 ```sh
-cd packages/ziac
+zig build test
+zig build examples
+zig build
+```
+
+The complete source, CockroachDB, PSC, Secret Manager, Direct VPC, Cloud Run,
+global load balancer, DNS, and canary composition is in
+`examples/production_global_service.zig`. Its executable path is build-cache
+specific; `zig build examples` is the supported graph proof.
+
+## Local Engine
+
+The CLI defaults to a deterministic fake provider and local state under
+`.ziac/state/<stack>/<stage>/`:
+
+```sh
 zig build
 zig-out/bin/ziac plan --stack hello-global --stage dev
 zig-out/bin/ziac deploy --stack hello-global --stage dev
 zig-out/bin/ziac outputs --stack hello-global --stage dev
-zig-out/bin/ziac state --stack hello-global --stage dev
 zig-out/bin/ziac refresh --stack hello-global --stage dev
-zig-out/bin/ziac import --stack hello-global --stage dev \
-  --resource gcp.run.Service.europe-west1.api \
-  --id projects/example/locations/europe-west1/services/api
-zig-out/bin/ziac unlock --stack hello-global --stage dev \
-  --lineage hello-global/dev
+zig-out/bin/ziac state --stack hello-global --stage dev
 zig-out/bin/ziac destroy --stack hello-global --stage dev --confirm
 ```
 
-Select generation-locked GCS state through ADC and migrate an existing local
-stack without deleting its local recovery copy:
+Commands that mutate state take an exclusive writer lock. State and command
+receipts persist secret references or `[REDACTED]`, never secret plaintext.
+
+## Production GCP
+
+Ziac uses native Application Default Credentials; it does not invoke `gcloud`.
+Use user ADC locally or Workload Identity Federation in CI. Select GCS state
+before the first production plan:
 
 ```sh
 export ZIAC_STATE_BUCKET=my-ziac-state
-export ZIAC_STATE_PREFIX=ziac/state # optional
-zig-out/bin/ziac state-migrate --stack hello-global --stage dev
-zig-out/bin/ziac plan --stack hello-global --stage dev
-```
-
-Create and apply an immutable reviewed plan without replanning:
-
-```sh
-zig-out/bin/ziac plan --stack hello-global --stage prod \
-  --out artifacts/hello-global-prod.plan.json
-zig-out/bin/ziac deploy --stack hello-global --stage prod \
-  --plan artifacts/hello-global-prod.plan.json
-```
-
-If the plan contains a delete or replacement, add `--approve <plan-digest>`
-using the exact digest printed by `plan`. Direct destructive deploys and all
-destroys require `--confirm`. Lifecycle-protected resources must first be
-unprotected in a separate deploy; approval never bypasses protection.
-
-Derive repository-bound preview stages and guard automated cleanup:
-
-```sh
-stage="$(zig-out/bin/ziac preview-stage \
-  --repository acme/platform \
-  --change 42)"
-zig-out/bin/ziac destroy --stack global-container --stage "$stage" \
-  --provider gcp --allow-live --preview-cleanup --confirm
-```
-
-Built-in preview stacks scope provider resources and DNS while persistent stage
-names remain compatible. The copyable keyless GitHub workflow uses native WIF,
-GCS state, saved plans, exact digest approval, and protected cleanup
-environments.
-
-Select the native provider explicitly for authenticated calls:
-
-```sh
+export ZIAC_STATE_PREFIX=ziac/state
 export ZIAC_LIVE_PROJECT=my-project
-export ZIAC_LIVE_IMAGE=europe-west1-docker.pkg.dev/my-project/repository/api@sha256:digest
-zig-out/bin/ziac deploy --stack hello-global --stage dev \
-  --provider gcp --allow-live
+export ZIAC_LIVE_IMAGE=europe-west1-docker.pkg.dev/my-project/apps/api@sha256:<64-hex-digest>
+export ZIAC_LIVE_REGIONS=europe-west1,us-central1
+export ZIAC_LIVE_DOMAIN=api.example.com
+export ZIAC_LIVE_DNS_ZONE=example-com
+
+zig-out/bin/ziac auth doctor
+zig-out/bin/ziac plan --stack global-container --stage prod \
+  --provider gcp --allow-live \
+  --out artifacts/global-container-prod.plan.json
+zig-out/bin/ziac deploy --stack global-container --stage prod \
+  --provider gcp --allow-live \
+  --plan artifacts/global-container-prod.plan.json
 ```
 
-Credential-gated smoke runs add `--live-test` and require a project ID ending
-in `-ziac-disposable`.
+If a saved plan contains deletion or replacement, pass the exact digest printed
+by `plan` through `--approve`. Lifecycle protection still requires a separate
+unprotecting deploy and cannot be bypassed by approval.
 
-For the two-region component stack, also set `ZIAC_LIVE_REGIONS`,
-`ZIAC_LIVE_DOMAIN`, and optional `ZIAC_LIVE_DNS_ZONE`, then select
-`--stack global-container`.
+The built-in global stack deploys the primary region first, waits for Cloud Run
+revision readiness, and only then releases the remaining regions. It restricts
+direct Cloud Run ingress and routes HTTPS through a Premium global external
+Application Load Balancer.
 
-Add `--json` to any command for the stable `ziac.command.v2` receipt. Saved-plan
-receipts include `plan_digest`, `plan_path`, and `approval_required`. Commands
-that write resource state acquire an exclusive stack/stage lock; `unlock`
-requires the recorded lineage unless `--force` is supplied explicitly.
+## CockroachDB
 
-The local CLI defaults to the fixture `hello-global` stack, deterministic JSON
-files under `.ziac/state/<stack>/<stage>/`, and a fake provider. Explicit live
-selection uses the native providers described below. Secret outputs are
-persisted and printed as `[REDACTED]`.
+The complete example adopts an existing Standard or Advanced Cockroach cluster,
+creates the application database/user/grants/migrations, stores the generated
+`verify-full` connection URI in Secret Manager, provisions PSC and private DNS
+in each region, and binds the secret output into `App.Env.database_url`.
 
-## GCP Provider Foundation
+Managed Basic, Standard, and Advanced cluster resources are also available.
+Managed clusters and databases are protected by default; deletion requires a
+separate unprotect deploy followed by an explicitly confirmed destroy.
 
-`hello-global` still defaults to the fake provider for deterministic local
-work. The package also includes a native live Google
-provider for Service Usage, IAM, Artifact Registry, Secret Manager, and Cloud
-Run v2. It can enable and disable project APIs, manage service accounts with
-drift-aware updates and import, mutate IAM members while preserving policy
-etags, conditional bindings, and unrelated fields, manage Docker repositories
-with normalized labels and operation polling, create secret versions from
-ephemeral source references without retaining plaintext, and deploy
-drift-aware Cloud Run services from complete canonical runtime specifications.
+For local verified-TLS transport evidence:
 
-The raw global load-balancer surface is implemented, including managed
-certificates, explicit certificate readiness polling, an optional HTTP-to-HTTPS
-redirect, Cloud DNS record sets in an existing zone, and VPC-bound private
-managed zones. The high-level
-`gcp.global.ContainerService` now assembles those resources with regional Cloud
-Run services and typed allocated-IP wiring. It can append a base graph and map a
-different typed Direct VPC subnet to each region. The authenticated two-region
-acceptance gate remains pending external configuration.
+```sh
+cd ../..
+bun run zigeffect:postgres:cockroach-live-test
+```
 
-`cockroach.private_service_connect.PrivateServiceConnect` composes a protected
-or adopted GCP Cockroach Standard/Advanced cluster with a global-routing VPC,
-one PSC endpoint and accepted Cockroach connection per region, private DNS, and
-the regional Cloud Run bindings. Every cross-provider value remains a typed
-output reference and the graph contains no public Cockroach allowlist.
+## Recovery
 
-`gcp.global.ZigService(App, Bindings, Providers)` adds deterministic Zig source
-archiving, a generated and digest-pinned nonroot container recipe, protected GCS
-build storage, regional Cloud Build, an immutable Artifact Registry image, and
-typed image and environment wiring into `ContainerService`. It creates separate
-least-privilege build and runtime service accounts and Secret Manager accessor
-IAM for each referenced secret. Applications provide source and typed bindings;
-they do not provide a Dockerfile or raw load-balancer resources.
+Cloud Run state retains the current and previous immutable image digest. A
+guarded rollback uses the same provider, lock, checkpoint, and remote-state
+path as deploy:
 
-## Delivery Status
+```sh
+zig-out/bin/ziac rollback --stack global-container --stage prod \
+  --provider gcp --allow-live --confirm
+```
 
-Ziac is currently a tested Engine V2 and native-provider implementation with
-authenticated cloud acceptance still gated on external disposable accounts.
-It retains canonical desired inputs, refreshes through an explicit provider
-lifecycle, persists versioned physical state, and executes stable dependency
-levels with bounded parallelism, retry, deadlines, cancellation, and redacted
-causal facts. Atomic checkpoint/resume, writer locking, refresh, import, unlock,
-stable JSON command receipts, and lineage/serial/graph plan preconditions are
-implemented. Engine V2 is complete. Typed public/secret provider outputs and
-dependency derivation are implemented. App `Env` field names, optionality, value
-types, secrecy, and regional scope now validate at comptime; provider-set
-contracts now canonically constrain typed namespaces and runtime registries.
-The build also compiles valid contract fixtures and proves all nine invalid
-fixtures fail for their intended stable `ZIAC` diagnostic. Comptime Contracts M2
-is complete. The production HTTP contract and native Google ADC layer are also
-implemented: authorized-user refresh, native RS256 service-account assertions,
-file/URL Workload Identity Federation, optional service-account impersonation,
-metadata tokens, secure refresh caching, and `ziac auth doctor` all pass
-deterministic tests without invoking `gcloud`. The authenticated Google JSON
-client and generic/Compute operation poller are implemented with injectable API
-roots, provider error mapping, request-ID diagnostics, cancellation, deadlines,
-and `Retry-After` handling.
-The CockroachDB Cloud client pins `Cc-Version: 2024-09-16`, keeps API keys
-secret, decodes cluster and regional connection topology plus SQL users through
-typed schemas, and performs bounded `Retry-After`-aware pagination. Transport
-and Authentication M3 is complete. Existing CockroachDB clusters can now be
-adopted as retained, read-only resources with deterministic topology drift and
-missing-cluster refresh behavior. `cockroach.ConnectionSecret` adds a
-secret-first graph for cryptographically generated `verify-full` connection
-URIs and idempotent SQL-user create/reset/delete behavior. State retains only
-the typed Secret Manager version reference, and a failed user write converges
-from that persisted version on retry.
-`cockroach.public_egress.PublicStaticEgress` now creates a custom VPC plus one
-subnet, router, Premium static address, manual NAT, and SQL-only Cockroach `/32`
-allowlist per Cloud Run region. Direct VPC consumes typed network outputs, and
-the NAT lifecycle preserves unrelated router configuration during updates and
-destroy.
-`cockroach.application_database.ApplicationDatabase` now composes the existing
-cluster, generated application secret and SQL user, protected database, exact
-grants, and immutable ordered migrations. SQLSTATE-aware `psql` and native
-`pg.zig` executors are implemented; the native pool requires verified TLS,
-rotates idle generations, and passes a reproducible secure CockroachDB container
-gate. Provider state and diagnostics retain only typed secret references and
-SQLSTATE categories.
-`cockroach.cluster.Cluster` now provisions protected GCP Basic, Standard, and
-Advanced clusters, polls long-running readiness, updates supported capacity and
-topology in place, starts serverless clusters with an empty IP allowlist, and
-requires a separate unprotect deploy plus `destroy --confirm` before deletion.
-The first Live GCP Primitives slice is implemented behind the provider
-interface: typed project-service, service-account, and project-member resources
-pass full scripted read/diff/create/update/delete/import lifecycles. Service
-Usage long-running operations and IAM etag conflict retries are covered. The
-credential-gated disposable-project smoke test remains part of the M4 gate.
-Artifact Registry create/read/update/delete/import and exact-match conflict
-adoption are also implemented; repository location and format changes classify
-as replacement while labels update in place.
-Secret metadata, append-only versions, and accessor IAM lifecycles are
-implemented. State contains only typed secret references, and tracked physical
-IDs let refresh address Google-assigned version numbers safely.
-Cloud Run v2 create/read/update/delete/import is implemented with live URI and
-revision outputs. Create and update operation handles checkpoint before polling
-and can resume through normal provider reads after interruption.
-Compute global addresses, regional serverless NEGs, backend services, URL maps,
-HTTPS proxies, and global forwarding rules now pass scripted lifecycle and
-fingerprint-conflict tests.
-Managed SSL certificates expose provisioning readiness without holding create
-operations open. Redirect URL maps and HTTP proxies pass the same lifecycle
-contract. Cloud DNS record sets pass create/read/update/delete/import tests with
-stable project/zone/name/type identity.
-`gcp.global.ContainerService` builds a deterministic, dependency-complete graph
-with restricted direct ingress, optional DNS and HTTP redirect, regional Direct
-VPC selection, base-graph composition, and production warm-instance/probe
-validation. Cockroach and GCP PSC resources now pass full scripted lifecycle
-tests, including endpoint acceptance and private DNS publication.
-GCS remote state uses generation-pinned reads, generation-zero creates,
-exact-generation updates/deletes, expiring owner leases, per-checkpoint renewal,
-and lineage-preserving local migration. Missing remote ADC fails closed instead
-of falling back to local files.
-Saved plan format v1 is create-exclusive and content addressed. It persists full
-canonical operations without secret payloads, rejects target/state/graph/input
-or digest drift before provider access, and applies the loaded operations
-without replanning. The executor independently requires confirmation for every
-delete and replacement; saved plans bind that approval to the exact plan digest.
-Repository-bound preview stages now isolate GCS state and built-in GCP resource
-names. GitHub external-account ADC completes URL subject-token, STS, and
-service-account impersonation contracts without a long-lived Google key, and
-preview cleanup cannot target production or malformed stages.
-The built-in global stack now gates fleet regions on a primary-region canary.
-Cloud Run operations complete only after revision readiness, state retains the
-current and immediately previous immutable image, and `rollback --confirm`
-builds a checkpointed inverse graph without unrelated mutations. Bounded GCP
-quota, request-ID, and retry diagnostics reach deploy and rollback failures
-without entering persistent artifacts.
+After interruption, rerun the same deploy. Ziac resumes provider operation
+handles from state. For drift, run `refresh`, review a new saved plan, and
+deploy. Do not force-unlock an active writer.
 
-See `docs/authentication.md`, `docs/google-client.md`, and
-`docs/cockroach-client.md` for the live client contracts and
-`docs/cockroach-existing-cluster.md` for retained cluster adoption. See
-`docs/cockroach-cluster.md` for managed cluster plans, scaling, readiness, and
-the protected destroy workflow. See
-`docs/cockroach-connection-secret.md` for SQL-user and Secret Manager wiring.
-See `docs/public-static-egress.md` for the initial public Cockroach connectivity
-topology and its production safety policy.
-See `docs/private-service-connect.md` for the private multi-region Cockroach
-topology, Cloud Run composition, lifecycle, and operations.
-See `docs/cockroach-sql.md` for application database composition, SQL resource
-lifecycles, migration semantics, and native execution.
-See `docs/secret-manager.md` for the secret payload boundary, and
-`docs/cloud-run.md` for the Cloud Run request and lifecycle contract. See
-`docs/live-gcp.md` for CLI selection and disposable-project safeguards, and
-`docs/compute-load-balancer.md` for the raw load-balancer resources. See
-`docs/cloud-dns.md` for existing-zone DNS ownership and import. See
-`docs/container-service.md` for the high-level global component. See
-`docs/zig-service.md` for source-to-image deployment and typed app bindings. See
-`docs/remote-state.md` for GCS bootstrap, IAM, migration, conflicts, and
-recovery. See `docs/saved-plans.md` for review artifacts, stale-plan checks,
-digest approval, and CI handoff. See `docs/keyless-ci.md` for WIF setup, preview
-identity, the workflow template, and guarded cleanup. See
-`docs/rollouts-recovery.md` for canary ordering, readiness, rollback, and
-incident recovery. See
-`docs/roadmap.md` for the acceptance-gated milestones. The authoritative
-design and task-level plan live at the repository root under
-`docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and
-`docs/superpowers/plans/2026-07-10-ziac-e2e-delivery.md`.
+## CI And Release
+
+`examples/github-actions/ziac-preview.yml` is the keyless GitHub Actions
+template. It derives repository-bound preview stages, uses GCS state and saved
+plans, gates apply and cleanup through environments, and never needs a Google
+service-account key.
+
+Authenticated release tests are declared without values in
+`release/live-tests.json`. Run `bash scripts/live-global-gate.sh` only against a
+project ending in `-ziac-disposable`; the script validates two regions, global
+HTTPS, denied direct ingress, regional failure/recovery, final no-op planning,
+secret absence, and cleanup.
+
+See `docs/release.md` for the clean-checkout release procedure and evidence
+policy.
+
+## Documentation
+
+- `docs/architecture.md`: engine, graph, provider, output, and source-build model
+- `docs/zig-service.md`: source-to-image component and app binding contract
+- `docs/container-service.md`: global Cloud Run and load-balancer component
+- `docs/private-service-connect.md`: private CockroachDB regional topology
+- `docs/cockroach-sql.md`: database, grants, migrations, and native TLS
+- `docs/authentication.md`: native ADC and Workload Identity Federation
+- `docs/remote-state.md`: GCS state, locking, migration, and recovery
+- `docs/saved-plans.md`: immutable plans and destructive approval
+- `docs/keyless-ci.md`: preview stages and GitHub Actions
+- `docs/rollouts-recovery.md`: canary progression, rollback, and incidents
+- `docs/live-gcp.md`: provider selection and disposable-project safeguards
+- `docs/roadmap.md`: acceptance-gated delivery status

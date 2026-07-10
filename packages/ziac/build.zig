@@ -68,6 +68,17 @@ pub fn build(b: *std.Build) void {
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-application-database", "examples/cockroach_application_database.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-cluster", "examples/cockroach_cluster.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-private-service-connect", "examples/cockroach_private_service_connect.zig");
+    addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "production-global-service", "examples/production_global_service.zig");
+
+    const format_check = b.addSystemCommand(&.{ "zig", "fmt", "--check", "build.zig", "src", "test", "examples" });
+    const release_checks = b.addSystemCommand(&.{"bash"});
+    release_checks.addFileArg(b.path("scripts/release-checks.sh"));
+    const release_gate = b.step("release-gate", "Run the complete credential-free Ziac release gate");
+    release_gate.dependOn(&format_check.step);
+    release_gate.dependOn(&release_checks.step);
+    release_gate.dependOn(examples_step);
+    release_gate.dependOn(&executable.step);
+    release_gate.dependOn(&container_e2e_command.step);
 }
 
 fn addExample(

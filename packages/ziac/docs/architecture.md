@@ -157,3 +157,12 @@ when remote values match, keeping refresh and subsequent plans stable.
 binding/provider programs must compile. Invalid fixtures must both fail and emit
 their exact contract code: `ZIAC100` through `ZIAC104`, `ZIAC110`, `ZIAC111`, or
 `ZIAC120`. A syntax or import failure cannot satisfy the harness.
+
+## Release Boundary
+
+`zig build release-gate` composes the package's formatting, compile-time,
+provider, executor, state, example, CLI, container, and secret checks. It is
+deliberately credential-free. Authenticated acceptance is described by the
+strictly parsed `release/live-tests.json` manifest so a local pass cannot be
+mistaken for evidence that GCP routing or Cockroach Cloud was exercised. See
+`release.md` for the clean-checkout and evidence contract.

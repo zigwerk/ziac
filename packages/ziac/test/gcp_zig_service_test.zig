@@ -134,6 +134,37 @@ test "global ZigService ignores excluded noise and changes identity for source e
     try std.testing.expect(!std.mem.eql(u8, &ziac.gcp.storage.integrity(stale_payload.bytes).sha256, &original.source_digest));
 }
 
+test "global ZigService rejects a conflicting project API in a base graph" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try writeSource(tmp.dir, "src/main.zig", "pub fn main() void {}\n");
+    try writeSource(tmp.dir, "build.zig", "pub fn build() void {}\n");
+    var conflicting_provider = provider();
+    conflicting_provider.project_id = "another-project";
+    var api = try ziac.gcp.project_service.Service.build(std.testing.allocator, conflicting_provider, .{
+        .service = "run.googleapis.com",
+    });
+    defer api.deinit(std.testing.allocator);
+    var base = ziac.ResourceGraph.init(std.testing.allocator);
+    defer base.deinit();
+    try base.addResource(api.node);
+    const EmptyApp = struct {
+        pub const Env = struct {};
+    };
+    const EmptyBindings = struct {};
+    const Service = ziac.gcp.global.ZigService(EmptyApp, EmptyBindings, Providers);
+
+    try std.testing.expectError(error.DuplicateResource, Service.build(std.testing.allocator, provider(), .{
+        .base_graph = &base,
+        .source = .{ .io = std.testing.io, .root = tmp.dir },
+        .name = "api",
+        .artifact_name = "sample-api",
+        .regions = &regions,
+        .domain = "api.example.com",
+        .bindings = .{},
+    }));
+}
+
 test "global ZigService rejects non-GCP and cross-project secret references" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();

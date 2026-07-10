@@ -121,3 +121,8 @@ the named quota instead of waiting through blind retries.
 5. Update the configured immutable image to the restored digest.
 6. Run a live plan, review the region dependency order, and deploy.
 7. Verify HTTPS, database TLS, and regional failover before closing the incident.
+
+The clean-checkout and authenticated release runbooks are in `release.md`.
+Rollout evidence may include image digests, revision names, region order,
+readiness outcomes, and request IDs; it must not include environment values,
+tokens, database URLs, or Secret Manager payloads.

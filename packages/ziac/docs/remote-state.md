@@ -112,3 +112,9 @@ state while a writer lease exists.
   conflicts remain distinct errors.
 - Diagnostics never include object bytes, authorization headers, token values,
   or secret plaintext.
+
+The release gate exercises local-to-remote migration fixtures, generation CAS,
+lease renewal, stale-writer rejection, and redacted output persistence without
+cloud credentials. Authenticated release evidence may record the bucket alias,
+object generation, lineage hash, and final serial, but never state object
+bodies. See `release.md`.

@@ -35,8 +35,9 @@ automated and live tests pass.
   global component are implemented behind explicit safety gates. The
   CockroachDB existing-cluster, protected cluster provisioning, SQL user,
   database, grants, migrations, native verified-TLS, and multi-region Private
-  Service Connect slices are implemented. Authenticated cloud acceptance,
-  remote state, and source builds remain pending.
+  Service Connect slices are implemented. GCS state, saved plans, source builds,
+  canary rollback, and the credential-free release gate are implemented;
+  authenticated cloud acceptance remains pending external configuration.
 
 ## M0: Integration And Architecture
 
@@ -178,7 +179,10 @@ this checkout.
   identities, saved-plan workflow template, and production-proof cleanup.
 - Canary regional rollouts, revision readiness, guarded digest rollback,
   interruption recovery, and quota/rate diagnostics: complete.
-- Release gate, complete docs, and clean-checkout end-to-end verification.
+- Credential-free release gate, complete production example, strict live-test
+  manifest, and public operator documentation: complete.
+- Clean-checkout automated verification and authenticated end-to-end execution:
+  final gate.
 
 Gate: all automated suites and the configured live end-to-end workflow pass,
 including regional failover, database TLS, update, interruption recovery, import,

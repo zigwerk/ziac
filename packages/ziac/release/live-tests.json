@@ -1,0 +1,79 @@
+{
+  "schema": "ziac.release.live-tests.v1",
+  "version": 1,
+  "automated_gate": {
+    "command": "zig build release-gate --summary all",
+    "includes": [
+      "formatting",
+      "unit-and-compile-fail",
+      "provider-contracts",
+      "interruption-and-state-migration",
+      "examples-and-cli",
+      "native-container",
+      "secret-scan"
+    ]
+  },
+  "live_tests": [
+    {
+      "id": "gcp-global-container",
+      "command": "bash scripts/live-global-gate.sh",
+      "authenticated": true,
+      "required_environment": [
+        "ZIAC_LIVE_PROJECT",
+        "ZIAC_LIVE_IMAGE",
+        "ZIAC_LIVE_REGIONS",
+        "ZIAC_LIVE_DOMAIN",
+        "ZIAC_LIVE_DNS_ZONE"
+      ],
+      "safety_constraints": [
+        "ZIAC_LIVE_PROJECT ends in -ziac-disposable",
+        "at least two GCP regions",
+        "automatic destroy trap",
+        "direct run.app ingress denied"
+      ],
+      "evidence": [
+        "global HTTPS response",
+        "regional failure and recovery",
+        "restored no-op plan",
+        "secret sentinel absent from state"
+      ]
+    },
+    {
+      "id": "cockroach-cloud-sql",
+      "command": "zig build test --summary all",
+      "authenticated": true,
+      "required_environment": [
+        "ZIAC_COCKROACH_ADMIN_LIVE_URL",
+        "ZIAC_COCKROACH_APP_LIVE_URL"
+      ],
+      "safety_constraints": [
+        "disposable database and user",
+        "verify-full TLS URLs",
+        "randomized resource names",
+        "cleanup after assertions"
+      ],
+      "evidence": [
+        "database lifecycle",
+        "grant lifecycle",
+        "ordered migration",
+        "SQLSTATE diagnostics without connection URLs"
+      ]
+    },
+    {
+      "id": "cockroach-local-verified-tls",
+      "command": "bun run zigeffect:postgres:cockroach-live-test",
+      "authenticated": false,
+      "required_environment": [],
+      "safety_constraints": [
+        "ephemeral local container",
+        "generated test certificate authority",
+        "verify-full TLS required"
+      ],
+      "evidence": [
+        "CockroachDB version",
+        "verified TLS query",
+        "clean container shutdown"
+      ]
+    }
+  ]
+}

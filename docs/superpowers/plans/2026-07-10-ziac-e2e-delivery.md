@@ -1396,6 +1396,8 @@ Evidence:
 
 ### Task 8.5: Public Documentation And Release Gate
 
+Status: implemented on 2026-07-10.
+
 Files:
 
 - Rewrite `packages/ziac/README.md` as a working quickstart.
@@ -1413,6 +1415,29 @@ Release gate:
 - Secret leak scan.
 - State migration fixtures.
 - Configured live test manifest.
+
+Commit: `Add the Ziac release gate`
+
+Evidence:
+
+- `zig build release-gate` composes formatting, all package and compile-fail
+  tests, scripted provider/state/interruption coverage, every example, the CLI,
+  a native-architecture ZigService container probe, required-file checks, and
+  credential/sentinel scanning without cloud access.
+- `release/live-tests.json` is strictly parsed and declares the GCP global,
+  Cockroach Cloud SQL, and local verified-TLS scenarios with required
+  environment names, safety constraints, and evidence fields but no values.
+- `production_global_service.zig` composes an adopted Cockroach cluster,
+  application SQL lifecycle, generated Secret Manager output, two-region PSC,
+  private DNS and Direct VPC, source-built Zig image, canary Cloud Run, global
+  HTTPS, and comptime `App.Env` binding. Its test proves two private regional
+  paths, no public allowlist, secret output wiring, and an acyclic graph.
+- The README is a working local and production quickstart. Architecture, auth,
+  live provider, state, rollout, roadmap, and release docs define the clean
+  checkout, security, operations, recovery, and evidence contracts.
+- The release gate completes 54 build steps with 351 of 352 tests passing; the
+  one skip is the explicitly credential-gated Cockroach Cloud SQL test. The
+  native arm64 distroless nonroot container probe passes.
 
 ### Task 8.6: Final End-To-End Verification
 

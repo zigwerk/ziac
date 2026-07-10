@@ -515,6 +515,18 @@ fn addRequiredApi(
 ) !void {
     var service = try project_service.Service.build(allocator, provider, .{ .service = service_name });
     defer service.deinit(allocator);
+    for (graph.resources.items) |*existing| {
+        if (!std.mem.eql(u8, existing.id, service.node.id)) continue;
+        if (existing.provider != service.node.provider or
+            existing.schema_version != service.node.schema_version or
+            !std.mem.eql(u8, existing.type_name, service.node.type_name) or
+            !std.mem.eql(u8, &existing.inputs_hash, &service.node.inputs_hash))
+        {
+            return error.DuplicateResource;
+        }
+        existing.lifecycle.retain_on_delete = true;
+        return;
+    }
     service.node.lifecycle.retain_on_delete = true;
     try graph.addResource(service.node);
 }
