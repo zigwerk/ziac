@@ -3,6 +3,7 @@ comptime {
     _ = @import("core_test.zig");
     _ = @import("value_test.zig");
     _ = @import("output_test.zig");
+    _ = @import("binding_test.zig");
     _ = @import("resource_graph_test.zig");
     _ = @import("state_test.zig");
     _ = @import("plan_test.zig");

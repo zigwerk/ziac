@@ -54,7 +54,8 @@ interrupted-resume integration tests.
 - Typed public and secret outputs: implemented and tested.
 - Automatic dependency derivation from output references: implemented and
   tested.
-- App `Env` and binding validation.
+- App `Env` and binding validation: implemented and unit tested; compile-fail
+  fixtures remain.
 - Provider-set validation.
 - Stable compile-fail diagnostics.
 

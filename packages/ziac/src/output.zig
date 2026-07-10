@@ -7,6 +7,11 @@ pub const Secrecy = enum {
     secret,
 };
 
+pub const Scope = enum {
+    global,
+    regional,
+};
+
 pub const OutputError = error{
     MissingOutput,
     OutputNotKnown,
@@ -30,11 +35,20 @@ pub fn Output(
     comptime T: type,
     comptime secrecy_kind: Secrecy,
 ) type {
+    return ScopedOutput(T, secrecy_kind, .global);
+}
+
+pub fn ScopedOutput(
+    comptime T: type,
+    comptime secrecy_kind: Secrecy,
+    comptime scope_kind: Scope,
+) type {
     return union(enum) {
         const Self = @This();
 
         pub const ValueType = T;
         pub const secrecy = secrecy_kind;
+        pub const scope = scope_kind;
 
         value: T,
         resource_ref: OutputRef,
@@ -85,6 +99,10 @@ pub fn PublicOutput(comptime T: type) type {
 
 pub fn SecretOutput(comptime T: type) type {
     return Output(T, .secret);
+}
+
+pub fn RegionalOutput(comptime T: type, comptime secrecy_kind: Secrecy) type {
+    return ScopedOutput(T, secrecy_kind, .regional);
 }
 
 pub fn Descriptor(

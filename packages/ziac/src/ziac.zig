@@ -6,6 +6,7 @@ pub const fx = zstd.fx;
 pub const core = @import("core.zig");
 pub const value = @import("value.zig");
 pub const output = @import("output.zig");
+pub const binding = @import("binding.zig");
 pub const resource = @import("resource.zig");
 pub const state = @import("state.zig");
 pub const state_format = @import("state_format.zig");

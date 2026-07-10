@@ -63,3 +63,9 @@ provider-assigned values. Binding a reference to a consumer derives one
 deduplicated graph edge. After mutation, references resolve from typed provider
 outputs in state; stack output files and CLI output therefore use observed values
 rather than builder-side URL conventions.
+
+Application `Env` structs use `binding.Value(T)` and `binding.Secret(T)` field
+descriptors. `validateBindings` reflects over the environment and supplied output
+struct types to enforce required and optional names, value types, secrecy, and
+regional scope. It returns the normalized binding struct type and emits stable
+`ZIAC100` through `ZIAC104` diagnostics for static contract failures.
