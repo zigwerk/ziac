@@ -1,16 +1,20 @@
 const std = @import("std");
 const client_mod = @import("client.zig");
+const connection_secret = @import("connection_secret.zig");
 const provider_mod = @import("../provider.zig");
 const resource = @import("../resource.zig");
+const secret = @import("../secret.zig");
 const state = @import("../state.zig");
 const validation = @import("validation.zig");
 const value = @import("../value.zig");
 
 const ProviderError = provider_mod.ProviderError;
 const existing_cluster_type = "cockroach.Cluster.Existing";
+const sql_user_type = "cockroach.SqlUser";
 
 pub const LiveProvider = struct {
     client: *client_mod.Client,
+    secret_source: ?secret.SecretSource = null,
 
     pub fn init(client: *client_mod.Client) LiveProvider {
         return .{ .client = client };
@@ -35,6 +39,7 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ReadResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (!isSupported(node)) return error.InvalidConfiguration;
+        if (isType(node, sql_user_type)) return self.readSqlUser(context, node);
         var diagnostic = client_mod.Diagnostic.init(context.allocator);
         defer diagnostic.deinit();
         var cluster = self.client.getClusterAlloc(context, try inputString(node.inputs, "cluster_id"), &diagnostic) catch |err| {
@@ -56,6 +61,7 @@ pub const LiveProvider = struct {
         if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash)) {
             return provider_mod.DiffResult.init(context.allocator, .noop, &.{});
         }
+        if (isType(node, sql_user_type)) return sqlUserDiff(context.allocator, node.inputs, observed.observed_inputs);
         return topologyDiff(context.allocator, node.inputs, observed.observed_inputs);
     }
 
@@ -65,17 +71,22 @@ pub const LiveProvider = struct {
         node: resource.ResourceNode,
     ) ProviderError!provider_mod.ResourceResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+        if (isType(node, sql_user_type)) return self.ensureSqlUser(context, node);
         return self.readExact(context, node);
     }
 
     fn update(
-        _: *anyopaque,
+        ptr: *anyopaque,
         context: *provider_mod.OperationContext,
         node: resource.ResourceNode,
         observed: *const provider_mod.ResourceResult,
     ) ProviderError!provider_mod.ResourceResult {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
+        if (isType(node, sql_user_type)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return self.ensureSqlUser(context, node);
+        }
         var result_diff = try topologyDiff(context.allocator, node.inputs, observed.observed_inputs);
         defer result_diff.deinit();
         if (result_diff.kind != .noop) return error.InvalidConfiguration;
@@ -83,13 +94,17 @@ pub const LiveProvider = struct {
     }
 
     fn delete(
-        _: *anyopaque,
+        ptr: *anyopaque,
         context: *provider_mod.OperationContext,
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!void {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
+        if (isType(node, sql_user_type)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return self.deleteSqlUser(context, node, physical_id);
+        }
         if (!std.mem.eql(u8, try inputString(node.inputs, "cluster_id"), physical_id)) {
             return error.InvalidConfiguration;
         }
@@ -103,6 +118,15 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (!isSupported(node)) return error.InvalidConfiguration;
+        if (isType(node, sql_user_type)) {
+            const expected = try sqlUserPhysicalIdAlloc(context.allocator, node);
+            defer context.allocator.free(expected);
+            if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
+            return switch (try self.readSqlUser(context, node)) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
         if (!std.mem.eql(u8, try inputString(node.inputs, "cluster_id"), physical_id)) {
             return error.InvalidConfiguration;
         }
@@ -124,7 +148,124 @@ pub const LiveProvider = struct {
         if (result_diff.kind != .noop) return error.InvalidConfiguration;
         return result;
     }
+
+    fn readSqlUser(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ReadResult {
+        const cluster_id = try inputString(node.inputs, "cluster_id");
+        const username = try inputString(node.inputs, "username");
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        const users = try self.client.listAllSqlUsersAlloc(context, cluster_id, &diagnostic);
+        defer client_mod.freeSqlUsers(context.allocator, users);
+        for (users) |user| {
+            if (std.mem.eql(u8, user.name, username)) {
+                return .{ .present = try sqlUserResult(context.allocator, node) };
+            }
+        }
+        return .absent;
+    }
+
+    fn ensureSqlUser(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ResourceResult {
+        const source = self.secret_source orelse return error.InvalidConfiguration;
+        const cluster_id = try inputString(node.inputs, "cluster_id");
+        const username = try inputString(node.inputs, "username");
+        const reference = try inputSecretReference(context, node.inputs, "connection_secret");
+        var payload = try source.resolve(context, context.allocator, reference);
+        defer payload.deinit();
+        const password = connection_secret.passwordFromConnectionUriAlloc(
+            context.allocator,
+            payload.bytes,
+            username,
+        ) catch |err| return switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            else => error.InvalidConfiguration,
+        };
+        defer {
+            std.crypto.secureZero(u8, password);
+            context.allocator.free(password);
+        }
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        const users = try self.client.listAllSqlUsersAlloc(context, cluster_id, &diagnostic);
+        defer client_mod.freeSqlUsers(context.allocator, users);
+        var exists = false;
+        for (users) |user| {
+            if (std.mem.eql(u8, user.name, username)) {
+                exists = true;
+                break;
+            }
+        }
+        if (exists) {
+            try self.client.resetSqlUserPassword(context, cluster_id, username, password, &diagnostic);
+        } else {
+            try self.client.createSqlUser(context, cluster_id, username, password, &diagnostic);
+        }
+        return sqlUserResult(context.allocator, node);
+    }
+
+    fn deleteSqlUser(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        const expected = try sqlUserPhysicalIdAlloc(context.allocator, node);
+        defer context.allocator.free(expected);
+        if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        try self.client.deleteSqlUser(
+            context,
+            try inputString(node.inputs, "cluster_id"),
+            try inputString(node.inputs, "username"),
+            &diagnostic,
+        );
+    }
 };
+
+fn sqlUserResult(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) ProviderError!provider_mod.ResourceResult {
+    const username = try inputString(node.inputs, "username");
+    const physical_id = try sqlUserPhysicalIdAlloc(allocator, node);
+    defer allocator.free(physical_id);
+    const outputs = [_]state.StateOutput{
+        .{ .name = "username", .value = .{ .string = username } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, null);
+}
+
+fn sqlUserPhysicalIdAlloc(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) ProviderError![]const u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "clusters/{s}/sql-users/{s}",
+        .{ try inputString(node.inputs, "cluster_id"), try inputString(node.inputs, "username") },
+    ) catch return error.OutOfMemory;
+}
+
+fn sqlUserDiff(
+    allocator: std.mem.Allocator,
+    desired: value.Value,
+    observed: value.Value,
+) ProviderError!provider_mod.DiffResult {
+    inline for (&.{ "cluster_id", "username" }) |field| {
+        if (!std.mem.eql(u8, try inputString(desired, field), try inputString(observed, field))) {
+            return provider_mod.DiffResult.init(allocator, .replace, &.{"SQL user identity changed"});
+        }
+    }
+    return provider_mod.DiffResult.init(allocator, .update, &.{"connection secret changed"});
+}
 
 fn resultFromCluster(
     allocator: std.mem.Allocator,
@@ -240,6 +381,26 @@ fn inputString(input: value.Value, name: []const u8) ProviderError![]const u8 {
     return error.InvalidConfiguration;
 }
 
+fn inputSecretReference(
+    context: *provider_mod.OperationContext,
+    input: value.Value,
+    name: []const u8,
+) ProviderError!value.SecretReference {
+    const fields = switch (input) {
+        .object => |fields| fields,
+        else => return error.InvalidConfiguration,
+    };
+    for (fields) |field| {
+        if (!std.mem.eql(u8, field.name, name)) continue;
+        return switch (field.value) {
+            .secret_ref => |reference| reference,
+            .output_ref => |reference| try context.resolveOutputSecret(reference),
+            else => error.InvalidConfiguration,
+        };
+    }
+    return error.InvalidConfiguration;
+}
+
 fn inputStringListAlloc(
     allocator: std.mem.Allocator,
     input: value.Value,
@@ -275,7 +436,11 @@ fn primaryRegion(regions: []const client_mod.Region) client_mod.Region {
 }
 
 fn isSupported(node: resource.ResourceNode) bool {
-    return std.mem.eql(u8, node.type_name, existing_cluster_type);
+    return isType(node, existing_cluster_type) or isType(node, sql_user_type);
+}
+
+fn isType(node: resource.ResourceNode, type_name: []const u8) bool {
+    return std.mem.eql(u8, node.type_name, type_name);
 }
 
 fn lessThanString(_: void, left: []const u8, right: []const u8) bool {

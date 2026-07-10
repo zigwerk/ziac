@@ -124,7 +124,8 @@ failure and destroys in reverse dependency order.
 - Secret-reference provider config: complete.
 - Existing-cluster topology, endpoint outputs, retained ownership, and scripted
   refresh/import lifecycle: complete.
-- SQL users and GCP Secret Manager connection bindings.
+- Idempotent SQL users, generated GCP Secret Manager connection bindings, and
+  persisted-secret retry convergence: complete.
 - Direct VPC egress, static NAT addresses, and narrow public allowlists.
 - Database, grants, migrations, transaction retry handling, and native pooled
   SQL/TLS runtime.

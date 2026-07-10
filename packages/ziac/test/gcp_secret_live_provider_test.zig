@@ -209,6 +209,7 @@ const FixedSecretSource = struct {
 
     fn resolve(
         raw: *anyopaque,
+        _: *ziac.provider.OperationContext,
         allocator: std.mem.Allocator,
         reference: ziac.value.SecretReference,
     ) ziac.provider.ProviderError!ziac.gcp.live_provider.SecretPayload {

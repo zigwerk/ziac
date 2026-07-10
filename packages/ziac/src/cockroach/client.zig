@@ -239,6 +239,63 @@ pub const Client = struct {
         return users.toOwnedSlice(context.allocator) catch return error.OutOfMemory;
     }
 
+    pub fn createSqlUser(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        username: []const u8,
+        password: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        const path = try sqlUsersPathAlloc(context.allocator, cluster_id, null);
+        defer context.allocator.free(path);
+        const body = std.json.Stringify.valueAlloc(context.allocator, .{
+            .name = username,
+            .password = password,
+        }, .{}) catch return error.OutOfMemory;
+        defer {
+            std.crypto.secureZero(u8, body);
+            context.allocator.free(body);
+        }
+        var response = try self.requestJsonAlloc(context, .{ .method = "POST", .path = path, .body = body }, diagnostic);
+        response.deinit(context.allocator);
+    }
+
+    pub fn resetSqlUserPassword(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        username: []const u8,
+        password: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        const path = try sqlUserPathAlloc(context.allocator, cluster_id, username, "/password");
+        defer context.allocator.free(path);
+        const body = std.json.Stringify.valueAlloc(context.allocator, .{ .password = password }, .{}) catch return error.OutOfMemory;
+        defer {
+            std.crypto.secureZero(u8, body);
+            context.allocator.free(body);
+        }
+        var response = try self.requestJsonAlloc(context, .{ .method = "PUT", .path = path, .body = body }, diagnostic);
+        response.deinit(context.allocator);
+    }
+
+    pub fn deleteSqlUser(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        username: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        const path = try sqlUserPathAlloc(context.allocator, cluster_id, username, "");
+        defer context.allocator.free(path);
+        var response = self.requestJsonAlloc(context, .{ .method = "DELETE", .path = path }, diagnostic) catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        response.deinit(context.allocator);
+    }
+
     pub fn requestJsonWithRetryAlloc(
         self: *Client,
         context: *provider.OperationContext,
@@ -392,12 +449,31 @@ fn sqlUsersPathAlloc(
     cluster_id: []const u8,
     page: ?[]const u8,
 ) std.mem.Allocator.Error![]const u8 {
+    const encoded_cluster = try queryEncodeAlloc(allocator, cluster_id);
+    defer allocator.free(encoded_cluster);
     if (page) |token| {
         const encoded = try queryEncodeAlloc(allocator, token);
         defer allocator.free(encoded);
-        return std.fmt.allocPrint(allocator, "/v1/clusters/{s}/sql-users?page={s}", .{ cluster_id, encoded });
+        return std.fmt.allocPrint(allocator, "/v1/clusters/{s}/sql-users?page={s}", .{ encoded_cluster, encoded });
     }
-    return std.fmt.allocPrint(allocator, "/v1/clusters/{s}/sql-users", .{cluster_id});
+    return std.fmt.allocPrint(allocator, "/v1/clusters/{s}/sql-users", .{encoded_cluster});
+}
+
+fn sqlUserPathAlloc(
+    allocator: std.mem.Allocator,
+    cluster_id: []const u8,
+    username: []const u8,
+    suffix: []const u8,
+) ProviderError![]const u8 {
+    const encoded_cluster = queryEncodeAlloc(allocator, cluster_id) catch return error.OutOfMemory;
+    defer allocator.free(encoded_cluster);
+    const encoded_username = queryEncodeAlloc(allocator, username) catch return error.OutOfMemory;
+    defer allocator.free(encoded_username);
+    return std.fmt.allocPrint(
+        allocator,
+        "/v1/clusters/{s}/sql-users/{s}{s}",
+        .{ encoded_cluster, encoded_username, suffix },
+    ) catch return error.OutOfMemory;
 }
 
 fn queryEncodeAlloc(allocator: std.mem.Allocator, value: []const u8) std.mem.Allocator.Error![]const u8 {

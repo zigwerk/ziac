@@ -168,14 +168,50 @@ test "Cockroach SQL user pagination is stable and percent encodes next page" {
     );
 }
 
+test "Cockroach client creates resets and deletes SQL users without retaining request passwords" {
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = "{}" },
+        .{ .status = 200, .body = "{}" },
+        .{ .status = 204, .body = "" },
+        .{ .status = 404, .body = "{\"message\":\"missing\"}" },
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    try client.createSqlUser(&context, "cluster-1", "app_user", "p@ss:/?#[]", &diagnostic);
+    try client.resetSqlUserPassword(&context, "cluster-1", "app_user", "next-password", &diagnostic);
+    try client.deleteSqlUser(&context, "cluster-1", "app_user", &diagnostic);
+    try client.deleteSqlUser(&context, "cluster-1", "app_user", &diagnostic);
+
+    try std.testing.expectEqualStrings("POST", transport.requests.items[0].method);
+    try std.testing.expectEqualStrings(
+        "https://cockroachlabs.cloud/api/v1/clusters/cluster-1/sql-users",
+        transport.requests.items[0].url,
+    );
+    try std.testing.expect(std.mem.indexOf(u8, transport.requests.items[0].body, "\"name\":\"app_user\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, transport.requests.items[0].body, "p@ss:/?#[]") != null);
+    try std.testing.expectEqualStrings("PUT", transport.requests.items[1].method);
+    try std.testing.expect(std.mem.endsWith(u8, transport.requests.items[1].url, "/sql-users/app_user/password"));
+    try std.testing.expectEqualStrings("DELETE", transport.requests.items[2].method);
+}
+
 const ObservedRequest = struct {
+    method: []const u8,
     url: []const u8,
+    body: []const u8,
     authorization: ?[]const u8,
     cc_version: ?[]const u8,
     content_type: ?[]const u8,
 
     fn deinit(self: *ObservedRequest, allocator: std.mem.Allocator) void {
+        allocator.free(self.method);
         allocator.free(self.url);
+        std.crypto.secureZero(u8, @constCast(self.body));
+        allocator.free(self.body);
         if (self.authorization) |value| allocator.free(value);
         if (self.cc_version) |value| allocator.free(value);
         if (self.content_type) |value| allocator.free(value);
@@ -213,7 +249,9 @@ pub const RecordingTransport = struct {
         try options.checkActive();
         if (self.cursor >= self.responses.len) return error.ScriptExhausted;
         const observed = ObservedRequest{
+            .method = try self.allocator.dupe(u8, request.method),
             .url = try self.allocator.dupe(u8, request.url),
+            .body = try self.allocator.dupe(u8, request.body),
             .authorization = try cloneHeader(self.allocator, request.headers, "authorization"),
             .cc_version = try cloneHeader(self.allocator, request.headers, "cc-version"),
             .content_type = try cloneHeader(self.allocator, request.headers, "content-type"),

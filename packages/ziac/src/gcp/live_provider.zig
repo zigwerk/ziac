@@ -6,6 +6,7 @@ const operation = @import("operation.zig");
 const run_provider = @import("run_provider.zig");
 const provider_mod = @import("../provider.zig");
 const resource = @import("../resource.zig");
+const secret_mod = @import("../secret.zig");
 const state = @import("../state.zig");
 const value = @import("../value.zig");
 
@@ -20,48 +21,9 @@ const secret_version_type = "gcp.secret.SecretVersion";
 const secret_iam_member_type = "gcp.secret.SecretIamMember";
 const cloud_run_service_type = "gcp.run.Service";
 
-pub const PayloadDeinitObserver = struct {
-    ptr: *anyopaque,
-    deinitFn: *const fn (*anyopaque) void,
-};
-
-pub const SecretPayload = struct {
-    allocator: std.mem.Allocator,
-    bytes: []u8,
-    observer: ?PayloadDeinitObserver = null,
-
-    pub fn initOwned(
-        allocator: std.mem.Allocator,
-        bytes: []const u8,
-        observer: ?PayloadDeinitObserver,
-    ) ProviderError!SecretPayload {
-        return .{
-            .allocator = allocator,
-            .bytes = allocator.dupe(u8, bytes) catch return error.OutOfMemory,
-            .observer = observer,
-        };
-    }
-
-    pub fn deinit(self: *SecretPayload) void {
-        std.crypto.secureZero(u8, self.bytes);
-        self.allocator.free(self.bytes);
-        if (self.observer) |observer| observer.deinitFn(observer.ptr);
-        self.* = undefined;
-    }
-};
-
-pub const SecretSource = struct {
-    ptr: *anyopaque,
-    resolveFn: *const fn (*anyopaque, std.mem.Allocator, value.SecretReference) ProviderError!SecretPayload,
-
-    pub fn resolve(
-        self: SecretSource,
-        allocator: std.mem.Allocator,
-        reference: value.SecretReference,
-    ) ProviderError!SecretPayload {
-        return self.resolveFn(self.ptr, allocator, reference);
-    }
-};
+pub const PayloadDeinitObserver = secret_mod.PayloadDeinitObserver;
+pub const SecretPayload = secret_mod.SecretPayload;
+pub const SecretSource = secret_mod.SecretSource;
 
 pub const LiveProvider = struct {
     client: *client_mod.Client,
@@ -663,7 +625,7 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const source = self.secret_source orelse return error.InvalidConfiguration;
         const reference = try requiredSecretInput(node, "source");
-        var payload = try source.resolve(context.allocator, reference);
+        var payload = try source.resolve(context, context.allocator, reference);
         defer payload.deinit();
         const encoded_size = std.base64.standard.Encoder.calcSize(payload.bytes.len);
         const encoded = context.allocator.alloc(u8, encoded_size) catch return error.OutOfMemory;

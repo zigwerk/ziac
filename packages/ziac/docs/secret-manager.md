@@ -19,8 +19,9 @@ name and numeric version, never the payload.
 
 ## Payload Ownership
 
-`gcp.live_provider.SecretSource` resolves an input `SecretReference` only when a
-version create call executes. It returns an owned `SecretPayload`. The provider:
+`ziac.secret.SecretSource` resolves an input `SecretReference` with the active
+provider operation context only when a version create or access call executes.
+It returns an owned `SecretPayload`. The GCP provider:
 
 1. keeps the plaintext in that owned buffer;
 2. base64-encodes it for the Google request;
@@ -31,6 +32,12 @@ version create call executes. It returns an owned `SecretPayload`. The provider:
 A missing source fails before any Google mutation. Scripted tests prove payload
 deinitialization and reject plaintext sentinel values in desired and observed
 documents and captured request bodies.
+
+`gcp.secret_access.SecretManagerSource` implements the inverse boundary for
+consumers. It accepts only a typed `gcp-secret-manager` reference with a valid
+resource path and numeric version, calls `versions:access`, and base64-decodes
+the response directly into an owned zeroing payload. This is used by the
+Cockroach SQL-user provider after the version is durably checkpointed.
 
 ## Refresh And IAM
 

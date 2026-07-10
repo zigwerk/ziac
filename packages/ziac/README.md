@@ -102,7 +102,11 @@ secret, decodes cluster and regional connection topology plus SQL users through
 typed schemas, and performs bounded `Retry-After`-aware pagination. Transport
 and Authentication M3 is complete. Existing CockroachDB clusters can now be
 adopted as retained, read-only resources with deterministic topology drift and
-missing-cluster refresh behavior.
+missing-cluster refresh behavior. `cockroach.ConnectionSecret` adds a
+secret-first graph for cryptographically generated `verify-full` connection
+URIs and idempotent SQL-user create/reset/delete behavior. State retains only
+the typed Secret Manager version reference, and a failed user write converges
+from that persisted version on retry.
 The first Live GCP Primitives slice is implemented behind the provider
 interface: typed project-service, service-account, and project-member resources
 pass full scripted read/diff/create/update/delete/import lifecycles. Service
@@ -131,7 +135,8 @@ warm-instance/probe validation.
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts and
 `docs/cockroach-existing-cluster.md` for retained cluster adoption. See
-`docs/secret-manager.md` for the secret payload boundary, and
+`docs/cockroach-connection-secret.md` for SQL-user and Secret Manager wiring.
+See `docs/secret-manager.md` for the secret payload boundary, and
 `docs/cloud-run.md` for the Cloud Run request and lifecycle contract. See
 `docs/live-gcp.md` for CLI selection and disposable-project safeguards, and
 `docs/compute-load-balancer.md` for the raw load-balancer resources. See

@@ -5,6 +5,7 @@ pub const fx = zstd.fx;
 
 pub const core = @import("core.zig");
 pub const value = @import("value.zig");
+pub const secret = @import("secret.zig");
 pub const output = @import("output.zig");
 pub const binding = @import("binding.zig");
 pub const resource = @import("resource.zig");

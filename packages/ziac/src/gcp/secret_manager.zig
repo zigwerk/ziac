@@ -63,6 +63,7 @@ pub const SecretVersionArgs = struct {
     name: []const u8,
     secret_id: []const u8,
     source: value.SecretReference,
+    source_dependencies: []const output.Output([]const u8, .public) = &.{},
 };
 
 pub const SecretVersion = struct {
@@ -88,19 +89,39 @@ pub const SecretVersion = struct {
         if (args.source.provider.len == 0 or args.source.resource.len == 0) return error.InvalidSecretReference;
         const id = try std.fmt.allocPrint(allocator, "gcp.secret.SecretVersion.{s}.{s}", .{ args.secret_id, args.name });
         defer allocator.free(id);
-        const fields = [_]value.Field{
-            .{ .name = "name", .value = .{ .string = args.name } },
-            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
-            .{ .name = "secret_id", .value = .{ .string = args.secret_id } },
-            .{ .name = "source", .value = .{ .secret_ref = args.source } },
-        };
+        const dependency_values = try allocator.alloc(value.Value, args.source_dependencies.len);
+        defer allocator.free(dependency_values);
+        for (args.source_dependencies, 0..) |dependency, index| {
+            dependency_values[index] = switch (dependency) {
+                .value => |known| .{ .string = known },
+                .resource_ref => |reference| .{ .output_ref = .{
+                    .resource_id = reference.resource_id,
+                    .field = reference.field,
+                } },
+                .unknown_reason => return error.InvalidSecretReference,
+            };
+        }
+        var fields: [5]value.Field = undefined;
+        var field_count: usize = 0;
+        fields[field_count] = .{ .name = "name", .value = .{ .string = args.name } };
+        field_count += 1;
+        fields[field_count] = .{ .name = "project_id", .value = .{ .string = provider.project_id } };
+        field_count += 1;
+        fields[field_count] = .{ .name = "secret_id", .value = .{ .string = args.secret_id } };
+        field_count += 1;
+        fields[field_count] = .{ .name = "source", .value = .{ .secret_ref = args.source } };
+        field_count += 1;
+        if (dependency_values.len > 0) {
+            fields[field_count] = .{ .name = "source_dependencies", .value = .{ .list = dependency_values } };
+            field_count += 1;
+        }
         const node = try nodeOwned(allocator, .{
             .id = id,
             .provider = .gcp,
             .type_name = "gcp.secret.SecretVersion",
             .schema_version = 1,
             .logical_id = args.name,
-            .inputs = .{ .object = &fields },
+            .inputs = .{ .object = fields[0..field_count] },
         });
         return .{ .node = node, .version = Outputs.Version.fromResource(node.id) };
     }

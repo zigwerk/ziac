@@ -6,6 +6,7 @@ pub const ValidationError = error{
     InvalidClusterId,
     MissingRegion,
     DuplicateRegion,
+    InvalidUsername,
 };
 
 pub const RegionCompatibility = struct {
@@ -62,6 +63,16 @@ pub fn validateClusterId(cluster_id: []const u8) ValidationError!void {
     if (cluster_id.len == 0) return error.MissingClusterId;
     for (cluster_id) |character| {
         if (!std.ascii.isAlphanumeric(character) and character != '-') return error.InvalidClusterId;
+    }
+}
+
+pub fn validateUsername(username: []const u8) ValidationError!void {
+    if (username.len == 0 or username.len > 63) return error.InvalidUsername;
+    if (!std.ascii.isLower(username[0]) and username[0] != '_') return error.InvalidUsername;
+    for (username[1..]) |character| {
+        if (!std.ascii.isLower(character) and !std.ascii.isDigit(character) and character != '_') {
+            return error.InvalidUsername;
+        }
     }
 }
 

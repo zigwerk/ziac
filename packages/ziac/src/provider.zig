@@ -170,6 +170,22 @@ pub const OperationContext = struct {
         }
         return error.InvalidConfiguration;
     }
+
+    pub fn resolveOutputSecret(
+        self: *const OperationContext,
+        reference: value.OutputReference,
+    ) ProviderError!value.SecretReference {
+        const store = self.state orelse return error.InvalidConfiguration;
+        const record = store.get(reference.resource_id) orelse return error.InvalidConfiguration;
+        for (record.outputs) |provider_output| {
+            if (!std.mem.eql(u8, provider_output.name, reference.field)) continue;
+            return switch (provider_output.value) {
+                .secret_ref => |secret| secret,
+                else => error.InvalidConfiguration,
+            };
+        }
+        return error.InvalidConfiguration;
+    }
 };
 
 pub const Provider = struct {

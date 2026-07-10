@@ -856,6 +856,9 @@ Commit: `Verify Ziac global Cloud Run deployments`
 
 ### Task 6.1: Provider Config And Existing Cluster
 
+Status: completed on 2026-07-10. Authenticated Cockroach Cloud verification is
+owned by Task 6.7.
+
 Files:
 
 - Add Cockroach provider root, config, validation, and existing-cluster modules.
@@ -868,9 +871,21 @@ Tests:
 - Existing cluster refresh detects missing and changed topology.
 - Region compatibility diagnostics are deterministic.
 
+Evidence:
+
+- API keys are environment-backed secret references and are absent from
+  resource state.
+- The pinned Cloud API decoder owns cluster, region, and public/private endpoint
+  fields from the current response contract.
+- Scripted provider and `refreshGraph` tests cover exact topology, changed
+  topology, missing clusters, import, and retained detach-only destroy.
+
 Commit: `Add CockroachDB existing cluster resources`
 
 ### Task 6.2: SQL User And Connection Secret
+
+Status: completed on 2026-07-10. Authenticated Secret Manager and Cockroach
+Cloud verification is owned by Task 6.7.
 
 Resources:
 
@@ -885,6 +900,17 @@ Tests:
 - Connection URI encoding handles reserved characters.
 - TLS mode defaults to `verify-full`.
 - State retains Secret Manager reference only.
+
+Evidence:
+
+- `ConnectionSecret` creates an explicit secret-first, five-resource graph with
+  typed dependencies from cluster endpoint through Secret Manager to SQL user.
+- Production passwords use `std.Io.randomSecure`; deterministic sources are
+  injectable in tests and all owned password/payload buffers are zeroed.
+- Secret Manager `versions:access` resolves only typed numeric version
+  references, and `SqlUser` creates or resets idempotently from the stored URI.
+- Scripted failure coverage proves a persisted secret plus failed user write
+  converges on retry without password plaintext in desired or observed state.
 
 Commit: `Add CockroachDB connection secret bindings`
 
