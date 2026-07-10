@@ -4,6 +4,8 @@ Date: 2026-07-10
 
 Design: `docs/superpowers/specs/2026-07-10-ziac-cockroach-sql-design.md`
 
+Status: completed on 2026-07-10.
+
 ## Task 1: Executor And SQL Safety
 
 1. Add failing tests for owned query results, SQLSTATE diagnostics, identifier
@@ -55,3 +57,16 @@ Design: `docs/superpowers/specs/2026-07-10-ziac-cockroach-sql-design.md`
 4. Run Ziac, zigeffect-std, zigeffect-postgres, examples, build, format, secret
    scan, and diff checks.
 5. Commit `Add CockroachDB SQL resources and migrations`.
+
+## Completion Evidence
+
+- Database, grants, and migration scripted lifecycles pass read, diff, create,
+  update, delete, refresh, and import contracts as applicable.
+- `40001`, `40003`, checksum conflicts, ordered chaining, and actual concurrent
+  caller serialization are deterministic tests.
+- `ApplicationDatabase` builds the administrator bootstrap and application
+  migration graph with typed dependency edges.
+- Both `psql` and native adapters preserve SQLSTATE without retaining server
+  messages, SQL output, or connection URIs in diagnostics.
+- `bun run zigeffect:postgres:cockroach-live-test` passes against a disposable
+  secure CockroachDB v26.2.3 container over `sslmode=verify-full`.

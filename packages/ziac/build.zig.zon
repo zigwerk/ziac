@@ -7,6 +7,9 @@
         .zigeffect_std = .{
             .path = "../zigeffect-std",
         },
+        .zigeffect_postgres = .{
+            .path = "../zigeffect-postgres",
+        },
     },
     .paths = .{
         "README.md",

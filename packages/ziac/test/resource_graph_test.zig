@@ -38,6 +38,42 @@ test "resource graph rejects duplicate resource ids" {
     }));
 }
 
+test "resource graph appends an owned graph and preserves explicit dependencies" {
+    var source = ziac.ResourceGraph.init(std.testing.allocator);
+    defer source.deinit();
+    try source.addResource(.{ .id = "dependency", .type_name = "test.Dependency", .logical_id = "dependency" });
+    try source.addResource(.{ .id = "consumer", .type_name = "test.Consumer", .logical_id = "consumer" });
+    try source.addDependency("consumer", "dependency");
+
+    var destination = ziac.ResourceGraph.init(std.testing.allocator);
+    defer destination.deinit();
+    try destination.addResource(.{ .id = "base", .type_name = "test.Base", .logical_id = "base" });
+    try destination.appendGraph(&source);
+
+    try std.testing.expectEqual(@as(usize, 3), destination.resources.items.len);
+    try std.testing.expectEqual(@as(usize, 1), destination.dependencies.items.len);
+    try std.testing.expectEqualStrings("consumer", destination.dependencies.items[0].from);
+    try std.testing.expectEqualStrings("dependency", destination.dependencies.items[0].to);
+    try destination.validateAcyclic();
+}
+
+test "resource graph append rolls back resources and edges on conflict" {
+    var source = ziac.ResourceGraph.init(std.testing.allocator);
+    defer source.deinit();
+    try source.addResource(.{ .id = "new", .type_name = "test.New", .logical_id = "new" });
+    try source.addResource(.{ .id = "duplicate", .type_name = "test.Duplicate", .logical_id = "duplicate" });
+    try source.addDependency("duplicate", "new");
+
+    var destination = ziac.ResourceGraph.init(std.testing.allocator);
+    defer destination.deinit();
+    try destination.addResource(.{ .id = "duplicate", .type_name = "test.Existing", .logical_id = "existing" });
+
+    try std.testing.expectError(error.DuplicateResource, destination.appendGraph(&source));
+    try std.testing.expectEqual(@as(usize, 1), destination.resources.items.len);
+    try std.testing.expectEqual(@as(usize, 0), destination.dependencies.items.len);
+    try std.testing.expectEqualStrings("duplicate", destination.resources.items[0].id);
+}
+
 test "resource graph detects a dependency cycle" {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     defer graph.deinit();

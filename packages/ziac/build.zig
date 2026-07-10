@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const zigeffect_std = b.dependency("zigeffect_std", .{}).module("zigeffect_std");
+    const zigeffect_postgres = b.dependency("zigeffect_postgres", .{}).module("zigeffect_postgres");
 
     const ziac = b.addModule("ziac", .{
         .root_source_file = b.path("src/ziac.zig"),
@@ -12,6 +13,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     ziac.addImport("zigeffect_std", zigeffect_std);
+    ziac.addImport("zigeffect_postgres", zigeffect_postgres);
 
     const tests = b.createModule(.{
         .root_source_file = b.path("test/all_test.zig"),
@@ -51,6 +53,7 @@ pub fn build(b: *std.Build) void {
     examples_step.dependOn(test_step);
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "local-cli", "examples/local_cli.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "global-container-service", "examples/global_container_service.zig");
+    addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-application-database", "examples/cockroach_application_database.zig");
 }
 
 fn addExample(

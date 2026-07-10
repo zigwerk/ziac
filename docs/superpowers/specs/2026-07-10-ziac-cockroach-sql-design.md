@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: validated for Task 6.4 implementation.
+Status: implemented and verified for Task 6.4.
 
 ## Goal
 
@@ -10,9 +10,11 @@ Add the SQL half of the CockroachDB provider: protected database creation,
 least-privilege grants, immutable ordered migrations, Cockroach transaction
 retry behavior, and a production Zig PostgreSQL/TLS pool suitable for Cloud Run.
 
-The resource graph must retain only Secret Manager references. Connection URI
-plaintext exists only in an owned, zeroed buffer while a provider operation is
-executing.
+The resource graph must retain only Secret Manager references. The local adapter
+holds connection plaintext only for one operation. The native adapter retains it
+only in owned pool-generation memory required for reconnects, scrubs the wrapper
+URI and driver password before teardown, and never writes it to state,
+diagnostics, receipts, or logs owned by Ziac.
 
 ## Boundaries
 
@@ -163,7 +165,7 @@ and jitter.
 - `verify_full` required by default;
 - startup connection validation;
 - `SELECT 1` validation before reuse after an idle threshold;
-- maximum connection lifetime with per-connection jitter;
+- maximum idle pool-generation lifetime with deterministic jitter;
 - TCP keepalive enabled;
 - redacted metrics and diagnostics.
 

@@ -70,6 +70,8 @@ test "ConnectionSecret builds secret-first graph and exposes only Secret Manager
     try std.testing.expectEqual(@as(usize, 1), countType(&component.graph, "cockroach.SqlUser"));
     try std.testing.expectEqual(@as(usize, 1), countType(&component.graph, "gcp.secret.SecretIamMember"));
     try std.testing.expect(component.secret_version == .resource_ref);
+    try std.testing.expect(component.cluster_id == .resource_ref);
+    try std.testing.expect(component.sql_user == .resource_ref);
     try std.testing.expectEqual(ziac.output.Secrecy.secret, @TypeOf(component.secret_version).secrecy);
     try std.testing.expectEqualStrings("cockroach.ConnectionSecret.production", component.payload_spec.source_resource);
     try component.graph.validateAcyclic();

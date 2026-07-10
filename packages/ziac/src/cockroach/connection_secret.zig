@@ -211,9 +211,13 @@ pub const BuildError = existing_cluster.BuildError || gcp_secret.BuildError || s
 pub const ConnectionSecret = struct {
     allocator: std.mem.Allocator,
     graph: resource.ResourceGraph,
+    cluster_id: existing_cluster.ExistingCluster.Outputs.ClusterId.OutputType,
     secret_version: gcp_secret.SecretVersion.Outputs.Version.OutputType,
+    sql_user: sql_user.SqlUser.Outputs.Username.OutputType,
     payload_spec: PayloadSpec,
+    cluster_resource_id: []const u8,
     secret_version_resource_id: []const u8,
+    sql_user_resource_id: []const u8,
 
     pub fn build(
         allocator: std.mem.Allocator,
@@ -284,20 +288,30 @@ pub const ConnectionSecret = struct {
             .username = args.username,
         });
         errdefer payload_spec.deinit();
+        const cluster_resource_id = try allocator.dupe(u8, cluster.node.id);
+        errdefer allocator.free(cluster_resource_id);
         const version_resource_id = try allocator.dupe(u8, version.node.id);
+        errdefer allocator.free(version_resource_id);
+        const sql_user_resource_id = try allocator.dupe(u8, user.node.id);
         return .{
             .allocator = allocator,
             .graph = graph,
+            .cluster_id = existing_cluster.ExistingCluster.Outputs.ClusterId.fromResource(cluster_resource_id),
             .secret_version = gcp_secret.SecretVersion.Outputs.Version.fromResource(version_resource_id),
+            .sql_user = sql_user.SqlUser.Outputs.Username.fromResource(sql_user_resource_id),
             .payload_spec = payload_spec,
+            .cluster_resource_id = cluster_resource_id,
             .secret_version_resource_id = version_resource_id,
+            .sql_user_resource_id = sql_user_resource_id,
         };
     }
 
     pub fn deinit(self: *ConnectionSecret) void {
         self.graph.deinit();
         self.payload_spec.deinit();
+        self.allocator.free(self.cluster_resource_id);
         self.allocator.free(self.secret_version_resource_id);
+        self.allocator.free(self.sql_user_resource_id);
         self.* = undefined;
     }
 

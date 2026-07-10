@@ -961,6 +961,9 @@ Commit: `Add safe CockroachDB public connectivity`
 
 ### Task 6.4: Database, Grants, And Migrations
 
+Status: completed on 2026-07-10. Authenticated CockroachDB Cloud and Cloud Run
+data-path execution remains part of Task 6.7.
+
 Resources:
 
 - `cockroach.Database`
@@ -984,6 +987,20 @@ Implementation:
 - Add bounded connection pooling, validation, lifetime, and jitter.
 
 Commit: `Add CockroachDB SQL resources and migrations`
+
+Evidence:
+
+- Full scripted lifecycles cover protected databases, exact direct grants, and
+  immutable checksummed migrations.
+- `ApplicationDatabase` composes administrator bootstrap, generated application
+  credentials, database, grants, and ordered migrations without plaintext state.
+- SQLSTATE `40001`, ambiguous `40003`, and concurrent migration callers are
+  tested; transaction SQL uses a singleton `FOR UPDATE` lock.
+- The local `psql` adapter uses a secret-free argv and redacted diagnostics.
+- The pinned native `pg.zig` pool requires `sslmode=verify-full`, validates and
+  rotates eager idle generations, and passes the reproducible CockroachDB
+  v26.2.3 TLS container gate for a typed query plus real database, grant,
+  migration, refresh, revoke, and drop lifecycles.
 
 ### Task 6.5: Cockroach Cluster Provisioning
 

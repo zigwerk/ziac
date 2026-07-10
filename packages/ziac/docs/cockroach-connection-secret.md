@@ -5,6 +5,11 @@ for an existing GCP-hosted CockroachDB Cloud cluster. It creates a dependency
 graph that persists a generated connection URI before applying its password to
 the SQL user.
 
+For a complete database, grants, and migration graph, use
+`cockroach.application_database.ApplicationDatabase`; it composes this binding
+with a separate bootstrap administrator secret so the target database is created
+before the generated application URI is used.
+
 ## Resource Graph
 
 With an accessor member configured, the component owns five resources:

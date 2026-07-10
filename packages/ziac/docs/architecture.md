@@ -69,6 +69,12 @@ which keeps refresh and subsequent plans stable without replacing the desired
 reference with a transient concrete value. Stack output files and CLI output
 therefore use observed values rather than builder-side URL conventions.
 
+High-level components transfer or transactionally append owned resource graphs.
+Append clones nodes, rebinds edges to destination-owned IDs, validates cycles,
+and rolls back every inserted node and edge on conflict. CockroachDB's
+`ApplicationDatabase` uses this ownership model to order existing topology,
+generated credentials, administrator bootstrap, grants, and migration outputs.
+
 Application `Env` structs use `binding.Value(T)` and `binding.Secret(T)` field
 descriptors. `validateBindings` reflects over the environment and supplied output
 struct types to enforce required and optional names, value types, secrecy, and

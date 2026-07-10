@@ -32,9 +32,10 @@ automated and live tests pass.
   tested without credential leakage.
 - Live GCP provider calls, raw global-routing resources, and the high-level
   global component are implemented behind explicit safety gates. The
-  CockroachDB existing-cluster provider slice is implemented. Authenticated live
-  acceptance, mutable CockroachDB resources, remote state, and source builds
-  remain pending.
+  CockroachDB existing-cluster, SQL user, database, grants, migrations, and
+  native verified-TLS provider slices are implemented. Authenticated cloud
+  acceptance, cluster provisioning, private connectivity, remote state, and
+  source builds remain pending.
 
 ## M0: Integration And Architecture
 
@@ -129,8 +130,10 @@ failure and destroys in reverse dependency order.
 - Direct VPC egress, static NAT addresses, and narrow public allowlists:
   complete with scripted GCP/Cockroach lifecycles; authenticated live execution
   pending.
-- Database, grants, migrations, transaction retry handling, and native pooled
-  SQL/TLS runtime.
+- Database, exact grants, immutable migrations, transaction retry handling,
+  concurrent serialization, high-level application database composition, and
+  native pooled SQL/TLS runtime: complete, including a disposable secure local
+  CockroachDB gate.
 - Protected cluster provisioning and Private Service Connect.
 
 Gate: the global Cloud Run sample reads and writes CockroachDB over TLS without

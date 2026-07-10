@@ -1,4 +1,5 @@
 pub const client = @import("client.zig");
+pub const application_database = @import("application_database.zig");
 pub const authorized_network = @import("authorized_network.zig");
 pub const connection_secret = @import("connection_secret.zig");
 pub const config = @import("config.zig");
@@ -7,7 +8,9 @@ pub const existing_cluster = @import("existing_cluster.zig");
 pub const grants = @import("grants.zig");
 pub const live_provider = @import("live_provider.zig");
 pub const migration = @import("migration.zig");
+pub const native_executor = @import("native_executor.zig");
 pub const public_egress = @import("public_egress.zig");
+pub const psql_executor = @import("psql_executor.zig");
 pub const sql = @import("sql.zig");
 pub const sql_provider = @import("sql_provider.zig");
 pub const sql_user = @import("sql_user.zig");

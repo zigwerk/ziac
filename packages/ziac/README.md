@@ -112,6 +112,13 @@ subnet, router, Premium static address, manual NAT, and SQL-only Cockroach `/32`
 allowlist per Cloud Run region. Direct VPC consumes typed network outputs, and
 the NAT lifecycle preserves unrelated router configuration during updates and
 destroy.
+`cockroach.application_database.ApplicationDatabase` now composes the existing
+cluster, generated application secret and SQL user, protected database, exact
+grants, and immutable ordered migrations. SQLSTATE-aware `psql` and native
+`pg.zig` executors are implemented; the native pool requires verified TLS,
+rotates idle generations, and passes a reproducible secure CockroachDB container
+gate. Provider state and diagnostics retain only typed secret references and
+SQLSTATE categories.
 The first Live GCP Primitives slice is implemented behind the provider
 interface: typed project-service, service-account, and project-member resources
 pass full scripted read/diff/create/update/delete/import lifecycles. Service
@@ -143,6 +150,8 @@ See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-connection-secret.md` for SQL-user and Secret Manager wiring.
 See `docs/public-static-egress.md` for the initial public Cockroach connectivity
 topology and its production safety policy.
+See `docs/cockroach-sql.md` for application database composition, SQL resource
+lifecycles, migration semantics, and native execution.
 See `docs/secret-manager.md` for the secret payload boundary, and
 `docs/cloud-run.md` for the Cloud Run request and lifecycle contract. See
 `docs/live-gcp.md` for CLI selection and disposable-project safeguards, and

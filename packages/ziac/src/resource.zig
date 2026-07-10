@@ -118,6 +118,22 @@ pub const ResourceGraph = struct {
         try self.bindInputReferences(stored.id, stored.inputs);
     }
 
+    pub fn appendGraph(self: *ResourceGraph, source: *const ResourceGraph) ResourceGraphError!void {
+        const resource_count = self.resources.items.len;
+        const dependency_count = self.dependencies.items.len;
+        errdefer {
+            while (self.dependencies.items.len > dependency_count) _ = self.dependencies.pop();
+            while (self.resources.items.len > resource_count) {
+                var removed = self.resources.pop().?;
+                removed.deinit(self.allocator);
+            }
+        }
+
+        for (source.resources.items) |node| try self.addResource(node);
+        for (source.dependencies.items) |edge| try self.addDependency(edge.from, edge.to);
+        try self.validateAcyclic();
+    }
+
     pub fn addDependency(self: *ResourceGraph, from: []const u8, to: []const u8) ResourceGraphError!void {
         const from_index = self.indexOf(from) orelse return error.MissingResource;
         const to_index = self.indexOf(to) orelse return error.MissingResource;
