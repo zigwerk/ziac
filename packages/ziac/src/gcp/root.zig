@@ -9,6 +9,7 @@ pub const project_service = @import("project_service.zig");
 pub const iam = @import("iam.zig");
 pub const live_provider = @import("live_provider.zig");
 pub const secret_manager = @import("secret_manager.zig");
+pub const run_provider = @import("run_provider.zig");
 
 pub const ValidationError = validation.ValidationError;
 pub const ProviderConfig = config.ProviderConfig;

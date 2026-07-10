@@ -54,7 +54,7 @@ is the convenience form when the caller only needs the terminal payload.
 
 ## First Live Resources
 
-`gcp.live_provider.LiveProvider` currently implements three resource types:
+`gcp.live_provider.LiveProvider` currently implements these resource families:
 
 - `gcp.project.Service` reads Service Usage state and waits for enable/disable
   operations;
@@ -67,6 +67,8 @@ is the convenience form when the caller only needs the terminal payload.
   repository only when immutable identity, format, and labels match exactly.
 - `gcp.secret.Secret`, `SecretVersion`, and `SecretIamMember` manage secret
   metadata, opaque version references, and resource-scoped accessor policy.
+- `gcp.run.Service` translates canonical runtime state to Cloud Run v2 and
+  normalizes the live service back into the same value model for drift diffing.
 
 Project-member mutations target only unconditional bindings for the requested
 role. Conditional bindings, audit configuration, policy version, etag, and

@@ -265,6 +265,7 @@ fn resumeIncompleteOperations(environment: *ExecutionEnvironment) ExecuteError!v
         const started_at = environment.clock.nowMs();
         var operation_context = operationContext(environment, operation, started_at);
         operation_context.physical_id = existing.physical_id;
+        operation_context.operation_handle = existing.operation_handle;
         var read = try provider.readWithContext(&operation_context, operation.resource);
         defer read.deinit();
         switch (read) {

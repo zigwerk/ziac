@@ -108,7 +108,12 @@ pub fn buildRefreshedPlan(
 
     for (graph.resources.items) |node| {
         const provider = try providers.get(node.provider);
-        var read = try provider.read(allocator, node);
+        var context = provider_mod.OperationContext.init(allocator);
+        if (store.get(node.id)) |existing| {
+            context.physical_id = existing.physical_id;
+            context.operation_handle = existing.operation_handle;
+        }
+        var read = try provider.readWithContext(&context, node);
         defer read.deinit();
         switch (read) {
             .absent => try appendGraphOperation(

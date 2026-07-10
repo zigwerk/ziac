@@ -90,7 +90,7 @@ credentials.
 - Artifact Registry: scripted lifecycle complete; live gate pending.
 - Secret Manager: scripted metadata, version, and IAM lifecycle complete; live
   gate pending.
-- Cloud Run v2.
+- Cloud Run v2: scripted full-runtime lifecycle complete; live gate pending.
 - Live provider selection and guarded disposable-project tests.
 
 Gate: an existing image completes create/read/update/noop/destroy in one Cloud

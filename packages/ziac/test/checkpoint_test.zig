@@ -183,7 +183,7 @@ test "failed atomic resource save leaves the previous state file intact" {
     try std.testing.expectEqual(@as(usize, 0), files.ordinary_writes);
 }
 
-test "pending provider operation persists its handle and resumes by adoption" {
+test "pending provider operation checkpoints its handle before completing by read" {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     defer graph.deinit();
     try addNode(&graph, "service");
@@ -199,30 +199,16 @@ test "pending provider operation persists its handle and resumes by adoption" {
     providers.register(.gcp, fake.provider());
     var first_checkpoints = Recorder{};
 
-    try std.testing.expectError(
-        error.OperationPending,
-        ziac.executor.executePlan(std.testing.allocator, &first_plan, &state, providers, .{
-            .checkpoint = first_checkpoints.checkpoint(),
-        }),
-    );
-    const pending = state.get("service").?;
-    try std.testing.expectEqual(ziac.ResourceStatus.creating, pending.status);
-    try std.testing.expectEqualStrings("operations/create-service", pending.operation_handle.?);
-    try std.testing.expectEqual(@as(usize, 1), first_checkpoints.calls);
-
-    var resume_plan = try ziac.plan.buildPlan(std.testing.allocator, &graph, &state);
-    defer resume_plan.deinit();
-    var resume_checkpoints = Recorder{};
-    try ziac.executor.executePlan(std.testing.allocator, &resume_plan, &state, providers, .{
-        .checkpoint = resume_checkpoints.checkpoint(),
+    try ziac.executor.executePlan(std.testing.allocator, &first_plan, &state, providers, .{
+        .checkpoint = first_checkpoints.checkpoint(),
     });
 
     const adopted = state.get("service").?;
-    try std.testing.expectEqual(ziac.ResourceStatus.adopted, adopted.status);
+    try std.testing.expectEqual(ziac.ResourceStatus.created, adopted.status);
     try std.testing.expectEqualStrings("fake/service", adopted.physical_id.?);
     try std.testing.expect(adopted.operation_handle == null);
     try std.testing.expectEqual(@as(usize, 1), fake.creates);
-    try std.testing.expectEqual(@as(usize, 1), resume_checkpoints.calls);
+    try std.testing.expectEqual(@as(usize, 2), first_checkpoints.calls);
 }
 
 test "pending operation that is not remotely visible is never duplicated" {

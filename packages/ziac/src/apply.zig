@@ -66,9 +66,12 @@ fn applyCreate(
         operation.dependencies,
         result,
         if (result.completed) final_status else .creating,
+        result.operation_handle,
     );
     try saveCheckpoint(checkpoint, store);
-    if (!result.completed) return error.OperationPending;
+    if (!result.completed) {
+        try completePendingMutation(context, store, provider, operation, result, checkpoint, final_status);
+    }
 }
 
 fn applyUpdate(
@@ -80,7 +83,10 @@ fn applyUpdate(
 ) ApplyError!void {
     const node = operation.resource;
     try putPendingState(context.allocator, store, node, operation.dependencies, .updating);
-    if (store.get(node.id)) |existing| context.physical_id = existing.physical_id;
+    if (store.get(node.id)) |existing| {
+        context.physical_id = existing.physical_id;
+        context.operation_handle = existing.operation_handle;
+    }
     var read = provider.readWithContext(context, node) catch |err| {
         try markFailedAndCheckpoint(store, node.id, checkpoint);
         return err;
@@ -101,9 +107,12 @@ fn applyUpdate(
         operation.dependencies,
         result,
         if (result.completed) .updated else .updating,
+        result.operation_handle,
     );
     try saveCheckpoint(checkpoint, store);
-    if (!result.completed) return error.OperationPending;
+    if (!result.completed) {
+        try completePendingMutation(context, store, provider, operation, result, checkpoint, .updated);
+    }
 }
 
 fn applyReplace(
@@ -115,7 +124,10 @@ fn applyReplace(
 ) ApplyError!void {
     const node = operation.resource;
     try putPendingState(context.allocator, store, node, operation.dependencies, .replacing);
-    if (store.get(node.id)) |existing| context.physical_id = existing.physical_id;
+    if (store.get(node.id)) |existing| {
+        context.physical_id = existing.physical_id;
+        context.operation_handle = existing.operation_handle;
+    }
     var read = provider.readWithContext(context, node) catch |err| {
         try markFailedAndCheckpoint(store, node.id, checkpoint);
         return err;
@@ -141,9 +153,41 @@ fn applyReplace(
         operation.dependencies,
         result,
         if (result.completed) .created else .replacing,
+        result.operation_handle,
     );
     try saveCheckpoint(checkpoint, store);
-    if (!result.completed) return error.OperationPending;
+    if (!result.completed) {
+        try completePendingMutation(context, store, provider, operation, result, checkpoint, .created);
+    }
+}
+
+fn completePendingMutation(
+    context: *provider_mod.OperationContext,
+    store: *state_mod.InMemoryStateStore,
+    provider: provider_mod.Provider,
+    operation: plan_mod.PlanOperation,
+    pending: provider_mod.ResourceResult,
+    checkpoint: ?checkpoint_mod.Checkpoint,
+    final_status: state_mod.ResourceStatus,
+) ApplyError!void {
+    context.physical_id = pending.physical_id;
+    context.operation_handle = pending.operation_handle;
+    var read = try provider.readWithContext(context, operation.resource);
+    defer read.deinit();
+    switch (read) {
+        .absent => return error.OperationPending,
+        .present => |observed| try putResultState(
+            store,
+            operation.resource,
+            operation.dependencies,
+            observed,
+            final_status,
+            null,
+        ),
+    }
+    try saveCheckpoint(checkpoint, store);
+    context.physical_id = null;
+    context.operation_handle = null;
 }
 
 fn applyDelete(
@@ -273,6 +317,7 @@ fn putResultState(
     dependencies: []const []const u8,
     result: provider_mod.ResourceResult,
     status: state_mod.ResourceStatus,
+    operation_handle: ?[]const u8,
 ) ApplyError!void {
     const desired_hash = std.fmt.bytesToHex(node.inputs_hash, .lower);
     const observed_hash = std.fmt.bytesToHex(result.observed_hash, .lower);
@@ -290,6 +335,6 @@ fn putResultState(
         .protect = node.lifecycle.protect,
         .retain_on_delete = node.lifecycle.retain_on_delete,
         .status = status,
-        .operation_handle = result.operation_handle,
+        .operation_handle = operation_handle,
     });
 }

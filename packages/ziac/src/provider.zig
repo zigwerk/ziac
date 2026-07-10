@@ -124,6 +124,7 @@ pub const OperationContext = struct {
     cancellation: ?Cancellation = null,
     deadline_millis: ?u64 = null,
     physical_id: ?[]const u8 = null,
+    operation_handle: ?[]const u8 = null,
 
     pub fn init(allocator: std.mem.Allocator) OperationContext {
         return .{ .allocator = allocator };

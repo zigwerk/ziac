@@ -74,10 +74,21 @@ test "refreshed planner uses provider diff for noop update and replace" {
     registry.register(.gcp, fake.provider());
     var state = ziac.InMemoryStateStore.init(std.testing.allocator);
     defer state.deinit();
+    const original_hash = std.fmt.bytesToHex(original.resources.items[0].inputs_hash, .lower);
+    try state.put(.{
+        .resource_id = original.resources.items[0].id,
+        .provider = .gcp,
+        .type_name = original.resources.items[0].type_name,
+        .logical_id = original.resources.items[0].logical_id,
+        .physical_id = "projects/example/non-deterministic/7",
+        .desired_hash = original_hash[0..],
+        .status = .created,
+    });
 
     var noops = try ziac.plan.buildRefreshedPlan(std.testing.allocator, &original, &state, registry);
     defer noops.deinit();
     try std.testing.expectEqual(ziac.plan.OperationKind.noop, noops.operations[0].kind);
+    try std.testing.expectEqualStrings("projects/example/non-deterministic/7", fake.last_read_physical_id.?);
 
     var updates = try ziac.plan.buildRefreshedPlan(std.testing.allocator, &changed, &state, registry);
     defer updates.deinit();
