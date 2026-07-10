@@ -36,3 +36,15 @@ planner, JSON state store, and fake provider.
 
 Live Google API calls, Cloud Run deployment, load balancers, and CockroachDB
 resources are intentionally deferred until the typed provider model is stable.
+
+## Delivery Status
+
+Ziac is currently a tested planning foundation, not yet a live deployment tool.
+The end-to-end delivery sequence starts by retaining complete desired resource
+inputs and upgrading the provider/state lifecycle before adding authenticated
+Google and CockroachDB API operations.
+
+See `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
+design and task-level plan live at the repository root under
+`docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and
+`docs/superpowers/plans/2026-07-10-ziac-e2e-delivery.md`.
