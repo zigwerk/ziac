@@ -20,10 +20,14 @@ comptime {
     _ = @import("source_archive_test.zig");
     _ = @import("gcp_config_test.zig");
     _ = @import("gcp_artifact_registry_test.zig");
+    _ = @import("gcp_storage_test.zig");
+    _ = @import("gcp_cloud_build_test.zig");
     _ = @import("gcp_network_test.zig");
     _ = @import("gcp_cloud_run_test.zig");
     _ = @import("gcp_auth_test.zig");
     _ = @import("gcp_client_test.zig");
+    _ = @import("gcp_storage_live_provider_test.zig");
+    _ = @import("gcp_cloud_build_live_provider_test.zig");
     _ = @import("gcp_operation_test.zig");
     _ = @import("cockroach_client_test.zig");
     _ = @import("cockroach_config_test.zig");

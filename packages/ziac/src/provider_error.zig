@@ -9,6 +9,7 @@ pub const ProviderError = error{
     TransientFailure,
     ProviderTimeout,
     ProviderCancelled,
+    RemoteOperationFailed,
     DestructiveConfirmationRequired,
     ProviderBug,
     OutOfMemory,
@@ -25,6 +26,7 @@ pub const Category = enum {
     transient,
     timeout,
     cancelled,
+    remote_operation,
     provider_bug,
 };
 
@@ -40,6 +42,7 @@ pub fn category(err: ProviderError) Category {
         error.TransientFailure => .transient,
         error.ProviderTimeout => .timeout,
         error.ProviderCancelled => .cancelled,
+        error.RemoteOperationFailed => .remote_operation,
         error.DestructiveConfirmationRequired => .invalid_configuration,
         error.ProviderBug, error.OutOfMemory => .provider_bug,
     };

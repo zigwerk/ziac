@@ -83,12 +83,16 @@ release-safe mode, and copies it into a digest-pinned non-root distroless image.
 The application binary name and build step are validated identifiers, not shell
 fragments.
 
-Create stores the returned build ID as an operation handle. Read/resume polls
-`projects/{project}/locations/{region}/builds/{id}`. Pending states remain
+Create stores the build resource name as its physical ID and the returned
+long-running operation name as its operation handle. Read/resume polls
+`projects/{project}/locations/{region}/builds/{id}`. A read without checkpointed
+identity recovers by the full build-digest tag and adopts only a complete
+source, builder, image, timeout, option, and tag match. Pending states remain
 incomplete; `SUCCESS` requires exactly one matching `results.images` entry and
-returns `<repository>/<image>@sha256:...`. Failure status, bounded redacted
-detail, and the console log URL are surfaced without fetching unbounded logs.
-The source/build digest identity makes unchanged builds a normal refresh/noop.
+returns `<repository>/<image>@sha256:...`. Failure status, bounded independently
+redacted detail, and a query-stripped console log URL are surfaced through an
+injectable reporter without fetching unbounded logs. The source/build digest
+identity makes unchanged builds a normal refresh/noop.
 
 ## ZigService
 

@@ -32,6 +32,13 @@ rejection, traversal/collision checks, and file limits.
 
 ## Task 2: GCS Build Context Resources
 
+Implementation evidence: completed on 2026-07-10. The regional bucket enforces
+uniform access, public-access prevention, versioning, lifecycle cleanup,
+retention, strict import identity, and location replacement. Source uploads use
+media requests with `ifGenerationMatch=0`; local SHA-256/CRC32C/size are checked
+before HTTP, conflicts are adopted only after matching metadata, generations
+are pinned, and payload bytes are owned ephemerally and excluded from state.
+
 Files:
 
 - Add typed build bucket and source object resources.
@@ -49,6 +56,16 @@ Steps:
 
 ## Task 3: Cloud Build Image Resource
 
+Implementation evidence: completed on 2026-07-10. Regional creates use a
+generation-pinned GCS source, digest-pinned Docker builder, deterministic image
+tag, bounded timeout/queue policy, and explicit logging/machine options. Build
+resource and operation identities survive checkpoints; full-digest tag lookup
+recovers the post-create/pre-checkpoint crash window and rejects collisions.
+Polling covers every documented pending and terminal status, retries bounded
+transient failures, honors cancellation/deadlines, and emits only an exact
+Artifact Registry digest. Failure reporting is bounded, redacted, injectable,
+and retains a sanitized console link.
+
 Files:
 
 - Add `packages/ziac/src/gcp/cloud_build.zig` and provider handler.
@@ -64,6 +81,11 @@ Steps:
 5. Implement refresh/import/delete semantics and source/build digest noops.
 
 Commit Tasks 2 and 3 as: `Add Zig source-to-image Cloud Build pipeline`
+
+Verification evidence: 286 package tests at this checkpoint (285 pass, one
+authenticated credential gate skipped), examples and executable build pass,
+zigeffect std/PostgreSQL tests pass, local CockroachDB v26.2.3 verified-TLS SQL
+integration passes, and tool hygiene passes with 46 files.
 
 ## Task 4: ZigService Component And Sample
 

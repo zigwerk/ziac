@@ -1138,6 +1138,8 @@ Evidence:
 
 ### Task 7.2: Cloud Build Resource
 
+Status: implemented on 2026-07-10.
+
 Resources:
 
 - build context object
@@ -1152,6 +1154,22 @@ Tests:
 - Failed build diagnostics are bounded and redacted.
 
 Commit: `Add Zig source-to-image Cloud Build pipeline`
+
+Evidence:
+
+- Protected regional GCS buckets and content-addressed source objects enforce
+  retention, generation-zero creation, local SHA-256/CRC32C/size preflight,
+  strict conflict adoption, and no source bytes in state.
+- Regional Cloud Build requests pin the GCS generation and Docker builder,
+  derive build/image tags from full digests, and recover interrupted creates by
+  validating complete build identity behind a digest-tag query.
+- Polling covers `STATUS_UNKNOWN`, `PENDING`, `QUEUED`, `WORKING`, and all five
+  terminal failure states. Success emits only the matching Artifact Registry
+  digest; bounded redacted diagnostics retain a sanitized console link.
+- The package suite contains 286 tests at this checkpoint: 285 pass and one
+  authenticated credential gate is skipped. Examples, executable build,
+  zigeffect std/PostgreSQL suites, local CockroachDB v26.2.3 verified-TLS SQL,
+  diff checks, and 46-file tool hygiene all pass.
 
 ### Task 7.3: ZigService Component
 

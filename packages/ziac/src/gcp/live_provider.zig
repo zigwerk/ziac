@@ -1,10 +1,12 @@
 const std = @import("std");
 const client_mod = @import("client.zig");
+const cloud_build_provider = @import("cloud_build_provider.zig");
 const compute_provider = @import("compute_provider.zig");
 const dns_provider = @import("dns_provider.zig");
 const network_provider = @import("network_provider.zig");
 const operation = @import("operation.zig");
 const run_provider = @import("run_provider.zig");
+const storage_provider = @import("storage_provider.zig");
 const provider_mod = @import("../provider.zig");
 const resource = @import("../resource.zig");
 const secret_mod = @import("../secret.zig");
@@ -32,6 +34,9 @@ pub const LiveProvider = struct {
     iam_conflict_retries: usize = 3,
     compute_conflict_retries: usize = 3,
     secret_source: ?SecretSource = null,
+    payload_source: ?storage_provider.PayloadSource = null,
+    cloud_build_poll_policy: operation.Policy = .{},
+    cloud_build_failure_reporter: ?cloud_build_provider.FailureReporter = null,
 
     pub fn init(client: *client_mod.Client) LiveProvider {
         return .{ .client = client };
@@ -62,6 +67,8 @@ pub const LiveProvider = struct {
         if (network_provider.supports(node)) return self.networkHandler().read(context, node, null);
         if (compute_provider.supports(node)) return self.computeHandler().read(context, node, null);
         if (dns_provider.supports(node)) return self.dnsHandler().read(context, node, null);
+        if (storage_provider.supports(node)) return self.storageHandler().read(context, node, null);
+        if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().read(context, node, null);
         return error.InvalidConfiguration;
     }
 
@@ -77,6 +84,8 @@ pub const LiveProvider = struct {
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (compute_provider.supports(node)) return compute_provider.Handler.diff(context, node, observed);
         if (dns_provider.supports(node)) return dns_provider.Handler.diff(context, node, observed);
+        if (storage_provider.supports(node)) return storage_provider.Handler.diff(context, node, observed);
+        if (cloud_build_provider.supports(node)) return cloud_build_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else if (isType(node, artifact_repository_type))
@@ -106,6 +115,8 @@ pub const LiveProvider = struct {
         if (network_provider.supports(node)) return self.networkHandler().create(context, node);
         if (compute_provider.supports(node)) return self.computeHandler().create(context, node);
         if (dns_provider.supports(node)) return self.dnsHandler().create(context, node);
+        if (storage_provider.supports(node)) return self.storageHandler().create(context, node);
+        if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().create(context, node);
         return error.InvalidConfiguration;
     }
 
@@ -124,6 +135,8 @@ pub const LiveProvider = struct {
         if (network_provider.supports(node)) return self.networkHandler().update(context, node, observed.physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().update(context, node, observed.physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().update(context, node, observed.physical_id);
+        if (storage_provider.supports(node)) return self.storageHandler().update(context, node, observed.physical_id);
+        if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().update(context, node, observed.physical_id);
         return error.InvalidConfiguration;
     }
 
@@ -143,6 +156,8 @@ pub const LiveProvider = struct {
         if (network_provider.supports(node)) return self.networkHandler().delete(context, node, physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().delete(context, node, physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().delete(context, node, physical_id);
+        if (storage_provider.supports(node)) return self.storageHandler().delete(context, node, physical_id);
+        if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
             removed.deinit();
@@ -235,6 +250,20 @@ pub const LiveProvider = struct {
         }
         if (dns_provider.supports(node)) {
             const result = try self.dnsHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (storage_provider.supports(node)) {
+            const result = try self.storageHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (cloud_build_provider.supports(node)) {
+            const result = try self.cloudBuildHandler().read(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -855,6 +884,18 @@ pub const LiveProvider = struct {
     fn dnsHandler(self: *LiveProvider) dns_provider.Handler {
         return .{ .client = self.client };
     }
+
+    fn storageHandler(self: *LiveProvider) storage_provider.Handler {
+        return .{ .client = self.client, .payload_source = self.payload_source };
+    }
+
+    fn cloudBuildHandler(self: *LiveProvider) cloud_build_provider.Handler {
+        return .{
+            .client = self.client,
+            .poll_policy = self.cloud_build_poll_policy,
+            .failure_reporter = self.cloud_build_failure_reporter,
+        };
+    }
 };
 
 fn projectServiceResult(
@@ -1276,5 +1317,7 @@ fn isSupported(node: resource.ResourceNode) bool {
         isType(node, cloud_run_service_type) or
         network_provider.supports(node) or
         compute_provider.supports(node) or
-        dns_provider.supports(node);
+        dns_provider.supports(node) or
+        storage_provider.supports(node) or
+        cloud_build_provider.supports(node);
 }

@@ -16,6 +16,8 @@ pub const Api = enum {
     compute,
     dns,
     secret_manager,
+    storage,
+    cloud_build,
 };
 
 pub const Endpoints = struct {
@@ -27,6 +29,8 @@ pub const Endpoints = struct {
     compute: []const u8 = "https://compute.googleapis.com",
     dns: []const u8 = "https://dns.googleapis.com",
     secret_manager: []const u8 = "https://secretmanager.googleapis.com",
+    storage: []const u8 = "https://storage.googleapis.com",
+    cloud_build: []const u8 = "https://cloudbuild.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
         return switch (api) {
@@ -38,6 +42,8 @@ pub const Endpoints = struct {
             .compute => self.compute,
             .dns => self.dns,
             .secret_manager => self.secret_manager,
+            .storage => self.storage,
+            .cloud_build => self.cloud_build,
         };
     }
 };
@@ -47,6 +53,8 @@ pub const Request = struct {
     method: []const u8,
     path: []const u8,
     body: []const u8 = "",
+    content_type: []const u8 = "application/json",
+    accept: []const u8 = "application/json",
 };
 
 pub const Diagnostic = struct {
@@ -120,8 +128,8 @@ pub const Client = struct {
         defer context.allocator.free(user_agent);
         const headers = [_]zstd.Http.Header{
             .{ .name = "authorization", .value = authorization },
-            .{ .name = "accept", .value = "application/json" },
-            .{ .name = "content-type", .value = "application/json" },
+            .{ .name = "accept", .value = request.accept },
+            .{ .name = "content-type", .value = request.content_type },
             .{ .name = "user-agent", .value = user_agent },
             .{ .name = "x-goog-api-client", .value = user_agent },
         };
