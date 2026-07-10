@@ -1,0 +1,231 @@
+const std = @import("std");
+const ziac = @import("ziac");
+const zstd = @import("zigeffect_std");
+
+const cockroach = ziac.cockroach.client;
+
+test "Cockroach client reads API key and sends pinned version headers" {
+    var env = zstd.Env.EnvMap.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("COCKROACH_API_KEY", "dummy-cockroach-secret-key");
+    var api_key = try cockroach.ApiKey.fromEnvAlloc(std.testing.allocator, env, "COCKROACH_API_KEY");
+    defer api_key.deinit(std.testing.allocator);
+    const responses = [_]zstd.Http.Response{.{ .status = 200, .body = "{}" }};
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), api_key.value, .{
+        .base_url = "https://cockroach.example.test/api",
+    });
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    var response = try client.requestJsonAlloc(&context, .{
+        .method = "GET",
+        .path = "/v1/clusters",
+    }, &diagnostic);
+    defer response.deinit(std.testing.allocator);
+
+    const request = transport.requests.items[0];
+    try std.testing.expectEqualStrings("https://cockroach.example.test/api/v1/clusters", request.url);
+    try std.testing.expectEqualStrings("Bearer dummy-cockroach-secret-key", request.authorization.?);
+    try std.testing.expectEqualStrings("2024-09-16", request.cc_version.?);
+    try std.testing.expectEqualStrings("application/json", request.content_type.?);
+}
+
+test "Cockroach client distinguishes auth permission rate limit and transient failures" {
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 401, .body = "{\"message\":\"invalid api key\"}" },
+        .{ .status = 403, .body = "{\"message\":\"permission denied\"}" },
+        .{
+            .status = 429,
+            .headers = &.{
+                .{ .name = "Retry-After", .value = "3" },
+                .{ .name = "X-Request-Id", .value = "cc-limited" },
+            },
+            .body = "{\"message\":\"sentinel-secret-for-tests\"}",
+        },
+        .{ .status = 503, .body = "{\"message\":\"unavailable\"}" },
+    };
+    const expected = [_]ziac.provider_error.ProviderError{
+        error.AuthenticationFailed,
+        error.AuthorizationFailed,
+        error.RateLimited,
+        error.TransientFailure,
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    for (expected, 0..) |expected_error, index| {
+        try std.testing.expectError(
+            expected_error,
+            client.requestJsonAlloc(&context, .{ .method = "GET", .path = "/v1/clusters" }, &diagnostic),
+        );
+        if (index == 2) {
+            try std.testing.expectEqual(@as(?u64, 3_000), diagnostic.retry_after_millis);
+            try std.testing.expectEqualStrings("cc-limited", diagnostic.request_id.?);
+            try std.testing.expectEqualStrings("[REDACTED]", diagnostic.message.?);
+        }
+    }
+}
+
+test "Cockroach retrying requests honor retry-after with bounded retries" {
+    const responses = [_]zstd.Http.Response{
+        .{
+            .status = 429,
+            .headers = &.{.{ .name = "Retry-After", .value = "2" }},
+            .body = "{\"message\":\"rate limit exceeded\"}",
+        },
+        .{ .status = 200, .body = "{}" },
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{ .max_retries = 2 });
+    var clock = ziac.fx.Clock.fake(0);
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    context.clock = &clock;
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    var response = try client.requestJsonWithRetryAlloc(
+        &context,
+        .{ .method = "GET", .path = "/v1/clusters" },
+        &diagnostic,
+    );
+    defer response.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), transport.cursor);
+    try std.testing.expectEqual(@as(u64, 2_000), clock.nowMs());
+}
+
+test "Cockroach client decodes typed cluster responses with unknown fields" {
+    const responses = [_]zstd.Http.Response{.{
+        .status = 200,
+        .body = "{\"id\":\"cluster-1\",\"name\":\"ziac-prod\",\"cloud_provider\":\"GCP\",\"plan\":\"STANDARD\",\"state\":\"CREATED\",\"future_field\":true}",
+    }};
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    var cluster = try client.getClusterAlloc(&context, "cluster-1", &diagnostic);
+    defer cluster.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("cluster-1", cluster.id);
+    try std.testing.expectEqualStrings("ziac-prod", cluster.name);
+    try std.testing.expectEqualStrings("GCP", cluster.cloud_provider.?);
+    try std.testing.expectEqualStrings("STANDARD", cluster.plan.?);
+    try std.testing.expectEqualStrings("CREATED", cluster.state.?);
+}
+
+test "Cockroach SQL user pagination is stable and percent encodes next page" {
+    const responses = [_]zstd.Http.Response{
+        .{
+            .status = 200,
+            .body = "{\"users\":[{\"name\":\"app\"},{\"name\":\"migration\"}],\"pagination\":{\"next_page\":\"next+token/1\"}}",
+        },
+        .{
+            .status = 200,
+            .body = "{\"users\":[{\"name\":\"readonly\"}],\"pagination\":{\"next_page\":\"\"}}",
+        },
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    const users = try client.listAllSqlUsersAlloc(&context, "cluster-1", &diagnostic);
+    defer cockroach.freeSqlUsers(std.testing.allocator, users);
+
+    try std.testing.expectEqual(@as(usize, 3), users.len);
+    try std.testing.expectEqualStrings("app", users[0].name);
+    try std.testing.expectEqualStrings("migration", users[1].name);
+    try std.testing.expectEqualStrings("readonly", users[2].name);
+    try std.testing.expectEqualStrings(
+        "https://cockroachlabs.cloud/api/v1/clusters/cluster-1/sql-users?page=next%2Btoken%2F1",
+        transport.requests.items[1].url,
+    );
+}
+
+const ObservedRequest = struct {
+    url: []const u8,
+    authorization: ?[]const u8,
+    cc_version: ?[]const u8,
+    content_type: ?[]const u8,
+
+    fn deinit(self: *ObservedRequest, allocator: std.mem.Allocator) void {
+        allocator.free(self.url);
+        if (self.authorization) |value| allocator.free(value);
+        if (self.cc_version) |value| allocator.free(value);
+        if (self.content_type) |value| allocator.free(value);
+        self.* = undefined;
+    }
+};
+
+const RecordingTransport = struct {
+    allocator: std.mem.Allocator,
+    responses: []const zstd.Http.Response,
+    cursor: usize = 0,
+    requests: std.ArrayList(ObservedRequest) = .empty,
+
+    fn init(allocator: std.mem.Allocator, responses: []const zstd.Http.Response) RecordingTransport {
+        return .{ .allocator = allocator, .responses = responses };
+    }
+
+    fn deinit(self: *RecordingTransport) void {
+        for (self.requests.items) |*request| request.deinit(self.allocator);
+        self.requests.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn client(self: *RecordingTransport) zstd.Http.Client {
+        return .{ .ptr = self, .sendFn = send };
+    }
+
+    fn send(
+        raw: *anyopaque,
+        allocator: std.mem.Allocator,
+        request: zstd.Http.Request,
+        options: zstd.Http.SendOptions,
+    ) zstd.Http.ClientError!zstd.Http.Response {
+        const self: *RecordingTransport = @ptrCast(@alignCast(raw));
+        try options.checkActive();
+        if (self.cursor >= self.responses.len) return error.ScriptExhausted;
+        const observed = ObservedRequest{
+            .url = try self.allocator.dupe(u8, request.url),
+            .authorization = try cloneHeader(self.allocator, request.headers, "authorization"),
+            .cc_version = try cloneHeader(self.allocator, request.headers, "cc-version"),
+            .content_type = try cloneHeader(self.allocator, request.headers, "content-type"),
+        };
+        self.requests.append(self.allocator, observed) catch |err| {
+            var mutable = observed;
+            mutable.deinit(self.allocator);
+            return err;
+        };
+        const response = self.responses[self.cursor];
+        self.cursor += 1;
+        return zstd.Http.cloneResponseAlloc(allocator, response);
+    }
+};
+
+fn cloneHeader(
+    allocator: std.mem.Allocator,
+    headers: []const zstd.Http.Header,
+    name: []const u8,
+) std.mem.Allocator.Error!?[]const u8 {
+    for (headers) |header| {
+        if (std.ascii.eqlIgnoreCase(header.name, name)) {
+            const value: []const u8 = try allocator.dupe(u8, header.value);
+            return value;
+        }
+    }
+    return null;
+}

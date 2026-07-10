@@ -70,9 +70,13 @@ deterministic tests without invoking `gcloud`. The authenticated Google JSON
 client and generic/Compute operation poller are implemented with injectable API
 roots, provider error mapping, request-ID diagnostics, cancellation, deadlines,
 and `Retry-After` handling.
+The CockroachDB Cloud client pins `Cc-Version: 2024-09-16`, keeps API keys
+secret, decodes clusters and SQL users through typed schemas, and performs
+bounded `Retry-After`-aware pagination. Transport and Authentication M3 is
+complete.
 
-See `docs/authentication.md` and `docs/google-client.md` for the live client
-contracts, and
+See `docs/authentication.md`, `docs/google-client.md`, and
+`docs/cockroach-client.md` for the live client contracts, and
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

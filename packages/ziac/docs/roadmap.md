@@ -27,6 +27,9 @@ automated and live tests pass.
 - Production HTTP transport contract: implemented and tested with owned headers,
   typed failures, cancellation, body limits, `Retry-After`, and credential
   redaction.
+- Native Google ADC, authenticated Google REST/LRO clients, and the
+  version-pinned CockroachDB Cloud client: implemented and scripted-transport
+  tested without credential leakage.
 - Live GCP calls, global routing, CockroachDB, remote state, and source builds:
   not yet implemented.
 
@@ -67,13 +70,13 @@ interrupted-resume integration tests.
 Gate: valid fixtures compile and invalid binding/provider/output fixtures fail
 with their expected Ziac diagnostic codes.
 
-## M3: Transport And Authentication
+## M3: Transport And Authentication (Complete)
 
 - Owned HTTP response headers, structured errors, timeout, cancellation, and
   `Retry-After` support: complete.
 - Native Google Application Default Credentials and token caching: complete.
 - Google REST and long-running operation client: complete.
-- Version-pinned CockroachDB Cloud API client.
+- Version-pinned CockroachDB Cloud API client: complete.
 - `ziac auth doctor`: complete.
 
 Gate: Google and Cockroach scripted transport suites pass without leaking
