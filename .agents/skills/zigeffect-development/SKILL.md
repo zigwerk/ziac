@@ -15,6 +15,8 @@ Use the project contract and causal evidence as the source of truth.
 3. Read the component's public facade, layers, schemas, tests, and causal helpers.
 4. Run `zigeffect project validate --json`. Treat an unsupported manifest or
    failed validation as blocking evidence, not a prompt to bypass the contract.
+5. Run `zigeffect agent status --json` and `zigeffect agent next --json` before
+   selecting work. Use JSONL queries when streaming multiple records.
 
 ## Implement
 
@@ -36,7 +38,7 @@ Run only manifest-owned commands:
 
 ```sh
 zigeffect project validate --json
-zigeffect project check --json
+zigeffect project check --agent --json
 zigeffect project test --json
 ```
 
@@ -44,12 +46,16 @@ When a check fails, query the structured project/evidence output first. Correlat
 the failed check to its requirement, component, session, and causal facts before
 inferring a fix from unstructured output.
 
+Use `zigeffect safety explain <finding-id>` for source-linked repair guidance.
+Do not add unmanaged roots or unaudited escape hatches. A failed, incomplete,
+truncated, or unsupported required gate is an unpassed handoff, not success.
+
 ## Handoff
 
 Before stopping:
 
 1. Record changed requirements and acceptance status.
-2. Attach bounded, redacted artifacts and causal evidence IDs.
-3. Run `zigeffect agent handoff --json`.
+2. Attach the bounded, redacted safety receipt and causal evidence IDs.
+3. Run `zigeffect agent handoff --provider codex --session <id> --json`.
 4. State failed or unrun checks plainly. Never mark a requirement satisfied
    without passing evidence.
