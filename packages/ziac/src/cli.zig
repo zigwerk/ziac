@@ -6,6 +6,7 @@ const gcp_auth = @import("gcp/auth/root.zig");
 const importer = @import("importer.zig");
 const local_state = @import("local_state.zig");
 const plan_mod = @import("plan.zig");
+const plan_format = @import("plan_format.zig");
 const provider_mod = @import("provider.zig");
 const refresh = @import("refresh.zig");
 const stack_registry = @import("stack_registry.zig");
@@ -27,6 +28,7 @@ pub const Env = struct {
     registry: stack_registry.StackRegistry,
     state: state_backend.Store,
     migration_source: ?local_state.Store = null,
+    plan_files: ?local_state.FileStore = null,
     auth_env: ?*zstd.Env.EnvMap = null,
     auth_files: ?gcp_auth.FileReader = null,
     live_providers: ?provider_mod.ProviderRegistry = null,
@@ -47,6 +49,9 @@ const Args = struct {
     live_test: bool = false,
     region: ?[]const u8 = null,
     confirm: bool = false,
+    out_path: ?[]const u8 = null,
+    plan_path: ?[]const u8 = null,
+    approval: ?[]const u8 = null,
 };
 
 const command_options = [_]zstd.Cli.OptionSpec{
@@ -95,6 +100,28 @@ const import_options = [_]zstd.Cli.OptionSpec{
     .{ .name = "id", .kind = .string, .required = true, .help = "provider physical ID" },
 };
 
+const plan_options = [_]zstd.Cli.OptionSpec{
+    command_options[0],
+    command_options[1],
+    command_options[2],
+    command_options[3],
+    command_options[4],
+    command_options[5],
+    .{ .name = "out", .kind = .string, .help = "create an immutable saved plan" },
+};
+
+const deploy_options = [_]zstd.Cli.OptionSpec{
+    command_options[0],
+    command_options[1],
+    command_options[2],
+    command_options[3],
+    command_options[4],
+    command_options[5],
+    .{ .name = "plan", .kind = .string, .help = "apply an immutable saved plan" },
+    .{ .name = "approve", .kind = .string, .help = "approve the exact destructive plan digest" },
+    .{ .name = "confirm", .kind = .boolean, .help = "confirm direct destructive operations" },
+};
+
 const destroy_options = [_]zstd.Cli.OptionSpec{
     command_options[0],
     command_options[1],
@@ -134,12 +161,12 @@ const subcommands = [_]zstd.Cli.CommandSpec{
     .{
         .name = "plan",
         .description = "preview resource changes",
-        .options = command_options[0..],
+        .options = plan_options[0..],
     },
     .{
         .name = "deploy",
         .description = "apply resource changes",
-        .options = command_options[0..],
+        .options = deploy_options[0..],
     },
     .{
         .name = "destroy",
@@ -246,6 +273,9 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .live_test = parsed.optionValue("live-test") != null,
         .region = parsed.optionValue("region"),
         .confirm = parsed.optionValue("confirm") != null,
+        .out_path = parsed.optionValue("out"),
+        .plan_path = parsed.optionValue("plan"),
+        .approval = parsed.optionValue("approve"),
     };
 }
 
@@ -299,7 +329,24 @@ fn runPlan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         };
     defer planned.deinit();
 
-    try writePlan(env, args, planned, loaded.store.serialValue());
+    var saved_metadata: ?PlanOutputMetadata = null;
+    if (args.out_path) |path| {
+        const files = env.plan_files orelse {
+            return handlePlanError(env, error.PlanFileSystemUnavailable);
+        };
+        var clock = ziacClock();
+        const metadata = plan_format.save(files, allocator, path, &planned, .{
+            .stack = args.stack,
+            .stage = args.stage,
+            .created_at_millis = clock.nowMs(),
+        }) catch |err| return handlePlanError(env, err);
+        saved_metadata = .{
+            .digest = metadata.digest,
+            .path = path,
+            .approval_required = metadata.approval_required,
+        };
+    }
+    try writePlan(env, args, &planned, loaded.store.serialValue(), saved_metadata);
     return Exit.success;
 }
 
@@ -325,10 +372,48 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     defer loaded.deinit();
 
-    var planned = plan_mod.buildPlan(allocator, &program.graph, &loaded.store) catch |err| {
-        return handlePlanError(env, err);
-    };
-    defer planned.deinit();
+    var generated_plan: ?plan_mod.Plan = null;
+    defer if (generated_plan) |*planned| planned.deinit();
+    var saved_plan: ?plan_format.LoadedPlan = null;
+    defer if (saved_plan) |*planned| planned.deinit();
+    var planned: *const plan_mod.Plan = undefined;
+    var plan_metadata: ?PlanOutputMetadata = null;
+    var destructive_confirmation = args.confirm;
+    if (args.plan_path) |path| {
+        const files = env.plan_files orelse {
+            return handlePlanError(env, error.PlanFileSystemUnavailable);
+        };
+        saved_plan = plan_format.load(files, allocator, path, .{}) catch |err| {
+            return handlePlanError(env, err);
+        };
+        const loaded_plan = &saved_plan.?;
+        if (!std.mem.eql(u8, loaded_plan.stack, args.stack) or !std.mem.eql(u8, loaded_plan.stage, args.stage)) {
+            return handlePlanError(env, error.PlanTargetMismatch);
+        }
+        const graph_digest = plan_mod.desiredGraphDigestAlloc(allocator, &program.graph) catch |err| {
+            return handlePlanError(env, err);
+        };
+        if (!std.mem.eql(u8, &graph_digest, &loaded_plan.plan.preconditions.desired_graph_digest)) {
+            return handlePlanError(env, error.PlanDesiredGraphMismatch);
+        }
+        if (loaded_plan.approval_required) {
+            const approval = args.approval orelse return handlePlanError(env, error.PlanApprovalRequired);
+            const expected = loaded_plan.metadata().digestHex();
+            if (!std.mem.eql(u8, approval, &expected)) return handlePlanError(env, error.PlanApprovalMismatch);
+            destructive_confirmation = true;
+        }
+        plan_metadata = .{
+            .digest = loaded_plan.digest,
+            .path = path,
+            .approval_required = loaded_plan.approval_required,
+        };
+        planned = &loaded_plan.plan;
+    } else {
+        generated_plan = plan_mod.buildPlan(allocator, &program.graph, &loaded.store) catch |err| {
+            return handlePlanError(env, err);
+        };
+        planned = &generated_plan.?;
+    }
 
     var checkpoint = checkpoint_mod.Resources{
         .store = env.state,
@@ -336,8 +421,9 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         .stage = args.stage,
         .lock_owner_id = command_lock.owner_id,
     };
-    executor.executePlan(allocator, &planned, &loaded.store, providers, .{
+    executor.executePlan(allocator, planned, &loaded.store, providers, .{
         .checkpoint = checkpoint.checkpoint(),
+        .destructive_confirmation = destructive_confirmation,
     }) catch |err| {
         return handleApplyError(env, err);
     };
@@ -353,7 +439,7 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
 
-    try writePlan(env, args, planned, loaded.store.serialValue());
+    try writePlan(env, args, planned, loaded.store.serialValue(), plan_metadata);
     if (!args.json) try env.console.writeOut("Deploy complete\n");
     return Exit.success;
 }
@@ -400,7 +486,7 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
 
-    try writePlan(env, args, planned, loaded.store.serialValue());
+    try writePlan(env, args, &planned, loaded.store.serialValue(), null);
     if (!args.json) try env.console.writeOut("Destroy complete\n");
     return Exit.success;
 }
@@ -714,9 +800,21 @@ fn resourceInputString(node: @import("resource.zig").ResourceNode, name: []const
     return null;
 }
 
-fn writePlan(env: *Env, args: Args, planned: plan_mod.Plan, serial: u64) !void {
+const PlanOutputMetadata = struct {
+    digest: [32]u8,
+    path: []const u8,
+    approval_required: bool,
+};
+
+fn writePlan(
+    env: *Env,
+    args: Args,
+    planned: *const plan_mod.Plan,
+    serial: u64,
+    metadata: ?PlanOutputMetadata,
+) !void {
     const counts = planCounts(planned);
-    if (args.json) return writeCommandJson(env, args, serial, counts);
+    if (args.json) return writeCommandJsonWithPlan(env, args, serial, counts, metadata);
 
     try env.console.stdout.print(env.console.allocator, "Plan: {d} create, {d} update, {d} delete, {d} noop\n", .{
         counts.create,
@@ -733,16 +831,21 @@ fn writePlan(env: *Env, args: Args, planned: plan_mod.Plan, serial: u64) !void {
         try env.console.writeOut(operation.resource.logical_id);
         try env.console.writeOut("\n");
     }
+    if (metadata) |saved| {
+        const digest = std.fmt.bytesToHex(saved.digest, .lower);
+        try env.console.stdout.print(env.console.allocator, "Plan digest: {s}\n", .{&digest});
+        try env.console.stdout.print(env.console.allocator, "Approval required: {s}\n", .{if (saved.approval_required) "yes" else "no"});
+    }
 }
 
-fn planCounts(planned: plan_mod.Plan) OperationCounts {
+fn planCounts(planned: *const plan_mod.Plan) OperationCounts {
     var counts = OperationCounts{};
     for (planned.operations) |operation| counts.add(operation.kind);
     return counts;
 }
 
 const CommandReceipt = struct {
-    schema: []const u8 = "ziac.command.v1",
+    schema: []const u8 = "ziac.command.v2",
     command: []const u8,
     status: []const u8 = "success",
     stack: []const u8,
@@ -752,9 +855,27 @@ const CommandReceipt = struct {
     update: usize,
     delete: usize,
     noop: usize,
+    plan_digest: ?[]const u8,
+    plan_path: ?[]const u8,
+    approval_required: bool,
 };
 
 fn writeCommandJson(env: *Env, args: Args, serial: u64, counts: OperationCounts) !void {
+    return writeCommandJsonWithPlan(env, args, serial, counts, null);
+}
+
+fn writeCommandJsonWithPlan(
+    env: *Env,
+    args: Args,
+    serial: u64,
+    counts: OperationCounts,
+    metadata: ?PlanOutputMetadata,
+) !void {
+    var digest_buffer: [64]u8 = undefined;
+    const digest: ?[]const u8 = if (metadata) |saved| blk: {
+        digest_buffer = std.fmt.bytesToHex(saved.digest, .lower);
+        break :blk &digest_buffer;
+    } else null;
     const json = try std.json.Stringify.valueAlloc(env.console.allocator, CommandReceipt{
         .command = args.command,
         .stack = args.stack,
@@ -764,6 +885,9 @@ fn writeCommandJson(env: *Env, args: Args, serial: u64, counts: OperationCounts)
         .update = counts.update,
         .delete = counts.delete,
         .noop = counts.noop,
+        .plan_digest = digest,
+        .plan_path = if (metadata) |saved| saved.path else null,
+        .approval_required = if (metadata) |saved| saved.approval_required else false,
     }, .{});
     defer env.console.allocator.free(json);
     try env.console.writeOut(json);

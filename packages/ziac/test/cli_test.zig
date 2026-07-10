@@ -14,6 +14,7 @@ fn testEnv(
         .console = console,
         .registry = ziac.stack_registry.fixtureRegistry(),
         .state = local.store(),
+        .plan_files = ziac.local_state.memoryFiles(fs),
     };
 }
 
@@ -139,7 +140,7 @@ test "cli outputs prints redacted secret values" {
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "sentinel-secret-for-tests") == null);
 }
 
-test "cli destroy marks resource deleted" {
+test "cli destroy requires explicit destructive confirmation" {
     var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
@@ -151,9 +152,10 @@ test "cli destroy marks resource deleted" {
     console.stdout.clearRetainingCapacity();
     const code = try ziac.cli.run(std.testing.allocator, &.{ "destroy", "--stack", "hello-global", "--stage", "dev" }, &env);
 
-    try std.testing.expectEqual(@as(u8, 0), code);
+    try std.testing.expectEqual(ziac.cli.Exit.provider_error, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "DestructiveConfirmationRequired") != null);
     const resources = fs.readFile(".ziac/state/hello-global/dev/resources.json").?;
-    try std.testing.expect(std.mem.indexOf(u8, resources, "\"status\":\"deleted\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, resources, "\"status\":\"deleted\"") == null);
 }
 
 test "cli destroy accepts explicit destructive confirmation" {
@@ -174,6 +176,8 @@ test "cli destroy accepts explicit destructive confirmation" {
 
     try std.testing.expectEqual(ziac.cli.Exit.success, code);
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Destroy complete") != null);
+    const resources = fs.readFile(".ziac/state/hello-global/dev/resources.json").?;
+    try std.testing.expect(std.mem.indexOf(u8, resources, "\"status\":\"deleted\"") != null);
 }
 
 test "cli state prints persisted resource status" {
@@ -203,15 +207,198 @@ test "cli plan emits stable JSON command output" {
 
     const code = try ziac.cli.run(
         std.testing.allocator,
-        &.{ "plan", "--stack", "hello-global", "--stage", "dev", "--json" },
+        &.{ "plan", "--stack", "hello-global", "--stage", "dev", "--out", "review/dev.plan.json", "--json" },
         &env,
     );
 
     try std.testing.expectEqual(@as(u8, 0), code);
-    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"schema\":\"ziac.command.v1\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"schema\":\"ziac.command.v2\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"command\":\"plan\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"create\":2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"plan_path\":\"review/dev.plan.json\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"plan_digest\":\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"approval_required\":false") != null);
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Plan:") == null);
+}
+
+test "cli saves an immutable plan and deploys its exact operations" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const plan_code = try ziac.cli.run(std.testing.allocator, &.{
+        "plan",
+        "--stack",
+        "hello-global",
+        "--stage",
+        "review",
+        "--out",
+        "plans/review.json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, plan_code);
+    try std.testing.expect(fs.exists("plans/review.json"));
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Plan digest:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Approval required: no") != null);
+    console.stdout.clearRetainingCapacity();
+
+    const deploy_code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy",
+        "--stack",
+        "hello-global",
+        "--stage",
+        "review",
+        "--plan",
+        "plans/review.json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, deploy_code);
+    try std.testing.expect(fs.exists(".ziac/state/hello-global/review/resources.json"));
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Deploy complete") != null);
+    console.stderr.clearRetainingCapacity();
+    const overwrite_code = try ziac.cli.run(std.testing.allocator, &.{
+        "plan", "--stack", "hello-global", "--stage", "review", "--out", "plans/review.json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.invalid_graph, overwrite_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "PlanAlreadyExists") != null);
+}
+
+test "cli saved plan rejects changed state target and desired graph" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    _ = try ziac.cli.run(std.testing.allocator, &.{
+        "plan", "--stack", "hello-global", "--stage", "prod", "--out", "plans/prod.json",
+    }, &env);
+
+    console.stderr.clearRetainingCapacity();
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    state.setLineage("hello-global/prod");
+    try state.put(.{
+        .resource_id = "test.Resource.changed",
+        .type_name = "test.Resource",
+        .logical_id = "changed",
+        .desired_hash = "changed",
+        .status = .created,
+    });
+    const local_store = ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(&fs));
+    try local_store.saveResources("hello-global", "prod", &state);
+    const stale_code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "prod", "--plan", "plans/prod.json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.provider_error, stale_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "StalePlan") != null);
+
+    console.stderr.clearRetainingCapacity();
+    const target_code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "other", "--plan", "plans/prod.json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.invalid_graph, target_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "PlanTargetMismatch") != null);
+
+    console.stderr.clearRetainingCapacity();
+    const regions = [_][]const u8{"europe-west1"};
+    env.registry = ziac.stack_registry.configuredRegistry(.{
+        .project_id = "ziac-dev",
+        .region = regions[0],
+        .regions = &regions,
+        .image = "europe-west1-docker.pkg.dev/ziac-dev/apps/changed@sha256:def",
+        .domain = "api.example.com",
+    });
+    const graph_code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "prod", "--plan", "plans/prod.json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.invalid_graph, graph_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "PlanDesiredGraphMismatch") != null);
+}
+
+test "cli destructive saved plan requires its exact digest approval" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    state.setLineage("hello-global/prod");
+    try state.put(.{
+        .resource_id = "gcp.run.Service.retired",
+        .provider = .gcp,
+        .type_name = "gcp.run.Service",
+        .logical_id = "retired",
+        .desired_hash = "retired",
+        .status = .created,
+    });
+    try ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(&fs)).saveResources("hello-global", "prod", &state);
+    _ = try ziac.cli.run(std.testing.allocator, &.{
+        "plan", "--stack", "hello-global", "--stage", "prod", "--out", "plans/delete.json",
+    }, &env);
+    var saved = try ziac.plan_format.load(ziac.local_state.memoryFiles(&fs), std.testing.allocator, "plans/delete.json", .{});
+    defer saved.deinit();
+    try std.testing.expect(saved.approval_required);
+    const digest = saved.metadata().digestHex();
+
+    console.stderr.clearRetainingCapacity();
+    const missing_code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "prod", "--plan", "plans/delete.json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.invalid_graph, missing_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "PlanApprovalRequired") != null);
+
+    console.stderr.clearRetainingCapacity();
+    const wrong_code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "prod", "--plan", "plans/delete.json", "--approve", "wrong",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.invalid_graph, wrong_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "PlanApprovalMismatch") != null);
+
+    console.stderr.clearRetainingCapacity();
+    const approved_code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "prod", "--plan", "plans/delete.json", "--approve", &digest,
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, approved_code);
+    const persisted = fs.readFile(".ziac/state/hello-global/prod/resources.json").?;
+    try std.testing.expect(std.mem.indexOf(u8, persisted, "\"resource_id\":\"gcp.run.Service.retired\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, persisted, "\"status\":\"deleted\"") != null);
+}
+
+test "cli direct destructive deploy requires confirm" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    state.setLineage("hello-global/direct");
+    try state.put(.{
+        .resource_id = "gcp.run.Service.retired",
+        .provider = .gcp,
+        .type_name = "gcp.run.Service",
+        .logical_id = "retired",
+        .desired_hash = "retired",
+        .status = .created,
+    });
+    try ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(&fs)).saveResources("hello-global", "direct", &state);
+
+    const refused = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "direct",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.provider_error, refused);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "DestructiveConfirmationRequired") != null);
+
+    console.stderr.clearRetainingCapacity();
+    const confirmed = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "direct", "--confirm",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, confirmed);
 }
 
 test "cli writer reports lock conflict without removing another owner lock" {

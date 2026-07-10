@@ -17,6 +17,7 @@ pub const PreconditionError = error{
     StalePlan,
     PlanLineageMismatch,
     PlanIntegrityMismatch,
+    DestructiveConfirmationRequired,
 };
 
 pub const ExecuteError = ScheduleError || PreconditionError || apply_mod.ApplyError || fx.DependencyError;
@@ -91,7 +92,7 @@ pub fn executePlan(
     options: ExecuteOptions,
 ) ExecuteError!void {
     if (options.max_concurrency == 0) return error.InvalidConcurrency;
-    try validatePreconditions(allocator, planned, store);
+    try validatePreconditions(allocator, planned, store, options);
     if (options.cancellation) |token| {
         if (token.isCancelled()) return error.ProviderCancelled;
     }
@@ -157,6 +158,7 @@ fn validatePreconditions(
     allocator: std.mem.Allocator,
     planned: *const plan_mod.Plan,
     store: *state_mod.InMemoryStateStore,
+    options: ExecuteOptions,
 ) ExecuteError!void {
     const metadata = store.metadata();
     if (!std.mem.eql(u8, &metadata.lineage_hash, &planned.preconditions.lineage_hash)) {
@@ -166,6 +168,9 @@ fn validatePreconditions(
     const operations_digest = try plan_mod.operationsDigestAlloc(allocator, planned.operations);
     if (!std.mem.eql(u8, &operations_digest, &planned.preconditions.operations_digest)) {
         return error.PlanIntegrityMismatch;
+    }
+    if (plan_mod.hasDestructiveOperations(planned.operations) and !options.destructive_confirmation) {
+        return error.DestructiveConfirmationRequired;
     }
 }
 

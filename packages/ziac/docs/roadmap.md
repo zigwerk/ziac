@@ -170,7 +170,9 @@ this checkout.
 - GCS remote state with generation locking: complete, including expiring
   writer leases, checkpoint renewal, fail-closed ADC selection, and verified
   local migration.
-- Saved plan preconditions and approval.
+- Immutable saved plans and digest-specific destructive approval: complete,
+  including create-exclusive artifacts, current-graph validation, executor
+  confirmation, and secret-reference-only persistence.
 - Workload Identity Federation and preview stages.
 - Canary regional rollouts, rollback, recovery, and protection.
 - Release gate, complete docs, and clean-checkout end-to-end verification.

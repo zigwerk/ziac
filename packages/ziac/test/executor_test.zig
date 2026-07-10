@@ -130,11 +130,36 @@ test "executor propagates destructive confirmation only when requested" {
 
     var destroy_plan = try ziac.plan.buildDestroyPlan(std.testing.allocator, &state);
     defer destroy_plan.deinit();
+    try std.testing.expectError(
+        error.DestructiveConfirmationRequired,
+        ziac.executor.executePlan(std.testing.allocator, &destroy_plan, &state, registryFor(&fake), .{}),
+    );
+    try std.testing.expectEqual(@as(usize, 0), fake.deletes);
     try ziac.executor.executePlan(std.testing.allocator, &destroy_plan, &state, registryFor(&fake), .{
         .destructive_confirmation = true,
     });
 
     try std.testing.expect(fake.last_delete_destructive_confirmation);
+}
+
+test "executor rejects an unconfirmed replacement before provider access" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try addNode(&graph, "service");
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    var plan = try ziac.plan.buildPlan(std.testing.allocator, &graph, &state);
+    defer plan.deinit();
+    plan.operations[0].kind = .replace;
+    plan.preconditions.operations_digest = try ziac.plan.operationsDigestAlloc(std.testing.allocator, plan.operations);
+    var fake = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer fake.deinit();
+
+    try std.testing.expectError(
+        error.DestructiveConfirmationRequired,
+        ziac.executor.executePlan(std.testing.allocator, &plan, &state, registryFor(&fake), .{}),
+    );
+    try std.testing.expectEqual(@as(usize, 0), fake.operationAttempts());
 }
 
 test "dependency failure prevents consumer execution" {

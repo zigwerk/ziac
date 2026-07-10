@@ -14,6 +14,7 @@ Initial source domains:
 - `resource.zig`: resource graph and dependency validation.
 - `state.zig`: resource state records and in-memory store.
 - `plan.zig`: deterministic plan operations.
+- `plan_format.zig`: immutable saved-plan encoding, loading, and integrity.
 - `provider.zig`: provider lifecycle vtable and fake provider.
 - `apply.zig`: one-operation lifecycle and state transitions.
 - `executor.zig`: stable dependency levels, bounded zigeffect execution, retry,
@@ -50,7 +51,7 @@ Lock metadata records lineage, owner, command, and acquisition time. Inspection
 is side-effect free, ordinary release checks owner identity, and forced unlock
 checks lineage unless an explicit override is supplied. The CLI exposes
 `refresh`, `import`, and `unlock`, and all commands can emit a versioned
-`ziac.command.v1` JSON receipt.
+`ziac.command.v2` JSON receipt.
 
 `state_backend.Store` generalizes that persistence contract without changing
 the in-memory state or executor. The local adapter delegates to atomic files.
@@ -61,11 +62,20 @@ downloads bytes pinned to that generation, and all upload/delete requests carry
 unconditional retry. Remote lock format v2 adds owner expiry; stale takeover,
 renewal, release, and forced unlock all compare the exact inspected generation.
 
-Every plan captures the state lineage hash, state serial, canonical desired graph
-digest, and an operation-integrity digest. The executor validates all four before
-refresh, resume, or provider access. Resource and dependency insertion order do
-not affect the desired graph digest, while any mutation of saved operation data
-invalidates the operation digest.
+Every plan captures the state lineage hash, state serial, canonical desired
+graph digest, and an operation-integrity digest. The executor validates lineage,
+serial, operation integrity, and destructive confirmation before refresh,
+resume, or provider access. Resource and dependency insertion order do not
+affect the desired graph digest, while any mutation of operation inputs or
+metadata invalidates the operation digest.
+
+Saved plan format v1 adds stack/stage identity, creation time, full canonical
+operations, a derived destructive-approval flag, and a top-level content digest.
+Files are created exclusively. `deploy --plan` compiles the current stack and
+checks its desired graph digest but never invokes a planner; it executes the
+loaded operation set after state and integrity checks. Delete and replacement
+plans require the exact saved digest through `--approve`. Lifecycle `protect`
+remains an absolute planning block, independent of confirmation or approval.
 
 Provider output descriptors carry their field name, Zig value type, and secrecy
 at comptime. Resource builders expose typed references instead of predicting

@@ -116,6 +116,38 @@ test "executor rejects a plan whose desired operation data was modified" {
     try std.testing.expectEqual(@as(usize, 0), fake.operationAttempts());
 }
 
+test "executor rejects mutated operation inputs even when the cached hash is unchanged" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    try graph.addResource(.{
+        .id = "service",
+        .provider = .gcp,
+        .type_name = "gcp.run.Service",
+        .logical_id = "service",
+        .inputs = .{ .object = &.{.{ .name = "image", .value = .{ .string = "example/api:v1" } }} },
+    });
+    state.setLineage("stack/dev");
+    var plan = try ziac.plan.buildPlan(std.testing.allocator, &graph, &state);
+    defer plan.deinit();
+    plan.operations[0].resource.inputs = .{ .object = &.{.{ .name = "image", .value = .{ .string = "example/api:tampered" } }} };
+    var fake = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer fake.deinit();
+
+    try std.testing.expectError(
+        error.PlanIntegrityMismatch,
+        ziac.executor.executePlan(
+            std.testing.allocator,
+            &plan,
+            &state,
+            providersFor(&fake),
+            .{},
+        ),
+    );
+    try std.testing.expectEqual(@as(usize, 0), fake.operationAttempts());
+}
+
 test "desired graph digest is independent of resource and edge insertion order" {
     var first = ziac.ResourceGraph.init(std.testing.allocator);
     defer first.deinit();

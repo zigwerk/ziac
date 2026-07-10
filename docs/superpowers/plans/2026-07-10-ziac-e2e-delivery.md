@@ -1274,6 +1274,8 @@ Evidence:
 
 ### Task 8.2: Saved Plans And Approval
 
+Status: implemented on 2026-07-10.
+
 Files:
 
 - Add plan serialization and apply validation.
@@ -1287,6 +1289,25 @@ Tests:
 - Plan files contain no secret plaintext.
 
 Commit: `Add immutable Ziac saved plans`
+
+Evidence:
+
+- Saved plan format v1 persists target identity, state and graph
+  preconditions, full canonical operations, content digest, and approval
+  classification in deterministic JSON.
+- Create-exclusive files prevent accidental artifact replacement. The strict
+  loader verifies schema/version, resource input hashes, operation integrity,
+  approval classification, and top-level digest with a 64 MiB bound.
+- `deploy --plan` compiles and hashes the current stack but executes only the
+  loaded operations. Changed target, state lineage/serial, desired graph,
+  inputs, or operation metadata fails before provider access.
+- Delete and replacement operations require executor confirmation. Saved plans
+  require `--approve` with the exact content digest; lifecycle protection
+  remains an absolute planning block.
+- `ziac.command.v2` receipts expose plan path, digest, and approval requirement
+  without resource inputs or secret payloads.
+- The package suite contains 321 tests at this checkpoint: 320 pass and one
+  authenticated credential gate is skipped.
 
 ### Task 8.3: CI Workload Identity And Preview Stages
 

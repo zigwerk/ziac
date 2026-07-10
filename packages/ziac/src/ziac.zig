@@ -15,6 +15,7 @@ pub const checkpoint = @import("checkpoint.zig");
 pub const refresh = @import("refresh.zig");
 pub const importer = @import("importer.zig");
 pub const plan = @import("plan.zig");
+pub const plan_format = @import("plan_format.zig");
 pub const provider = @import("provider.zig");
 pub const provider_error = @import("provider_error.zig");
 pub const apply = @import("apply.zig");

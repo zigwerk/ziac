@@ -33,7 +33,7 @@ zig-out/bin/ziac import --stack hello-global --stage dev \
   --id projects/example/locations/europe-west1/services/api
 zig-out/bin/ziac unlock --stack hello-global --stage dev \
   --lineage hello-global/dev
-zig-out/bin/ziac destroy --stack hello-global --stage dev
+zig-out/bin/ziac destroy --stack hello-global --stage dev --confirm
 ```
 
 Select generation-locked GCS state through ADC and migrate an existing local
@@ -45,6 +45,20 @@ export ZIAC_STATE_PREFIX=ziac/state # optional
 zig-out/bin/ziac state-migrate --stack hello-global --stage dev
 zig-out/bin/ziac plan --stack hello-global --stage dev
 ```
+
+Create and apply an immutable reviewed plan without replanning:
+
+```sh
+zig-out/bin/ziac plan --stack hello-global --stage prod \
+  --out artifacts/hello-global-prod.plan.json
+zig-out/bin/ziac deploy --stack hello-global --stage prod \
+  --plan artifacts/hello-global-prod.plan.json
+```
+
+If the plan contains a delete or replacement, add `--approve <plan-digest>`
+using the exact digest printed by `plan`. Direct destructive deploys and all
+destroys require `--confirm`. Lifecycle-protected resources must first be
+unprotected in a separate deploy; approval never bypasses protection.
 
 Select the native provider explicitly for authenticated calls:
 
@@ -62,7 +76,8 @@ For the two-region component stack, also set `ZIAC_LIVE_REGIONS`,
 `ZIAC_LIVE_DOMAIN`, and optional `ZIAC_LIVE_DNS_ZONE`, then select
 `--stack global-container`.
 
-Add `--json` to any command for the stable `ziac.command.v1` receipt. Commands
+Add `--json` to any command for the stable `ziac.command.v2` receipt. Saved-plan
+receipts include `plan_digest`, `plan_path`, and `approval_required`. Commands
 that write resource state acquire an exclusive stack/stage lock; `unlock`
 requires the recorded lineage unless `--force` is supplied explicitly.
 
@@ -185,6 +200,11 @@ GCS remote state uses generation-pinned reads, generation-zero creates,
 exact-generation updates/deletes, expiring owner leases, per-checkpoint renewal,
 and lineage-preserving local migration. Missing remote ADC fails closed instead
 of falling back to local files.
+Saved plan format v1 is create-exclusive and content addressed. It persists full
+canonical operations without secret payloads, rejects target/state/graph/input
+or digest drift before provider access, and applies the loaded operations
+without replanning. The executor independently requires confirmation for every
+delete and replacement; saved plans bind that approval to the exact plan digest.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts and
@@ -206,7 +226,8 @@ See `docs/secret-manager.md` for the secret payload boundary, and
 `docs/container-service.md` for the high-level global component. See
 `docs/zig-service.md` for source-to-image deployment and typed app bindings. See
 `docs/remote-state.md` for GCS bootstrap, IAM, migration, conflicts, and
-recovery. See
+recovery. See `docs/saved-plans.md` for review artifacts, stale-plan checks,
+digest approval, and CI handoff. See
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

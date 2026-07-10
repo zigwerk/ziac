@@ -47,6 +47,14 @@ pub const Plan = struct {
     }
 };
 
+pub fn hasDestructiveOperations(operations: []const PlanOperation) bool {
+    for (operations) |operation| switch (operation.kind) {
+        .delete, .replace => return true,
+        .create, .update, .read, .noop => {},
+    };
+    return false;
+}
+
 pub fn buildPlan(
     allocator: std.mem.Allocator,
     graph: *const resource.ResourceGraph,
@@ -283,7 +291,7 @@ pub fn operationsDigestAlloc(
 ) std.mem.Allocator.Error![32]u8 {
     var bytes = std.ArrayList(u8).empty;
     defer bytes.deinit(allocator);
-    try appendFramed(&bytes, allocator, "ziac.plan.operations.v1");
+    try appendFramed(&bytes, allocator, "ziac.plan.operations.v2");
     for (operations) |operation| {
         try appendFramed(&bytes, allocator, @tagName(operation.kind));
         try appendNodeDigest(&bytes, allocator, operation.resource);
@@ -295,13 +303,13 @@ pub fn operationsDigestAlloc(
     return hashBytes(bytes.items);
 }
 
-fn desiredGraphDigestAlloc(
+pub fn desiredGraphDigestAlloc(
     allocator: std.mem.Allocator,
     graph: *const resource.ResourceGraph,
 ) std.mem.Allocator.Error![32]u8 {
     var bytes = std.ArrayList(u8).empty;
     defer bytes.deinit(allocator);
-    try appendFramed(&bytes, allocator, "ziac.desired.graph.v1");
+    try appendFramed(&bytes, allocator, "ziac.desired.graph.v2");
 
     const resource_indexes = try allocator.alloc(usize, graph.resources.items.len);
     defer allocator.free(resource_indexes);
@@ -321,9 +329,9 @@ fn desiredGraphDigestAlloc(
     return hashBytes(bytes.items);
 }
 
-fn emptyDesiredGraphDigest() [32]u8 {
+pub fn emptyDesiredGraphDigest() [32]u8 {
     var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash("21:ziac.desired.graph.v1", &digest, .{});
+    std.crypto.hash.sha2.Sha256.hash("21:ziac.desired.graph.v2", &digest, .{});
     return digest;
 }
 
@@ -337,6 +345,12 @@ fn appendNodeDigest(
     try appendFramed(bytes, allocator, node.type_name);
     try bytes.print(allocator, "{d}:", .{node.schema_version});
     try appendFramed(bytes, allocator, node.logical_id);
+    const canonical_inputs: ?[]const u8 = node.inputs.canonicalJsonAlloc(allocator) catch |err| switch (err) {
+        error.DuplicateField => null,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+    defer if (canonical_inputs) |inputs| allocator.free(inputs);
+    try appendFramed(bytes, allocator, canonical_inputs orelse "invalid:duplicate-input-field");
     try bytes.appendSlice(allocator, &node.inputs_hash);
     try bytes.append(allocator, @intFromBool(node.lifecycle.protect));
     try bytes.append(allocator, @intFromBool(node.lifecycle.retain_on_delete));

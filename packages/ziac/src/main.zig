@@ -120,6 +120,7 @@ pub fn main(init: std.process.Init) !void {
         .registry = registry,
         .state = selected_state,
         .migration_source = if (remote_state_initialized) local_backend.delegate else null,
+        .plan_files = ziac.local_state.localFiles.store(&local_fs),
         .auth_env = &auth_env,
         .auth_files = auth_files,
         .live_providers = live_providers,

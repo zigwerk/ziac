@@ -16,6 +16,7 @@ pub const StateFileError = error{
 pub const FileStore = struct {
     ptr: *anyopaque,
     readFileAllocFn: *const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]const u8,
+    readFileAllocBoundedFn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize) anyerror![]const u8 = null,
     writeFileFn: *const fn (*anyopaque, []const u8, []const u8) anyerror!void,
     atomicWriteFileFn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8) anyerror!void,
     createExclusiveFileFn: *const fn (*anyopaque, []const u8, []const u8) anyerror!void,
@@ -28,6 +29,21 @@ pub const FileStore = struct {
         path: []const u8,
     ) anyerror![]const u8 {
         return self.readFileAllocFn(self.ptr, allocator, path);
+    }
+
+    pub fn readFileAllocBounded(
+        self: FileStore,
+        allocator: std.mem.Allocator,
+        path: []const u8,
+        max_bytes: usize,
+    ) anyerror![]const u8 {
+        if (self.readFileAllocBoundedFn) |read| return read(self.ptr, allocator, path, max_bytes);
+        const bytes = try self.readFileAllocFn(self.ptr, allocator, path);
+        if (bytes.len > max_bytes) {
+            allocator.free(bytes);
+            return error.StreamTooLong;
+        }
+        return bytes;
     }
 
     pub fn writeFile(self: FileStore, path: []const u8, content: []const u8) anyerror!void {
@@ -60,12 +76,25 @@ pub fn memoryFiles(fs: *zstd.FileSystem.MemoryFileSystem) FileStore {
     return .{
         .ptr = fs,
         .readFileAllocFn = memoryReadFileAlloc,
+        .readFileAllocBoundedFn = memoryReadFileAllocBounded,
         .writeFileFn = memoryWriteFile,
         .atomicWriteFileFn = memoryAtomicWriteFile,
         .createExclusiveFileFn = memoryCreateExclusiveFile,
         .deleteFileFn = memoryDeleteFile,
         .existsFn = memoryExists,
     };
+}
+
+fn memoryReadFileAllocBounded(
+    raw: *anyopaque,
+    allocator: std.mem.Allocator,
+    path: []const u8,
+    max_bytes: usize,
+) anyerror![]const u8 {
+    const fs: *zstd.FileSystem.MemoryFileSystem = @ptrCast(@alignCast(raw));
+    const content = fs.readFile(path) orelse return error.FileNotFound;
+    if (content.len > max_bytes) return error.StreamTooLong;
+    return allocator.dupe(u8, content);
 }
 
 fn memoryReadFileAlloc(
@@ -115,12 +144,29 @@ pub const localFiles = struct {
         return .{
             .ptr = fs,
             .readFileAllocFn = localReadFileAlloc,
+            .readFileAllocBoundedFn = localReadFileAllocBounded,
             .writeFileFn = localWriteFile,
             .atomicWriteFileFn = localAtomicWriteFile,
             .createExclusiveFileFn = localCreateExclusiveFile,
             .deleteFileFn = localDeleteFile,
             .existsFn = localExists,
         };
+    }
+
+    fn localReadFileAllocBounded(
+        raw: *anyopaque,
+        allocator: std.mem.Allocator,
+        path: []const u8,
+        max_bytes: usize,
+    ) anyerror![]const u8 {
+        const fs: *zstd.FileSystem.LocalFileSystem = @ptrCast(@alignCast(raw));
+        const read_limit = std.math.add(usize, max_bytes, 1) catch std.math.maxInt(usize);
+        const bytes = try fs.dir.readFileAlloc(fs.io, path, allocator, .limited(read_limit));
+        if (bytes.len > max_bytes) {
+            allocator.free(bytes);
+            return error.StreamTooLong;
+        }
+        return bytes;
     }
 
     fn localReadFileAlloc(

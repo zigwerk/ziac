@@ -84,6 +84,10 @@ pub const Value = union(enum) {
         defer parsed.deinit();
         return valueFromJson(allocator, parsed.value);
     }
+
+    pub fn fromJsonValueAlloc(allocator: std.mem.Allocator, source: std.json.Value) ParseError!Value {
+        return valueFromJson(allocator, source);
+    }
 };
 
 fn cloneList(allocator: std.mem.Allocator, source: []const Value) ValueError![]const Value {
