@@ -264,6 +264,8 @@ fn appendRecordJson(
     try appendOptionalStringField(output, allocator, "observed_hash", record.observed_hash, true);
     try appendStringArrayField(output, allocator, "dependencies", record.dependencies, true);
     try appendStateOutputsField(output, allocator, record.outputs, true);
+    try appendBoolField(output, allocator, "protect", record.protect, true);
+    try appendBoolField(output, allocator, "retain_on_delete", record.retain_on_delete, true);
     try appendStringField(output, allocator, "status", statusName(record.status), true);
     try appendOptionalStringField(output, allocator, "operation_handle", record.operation_handle, true);
     try output.append(allocator, '}');
@@ -507,6 +509,8 @@ fn parseVersionTwoResources(
             .observed_hash = try jsonOptionalString(object, "observed_hash"),
             .dependencies = dependencies,
             .outputs = outputs,
+            .protect = try jsonBoolDefault(object, "protect", false),
+            .retain_on_delete = try jsonBoolDefault(object, "retain_on_delete", false),
             .status = try parseStatus(try jsonString(object, "status")),
             .operation_handle = try jsonOptionalString(object, "operation_handle"),
         });
@@ -682,6 +686,11 @@ fn jsonBool(object: std.json.ObjectMap, field: []const u8) !bool {
         .bool => |boolean| boolean,
         else => error.InvalidStateFile,
     };
+}
+
+fn jsonBoolDefault(object: std.json.ObjectMap, field: []const u8, default: bool) !bool {
+    if (object.get(field) == null) return default;
+    return jsonBool(object, field);
 }
 
 pub fn statusName(status: state_mod.ResourceStatus) []const u8 {

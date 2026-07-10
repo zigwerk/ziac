@@ -102,10 +102,12 @@ fn applyDelete(
     try store.put(deleting);
 
     const pending = store.get(node.id) orelse return error.MissingRecord;
-    provider.delete(node, pending.physical_id orelse node.id) catch |err| {
-        try store.markFailed(node.id);
-        return err;
-    };
+    if (!node.lifecycle.retain_on_delete) {
+        provider.delete(node, pending.physical_id orelse node.id) catch |err| {
+            try store.markFailed(node.id);
+            return err;
+        };
+    }
     var deleted = store.get(node.id) orelse return error.MissingRecord;
     deleted.status = .deleted;
     deleted.operation_handle = null;
@@ -125,6 +127,8 @@ fn putPendingState(
         pending.schema_version = node.schema_version;
         pending.logical_id = node.logical_id;
         pending.desired_hash = desired_hash[0..];
+        pending.protect = node.lifecycle.protect;
+        pending.retain_on_delete = node.lifecycle.retain_on_delete;
         pending.status = status;
         try store.put(pending);
         return;
@@ -136,6 +140,8 @@ fn putPendingState(
         .schema_version = node.schema_version,
         .logical_id = node.logical_id,
         .desired_hash = desired_hash[0..],
+        .protect = node.lifecycle.protect,
+        .retain_on_delete = node.lifecycle.retain_on_delete,
         .status = status,
     });
 }
@@ -160,6 +166,8 @@ fn putResultState(
         .observed_hash = observed_hash[0..],
         .dependencies = dependencies,
         .outputs = result.outputs,
+        .protect = node.lifecycle.protect,
+        .retain_on_delete = node.lifecycle.retain_on_delete,
         .status = status,
         .operation_handle = result.operation_handle,
     });

@@ -38,6 +38,8 @@ pub const StateRecord = struct {
     observed_hash: ?[]const u8 = null,
     dependencies: []const []const u8 = &.{},
     outputs: []const StateOutput = &.{},
+    protect: bool = false,
+    retain_on_delete: bool = false,
     status: ResourceStatus,
     operation_handle: ?[]const u8 = null,
 
@@ -72,6 +74,8 @@ pub const StateRecord = struct {
             .observed_hash = observed_hash,
             .dependencies = dependencies,
             .outputs = outputs,
+            .protect = source.protect,
+            .retain_on_delete = source.retain_on_delete,
             .status = source.status,
             .operation_handle = operation_handle,
         };

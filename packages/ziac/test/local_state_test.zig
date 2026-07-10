@@ -116,6 +116,21 @@ test "local state rejects unsupported future versions" {
     try std.testing.expectError(error.UnsupportedStateVersion, store.loadResources("hello-global", "dev"));
 }
 
+test "local state accepts version two records written before lifecycle flags" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    try fs.writeFile(".ziac/state/hello-global/dev/resources.json",
+        \\{"format_version":2,"lineage_id":"hello-global/dev","serial":1,"stack":"hello-global","stage":"dev","resources":[{"resource_id":"test.resource","provider":"local","type_name":"test.Resource","schema_version":1,"logical_id":"resource","physical_id":null,"desired_hash":"hash","observed_hash":null,"dependencies":[],"outputs":[],"status":"created","operation_handle":null}]}
+    );
+
+    var store = ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(&fs));
+    var loaded = try store.loadResources("hello-global", "dev");
+    defer loaded.deinit();
+    const record = loaded.store.get("test.resource") orelse return error.MissingRecord;
+    try std.testing.expect(!record.protect);
+    try std.testing.expect(!record.retain_on_delete);
+}
+
 test "local state saves outputs with secret values redacted" {
     var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer fs.deinit();
