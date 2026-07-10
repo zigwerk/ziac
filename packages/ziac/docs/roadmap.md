@@ -22,8 +22,13 @@ automated and live tests pass.
   refresh/import/unlock, and JSON command receipts: implemented and tested.
 - Lineage, serial, canonical desired-graph, and operation-integrity plan
   preconditions: implemented and tested before provider access.
-- Live GCP calls, global routing, CockroachDB, comptime app bindings, remote
-  state, and source builds: not yet implemented.
+- Comptime app bindings, scoped outputs, and provider-set validation: implemented
+  and compile-fail tested.
+- Production HTTP transport contract: implemented and tested with owned headers,
+  typed failures, cancellation, body limits, `Retry-After`, and credential
+  redaction.
+- Live GCP calls, global routing, CockroachDB, remote state, and source builds:
+  not yet implemented.
 
 ## M0: Integration And Architecture
 
@@ -65,7 +70,7 @@ with their expected Ziac diagnostic codes.
 ## M3: Transport And Authentication
 
 - Owned HTTP response headers, structured errors, timeout, cancellation, and
-  `Retry-After` support.
+  `Retry-After` support: complete.
 - Native Google Application Default Credentials and token caching.
 - Google REST and long-running operation client.
 - Version-pinned CockroachDB Cloud API client.
