@@ -1105,6 +1105,8 @@ Commit: `Verify Ziac CockroachDB bindings end to end`
 
 ### Task 7.1: Deterministic Source Archive
 
+Status: implemented on 2026-07-10.
+
 Files:
 
 - Add `packages/ziac/src/build/source_archive.zig`.
@@ -1119,6 +1121,20 @@ Tests:
 - Secret and state directories are excluded.
 
 Commit: `Add deterministic Zig build contexts`
+
+Evidence:
+
+- Native Zig tar/gzip output is byte-stable across filesystem order and
+  timestamp-only rewrites, with sorted paths, zero timestamps and ownership,
+  and normalized executable modes.
+- Mandatory state, VCS, cache, environment, key, and secret-directory filters
+  cannot be negated. Additive `.ziacignore` rules support bounded root-relative
+  globs and reject unsupported negation.
+- Both collection and final reads reject symlinks and use no-follow,
+  resolve-beneath opens. Generated build files share path, collision, and size
+  validation.
+- The package suite contains 270 tests at this checkpoint: 269 pass and one
+  authenticated credential gate is skipped.
 
 ### Task 7.2: Cloud Build Resource
 

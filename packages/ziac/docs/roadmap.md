@@ -148,7 +148,10 @@ secret plaintext in state or artifacts.
 
 ## M7: ZigService
 
-- Deterministic source archives and build digests.
+- Deterministic source archives and build digests: implemented with native
+  sorted tar/gzip output, normalized metadata, mandatory secret/state/cache
+  exclusions, additive `.ziacignore` globs, no-follow reads, symlink rejection,
+  generated-file collision checks, and bounded source/archive sizes.
 - Cloud Build to Artifact Registry immutable image pipeline.
 - `ziac.gcp.global.ZigService`.
 - Typed app environment wiring into the global service.

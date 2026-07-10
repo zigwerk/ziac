@@ -17,6 +17,7 @@ comptime {
     _ = @import("provider_set_test.zig");
     _ = @import("local_state_test.zig");
     _ = @import("cli_test.zig");
+    _ = @import("source_archive_test.zig");
     _ = @import("gcp_config_test.zig");
     _ = @import("gcp_artifact_registry_test.zig");
     _ = @import("gcp_network_test.zig");
