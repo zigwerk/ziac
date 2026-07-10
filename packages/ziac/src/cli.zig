@@ -44,6 +44,7 @@ const Args = struct {
     allow_live: bool = false,
     live_test: bool = false,
     region: ?[]const u8 = null,
+    confirm: bool = false,
 };
 
 const command_options = [_]zstd.Cli.OptionSpec{
@@ -92,6 +93,16 @@ const import_options = [_]zstd.Cli.OptionSpec{
     .{ .name = "id", .kind = .string, .required = true, .help = "provider physical ID" },
 };
 
+const destroy_options = [_]zstd.Cli.OptionSpec{
+    command_options[0],
+    command_options[1],
+    command_options[2],
+    command_options[3],
+    command_options[4],
+    command_options[5],
+    .{ .name = "confirm", .kind = .boolean, .help = "confirm destructive operations" },
+};
+
 const unlock_options = [_]zstd.Cli.OptionSpec{
     command_options[0],
     command_options[1],
@@ -131,7 +142,7 @@ const subcommands = [_]zstd.Cli.CommandSpec{
     .{
         .name = "destroy",
         .description = "delete managed resources",
-        .options = command_options[0..],
+        .options = destroy_options[0..],
     },
     .{
         .name = "outputs",
@@ -226,6 +237,7 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .allow_live = parsed.optionValue("allow-live") != null,
         .live_test = parsed.optionValue("live-test") != null,
         .region = parsed.optionValue("region"),
+        .confirm = parsed.optionValue("confirm") != null,
     };
 }
 
@@ -369,6 +381,7 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     executor.executePlan(allocator, &planned, &loaded.store, providers, .{
         .checkpoint = checkpoint.checkpoint(),
+        .destructive_confirmation = args.confirm,
     }) catch |err| {
         return handleApplyError(env, err);
     };

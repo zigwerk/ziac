@@ -126,6 +126,7 @@ pub const OperationContext = struct {
     deadline_millis: ?u64 = null,
     physical_id: ?[]const u8 = null,
     operation_handle: ?[]const u8 = null,
+    destructive_confirmation: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) OperationContext {
         return .{ .allocator = allocator };
@@ -339,6 +340,7 @@ pub const FakeProvider = struct {
     deletes: usize = 0,
     imports: usize = 0,
     last_read_physical_id: ?[]const u8 = null,
+    last_delete_destructive_confirmation: bool = false,
     operation_delay_millis: u64 = 0,
     result_operation_handle: ?[]const u8 = null,
     result_completed: bool = true,
@@ -526,6 +528,7 @@ pub const FakeProvider = struct {
         defer self.mutex.unlock();
         try self.takeFailureLocked();
         self.deletes += 1;
+        self.last_delete_destructive_confirmation = context.destructive_confirmation;
         if (self.remotes.fetchRemove(node.id)) |removed| {
             var remote = removed.value;
             remote.deinit();

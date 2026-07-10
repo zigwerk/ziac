@@ -45,6 +45,7 @@ pub const ExecuteOptions = struct {
     cancellation: ?*CancellationToken = null,
     causal_store: ?*fx.CausalStore = null,
     checkpoint: ?checkpoint_mod.Checkpoint = null,
+    destructive_confirmation: bool = false,
 };
 
 pub const ExecutionLevel = struct {
@@ -345,6 +346,7 @@ fn operationContext(
             started_at,
             operation.resource.lifecycle.operation_timeout_millis,
         ) catch std.math.maxInt(u64),
+        .destructive_confirmation = environment.options.destructive_confirmation,
     };
 }
 

@@ -1004,6 +1004,9 @@ Evidence:
 
 ### Task 6.5: Cockroach Cluster Provisioning
 
+Status: completed on 2026-07-10. Authenticated Cockroach Cloud creation remains
+part of the credential-gated M6 live acceptance run.
+
 Resource:
 
 - `cockroach.Cluster`
@@ -1018,6 +1021,20 @@ Tests:
 - Delete requires explicit unprotect and confirmation.
 
 Commit: `Add protected CockroachDB Cloud clusters`
+
+Evidence:
+
+- GCP Basic, Standard, and Advanced builders normalize topology and reject
+  invalid names, primary regions, CIDRs, and plan-specific sizing.
+- The pinned client emits exact structured create/update JSON, string-encoded
+  usage limits, an empty serverless IP allowlist, and remote deletion
+  protection.
+- Scripted provider lifecycles cover create/read/update/import/delete,
+  `CREATING`/`LOCKED` readiness, terminal failure, deadlines, scaling, and
+  immutable replacement classification.
+- Protection is mirrored into managed inputs, Ziac lifecycle state, and the
+  Cockroach API. Tests prove the required unprotect deploy followed by
+  `destroy --confirm` propagation through the CLI and executor.
 
 ### Task 6.6: Private Service Connect
 

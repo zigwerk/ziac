@@ -116,6 +116,27 @@ test "destroy schedule runs consumers before their dependencies" {
     );
 }
 
+test "executor propagates destructive confirmation only when requested" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try addNode(&graph, "service");
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    var fake = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer fake.deinit();
+    var create_plan = try ziac.plan.buildPlan(std.testing.allocator, &graph, &state);
+    defer create_plan.deinit();
+    try ziac.executor.executePlan(std.testing.allocator, &create_plan, &state, registryFor(&fake), .{});
+
+    var destroy_plan = try ziac.plan.buildDestroyPlan(std.testing.allocator, &state);
+    defer destroy_plan.deinit();
+    try ziac.executor.executePlan(std.testing.allocator, &destroy_plan, &state, registryFor(&fake), .{
+        .destructive_confirmation = true,
+    });
+
+    try std.testing.expect(fake.last_delete_destructive_confirmation);
+}
+
 test "dependency failure prevents consumer execution" {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     defer graph.deinit();

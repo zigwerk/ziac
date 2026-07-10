@@ -119,6 +119,10 @@ grants, and immutable ordered migrations. SQLSTATE-aware `psql` and native
 rotates idle generations, and passes a reproducible secure CockroachDB container
 gate. Provider state and diagnostics retain only typed secret references and
 SQLSTATE categories.
+`cockroach.cluster.Cluster` now provisions protected GCP Basic, Standard, and
+Advanced clusters, polls long-running readiness, updates supported capacity and
+topology in place, starts serverless clusters with an empty IP allowlist, and
+requires a separate unprotect deploy plus `destroy --confirm` before deletion.
 The first Live GCP Primitives slice is implemented behind the provider
 interface: typed project-service, service-account, and project-member resources
 pass full scripted read/diff/create/update/delete/import lifecycles. Service
@@ -147,6 +151,8 @@ warm-instance/probe validation.
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts and
 `docs/cockroach-existing-cluster.md` for retained cluster adoption. See
+`docs/cockroach-cluster.md` for managed cluster plans, scaling, readiness, and
+the protected destroy workflow. See
 `docs/cockroach-connection-secret.md` for SQL-user and Secret Manager wiring.
 See `docs/public-static-egress.md` for the initial public Cockroach connectivity
 topology and its production safety policy.

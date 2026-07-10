@@ -1,6 +1,7 @@
 pub const client = @import("client.zig");
 pub const application_database = @import("application_database.zig");
 pub const authorized_network = @import("authorized_network.zig");
+pub const cluster = @import("cluster.zig");
 pub const connection_secret = @import("connection_secret.zig");
 pub const config = @import("config.zig");
 pub const database = @import("database.zig");

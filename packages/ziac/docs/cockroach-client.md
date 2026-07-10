@@ -41,6 +41,12 @@ The initial typed response surface includes:
   endpoints, node count, and primary-region metadata;
 - SQL-user names and `pagination.next_page`.
 
+The mutable cluster surface emits exact GCP Basic, Standard, and Advanced create
+and update schemas, including string-encoded usage limits and remote deletion
+protection. Serverless creates always request an empty IP allowlist. Cluster
+delete treats `404` as converged and remains gated by the managed resource's
+local, remote, and explicit-confirmation checks.
+
 Unknown response fields are ignored to preserve forward compatibility within
 the pinned API version. Returned clusters, users, page tokens, headers, and
 bodies are all owned.

@@ -78,6 +78,25 @@ test "cli destroy marks resource deleted" {
     try std.testing.expect(std.mem.indexOf(u8, resources, "\"status\":\"deleted\"") != null);
 }
 
+test "cli destroy accepts explicit destructive confirmation" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+
+    _ = try ziac.cli.run(std.testing.allocator, &.{ "deploy", "--stack", "hello-global", "--stage", "dev" }, &env);
+    console.stdout.clearRetainingCapacity();
+    const code = try ziac.cli.run(
+        std.testing.allocator,
+        &.{ "destroy", "--stack", "hello-global", "--stage", "dev", "--confirm" },
+        &env,
+    );
+
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Destroy complete") != null);
+}
+
 test "cli state prints persisted resource status" {
     var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer fs.deinit();

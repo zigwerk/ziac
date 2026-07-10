@@ -11,6 +11,7 @@ const validation = @import("validation.zig");
 const value = @import("../value.zig");
 
 const ProviderError = provider_mod.ProviderError;
+const cluster_type = "cockroach.Cluster";
 const existing_cluster_type = "cockroach.Cluster.Existing";
 const sql_user_type = "cockroach.SqlUser";
 const authorized_network_type = "cockroach.AuthorizedNetwork";
@@ -20,6 +21,7 @@ pub const LiveProvider = struct {
     secret_source: ?secret.SecretSource = null,
     sql_executor: ?sql.Executor = null,
     sql_retry_policy: sql_provider.RetryPolicy = .{},
+    cluster_poll_interval_millis: u64 = 5_000,
     migration_lock: @import("zigeffect_std").fx.SpinLock = .{},
 
     pub fn init(client: *client_mod.Client) LiveProvider {
@@ -48,6 +50,7 @@ pub const LiveProvider = struct {
         if (isType(node, sql_user_type)) return self.readSqlUser(context, node);
         if (isType(node, authorized_network_type)) return self.readAuthorizedNetwork(context, node);
         if (sql_provider.supports(node)) return (try self.sqlHandler()).read(context, node);
+        if (isType(node, cluster_type)) return self.readManagedCluster(context, node);
         var diagnostic = client_mod.Diagnostic.init(context.allocator);
         defer diagnostic.deinit();
         var cluster = self.client.getClusterAlloc(context, try inputString(node.inputs, "cluster_id"), &diagnostic) catch |err| {
@@ -71,6 +74,7 @@ pub const LiveProvider = struct {
         }
         if (isType(node, sql_user_type)) return sqlUserDiff(context.allocator, node.inputs, observed.observed_inputs);
         if (isType(node, authorized_network_type)) return authorizedNetworkDiff(context.allocator, node.inputs, observed.observed_inputs);
+        if (isType(node, cluster_type)) return managedClusterDiff(context.allocator, node.inputs, observed.observed_inputs);
         if (sql_provider.supports(node)) {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return (try self.sqlHandler()).diff(context, node, observed);
@@ -87,6 +91,7 @@ pub const LiveProvider = struct {
         if (isType(node, sql_user_type)) return self.ensureSqlUser(context, node);
         if (isType(node, authorized_network_type)) return self.writeAuthorizedNetwork(context, node, false);
         if (sql_provider.supports(node)) return (try self.sqlHandler()).create(context, node);
+        if (isType(node, cluster_type)) return self.createManagedCluster(context, node);
         return self.readExact(context, node);
     }
 
@@ -109,6 +114,10 @@ pub const LiveProvider = struct {
         if (sql_provider.supports(node)) {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return (try self.sqlHandler()).update(context, node, observed);
+        }
+        if (isType(node, cluster_type)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return self.updateManagedCluster(context, node, observed);
         }
         var result_diff = try topologyDiff(context.allocator, node.inputs, observed.observed_inputs);
         defer result_diff.deinit();
@@ -135,6 +144,10 @@ pub const LiveProvider = struct {
         if (sql_provider.supports(node)) {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return (try self.sqlHandler()).delete(context, node, physical_id);
+        }
+        if (isType(node, cluster_type)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return self.deleteManagedCluster(context, node, physical_id);
         }
         if (!std.mem.eql(u8, try inputString(node.inputs, "cluster_id"), physical_id)) {
             return error.InvalidConfiguration;
@@ -168,6 +181,7 @@ pub const LiveProvider = struct {
             };
         }
         if (sql_provider.supports(node)) return (try self.sqlHandler()).importResource(context, node, physical_id);
+        if (isType(node, cluster_type)) return self.importManagedCluster(context, node, physical_id);
         if (!std.mem.eql(u8, try inputString(node.inputs, "cluster_id"), physical_id)) {
             return error.InvalidConfiguration;
         }
@@ -188,6 +202,130 @@ pub const LiveProvider = struct {
         defer result_diff.deinit();
         if (result_diff.kind != .noop) return error.InvalidConfiguration;
         return result;
+    }
+
+    fn readManagedCluster(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ReadResult {
+        const physical_id = context.physical_id orelse return .absent;
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var cluster = self.client.getClusterAlloc(context, physical_id, &diagnostic) catch |err| {
+            if (err == error.NotFound) return .absent;
+            return err;
+        };
+        defer cluster.deinit(context.allocator);
+        if (cluster.state) |remote_state| {
+            if (std.mem.eql(u8, remote_state, "DELETED")) return .absent;
+        }
+        return .{ .present = try managedClusterResult(context.allocator, node, cluster) };
+    }
+
+    fn createManagedCluster(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ResourceResult {
+        var spec = try managedSpecFromInputsAlloc(context.allocator, node.inputs);
+        defer spec.deinit();
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var cluster = try self.client.createClusterAlloc(context, spec.value, &diagnostic);
+        cluster = try self.waitForClusterReady(context, cluster, &diagnostic);
+        defer cluster.deinit(context.allocator);
+        return managedClusterResult(context.allocator, node, cluster);
+    }
+
+    fn updateManagedCluster(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        observed: *const provider_mod.ResourceResult,
+    ) ProviderError!provider_mod.ResourceResult {
+        var result_diff = try managedClusterDiff(context.allocator, node.inputs, observed.observed_inputs);
+        defer result_diff.deinit();
+        if (result_diff.kind == .replace) return error.InvalidConfiguration;
+        if (result_diff.kind == .noop) return observed.clone(context.allocator);
+        const physical_id = context.physical_id orelse observed.physical_id;
+        var spec = try managedSpecFromInputsAlloc(context.allocator, node.inputs);
+        defer spec.deinit();
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var cluster = try self.client.updateClusterAlloc(context, physical_id, spec.value, &diagnostic);
+        cluster = try self.waitForClusterReady(context, cluster, &diagnostic);
+        defer cluster.deinit(context.allocator);
+        return managedClusterResult(context.allocator, node, cluster);
+    }
+
+    fn importManagedCluster(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!provider_mod.ResourceResult {
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var cluster = try self.client.getClusterAlloc(context, physical_id, &diagnostic);
+        defer cluster.deinit(context.allocator);
+        var result = try managedClusterResult(context.allocator, node, cluster);
+        errdefer result.deinit();
+        var result_diff = try managedClusterDiff(context.allocator, node.inputs, result.observed_inputs);
+        defer result_diff.deinit();
+        if (result_diff.kind != .noop) return error.InvalidConfiguration;
+        return result;
+    }
+
+    fn deleteManagedCluster(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        if (try inputBoolean(node.inputs, "protect")) return error.InvalidConfiguration;
+        if (!context.destructive_confirmation) return error.DestructiveConfirmationRequired;
+        if (physical_id.len == 0) return error.InvalidConfiguration;
+        if (context.physical_id) |tracked_id| {
+            if (!std.mem.eql(u8, tracked_id, physical_id)) return error.InvalidConfiguration;
+        }
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var cluster = self.client.getClusterAlloc(context, physical_id, &diagnostic) catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        defer cluster.deinit(context.allocator);
+        if (cluster.delete_protection == null or !std.mem.eql(u8, cluster.delete_protection.?, "DISABLED")) {
+            return error.InvalidConfiguration;
+        }
+        try self.client.deleteCluster(context, physical_id, &diagnostic);
+    }
+
+    fn waitForClusterReady(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        initial: client_mod.Cluster,
+        diagnostic: *client_mod.Diagnostic,
+    ) ProviderError!client_mod.Cluster {
+        var current = initial;
+        errdefer current.deinit(context.allocator);
+        while (true) {
+            const remote_state = current.state orelse return error.ProviderBug;
+            if (std.mem.eql(u8, remote_state, "CREATED")) return current;
+            if (std.mem.eql(u8, remote_state, "CREATION_FAILED") or std.mem.eql(u8, remote_state, "DELETED")) {
+                return error.ProviderBug;
+            }
+            if (!std.mem.eql(u8, remote_state, "CREATING") and !std.mem.eql(u8, remote_state, "LOCKED")) {
+                return error.ProviderBug;
+            }
+            try context.checkActive();
+            context.sleep(self.cluster_poll_interval_millis);
+            try context.checkActive();
+            const next = try self.client.getClusterAlloc(context, current.id, diagnostic);
+            current.deinit(context.allocator);
+            current = next;
+        }
     }
 
     fn readSqlUser(
@@ -445,6 +583,246 @@ fn sqlUserDiff(
     return provider_mod.DiffResult.init(allocator, .update, &.{"connection secret changed"});
 }
 
+const ManagedSpec = struct {
+    allocator: std.mem.Allocator,
+    regions: []client_mod.ClusterRegionSpec,
+    value: client_mod.ManagedClusterSpec,
+
+    fn deinit(self: *ManagedSpec) void {
+        self.allocator.free(self.regions);
+        self.* = undefined;
+    }
+};
+
+fn managedSpecFromInputsAlloc(allocator: std.mem.Allocator, inputs: value.Value) ProviderError!ManagedSpec {
+    const plan_name = try inputString(inputs, "plan");
+    const plan: client_mod.ClusterPlan = if (std.mem.eql(u8, plan_name, "BASIC"))
+        .basic
+    else if (std.mem.eql(u8, plan_name, "STANDARD"))
+        .standard
+    else if (std.mem.eql(u8, plan_name, "ADVANCED"))
+        .advanced
+    else
+        return error.InvalidConfiguration;
+    const region_values = try inputList(inputs, "regions");
+    const regions = allocator.alloc(client_mod.ClusterRegionSpec, region_values.len) catch return error.OutOfMemory;
+    errdefer allocator.free(regions);
+    for (region_values, 0..) |region, index| {
+        regions[index] = .{
+            .name = try inputString(region, "name"),
+            .node_count = try inputInteger(region, "node_count"),
+            .primary = try inputBoolean(region, "primary"),
+        };
+    }
+    return .{
+        .allocator = allocator,
+        .regions = regions,
+        .value = .{
+            .name = try inputString(inputs, "name"),
+            .plan = plan,
+            .protect = try inputBoolean(inputs, "protect"),
+            .regions = regions,
+            .provisioned_virtual_cpus = if (plan == .standard) try inputInteger(inputs, "provisioned_virtual_cpus") else null,
+            .request_unit_limit = if (plan == .basic) positiveOptional(try inputInteger(inputs, "request_unit_limit")) else null,
+            .storage_mib_limit = if (plan == .basic) positiveOptional(try inputInteger(inputs, "storage_mib_limit")) else null,
+            .num_virtual_cpus = if (plan == .advanced) try inputInteger(inputs, "num_virtual_cpus") else null,
+            .storage_gib = if (plan == .advanced) positiveOptional(try inputInteger(inputs, "storage_gib")) else null,
+            .cockroach_version = if (plan == .advanced) nonEmptyOptional(try inputString(inputs, "cockroach_version")) else null,
+            .private_network_visibility = if (plan == .advanced) try inputBoolean(inputs, "private_network_visibility") else false,
+            .cidr_range = if (plan == .advanced) nonEmptyOptional(try inputString(inputs, "cidr_range")) else null,
+        },
+    };
+}
+
+fn managedClusterResult(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    cluster: client_mod.Cluster,
+) ProviderError!provider_mod.ResourceResult {
+    const cloud_provider = cluster.cloud_provider orelse return error.ProviderBug;
+    const plan = cluster.plan orelse return error.ProviderBug;
+    const remote_state = cluster.state orelse return error.ProviderBug;
+    const delete_protection = cluster.delete_protection orelse return error.ProviderBug;
+    if (cluster.regions.len == 0) return error.ProviderBug;
+
+    const sorted_regions = allocator.dupe(client_mod.Region, cluster.regions) catch return error.OutOfMemory;
+    defer allocator.free(sorted_regions);
+    std.mem.sort(client_mod.Region, sorted_regions, {}, lessThanClientRegion);
+    const region_values = allocator.alloc(value.Value, sorted_regions.len) catch return error.OutOfMemory;
+    defer allocator.free(region_values);
+    const region_fields = allocator.alloc(value.Field, sorted_regions.len * 3) catch return error.OutOfMemory;
+    defer allocator.free(region_fields);
+    for (sorted_regions, 0..) |region, index| {
+        const start = index * 3;
+        region_fields[start..][0..3].* = .{
+            .{ .name = "name", .value = .{ .string = region.name } },
+            .{ .name = "node_count", .value = .{ .integer = region.node_count } },
+            .{ .name = "primary", .value = .{ .boolean = region.primary orelse false } },
+        };
+        if (sorted_regions.len == 1 and !std.mem.eql(u8, plan, "ADVANCED")) {
+            region_fields[start + 2].value = .{ .boolean = true };
+        }
+        region_values[index] = .{ .object = region_fields[start..][0..3] };
+    }
+
+    var observed_fields = std.ArrayList(value.Field).empty;
+    defer observed_fields.deinit(allocator);
+    if (std.mem.eql(u8, plan, "ADVANCED")) {
+        const desired_cidr = inputStringOr(node.inputs, "cidr_range", "");
+        const desired_version = inputStringOr(node.inputs, "cockroach_version", "");
+        try observed_fields.appendSlice(allocator, &.{
+            .{ .name = "cidr_range", .value = .{ .string = managedRemoteString(desired_cidr, cluster.cidr_range) } },
+            .{ .name = "cloud_provider", .value = .{ .string = cloud_provider } },
+            .{ .name = "cockroach_version", .value = .{ .string = managedRemoteVersion(desired_version, cluster.cockroach_version) } },
+            .{ .name = "name", .value = .{ .string = cluster.name } },
+            .{ .name = "num_virtual_cpus", .value = .{ .integer = cluster.num_virtual_cpus orelse 0 } },
+            .{ .name = "plan", .value = .{ .string = plan } },
+            .{ .name = "private_network_visibility", .value = .{ .boolean = cluster.private_network_visibility orelse false } },
+            .{ .name = "protect", .value = .{ .boolean = std.mem.eql(u8, delete_protection, "ENABLED") } },
+            .{ .name = "regions", .value = .{ .list = region_values } },
+            .{ .name = "storage_gib", .value = .{ .integer = managedRemoteInteger(inputIntegerOr(node.inputs, "storage_gib", 0), cluster.storage_gib) } },
+        });
+    } else {
+        const primary = primaryRegion(sorted_regions);
+        try observed_fields.appendSlice(allocator, &.{
+            .{ .name = "cloud_provider", .value = .{ .string = cloud_provider } },
+            .{ .name = "name", .value = .{ .string = cluster.name } },
+            .{ .name = "plan", .value = .{ .string = plan } },
+            .{ .name = "primary_region", .value = .{ .string = primary.name } },
+            .{ .name = "protect", .value = .{ .boolean = std.mem.eql(u8, delete_protection, "ENABLED") } },
+        });
+        if (std.mem.eql(u8, plan, "STANDARD")) {
+            try observed_fields.append(allocator, .{ .name = "provisioned_virtual_cpus", .value = .{ .integer = cluster.provisioned_virtual_cpus orelse 0 } });
+        }
+        try observed_fields.append(allocator, .{ .name = "regions", .value = .{ .list = region_values } });
+        if (std.mem.eql(u8, plan, "BASIC")) {
+            try observed_fields.appendSlice(allocator, &.{
+                .{ .name = "request_unit_limit", .value = .{ .integer = cluster.request_unit_limit orelse 0 } },
+                .{ .name = "storage_mib_limit", .value = .{ .integer = cluster.storage_mib_limit orelse 0 } },
+            });
+        }
+    }
+
+    const region_names = allocator.alloc([]const u8, sorted_regions.len) catch return error.OutOfMemory;
+    defer allocator.free(region_names);
+    for (sorted_regions, 0..) |region, index| region_names[index] = region.name;
+    const regions_csv = std.mem.join(allocator, ",", region_names) catch return error.OutOfMemory;
+    defer allocator.free(regions_csv);
+    const primary = primaryRegion(sorted_regions);
+    const sql_dns = cluster.sql_dns orelse primary.sql_dns;
+    const outputs = [_]state.StateOutput{
+        .{ .name = "cluster_id", .value = .{ .string = cluster.id } },
+        .{ .name = "name", .value = .{ .string = cluster.name } },
+        .{ .name = "cloud_provider", .value = .{ .string = cloud_provider } },
+        .{ .name = "plan", .value = .{ .string = plan } },
+        .{ .name = "state", .value = .{ .string = remote_state } },
+        .{ .name = "delete_protection", .value = .{ .boolean = std.mem.eql(u8, delete_protection, "ENABLED") } },
+        .{ .name = "sql_dns", .value = .{ .string = sql_dns } },
+        .{ .name = "regions", .value = .{ .string = regions_csv } },
+        .{ .name = "primary_region", .value = .{ .string = primary.name } },
+        .{ .name = "primary_sql_dns", .value = .{ .string = primary.sql_dns } },
+        .{ .name = "primary_internal_dns", .value = .{ .string = primary.internal_dns } },
+        .{ .name = "primary_private_endpoint_dns", .value = .{ .string = primary.private_endpoint_dns } },
+    };
+    return provider_mod.ResourceResult.init(
+        allocator,
+        cluster.id,
+        .{ .object = observed_fields.items },
+        &outputs,
+        null,
+    );
+}
+
+fn managedClusterDiff(
+    allocator: std.mem.Allocator,
+    desired: value.Value,
+    observed: value.Value,
+) ProviderError!provider_mod.DiffResult {
+    if (try valuesEqualAlloc(allocator, desired, observed)) {
+        return provider_mod.DiffResult.init(allocator, .noop, &.{});
+    }
+    inline for (&.{ "cloud_provider", "name" }) |field| {
+        if (!std.mem.eql(u8, try inputString(desired, field), try inputString(observed, field))) {
+            return provider_mod.DiffResult.init(allocator, .replace, &.{"cluster identity changed"});
+        }
+    }
+    const desired_plan = try inputString(desired, "plan");
+    const observed_plan = try inputString(observed, "plan");
+    const desired_advanced = std.mem.eql(u8, desired_plan, "ADVANCED");
+    const observed_advanced = std.mem.eql(u8, observed_plan, "ADVANCED");
+    if (desired_advanced != observed_advanced) {
+        return provider_mod.DiffResult.init(allocator, .replace, &.{"serverless and Advanced plans are not interchangeable"});
+    }
+    if (desired_advanced) {
+        inline for (&.{ "cidr_range", "cockroach_version", "private_network_visibility" }) |field| {
+            if (!try inputFieldEqualAlloc(allocator, desired, observed, field)) {
+                return provider_mod.DiffResult.init(allocator, .replace, &.{"Advanced creation settings changed"});
+            }
+        }
+    } else {
+        const desired_regions = try inputRegionNamesAlloc(allocator, desired);
+        defer allocator.free(desired_regions);
+        const observed_regions = try inputRegionNamesAlloc(allocator, observed);
+        defer allocator.free(observed_regions);
+        for (observed_regions) |region| {
+            if (!containsString(desired_regions, region)) {
+                return provider_mod.DiffResult.init(allocator, .replace, &.{"serverless regions cannot be removed in place"});
+            }
+        }
+    }
+    return provider_mod.DiffResult.init(allocator, .update, &.{"managed cluster configuration changed"});
+}
+
+fn managedRemoteString(desired: []const u8, remote: ?[]const u8) []const u8 {
+    if (desired.len == 0) return "";
+    return remote orelse "";
+}
+
+fn managedRemoteVersion(desired: []const u8, remote: ?[]const u8) []const u8 {
+    if (desired.len == 0) return "";
+    const actual = remote orelse return "";
+    return if (std.mem.startsWith(u8, actual, desired)) desired else actual;
+}
+
+fn managedRemoteInteger(desired: i64, remote: ?i64) i64 {
+    if (desired == 0) return 0;
+    return remote orelse 0;
+}
+
+fn valuesEqualAlloc(allocator: std.mem.Allocator, left: value.Value, right: value.Value) ProviderError!bool {
+    const left_json = left.canonicalJsonAlloc(allocator) catch return error.OutOfMemory;
+    defer allocator.free(left_json);
+    const right_json = right.canonicalJsonAlloc(allocator) catch return error.OutOfMemory;
+    defer allocator.free(right_json);
+    return std.mem.eql(u8, left_json, right_json);
+}
+
+fn inputFieldEqualAlloc(
+    allocator: std.mem.Allocator,
+    left: value.Value,
+    right: value.Value,
+    field: []const u8,
+) ProviderError!bool {
+    return valuesEqualAlloc(allocator, try inputValue(left, field), try inputValue(right, field));
+}
+
+fn inputRegionNamesAlloc(allocator: std.mem.Allocator, inputs: value.Value) ProviderError![]const []const u8 {
+    const regions = try inputList(inputs, "regions");
+    const names = allocator.alloc([]const u8, regions.len) catch return error.OutOfMemory;
+    errdefer allocator.free(names);
+    for (regions, 0..) |region, index| names[index] = try inputString(region, "name");
+    return names;
+}
+
+fn containsString(values: []const []const u8, expected: []const u8) bool {
+    for (values) |item| if (std.mem.eql(u8, item, expected)) return true;
+    return false;
+}
+
+fn lessThanClientRegion(_: void, left: client_mod.Region, right: client_mod.Region) bool {
+    return std.mem.lessThan(u8, left.name, right.name);
+}
+
 fn resultFromCluster(
     allocator: std.mem.Allocator,
     node: resource.ResourceNode,
@@ -552,6 +930,10 @@ fn inputString(input: value.Value, name: []const u8) ProviderError![]const u8 {
     };
 }
 
+fn inputStringOr(input: value.Value, name: []const u8, fallback: []const u8) []const u8 {
+    return inputString(input, name) catch fallback;
+}
+
 fn inputValue(input: value.Value, name: []const u8) ProviderError!value.Value {
     const fields = switch (input) {
         .object => |fields| fields,
@@ -561,6 +943,24 @@ fn inputValue(input: value.Value, name: []const u8) ProviderError!value.Value {
         if (std.mem.eql(u8, field.name, name)) return field.value;
     }
     return error.InvalidConfiguration;
+}
+
+fn inputList(input: value.Value, name: []const u8) ProviderError![]const value.Value {
+    return switch (try inputValue(input, name)) {
+        .list => |items| if (items.len > 0) items else error.InvalidConfiguration,
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn inputInteger(input: value.Value, name: []const u8) ProviderError!i64 {
+    return switch (try inputValue(input, name)) {
+        .integer => |integer| integer,
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn inputIntegerOr(input: value.Value, name: []const u8, fallback: i64) i64 {
+    return inputInteger(input, name) catch fallback;
 }
 
 fn inputU8(input: value.Value, name: []const u8) ProviderError!u8 {
@@ -575,6 +975,14 @@ fn inputBoolean(input: value.Value, name: []const u8) ProviderError!bool {
         .boolean => |boolean| boolean,
         else => error.InvalidConfiguration,
     };
+}
+
+fn positiveOptional(number: i64) ?i64 {
+    return if (number > 0) number else null;
+}
+
+fn nonEmptyOptional(text: []const u8) ?[]const u8 {
+    return if (text.len > 0) text else null;
 }
 
 fn resolveInputString(
@@ -651,7 +1059,7 @@ fn primaryRegion(regions: []const client_mod.Region) client_mod.Region {
 }
 
 fn isSupported(node: resource.ResourceNode) bool {
-    return isType(node, existing_cluster_type) or isType(node, sql_user_type) or
+    return isType(node, cluster_type) or isType(node, existing_cluster_type) or isType(node, sql_user_type) or
         isType(node, authorized_network_type) or sql_provider.supports(node);
 }
 

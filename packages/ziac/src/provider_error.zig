@@ -9,6 +9,7 @@ pub const ProviderError = error{
     TransientFailure,
     ProviderTimeout,
     ProviderCancelled,
+    DestructiveConfirmationRequired,
     ProviderBug,
     OutOfMemory,
 };
@@ -39,6 +40,7 @@ pub fn category(err: ProviderError) Category {
         error.TransientFailure => .transient,
         error.ProviderTimeout => .timeout,
         error.ProviderCancelled => .cancelled,
+        error.DestructiveConfirmationRequired => .invalid_configuration,
         error.ProviderBug, error.OutOfMemory => .provider_bug,
     };
 }

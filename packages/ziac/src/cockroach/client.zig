@@ -73,6 +73,15 @@ pub const Cluster = struct {
     cloud_provider: ?[]const u8,
     plan: ?[]const u8,
     state: ?[]const u8,
+    delete_protection: ?[]const u8,
+    cockroach_version: ?[]const u8,
+    cidr_range: ?[]const u8,
+    private_network_visibility: ?bool,
+    provisioned_virtual_cpus: ?i64,
+    request_unit_limit: ?i64,
+    storage_mib_limit: ?i64,
+    num_virtual_cpus: ?i64,
+    storage_gib: ?i64,
     sql_dns: ?[]const u8,
     regions: []const Region,
 
@@ -82,11 +91,49 @@ pub const Cluster = struct {
         if (self.cloud_provider) |value| allocator.free(value);
         if (self.plan) |value| allocator.free(value);
         if (self.state) |value| allocator.free(value);
+        if (self.delete_protection) |value| allocator.free(value);
+        if (self.cockroach_version) |value| allocator.free(value);
+        if (self.cidr_range) |value| allocator.free(value);
         if (self.sql_dns) |value| allocator.free(value);
         for (self.regions) |*region| @constCast(region).deinit(allocator);
         allocator.free(self.regions);
         self.* = undefined;
     }
+};
+
+pub const ClusterPlan = enum {
+    basic,
+    standard,
+    advanced,
+
+    pub fn apiName(self: ClusterPlan) []const u8 {
+        return switch (self) {
+            .basic => "BASIC",
+            .standard => "STANDARD",
+            .advanced => "ADVANCED",
+        };
+    }
+};
+
+pub const ClusterRegionSpec = struct {
+    name: []const u8,
+    node_count: i64 = 0,
+    primary: bool = false,
+};
+
+pub const ManagedClusterSpec = struct {
+    name: []const u8,
+    plan: ClusterPlan,
+    protect: bool,
+    regions: []const ClusterRegionSpec,
+    provisioned_virtual_cpus: ?i64 = null,
+    request_unit_limit: ?i64 = null,
+    storage_mib_limit: ?i64 = null,
+    num_virtual_cpus: ?i64 = null,
+    storage_gib: ?i64 = null,
+    cockroach_version: ?[]const u8 = null,
+    private_network_visibility: bool = false,
+    cidr_range: ?[]const u8 = null,
 };
 
 pub const Region = struct {
@@ -214,6 +261,61 @@ pub const Client = struct {
         var response = try self.requestJsonWithRetryAlloc(context, .{ .method = "GET", .path = path }, diagnostic);
         defer response.deinit(context.allocator);
         return decodeClusterAlloc(context.allocator, response.body);
+    }
+
+    pub fn createClusterAlloc(
+        self: *Client,
+        context: *provider.OperationContext,
+        spec: ManagedClusterSpec,
+        diagnostic: *Diagnostic,
+    ) ProviderError!Cluster {
+        const body = try clusterMutationBodyAlloc(context.allocator, spec, true);
+        defer context.allocator.free(body);
+        var response = try self.requestJsonWithRetryAlloc(context, .{
+            .method = "POST",
+            .path = "/v1/clusters",
+            .body = body,
+        }, diagnostic);
+        defer response.deinit(context.allocator);
+        return decodeClusterAlloc(context.allocator, response.body);
+    }
+
+    pub fn updateClusterAlloc(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        spec: ManagedClusterSpec,
+        diagnostic: *Diagnostic,
+    ) ProviderError!Cluster {
+        const path = try clusterPathAlloc(context.allocator, cluster_id);
+        defer context.allocator.free(path);
+        const body = try clusterMutationBodyAlloc(context.allocator, spec, false);
+        defer context.allocator.free(body);
+        var response = try self.requestJsonWithRetryAlloc(context, .{
+            .method = "PATCH",
+            .path = path,
+            .body = body,
+        }, diagnostic);
+        defer response.deinit(context.allocator);
+        return decodeClusterAlloc(context.allocator, response.body);
+    }
+
+    pub fn deleteCluster(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        const path = try clusterPathAlloc(context.allocator, cluster_id);
+        defer context.allocator.free(path);
+        var response = self.requestJsonWithRetryAlloc(context, .{
+            .method = "DELETE",
+            .path = path,
+        }, diagnostic) catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        response.deinit(context.allocator);
     }
 
     pub fn listAllSqlUsersAlloc(
@@ -407,12 +509,146 @@ pub const Client = struct {
     }
 };
 
+fn clusterMutationBodyAlloc(
+    allocator: std.mem.Allocator,
+    spec: ManagedClusterSpec,
+    create: bool,
+) ProviderError![]const u8 {
+    if (spec.name.len == 0 or spec.regions.len == 0) return error.InvalidConfiguration;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const temp = arena.allocator();
+
+    var spec_object: std.json.ObjectMap = .{};
+    try putJson(temp, &spec_object, "plan", .{ .string = spec.plan.apiName() });
+    try putJson(temp, &spec_object, "delete_protection", .{ .string = if (spec.protect) "ENABLED" else "DISABLED" });
+    switch (spec.plan) {
+        .basic, .standard => try putJson(temp, &spec_object, "serverless", try serverlessWireValue(temp, spec, create)),
+        .advanced => try putJson(temp, &spec_object, "dedicated", try dedicatedWireValue(temp, spec, create)),
+    }
+    if (!create) {
+        return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = spec_object }, .{}) catch return error.OutOfMemory;
+    }
+
+    var root: std.json.ObjectMap = .{};
+    try putJson(temp, &root, "name", .{ .string = spec.name });
+    try putJson(temp, &root, "provider", .{ .string = "GCP" });
+    try putJson(temp, &root, "spec", .{ .object = spec_object });
+    return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = root }, .{}) catch return error.OutOfMemory;
+}
+
+fn serverlessWireValue(
+    allocator: std.mem.Allocator,
+    spec: ManagedClusterSpec,
+    create: bool,
+) ProviderError!std.json.Value {
+    const regions = try sortedClusterRegionsAlloc(allocator, spec.regions);
+    var primary_region: ?[]const u8 = null;
+    var primary_count: usize = 0;
+    var region_values = std.json.Array.init(allocator);
+    for (regions) |region| {
+        if (region.primary) {
+            primary_count += 1;
+            primary_region = region.name;
+        }
+        region_values.append(.{ .string = region.name }) catch return error.OutOfMemory;
+    }
+    if (primary_count > 1 or (regions.len > 1 and primary_count != 1)) return error.InvalidConfiguration;
+
+    var serverless: std.json.ObjectMap = .{};
+    if (regions.len > 1) try putJson(allocator, &serverless, "primary_region", .{ .string = primary_region.? });
+    try putJson(allocator, &serverless, "regions", .{ .array = region_values });
+
+    var usage: std.json.ObjectMap = .{};
+    switch (spec.plan) {
+        .basic => {
+            if (spec.request_unit_limit) |limit| try putJson(allocator, &usage, "request_unit_limit", .{ .string = try positiveIntegerStringAlloc(allocator, limit) });
+            if (spec.storage_mib_limit) |limit| try putJson(allocator, &usage, "storage_mib_limit", .{ .string = try positiveIntegerStringAlloc(allocator, limit) });
+        },
+        .standard => {
+            const cpus = spec.provisioned_virtual_cpus orelse return error.InvalidConfiguration;
+            try putJson(allocator, &usage, "provisioned_virtual_cpus", .{ .string = try positiveIntegerStringAlloc(allocator, cpus) });
+        },
+        .advanced => unreachable,
+    }
+    if (usage.count() > 0 or (!create and spec.plan == .basic)) {
+        try putJson(allocator, &serverless, "usage_limits", .{ .object = usage });
+    }
+    if (create) try putJson(allocator, &serverless, "with_empty_ip_allowlist", .{ .bool = true });
+    return .{ .object = serverless };
+}
+
+fn dedicatedWireValue(
+    allocator: std.mem.Allocator,
+    spec: ManagedClusterSpec,
+    create: bool,
+) ProviderError!std.json.Value {
+    const cpus = spec.num_virtual_cpus orelse return error.InvalidConfiguration;
+    if (cpus <= 0 or cpus > std.math.maxInt(i32)) return error.InvalidConfiguration;
+    const regions = try sortedClusterRegionsAlloc(allocator, spec.regions);
+
+    var dedicated: std.json.ObjectMap = .{};
+    if (create) {
+        if (spec.cidr_range) |cidr| try putJson(allocator, &dedicated, "cidr_range", .{ .string = cidr });
+        if (spec.cockroach_version) |version| try putJson(allocator, &dedicated, "cockroach_version", .{ .string = version });
+    }
+    var hardware: std.json.ObjectMap = .{};
+    var machine_spec: std.json.ObjectMap = .{};
+    try putJson(allocator, &machine_spec, "num_virtual_cpus", .{ .integer = cpus });
+    try putJson(allocator, &hardware, "machine_spec", .{ .object = machine_spec });
+    if (spec.storage_gib) |storage| {
+        if (storage <= 0 or storage > std.math.maxInt(i32)) return error.InvalidConfiguration;
+        try putJson(allocator, &hardware, "storage_gib", .{ .integer = storage });
+    } else if (create) {
+        try putJson(allocator, &hardware, "storage_gib", .{ .integer = 0 });
+    }
+    try putJson(allocator, &dedicated, "hardware", .{ .object = hardware });
+    if (create and spec.private_network_visibility) try putJson(allocator, &dedicated, "network_visibility", .{ .string = "PRIVATE" });
+    var region_nodes: std.json.ObjectMap = .{};
+    for (regions) |region| {
+        if (region.node_count <= 0 or region.node_count > std.math.maxInt(i32)) return error.InvalidConfiguration;
+        try putJson(allocator, &region_nodes, region.name, .{ .integer = region.node_count });
+    }
+    try putJson(allocator, &dedicated, "region_nodes", .{ .object = region_nodes });
+    return .{ .object = dedicated };
+}
+
+fn sortedClusterRegionsAlloc(
+    allocator: std.mem.Allocator,
+    regions: []const ClusterRegionSpec,
+) ProviderError![]ClusterRegionSpec {
+    const sorted = allocator.dupe(ClusterRegionSpec, regions) catch return error.OutOfMemory;
+    std.mem.sort(ClusterRegionSpec, sorted, {}, lessThanClusterRegion);
+    for (sorted, 0..) |region, index| {
+        if (region.name.len == 0) return error.InvalidConfiguration;
+        if (index > 0 and std.mem.eql(u8, sorted[index - 1].name, region.name)) return error.InvalidConfiguration;
+    }
+    return sorted;
+}
+
+fn positiveIntegerStringAlloc(allocator: std.mem.Allocator, number: i64) ProviderError![]const u8 {
+    if (number <= 0) return error.InvalidConfiguration;
+    return std.fmt.allocPrint(allocator, "{d}", .{number}) catch return error.OutOfMemory;
+}
+
+fn putJson(allocator: std.mem.Allocator, map: *std.json.ObjectMap, key: []const u8, item: std.json.Value) ProviderError!void {
+    map.put(allocator, key, item) catch return error.OutOfMemory;
+}
+
+fn lessThanClusterRegion(_: void, left: ClusterRegionSpec, right: ClusterRegionSpec) bool {
+    return std.mem.lessThan(u8, left.name, right.name);
+}
+
 const ClusterDecoded = struct {
     id: []const u8,
     name: []const u8,
     cloud_provider: ?[]const u8,
     plan: ?[]const u8,
     state: ?[]const u8,
+    delete_protection: ?[]const u8,
+    cockroach_version: ?[]const u8,
+    cidr_range: ?[]const u8,
+    network_visibility: ?[]const u8,
     sql_dns: ?[]const u8,
     regions: []const RegionDecoded,
 };
@@ -448,6 +684,12 @@ fn decodeClusterAlloc(allocator: std.mem.Allocator, json: []const u8) ProviderEr
     errdefer if (plan) |text| allocator.free(text);
     const state = if (value.state) |text| allocator.dupe(u8, text) catch return error.OutOfMemory else null;
     errdefer if (state) |text| allocator.free(text);
+    const delete_protection = if (value.delete_protection) |text| allocator.dupe(u8, text) catch return error.OutOfMemory else null;
+    errdefer if (delete_protection) |text| allocator.free(text);
+    const cockroach_version = if (value.cockroach_version) |text| allocator.dupe(u8, text) catch return error.OutOfMemory else null;
+    errdefer if (cockroach_version) |text| allocator.free(text);
+    const cidr_range = if (value.cidr_range) |text| allocator.dupe(u8, text) catch return error.OutOfMemory else null;
+    errdefer if (cidr_range) |text| allocator.free(text);
     const sql_dns = if (value.sql_dns) |text| allocator.dupe(u8, text) catch return error.OutOfMemory else null;
     errdefer if (sql_dns) |text| allocator.free(text);
     const regions = allocator.alloc(Region, value.regions.len) catch return error.OutOfMemory;
@@ -475,14 +717,73 @@ fn decodeClusterAlloc(allocator: std.mem.Allocator, json: []const u8) ProviderEr
         };
         initialized += 1;
     }
+    const sizing = try decodeClusterSizing(allocator, json);
     return .{
         .id = id,
         .name = name,
         .cloud_provider = cloud_provider,
         .plan = plan,
         .state = state,
+        .delete_protection = delete_protection,
+        .cockroach_version = cockroach_version,
+        .cidr_range = cidr_range,
+        .private_network_visibility = if (value.network_visibility) |visibility| std.mem.eql(u8, visibility, "PRIVATE") else null,
+        .provisioned_virtual_cpus = sizing.provisioned_virtual_cpus,
+        .request_unit_limit = sizing.request_unit_limit,
+        .storage_mib_limit = sizing.storage_mib_limit,
+        .num_virtual_cpus = sizing.num_virtual_cpus,
+        .storage_gib = sizing.storage_gib,
         .sql_dns = sql_dns,
         .regions = regions,
+    };
+}
+
+const ClusterSizing = struct {
+    provisioned_virtual_cpus: ?i64 = null,
+    request_unit_limit: ?i64 = null,
+    storage_mib_limit: ?i64 = null,
+    num_virtual_cpus: ?i64 = null,
+    storage_gib: ?i64 = null,
+};
+
+fn decodeClusterSizing(allocator: std.mem.Allocator, json: []const u8) ProviderError!ClusterSizing {
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, json, .{}) catch return error.ProviderBug;
+    defer parsed.deinit();
+    const root = jsonObject(parsed.value) orelse return error.ProviderBug;
+    const config = jsonObject(root.get("config") orelse return .{}) orelse return error.ProviderBug;
+    if (jsonObject(config.get("serverless") orelse .null)) |serverless| {
+        if (jsonObject(serverless.get("usage_limits") orelse .null)) |limits| {
+            return .{
+                .provisioned_virtual_cpus = try jsonOptionalInteger(limits.get("provisioned_virtual_cpus")),
+                .request_unit_limit = try jsonOptionalInteger(limits.get("request_unit_limit")),
+                .storage_mib_limit = try jsonOptionalInteger(limits.get("storage_mib_limit")),
+            };
+        }
+        return .{};
+    }
+    if (jsonObject(config.get("dedicated") orelse .null)) |dedicated| {
+        return .{
+            .num_virtual_cpus = try jsonOptionalInteger(dedicated.get("num_virtual_cpus")),
+            .storage_gib = try jsonOptionalInteger(dedicated.get("storage_gib")),
+        };
+    }
+    return .{};
+}
+
+fn jsonObject(item: std.json.Value) ?std.json.ObjectMap {
+    return switch (item) {
+        .object => |object| object,
+        else => null,
+    };
+}
+
+fn jsonOptionalInteger(item: ?std.json.Value) ProviderError!?i64 {
+    const value = item orelse return null;
+    return switch (value) {
+        .integer => |number| number,
+        .number_string, .string => |text| std.fmt.parseInt(i64, text, 10) catch return error.ProviderBug,
+        .null => null,
+        else => error.ProviderBug,
     };
 }
 
@@ -590,6 +891,12 @@ fn sqlUsersPathAlloc(
         return std.fmt.allocPrint(allocator, "/v1/clusters/{s}/sql-users?page={s}", .{ encoded_cluster, encoded });
     }
     return std.fmt.allocPrint(allocator, "/v1/clusters/{s}/sql-users", .{encoded_cluster});
+}
+
+fn clusterPathAlloc(allocator: std.mem.Allocator, cluster_id: []const u8) ProviderError![]const u8 {
+    const encoded_cluster = queryEncodeAlloc(allocator, cluster_id) catch return error.OutOfMemory;
+    defer allocator.free(encoded_cluster);
+    return std.fmt.allocPrint(allocator, "/v1/clusters/{s}", .{encoded_cluster}) catch return error.OutOfMemory;
 }
 
 fn allowlistCollectionPathAlloc(

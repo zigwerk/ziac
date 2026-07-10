@@ -62,6 +62,8 @@ pub fn main(init: std.process.Init) !void {
     defer if (token_cache) |*cache| cache.deinit(allocator);
     var google_client: ziac.gcp.client.Client = undefined;
     var live_provider: ziac.gcp.live_provider.LiveProvider = undefined;
+    var cockroach_client: ziac.cockroach.client.Client = undefined;
+    var cockroach_provider: ziac.cockroach.live_provider.LiveProvider = undefined;
     var live_providers: ?ziac.provider.ProviderRegistry = null;
     if (requestsLiveProvider(args.items)) {
         if (ziac.gcp.auth.resolveAdcAlloc(allocator, auth_env, &auth_files)) |resolved| {
@@ -76,6 +78,13 @@ pub fn main(init: std.process.Init) !void {
             live_provider = ziac.gcp.live_provider.LiveProvider.init(&google_client);
             var providers = ziac.provider.ProviderRegistry{};
             providers.register(.gcp, live_provider.provider());
+            if (init.environ_map.get("COCKROACH_API_KEY")) |api_key| {
+                if (api_key.len > 0) {
+                    cockroach_client = ziac.cockroach.client.Client.init(local_http.client(), api_key, .{});
+                    cockroach_provider = ziac.cockroach.live_provider.LiveProvider.init(&cockroach_client);
+                    providers.register(.cockroach, cockroach_provider.provider());
+                }
+            }
             live_providers = providers;
         } else |_| {}
     }

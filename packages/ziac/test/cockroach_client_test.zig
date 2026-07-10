@@ -106,7 +106,7 @@ test "Cockroach client decodes typed cluster responses with unknown fields" {
     const responses = [_]zstd.Http.Response{.{
         .status = 200,
         .body =
-        \\{"id":"cluster-1","name":"ziac-prod","cloud_provider":"GCP","plan":"STANDARD","state":"CREATED","sql_dns":"ziac-prod.cockroachlabs.cloud","regions":[{"name":"europe-west1","sql_dns":"ziac-prod.gcp-europe-west1.cockroachlabs.cloud","internal_dns":"internal-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","private_endpoint_dns":"private-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","ui_dns":"admin-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","node_count":0,"primary":true},{"name":"us-central1","sql_dns":"ziac-prod.gcp-us-central1.cockroachlabs.cloud","internal_dns":"internal-ziac-prod.gcp-us-central1.cockroachlabs.cloud","private_endpoint_dns":"private-ziac-prod.gcp-us-central1.cockroachlabs.cloud","ui_dns":"admin-ziac-prod.gcp-us-central1.cockroachlabs.cloud","node_count":0}],"future_field":true}
+        \\{"id":"cluster-1","name":"ziac-prod","cloud_provider":"GCP","plan":"STANDARD","state":"CREATED","delete_protection":"ENABLED","cockroach_version":"v26.1.4","sql_dns":"ziac-prod.cockroachlabs.cloud","config":{"serverless":{"routing_id":"route-1","upgrade_type":"AUTOMATIC","usage_limits":{"provisioned_virtual_cpus":"4"}}},"regions":[{"name":"europe-west1","sql_dns":"ziac-prod.gcp-europe-west1.cockroachlabs.cloud","internal_dns":"internal-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","private_endpoint_dns":"private-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","ui_dns":"admin-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","node_count":0,"primary":true},{"name":"us-central1","sql_dns":"ziac-prod.gcp-us-central1.cockroachlabs.cloud","internal_dns":"internal-ziac-prod.gcp-us-central1.cockroachlabs.cloud","private_endpoint_dns":"private-ziac-prod.gcp-us-central1.cockroachlabs.cloud","ui_dns":"admin-ziac-prod.gcp-us-central1.cockroachlabs.cloud","node_count":0}],"future_field":true}
         ,
     }};
     var transport = RecordingTransport.init(std.testing.allocator, &responses);
@@ -124,6 +124,9 @@ test "Cockroach client decodes typed cluster responses with unknown fields" {
     try std.testing.expectEqualStrings("GCP", cluster.cloud_provider.?);
     try std.testing.expectEqualStrings("STANDARD", cluster.plan.?);
     try std.testing.expectEqualStrings("CREATED", cluster.state.?);
+    try std.testing.expectEqualStrings("ENABLED", cluster.delete_protection.?);
+    try std.testing.expectEqualStrings("v26.1.4", cluster.cockroach_version.?);
+    try std.testing.expectEqual(@as(?i64, 4), cluster.provisioned_virtual_cpus);
     try std.testing.expectEqualStrings("ziac-prod.cockroachlabs.cloud", cluster.sql_dns.?);
     try std.testing.expectEqual(@as(usize, 2), cluster.regions.len);
     try std.testing.expectEqualStrings("europe-west1", cluster.regions[0].name);
@@ -135,6 +138,117 @@ test "Cockroach client decodes typed cluster responses with unknown fields" {
     try std.testing.expectEqual(true, cluster.regions[0].primary.?);
     try std.testing.expectEqualStrings("us-central1", cluster.regions[1].name);
     try std.testing.expectEqual(@as(?bool, null), cluster.regions[1].primary);
+}
+
+test "Cockroach client creates exact Basic Standard and Advanced GCP clusters" {
+    const responses = [_]zstd.Http.Response{
+        clusterMutationResponse("cluster-basic", "BASIC"),
+        clusterMutationResponse("cluster-standard", "STANDARD"),
+        clusterMutationResponse("cluster-advanced", "ADVANCED"),
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    var basic = try client.createClusterAlloc(&context, .{
+        .name = "ziac-basic",
+        .plan = .basic,
+        .protect = true,
+        .regions = &.{
+            .{ .name = "europe-west1", .primary = true },
+            .{ .name = "us-central1" },
+        },
+        .request_unit_limit = 10_000_000,
+        .storage_mib_limit = 10_240,
+    }, &diagnostic);
+    defer basic.deinit(std.testing.allocator);
+    var standard = try client.createClusterAlloc(&context, .{
+        .name = "ziac-standard",
+        .plan = .standard,
+        .protect = true,
+        .regions = &.{.{ .name = "europe-west1", .primary = true }},
+        .provisioned_virtual_cpus = 4,
+    }, &diagnostic);
+    defer standard.deinit(std.testing.allocator);
+    var advanced = try client.createClusterAlloc(&context, .{
+        .name = "ziac-advanced",
+        .plan = .advanced,
+        .protect = true,
+        .regions = &.{
+            .{ .name = "europe-west1", .node_count = 3 },
+            .{ .name = "us-central1", .node_count = 3 },
+        },
+        .num_virtual_cpus = 4,
+        .storage_gib = 500,
+        .cockroach_version = "v26.1",
+        .private_network_visibility = true,
+        .cidr_range = "172.28.0.0/14",
+    }, &diagnostic);
+    defer advanced.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("cluster-basic", basic.id);
+    try std.testing.expectEqualStrings(
+        "{\"name\":\"ziac-basic\",\"provider\":\"GCP\",\"spec\":{\"plan\":\"BASIC\",\"delete_protection\":\"ENABLED\",\"serverless\":{\"primary_region\":\"europe-west1\",\"regions\":[\"europe-west1\",\"us-central1\"],\"usage_limits\":{\"request_unit_limit\":\"10000000\",\"storage_mib_limit\":\"10240\"},\"with_empty_ip_allowlist\":true}}}",
+        transport.requests.items[0].body,
+    );
+    try std.testing.expectEqualStrings(
+        "{\"name\":\"ziac-standard\",\"provider\":\"GCP\",\"spec\":{\"plan\":\"STANDARD\",\"delete_protection\":\"ENABLED\",\"serverless\":{\"regions\":[\"europe-west1\"],\"usage_limits\":{\"provisioned_virtual_cpus\":\"4\"},\"with_empty_ip_allowlist\":true}}}",
+        transport.requests.items[1].body,
+    );
+    try std.testing.expectEqualStrings(
+        "{\"name\":\"ziac-advanced\",\"provider\":\"GCP\",\"spec\":{\"plan\":\"ADVANCED\",\"delete_protection\":\"ENABLED\",\"dedicated\":{\"cidr_range\":\"172.28.0.0/14\",\"cockroach_version\":\"v26.1\",\"hardware\":{\"machine_spec\":{\"num_virtual_cpus\":4},\"storage_gib\":500},\"network_visibility\":\"PRIVATE\",\"region_nodes\":{\"europe-west1\":3,\"us-central1\":3}}}}",
+        transport.requests.items[2].body,
+    );
+}
+
+test "Cockroach client updates and idempotently deletes clusters" {
+    const responses = [_]zstd.Http.Response{
+        clusterMutationResponse("cluster-standard", "STANDARD"),
+        clusterMutationResponse("cluster-advanced", "ADVANCED"),
+        .{ .status = 204, .body = "" },
+        .{ .status = 404, .body = "{\"message\":\"missing\"}" },
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    var standard = try client.updateClusterAlloc(&context, "cluster-standard", .{
+        .name = "ziac-standard",
+        .plan = .standard,
+        .protect = false,
+        .regions = &.{.{ .name = "europe-west1", .primary = true }},
+        .provisioned_virtual_cpus = 8,
+    }, &diagnostic);
+    defer standard.deinit(std.testing.allocator);
+    var advanced = try client.updateClusterAlloc(&context, "cluster-advanced", .{
+        .name = "ziac-advanced",
+        .plan = .advanced,
+        .protect = false,
+        .regions = &.{.{ .name = "europe-west1", .node_count = 5 }},
+        .num_virtual_cpus = 8,
+        .storage_gib = 750,
+    }, &diagnostic);
+    defer advanced.deinit(std.testing.allocator);
+    try client.deleteCluster(&context, "cluster-standard", &diagnostic);
+    try client.deleteCluster(&context, "cluster-standard", &diagnostic);
+
+    try std.testing.expectEqualStrings("PATCH", transport.requests.items[0].method);
+    try std.testing.expectEqualStrings(
+        "{\"plan\":\"STANDARD\",\"delete_protection\":\"DISABLED\",\"serverless\":{\"regions\":[\"europe-west1\"],\"usage_limits\":{\"provisioned_virtual_cpus\":\"8\"}}}",
+        transport.requests.items[0].body,
+    );
+    try std.testing.expectEqualStrings(
+        "{\"plan\":\"ADVANCED\",\"delete_protection\":\"DISABLED\",\"dedicated\":{\"hardware\":{\"machine_spec\":{\"num_virtual_cpus\":8},\"storage_gib\":750},\"region_nodes\":{\"europe-west1\":5}}}",
+        transport.requests.items[1].body,
+    );
+    try std.testing.expectEqualStrings("DELETE", transport.requests.items[2].method);
+    try std.testing.expect(std.mem.endsWith(u8, transport.requests.items[2].url, "/v1/clusters/cluster-standard"));
 }
 
 test "Cockroach SQL user pagination is stable and percent encodes next page" {
@@ -318,4 +432,11 @@ fn cloneHeader(
         }
     }
     return null;
+}
+
+fn clusterMutationResponse(comptime id: []const u8, comptime plan: []const u8) zstd.Http.Response {
+    return .{
+        .status = 200,
+        .body = "{\"id\":\"" ++ id ++ "\",\"name\":\"ziac-test\",\"cloud_provider\":\"GCP\",\"plan\":\"" ++ plan ++ "\",\"state\":\"CREATING\",\"delete_protection\":\"ENABLED\",\"regions\":[{\"name\":\"europe-west1\",\"sql_dns\":\"sql.example\",\"internal_dns\":\"internal.example\",\"private_endpoint_dns\":\"private.example\",\"ui_dns\":\"ui.example\",\"node_count\":0,\"primary\":true}]}",
+    };
 }
