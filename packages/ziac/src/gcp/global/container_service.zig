@@ -263,6 +263,12 @@ pub const ContainerService = struct {
         self.allocator.free(self.certificate_resource_id);
         self.* = undefined;
     }
+
+    pub fn takeGraph(self: *ContainerService) resource.ResourceGraph {
+        const graph = self.graph;
+        self.graph = resource.ResourceGraph.init(self.allocator);
+        return graph;
+    }
 };
 
 fn validate(

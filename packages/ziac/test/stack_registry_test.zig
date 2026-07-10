@@ -48,3 +48,43 @@ test "fixture registry rejects unknown stack names" {
         .stage = "dev",
     }));
 }
+
+test "configured registry builds the global ContainerService stack" {
+    const regions = [_][]const u8{ "europe-west1", "us-central1" };
+    var registry = ziac.stack_registry.configuredRegistry(.{
+        .project_id = "test-ziac-disposable",
+        .region = regions[0],
+        .regions = &regions,
+        .service_account = "api@test-ziac-disposable.iam.gserviceaccount.com",
+        .image = "europe-west1-docker.pkg.dev/test-ziac-disposable/apps/api@sha256:abc",
+        .domain = "api.example.com",
+        .dns_zone = "example-com",
+    });
+
+    var program = try registry.build(std.testing.allocator, .{
+        .stack = "global-container",
+        .stage = "smoke",
+    });
+    defer program.deinit();
+
+    try std.testing.expectEqual(@as(usize, 14), program.graph.resources.items.len);
+    try std.testing.expectEqual(@as(usize, 13), program.graph.dependencies.items.len);
+    try std.testing.expectEqual(@as(usize, 3), program.outputs.items.len);
+    try std.testing.expectEqualStrings("url", program.outputs.items[0].name);
+    try std.testing.expectEqualStrings("ip_address", program.outputs.items[1].name);
+    try std.testing.expectEqualStrings("certificate_status", program.outputs.items[2].name);
+    try std.testing.expect(program.outputs.items[1].source == .resource_ref);
+    try std.testing.expectEqualStrings("address", program.outputs.items[1].source.resource_ref.field);
+}
+
+test "live region CSV parsing rejects empty entries" {
+    const parsed = try ziac.stack_registry.regionsFromCsvAlloc(std.testing.allocator, "europe-west1,us-central1");
+    defer std.testing.allocator.free(parsed);
+    try std.testing.expectEqual(@as(usize, 2), parsed.len);
+    try std.testing.expectEqualStrings("europe-west1", parsed[0]);
+    try std.testing.expectEqualStrings("us-central1", parsed[1]);
+    try std.testing.expectError(
+        error.InvalidRegionList,
+        ziac.stack_registry.regionsFromCsvAlloc(std.testing.allocator, "europe-west1,,us-central1"),
+    );
+}

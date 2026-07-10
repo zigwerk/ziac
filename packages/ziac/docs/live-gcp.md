@@ -10,8 +10,12 @@ The executable reads:
 
 - `ZIAC_LIVE_PROJECT` for the target project and graph configuration;
 - `ZIAC_LIVE_REGION`, defaulting to `europe-west1`;
+- `ZIAC_LIVE_REGIONS`, a comma-separated list for `global-container`;
 - `ZIAC_LIVE_IMAGE` for an existing container image used by `hello-global`;
 - `ZIAC_LIVE_SERVICE_ACCOUNT` for the Cloud Run runtime identity;
+- `ZIAC_LIVE_DOMAIN` and optional `ZIAC_LIVE_DNS_ZONE` for
+  `global-container`;
+- `ZIAC_LIVE_HTTP_REDIRECT=false` to omit the default port-80 redirect path;
 - normal Google ADC variables and well-known credential locations.
 
 ADC is resolved only when the argument list contains `--provider gcp`. Fake
@@ -31,6 +35,23 @@ zig-out/bin/ziac refresh --stack hello-global --stage smoke \
 zig-out/bin/ziac destroy --stack hello-global --stage smoke \
   --provider gcp --allow-live --live-test
 ```
+
+The high-level global stack uses the same explicit safety flags:
+
+```sh
+export ZIAC_LIVE_REGIONS=europe-west1,us-central1
+export ZIAC_LIVE_DOMAIN=api.example.com
+export ZIAC_LIVE_DNS_ZONE=example-com
+
+zig-out/bin/ziac plan --stack global-container --stage smoke \
+  --provider gcp --allow-live --live-test
+zig-out/bin/ziac deploy --stack global-container --stage smoke \
+  --provider gcp --allow-live --live-test
+```
+
+`global-container` refuses a missing image/domain, fewer than two regions, a
+duplicate region, or a non-Premium graph before provider mutation. The existing
+zone is referenced only when `ZIAC_LIVE_DNS_ZONE` is set.
 
 ## Safety Order
 

@@ -30,12 +30,25 @@ pub fn main(init: std.process.Init) !void {
         if (init.environ_map.get(name)) |value| try auth_env.put(name, value);
     }
     const live_project = init.environ_map.get("ZIAC_LIVE_PROJECT");
+    const live_regions = if (init.environ_map.get("ZIAC_LIVE_REGIONS")) |csv|
+        try ziac.stack_registry.regionsFromCsvAlloc(allocator, csv)
+    else
+        null;
+    defer if (live_regions) |regions| allocator.free(regions);
     const registry = if (live_project) |project_id|
         ziac.stack_registry.configuredRegistry(.{
             .project_id = project_id,
             .region = init.environ_map.get("ZIAC_LIVE_REGION") orelse "europe-west1",
+            .regions = live_regions orelse &.{},
             .service_account = init.environ_map.get("ZIAC_LIVE_SERVICE_ACCOUNT"),
             .image = init.environ_map.get("ZIAC_LIVE_IMAGE"),
+            .domain = init.environ_map.get("ZIAC_LIVE_DOMAIN"),
+            .dns_zone = init.environ_map.get("ZIAC_LIVE_DNS_ZONE"),
+            .http_redirect = !std.mem.eql(
+                u8,
+                init.environ_map.get("ZIAC_LIVE_HTTP_REDIRECT") orelse "true",
+                "false",
+            ),
         })
     else
         ziac.stack_registry.fixtureRegistry();

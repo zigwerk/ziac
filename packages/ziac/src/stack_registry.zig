@@ -4,27 +4,8 @@ const output = @import("output.zig");
 const resource = @import("resource.zig");
 const state_mod = @import("state.zig");
 
-pub const StackError = error{
+pub const StackError = gcp.global.container_service.BuildError || gcp.artifact_registry.BuildError || error{
     UnknownStack,
-    DuplicateResource,
-    DuplicateField,
-    MissingResource,
-    OutOfMemory,
-    MissingProjectId,
-    MissingRegion,
-    MissingName,
-    MissingImage,
-    InvalidPort,
-    InvalidScaling,
-    InvalidResources,
-    InvalidConcurrency,
-    InvalidTimeout,
-    InvalidProbe,
-    InvalidVpcAccess,
-    InvalidSecretVolume,
-    DuplicateEnvVar,
-    MissingLabel,
-    PremiumTierRequired,
 };
 
 pub const StackArgs = struct {
@@ -104,8 +85,13 @@ pub const StackRegistry = struct {
     region: []const u8 = "europe-west1",
     service_account: ?[]const u8 = "hello-global@ziac-dev.iam.gserviceaccount.com",
     image: ?[]const u8 = null,
+    regions: []const []const u8 = &.{},
+    domain: ?[]const u8 = null,
+    dns_zone: ?[]const u8 = null,
+    http_redirect: bool = true,
 
     pub fn build(self: StackRegistry, allocator: std.mem.Allocator, args: StackArgs) StackError!StackProgram {
+        if (std.mem.eql(u8, args.stack, "global-container")) return self.buildGlobalContainer(allocator);
         if (!std.mem.eql(u8, args.stack, "hello-global")) return error.UnknownStack;
 
         const provider = gcp.config.ProviderConfig{
@@ -182,6 +168,39 @@ pub const StackRegistry = struct {
             .outputs = outputs,
         };
     }
+
+    fn buildGlobalContainer(self: StackRegistry, allocator: std.mem.Allocator) StackError!StackProgram {
+        const provider = gcp.config.ProviderConfig{
+            .project_id = self.project_id,
+            .primary_region = self.region,
+            .service_regions = self.regions,
+            .network_tier = .premium,
+            .service_account = self.service_account,
+        };
+        var component = try gcp.global.ContainerService.build(allocator, provider, .{
+            .name = "api",
+            .image = self.image orelse return error.MissingImage,
+            .regions = self.regions,
+            .domain = self.domain orelse return error.MissingDomain,
+            .dns_zone = self.dns_zone,
+            .http_redirect = self.http_redirect,
+        });
+        defer component.deinit();
+
+        var outputs = std.ArrayList(OutputDefinition).empty;
+        errdefer {
+            for (outputs.items) |*entry| entry.deinit(allocator);
+            outputs.deinit(allocator);
+        }
+        try appendLiteral(allocator, &outputs, "url", component.url.value, false);
+        try appendReference(allocator, &outputs, "ip_address", component.ip_address.resource_ref, false);
+        try appendReference(allocator, &outputs, "certificate_status", component.certificate_status.resource_ref, false);
+        return .{
+            .allocator = allocator,
+            .graph = component.takeGraph(),
+            .outputs = outputs,
+        };
+    }
 };
 
 fn appendLiteral(
@@ -247,6 +266,10 @@ pub const ConfiguredRegistryArgs = struct {
     region: []const u8 = "europe-west1",
     service_account: ?[]const u8 = null,
     image: ?[]const u8 = null,
+    regions: []const []const u8 = &.{},
+    domain: ?[]const u8 = null,
+    dns_zone: ?[]const u8 = null,
+    http_redirect: bool = true,
 };
 
 pub fn configuredRegistry(args: ConfiguredRegistryArgs) StackRegistry {
@@ -255,5 +278,29 @@ pub fn configuredRegistry(args: ConfiguredRegistryArgs) StackRegistry {
         .region = args.region,
         .service_account = args.service_account,
         .image = args.image,
+        .regions = args.regions,
+        .domain = args.domain,
+        .dns_zone = args.dns_zone,
+        .http_redirect = args.http_redirect,
     };
+}
+
+pub fn regionsFromCsvAlloc(
+    allocator: std.mem.Allocator,
+    csv: []const u8,
+) (std.mem.Allocator.Error || error{InvalidRegionList})![]const []const u8 {
+    if (csv.len == 0) return error.InvalidRegionList;
+    var count: usize = 0;
+    var counter = std.mem.splitScalar(u8, csv, ',');
+    while (counter.next()) |_| count += 1;
+    const regions = try allocator.alloc([]const u8, count);
+    errdefer allocator.free(regions);
+    var iterator = std.mem.splitScalar(u8, csv, ',');
+    var index: usize = 0;
+    while (iterator.next()) |raw_region| : (index += 1) {
+        const region = std.mem.trim(u8, raw_region, " \t");
+        if (region.len == 0) return error.InvalidRegionList;
+        regions[index] = region;
+    }
+    return regions;
 }

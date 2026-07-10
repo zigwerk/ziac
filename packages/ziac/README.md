@@ -42,6 +42,10 @@ zig-out/bin/ziac deploy --stack hello-global --stage dev \
 Credential-gated smoke runs add `--live-test` and require a project ID ending
 in `-ziac-disposable`.
 
+For the two-region component stack, also set `ZIAC_LIVE_REGIONS`,
+`ZIAC_LIVE_DOMAIN`, and optional `ZIAC_LIVE_DNS_ZONE`, then select
+`--stack global-container`.
+
 Add `--json` to any command for the stable `ziac.command.v1` receipt. Commands
 that write resource state acquire an exclusive stack/stage lock; `unlock`
 requires the recorded lineage unless `--force` is supplied explicitly.

@@ -271,6 +271,35 @@ test "cli live GCP selection fails before state mutation when providers are unav
     try std.testing.expect(!try env.state.hasLock("hello-global", "dev"));
 }
 
+test "cli plans the configured global ContainerService stack" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+    const regions = [_][]const u8{ "europe-west1", "us-central1" };
+    env.registry = ziac.stack_registry.configuredRegistry(.{
+        .project_id = "test-ziac-disposable",
+        .region = regions[0],
+        .regions = &regions,
+        .image = "europe-west1-docker.pkg.dev/test-ziac-disposable/apps/api@sha256:abc",
+        .domain = "api.example.com",
+        .dns_zone = "example-com",
+    });
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "plan",
+        "--stack",
+        "global-container",
+        "--stage",
+        "smoke",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Plan: 14 create") != null);
+    try std.testing.expect(!fs.exists(".ziac/state/global-container/smoke/resources.json"));
+}
+
 test "cli live test rejects a non-disposable GCP project before mutation" {
     var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer fs.deinit();

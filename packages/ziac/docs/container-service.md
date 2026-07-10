@@ -69,3 +69,9 @@ The component exposes a known typed `url`, the allocated `ip_address` output,
 and the managed `certificate_status` output. The authenticated two-region
 deployment, health probe, failover, failback, and teardown sequence remains the
 M5 live acceptance gate.
+
+The compiled CLI exposes this graph as `--stack global-container`. Configure it
+with `ZIAC_LIVE_REGIONS`, `ZIAC_LIVE_IMAGE`, `ZIAC_LIVE_DOMAIN`, and optional
+`ZIAC_LIVE_DNS_ZONE`; live commands still require `--provider gcp --allow-live`,
+and credential-gated acceptance also requires `--live-test` plus a disposable
+project suffix.
