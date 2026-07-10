@@ -75,3 +75,8 @@ duplicates. `stack.Context(Set)` exposes GCP, CockroachDB, and local namespaces
 only when declared, with `ZIAC110` and `ZIAC111` diagnostics for missing cloud
 providers. The runtime provider registry is derived by iterating that same static
 set, so undeclared provider implementations cannot become available by accident.
+
+`zig build test` runs isolated compiler fixtures in addition to unit tests. Valid
+binding/provider programs must compile. Invalid fixtures must both fail and emit
+their exact contract code: `ZIAC100` through `ZIAC104`, `ZIAC110`, `ZIAC111`, or
+`ZIAC120`. A syntax or import failure cannot satisfy the harness.

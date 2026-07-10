@@ -15,6 +15,11 @@ pub const DockerRepositoryArgs = struct {
 pub const DockerRepository = struct {
     pub const Outputs = struct {
         pub const RepositoryUrl = output.Descriptor("repository_url", []const u8, .public);
+
+        pub fn field(comptime name: []const u8) type {
+            if (std.mem.eql(u8, name, "repository_url")) return RepositoryUrl;
+            @compileError("ZIAC120 unknown gcp.artifact.Repository output field: " ++ name);
+        }
     };
 
     node: resource.ResourceNode,

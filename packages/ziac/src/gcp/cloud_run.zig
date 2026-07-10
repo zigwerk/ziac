@@ -26,6 +26,12 @@ pub const Service = struct {
     pub const Outputs = struct {
         pub const ServiceUrl = output.Descriptor("service_url", []const u8, .public);
         pub const ServiceAccount = output.Descriptor("service_account", []const u8, .public);
+
+        pub fn field(comptime name: []const u8) type {
+            if (std.mem.eql(u8, name, "service_url")) return ServiceUrl;
+            if (std.mem.eql(u8, name, "service_account")) return ServiceAccount;
+            @compileError("ZIAC120 unknown gcp.run.Service output field: " ++ name);
+        }
     };
 
     node: resource.ResourceNode,

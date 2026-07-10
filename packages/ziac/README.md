@@ -60,7 +60,9 @@ implemented. Engine V2 is complete. Typed public/secret provider outputs and
 dependency derivation are implemented. App `Env` field names, optionality, value
 types, secrecy, and regional scope now validate at comptime; provider-set
 contracts now canonically constrain typed namespaces and runtime registries.
-Compile-fail fixtures are next.
+The build also compiles valid contract fixtures and proves all eight invalid
+fixtures fail for their intended stable `ZIAC` diagnostic. Comptime Contracts M2
+is complete.
 
 See `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under

@@ -43,6 +43,9 @@ pub fn build(b: *std.Build) void {
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run Ziac tests");
     test_step.dependOn(&run_unit_tests.step);
+    const compile_contracts = b.addSystemCommand(&.{"bash"});
+    compile_contracts.addFileArg(b.path("test/compile_fail/run.sh"));
+    test_step.dependOn(&compile_contracts.step);
 
     const examples_step = b.step("examples", "Build Ziac examples");
     examples_step.dependOn(test_step);

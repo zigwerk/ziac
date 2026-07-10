@@ -49,16 +49,15 @@ and the integrated baseline passes all Ziac tests and builds.
 Gate: a fake remote system passes create/update/replace/delete/import, drift, and
 interrupted-resume integration tests.
 
-## M2: Comptime Contracts
+## M2: Comptime Contracts (Complete)
 
 - Typed public and secret outputs: implemented and tested.
 - Automatic dependency derivation from output references: implemented and
   tested.
-- App `Env` and binding validation: implemented and unit tested; compile-fail
-  fixtures remain.
-- Provider-set validation: implemented and unit tested; compile-fail fixtures
-  remain.
-- Stable compile-fail diagnostics.
+- App `Env` and binding validation: implemented and compile-fail tested.
+- Provider-set validation: implemented and compile-fail tested.
+- Stable compile-fail diagnostics: all required fixtures enforced by
+  `zig build test`.
 
 Gate: valid fixtures compile and invalid binding/provider/output fixtures fail
 with their expected Ziac diagnostic codes.
