@@ -1,0 +1,6 @@
+interface:
+  display_name: "zigeffect Development"
+  short_description: "Build verifiable agent-first Zig applications"
+  default_prompt: "Use $zigeffect-development to implement this requirement through the project contract, tests, causal evidence, and a redacted handoff."
+policy:
+  allow_implicit_invocation: true
