@@ -1,6 +1,7 @@
 const std = @import("std");
 const zstd = @import("zigeffect_std");
-const apply = @import("apply.zig");
+const checkpoint_mod = @import("checkpoint.zig");
+const executor = @import("executor.zig");
 const local_state = @import("local_state.zig");
 const plan_mod = @import("plan.zig");
 const provider_mod = @import("provider.zig");
@@ -146,7 +147,15 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 
     var fake_provider = provider_mod.FakeProvider.init(allocator);
     defer fake_provider.deinit();
-    apply.applyPlan(allocator, &planned, &loaded.store, fake_provider.provider()) catch |err| {
+    const providers = fakeProviderRegistry(&fake_provider);
+    var checkpoint = checkpoint_mod.LocalResources{
+        .store = env.state,
+        .stack = args.stack,
+        .stage = args.stage,
+    };
+    executor.executePlan(allocator, &planned, &loaded.store, providers, .{
+        .checkpoint = checkpoint.checkpoint(),
+    }) catch |err| {
         return handleApplyError(env, err);
     };
 
@@ -175,7 +184,15 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 
     var fake_provider = provider_mod.FakeProvider.init(allocator);
     defer fake_provider.deinit();
-    apply.applyPlan(allocator, &planned, &loaded.store, fake_provider.provider()) catch |err| {
+    const providers = fakeProviderRegistry(&fake_provider);
+    var checkpoint = checkpoint_mod.LocalResources{
+        .store = env.state,
+        .stack = args.stack,
+        .stage = args.stage,
+    };
+    executor.executePlan(allocator, &planned, &loaded.store, providers, .{
+        .checkpoint = checkpoint.checkpoint(),
+    }) catch |err| {
         return handleApplyError(env, err);
     };
 
@@ -186,6 +203,15 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     try writePlan(env, planned);
     try env.console.writeOut("Destroy complete\n");
     return Exit.success;
+}
+
+fn fakeProviderRegistry(fake: *provider_mod.FakeProvider) provider_mod.ProviderRegistry {
+    const provider = fake.provider();
+    var providers = provider_mod.ProviderRegistry{};
+    providers.register(.local, provider);
+    providers.register(.gcp, provider);
+    providers.register(.cockroach, provider);
+    return providers;
 }
 
 fn runOutputs(_: std.mem.Allocator, env: *Env, args: Args) !u8 {

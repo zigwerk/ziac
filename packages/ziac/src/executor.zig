@@ -1,6 +1,7 @@
 const std = @import("std");
 const fx = @import("zigeffect_std").fx;
 const apply_mod = @import("apply.zig");
+const checkpoint_mod = @import("checkpoint.zig");
 const plan_mod = @import("plan.zig");
 const provider_mod = @import("provider.zig");
 const state_mod = @import("state.zig");
@@ -37,6 +38,7 @@ pub const ExecuteOptions = struct {
     clock: ?*fx.Clock = null,
     cancellation: ?*CancellationToken = null,
     causal_store: ?*fx.CausalStore = null,
+    checkpoint: ?checkpoint_mod.Checkpoint = null,
 };
 
 pub const ExecutionLevel = struct {
@@ -90,15 +92,25 @@ pub fn executePlan(
     defer schedule.deinit();
     var system_clock = fx.Clock.system();
     var internal_cancellation = CancellationToken{};
+    var checkpoint_mutex = fx.SpinLock{};
+    const resumed_operations = try allocator.alloc(bool, planned.operations.len);
+    defer allocator.free(resumed_operations);
+    @memset(resumed_operations, false);
+    var execution_options = options;
+    if (execution_options.checkpoint) |checkpoint| {
+        execution_options.checkpoint = checkpoint.serialized(&checkpoint_mutex);
+    }
     var environment = ExecutionEnvironment{
         .allocator = allocator,
         .planned = planned,
         .store = store,
         .providers = providers,
-        .options = options,
+        .options = execution_options,
         .clock = options.clock orelse &system_clock,
         .internal_cancellation = &internal_cancellation,
+        .resumed_operations = resumed_operations,
     };
+    try resumeIncompleteOperations(&environment);
     var runtime = fx.Runtime(ExecutionEnvironment).init(allocator, &environment);
     if (options.fiber_executor) |fiber_executor| {
         runtime = runtime.withExecutor(fiber_executor);
@@ -141,6 +153,7 @@ const ExecutionEnvironment = struct {
     options: ExecuteOptions,
     clock: *fx.Clock,
     internal_cancellation: *CancellationToken,
+    resumed_operations: []bool,
 
     fn isCancelled(self: *const ExecutionEnvironment) bool {
         if (self.internal_cancellation.isCancelled()) return true;
@@ -159,10 +172,14 @@ const ExecutionJob = struct {
         const environment = context.env;
         if (environment.isCancelled()) return error.ProviderCancelled;
         const operation = environment.planned.operations[self.operation_index];
+        if (environment.resumed_operations[self.operation_index]) {
+            recordFact(context, operation, "resumed");
+            return;
+        }
         recordFact(context, operation, "started");
         executeWithRetry(environment, context, operation) catch |err| {
             environment.internal_cancellation.cancel();
-            recordFact(context, operation, "failure");
+            recordFact(context, operation, if (err == error.OperationPending) "incomplete" else "failure");
             return err;
         };
         recordFact(context, operation, "success");
@@ -178,15 +195,7 @@ fn executeWithRetry(
     const provider = try environment.providers.get(operation.resource.provider);
     const started_at = environment.clock.nowMs();
     const timeout_millis = operation.resource.lifecycle.operation_timeout_millis;
-    var operation_context = provider_mod.OperationContext{
-        .allocator = environment.allocator,
-        .clock = environment.clock,
-        .cancellation = .{
-            .ptr = environment,
-            .isCancelledFn = executionCancelled,
-        },
-        .deadline_millis = std.math.add(u64, started_at, timeout_millis) catch std.math.maxInt(u64),
-    };
+    var operation_context = operationContext(environment, operation, started_at);
     var retry_index: usize = 0;
 
     while (true) {
@@ -196,6 +205,7 @@ fn executeWithRetry(
             operation,
             environment.store,
             provider,
+            environment.options.checkpoint,
         ) catch |err| {
             if (!isRetryable(err)) return err;
             const delay_millis = environment.options.retry_schedule.nextDelay(retry_index) orelse return err;
@@ -213,6 +223,110 @@ fn executeWithRetry(
         };
         return;
     }
+}
+
+fn resumeIncompleteOperations(environment: *ExecutionEnvironment) ExecuteError!void {
+    for (environment.planned.operations, 0..) |operation, operation_index| {
+        const maybe_existing = try environment.store.getOwned(environment.allocator, operation.resource.id);
+        if (maybe_existing == null) {
+            if (operation.kind == .noop) {
+                try adoptUntrackedNoop(environment, operation, operation_index);
+            }
+            continue;
+        }
+        var existing = maybe_existing.?;
+        defer existing.deinit(environment.allocator);
+        if (!isIncomplete(existing.status)) continue;
+
+        const provider = try environment.providers.get(operation.resource.provider);
+        const started_at = environment.clock.nowMs();
+        var operation_context = operationContext(environment, operation, started_at);
+        var read = try provider.readWithContext(&operation_context, operation.resource);
+        defer read.deinit();
+        switch (read) {
+            .absent => {
+                if (existing.status == .deleting) {
+                    try apply_mod.completeAbsentDelete(
+                        environment.allocator,
+                        environment.store,
+                        operation,
+                        environment.options.checkpoint,
+                    );
+                    environment.resumed_operations[operation_index] = true;
+                } else if (existing.operation_handle != null) {
+                    return error.OperationPending;
+                }
+            },
+            .present => |*observed| {
+                if (existing.status == .deleting) continue;
+                var diff = try provider.diffWithContext(&operation_context, operation.resource, observed);
+                defer diff.deinit();
+                if (diff.kind == .noop) {
+                    try apply_mod.adoptObserved(
+                        environment.store,
+                        operation,
+                        observed.*,
+                        environment.options.checkpoint,
+                    );
+                    environment.resumed_operations[operation_index] = true;
+                }
+            },
+        }
+    }
+}
+
+fn adoptUntrackedNoop(
+    environment: *ExecutionEnvironment,
+    operation: plan_mod.PlanOperation,
+    operation_index: usize,
+) ExecuteError!void {
+    const provider = try environment.providers.get(operation.resource.provider);
+    const started_at = environment.clock.nowMs();
+    var operation_context = operationContext(environment, operation, started_at);
+    var read = try provider.readWithContext(&operation_context, operation.resource);
+    defer read.deinit();
+    switch (read) {
+        .absent => return error.Conflict,
+        .present => |*observed| {
+            var diff = try provider.diffWithContext(&operation_context, operation.resource, observed);
+            defer diff.deinit();
+            if (diff.kind != .noop) return error.Conflict;
+            try apply_mod.adoptObserved(
+                environment.store,
+                operation,
+                observed.*,
+                environment.options.checkpoint,
+            );
+            environment.resumed_operations[operation_index] = true;
+        },
+    }
+}
+
+fn operationContext(
+    environment: *ExecutionEnvironment,
+    operation: plan_mod.PlanOperation,
+    started_at: u64,
+) provider_mod.OperationContext {
+    return .{
+        .allocator = environment.allocator,
+        .clock = environment.clock,
+        .cancellation = .{
+            .ptr = environment,
+            .isCancelledFn = executionCancelled,
+        },
+        .deadline_millis = std.math.add(
+            u64,
+            started_at,
+            operation.resource.lifecycle.operation_timeout_millis,
+        ) catch std.math.maxInt(u64),
+    };
+}
+
+fn isIncomplete(status: state_mod.ResourceStatus) bool {
+    return switch (status) {
+        .planned, .creating, .updating, .replacing, .deleting, .failed, .tainted => true,
+        .created, .updated, .deleted, .adopted => false,
+    };
 }
 
 fn executionCancelled(raw: *const anyopaque) bool {

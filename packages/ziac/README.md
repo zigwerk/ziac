@@ -44,8 +44,9 @@ Ziac is currently a tested Engine V2 foundation, not yet a live deployment tool.
 It retains canonical desired inputs, refreshes through an explicit provider
 lifecycle, persists versioned physical state, and executes stable dependency
 levels with bounded parallelism, retry, deadlines, cancellation, and redacted
-causal facts. Checkpoint/resume and state locking are the remaining M1 work before
-authenticated Google and CockroachDB API operations.
+causal facts. Atomic checkpoint/resume is implemented; writer locking and saved
+plan preconditions are the remaining M1 work before authenticated Google and
+CockroachDB API operations.
 
 See `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under

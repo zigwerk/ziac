@@ -17,6 +17,7 @@ pub const FileStore = struct {
     ptr: *anyopaque,
     readFileAllocFn: *const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]const u8,
     writeFileFn: *const fn (*anyopaque, []const u8, []const u8) anyerror!void,
+    atomicWriteFileFn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8) anyerror!void,
     existsFn: *const fn (*anyopaque, []const u8) anyerror!bool,
 
     pub fn readFileAlloc(
@@ -31,6 +32,15 @@ pub const FileStore = struct {
         try self.writeFileFn(self.ptr, path, content);
     }
 
+    pub fn atomicWriteFile(
+        self: FileStore,
+        allocator: std.mem.Allocator,
+        path: []const u8,
+        content: []const u8,
+    ) anyerror!void {
+        try self.atomicWriteFileFn(self.ptr, allocator, path, content);
+    }
+
     pub fn exists(self: FileStore, path: []const u8) anyerror!bool {
         return self.existsFn(self.ptr, path);
     }
@@ -41,6 +51,7 @@ pub fn memoryFiles(fs: *zstd.FileSystem.MemoryFileSystem) FileStore {
         .ptr = fs,
         .readFileAllocFn = memoryReadFileAlloc,
         .writeFileFn = memoryWriteFile,
+        .atomicWriteFileFn = memoryAtomicWriteFile,
         .existsFn = memoryExists,
     };
 }
@@ -59,6 +70,17 @@ fn memoryWriteFile(raw: *anyopaque, path: []const u8, content: []const u8) anyer
     try fs.writeFile(path, content);
 }
 
+fn memoryAtomicWriteFile(
+    raw: *anyopaque,
+    allocator: std.mem.Allocator,
+    path: []const u8,
+    content: []const u8,
+) anyerror!void {
+    _ = allocator;
+    const fs: *zstd.FileSystem.MemoryFileSystem = @ptrCast(@alignCast(raw));
+    try fs.atomicWriteFile(path, content);
+}
+
 fn memoryExists(raw: *anyopaque, path: []const u8) anyerror!bool {
     const fs: *zstd.FileSystem.MemoryFileSystem = @ptrCast(@alignCast(raw));
     return fs.exists(path);
@@ -70,6 +92,7 @@ pub const localFiles = struct {
             .ptr = fs,
             .readFileAllocFn = localReadFileAlloc,
             .writeFileFn = localWriteFile,
+            .atomicWriteFileFn = localAtomicWriteFile,
             .existsFn = localExists,
         };
     }
@@ -89,6 +112,25 @@ pub const localFiles = struct {
             try fs.dir.createDirPath(fs.io, path[0..slash]);
         }
         try fs.writeFile(path, content);
+    }
+
+    fn localAtomicWriteFile(
+        raw: *anyopaque,
+        allocator: std.mem.Allocator,
+        path: []const u8,
+        content: []const u8,
+    ) anyerror!void {
+        const fs: *zstd.FileSystem.LocalFileSystem = @ptrCast(@alignCast(raw));
+        if (std.mem.lastIndexOfScalar(u8, path, '/')) |slash| {
+            try fs.dir.createDirPath(fs.io, path[0..slash]);
+        }
+        const temporary_path = try std.fmt.allocPrint(allocator, "{s}.tmp", .{path});
+        defer allocator.free(temporary_path);
+        try fs.writeFile(temporary_path, content);
+        fs.dir.rename(temporary_path, fs.dir.*, path, fs.io) catch |err| {
+            fs.deleteFile(temporary_path) catch {};
+            return err;
+        };
     }
 
     fn localExists(raw: *anyopaque, path: []const u8) anyerror!bool {
@@ -128,7 +170,7 @@ pub const Store = struct {
         const content = try resourcesJsonAlloc(self.allocator, stack, stage, state_store);
         defer self.allocator.free(content);
 
-        try self.files.writeFile(path, content);
+        try self.files.atomicWriteFile(self.allocator, path, content);
     }
 
     pub fn loadResources(self: Store, stack: []const u8, stage: []const u8) !LoadedResources {
@@ -163,7 +205,7 @@ pub const Store = struct {
         const content = try outputsJsonAlloc(self.allocator, outputs);
         defer self.allocator.free(content);
 
-        try self.files.writeFile(path, content);
+        try self.files.atomicWriteFile(self.allocator, path, content);
     }
 
     pub fn loadOutputs(self: Store, stack: []const u8, stage: []const u8) !LoadedOutputs {
@@ -226,8 +268,8 @@ fn resourcesJsonAlloc(
     var output = std.ArrayList(u8).empty;
     errdefer output.deinit(allocator);
 
-    const records = try state_store.recordsAlloc(allocator);
-    defer allocator.free(records);
+    var snapshot = try state_store.snapshotAlloc(allocator);
+    defer snapshot.deinit();
 
     const lineage = try state_format.lineageAlloc(allocator, stack, stage);
     defer allocator.free(lineage);
@@ -235,11 +277,11 @@ fn resourcesJsonAlloc(
     try output.append(allocator, '{');
     try appendIntField(&output, allocator, "format_version", state_format.current_version, false);
     try appendStringField(&output, allocator, "lineage_id", lineage, true);
-    try appendIntField(&output, allocator, "serial", state_store.serial, true);
+    try appendIntField(&output, allocator, "serial", snapshot.serial, true);
     try appendStringField(&output, allocator, "stack", stack, true);
     try appendStringField(&output, allocator, "stage", stage, true);
     try output.appendSlice(allocator, ",\"resources\":[");
-    for (records, 0..) |record, index| {
+    for (snapshot.records, 0..) |record, index| {
         if (index != 0) try output.append(allocator, ',');
         try appendRecordJson(&output, allocator, record);
     }

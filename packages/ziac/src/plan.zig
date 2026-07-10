@@ -54,6 +54,18 @@ pub fn buildPlan(
             try appendGraphOperation(allocator, &operations, graph, .create, node, &.{"resource is not in state"});
             continue;
         }
+        if (recoveryKind(existing.?)) |kind| {
+            if (kind == .replace and node.lifecycle.protect) return error.ProtectedResource;
+            try appendGraphOperation(
+                allocator,
+                &operations,
+                graph,
+                kind,
+                node,
+                &.{"resource has incomplete state"},
+            );
+            continue;
+        }
 
         const desired_hash = std.fmt.bytesToHex(node.inputs_hash, .lower);
         if (std.mem.eql(u8, existing.?.desired_hash, desired_hash[0..])) {
@@ -64,6 +76,16 @@ pub fn buildPlan(
     }
     try appendRemovedResources(allocator, &operations, graph, store);
     return finishPlan(allocator, &operations);
+}
+
+fn recoveryKind(record: state.StateRecord) ?OperationKind {
+    return switch (record.status) {
+        .planned, .creating => .create,
+        .updating => .update,
+        .replacing, .deleting, .tainted => .replace,
+        .failed => if (record.physical_id == null) .create else .update,
+        .created, .updated, .deleted, .adopted => null,
+    };
 }
 
 pub fn buildRefreshedPlan(

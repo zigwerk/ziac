@@ -100,6 +100,18 @@ pub const StateRecord = struct {
     }
 };
 
+pub const StateSnapshot = struct {
+    allocator: std.mem.Allocator,
+    serial: u64,
+    records: []StateRecord,
+
+    pub fn deinit(self: *StateSnapshot) void {
+        for (self.records) |*record| record.deinit(self.allocator);
+        self.allocator.free(self.records);
+        self.* = undefined;
+    }
+};
+
 pub const InMemoryStateStore = struct {
     allocator: std.mem.Allocator,
     records: std.StringHashMap(StateRecord),
@@ -155,6 +167,40 @@ pub const InMemoryStateStore = struct {
         defer self.mutex.unlock();
         const record = self.records.get(resource_id) orelse return null;
         return try StateRecord.initOwned(allocator, record);
+    }
+
+    pub fn serialValue(self: *InMemoryStateStore) u64 {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        return self.serial;
+    }
+
+    pub fn snapshotAlloc(
+        self: *InMemoryStateStore,
+        allocator: std.mem.Allocator,
+    ) StateError!StateSnapshot {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        var records = std.ArrayList(StateRecord).empty;
+        errdefer {
+            for (records.items) |*record| record.deinit(allocator);
+            records.deinit(allocator);
+        }
+
+        var iterator = self.records.valueIterator();
+        while (iterator.next()) |record| {
+            var owned = try StateRecord.initOwned(allocator, record.*);
+            errdefer owned.deinit(allocator);
+            try records.append(allocator, owned);
+        }
+
+        const owned_records = try records.toOwnedSlice(allocator);
+        std.mem.sort(StateRecord, owned_records, {}, lessThanRecordId);
+        return .{
+            .allocator = allocator,
+            .serial = self.serial,
+            .records = owned_records,
+        };
     }
 
     pub fn markFailed(self: *InMemoryStateStore, resource_id: []const u8) StateError!void {

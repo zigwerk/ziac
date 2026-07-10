@@ -18,6 +18,8 @@ Initial source domains:
 - `apply.zig`: one-operation lifecycle and state transitions.
 - `executor.zig`: stable dependency levels, bounded zigeffect execution, retry,
   deadlines, cancellation, and causal operation facts.
+- `checkpoint.zig`: serialized state checkpoint interface and local-state
+  adapter.
 
 Provider implementations must sit behind the provider lifecycle interface so the
 engine can be tested without live cloud credentials. Every provider operation
@@ -30,3 +32,12 @@ dependencies before consumers; destroy phases reverse that relationship.
 Independent operations in one topological level are split into deterministic
 batches and handed to zigeffect's structured `forEachPar` primitive. State and
 the fake remote provider protect concurrent mutations with zigeffect spinlocks.
+
+Each completed provider mutation checkpoints a deep, serial-consistent state
+snapshot. Local resources and outputs use temporary-file replacement so a failed
+write cannot truncate the previous state. Pending provider results retain their
+operation handles and transitional status. On the next run the executor reads
+the remote before applying: matching remote objects are adopted, absent objects
+with live handles remain pending, and absent operations without handles resume
+from the recovery plan. A refreshed noop with no local record is also re-read and
+adopted, covering remote success immediately before a local crash.

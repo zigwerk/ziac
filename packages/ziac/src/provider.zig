@@ -40,6 +40,7 @@ pub const ResourceResult = struct {
     observed_hash: [32]u8,
     outputs: []const state.StateOutput,
     operation_handle: ?[]const u8 = null,
+    completed: bool = true,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -75,13 +76,15 @@ pub const ResourceResult = struct {
     }
 
     pub fn clone(self: ResourceResult, allocator: std.mem.Allocator) ProviderError!ResourceResult {
-        return init(
+        var result = try init(
             allocator,
             self.physical_id,
             self.observed_inputs,
             self.outputs,
             self.operation_handle,
         );
+        result.completed = self.completed;
+        return result;
     }
 
     pub fn deinit(self: *ResourceResult) void {
@@ -301,6 +304,8 @@ pub const FakeProvider = struct {
     deletes: usize = 0,
     imports: usize = 0,
     operation_delay_millis: u64 = 0,
+    result_operation_handle: ?[]const u8 = null,
+    result_completed: bool = true,
     mutex: fx.SpinLock = .{},
     active_operations: usize = 0,
     max_concurrent_operations: usize = 0,
@@ -518,8 +523,9 @@ pub const FakeProvider = struct {
             physical_id,
             node.inputs,
             output_source[0..],
-            null,
+            self.result_operation_handle,
         );
+        result.completed = self.result_completed;
         errdefer result.deinit();
         const remote = RemoteRecord{
             .allocator = self.allocator,
