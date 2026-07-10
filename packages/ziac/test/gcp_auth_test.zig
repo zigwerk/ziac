@@ -7,6 +7,7 @@ const authorized_user_json = @embedFile("fixtures/gcp/authorized_user.json");
 const service_account_json = @embedFile("fixtures/gcp/service_account.json");
 const external_account_json = @embedFile("fixtures/gcp/external_account.json");
 const external_account_url_json = @embedFile("fixtures/gcp/external_account_url.json");
+const github_actions_external_account_json = @embedFile("fixtures/gcp/github_actions_external_account.json");
 
 test "GCP ADC follows environment well-known file metadata order" {
     var files = zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
@@ -208,6 +209,44 @@ test "GCP external-account source exchanges STS token for impersonated service a
     try std.testing.expect(transport.saw_impersonation_request);
 }
 
+test "GitHub Actions WIF credential resolves through ADC without a service-account key" {
+    try std.testing.expect(std.mem.indexOf(u8, github_actions_external_account_json, "private_key") == null);
+    try std.testing.expect(std.mem.indexOf(u8, github_actions_external_account_json, "client_secret") == null);
+    var files = zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer files.deinit();
+    try files.writeFile("/workspace/gha-creds-fixture.json", github_actions_external_account_json);
+    var env = zstd.Env.EnvMap.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("GOOGLE_APPLICATION_CREDENTIALS", "/workspace/gha-creds-fixture.json");
+
+    var resolved = try auth.resolveAdcAlloc(std.testing.allocator, env, &files);
+    defer resolved.deinit(std.testing.allocator);
+    try std.testing.expectEqual(auth.SourceLocation.environment, resolved.location);
+    try std.testing.expectEqual(auth.CredentialKind.external_account, resolved.credentialKind().?);
+    const external_account = switch (resolved.credential.?) {
+        .external_account => |*credential| credential,
+        else => unreachable,
+    };
+    try std.testing.expect(external_account.service_account_impersonation_url != null);
+
+    var transport = GitHubWifTransport{};
+    const reader = auth.memoryFileReader(&files);
+    var source = auth.AdcTokenSource.init(&resolved, transport.client(), reader);
+    var token = try source.fetchAlloc(std.testing.allocator, 1_700_000_000);
+    defer token.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("github-impersonated-token", token.access_token);
+    try std.testing.expectEqual(@as(usize, 3), transport.calls);
+    try std.testing.expect(transport.saw_subject_request);
+    try std.testing.expect(transport.saw_sts_request);
+    try std.testing.expect(transport.saw_impersonation_request);
+
+    const diagnostic = try resolved.doctorJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(diagnostic);
+    try std.testing.expect(std.mem.indexOf(u8, diagnostic, "\"credential_type\":\"external_account\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diagnostic, "dummy-source-authorization") == null);
+    try std.testing.expect(std.mem.indexOf(u8, diagnostic, "dummy-url-subject") == null);
+}
+
 const StaticSubjectTokenSource = struct {
     fn subjectTokenSource(self: *StaticSubjectTokenSource) auth.SubjectTokenSource {
         return .{ .ptr = self, .fetchFn = fetch };
@@ -215,6 +254,56 @@ const StaticSubjectTokenSource = struct {
 
     fn fetch(_: *anyopaque, allocator: std.mem.Allocator) auth.AuthError![]const u8 {
         return allocator.dupe(u8, "dummy-subject-token");
+    }
+};
+
+const GitHubWifTransport = struct {
+    calls: usize = 0,
+    saw_subject_request: bool = false,
+    saw_sts_request: bool = false,
+    saw_impersonation_request: bool = false,
+
+    fn client(self: *GitHubWifTransport) zstd.Http.Client {
+        return .{ .ptr = self, .sendFn = send };
+    }
+
+    fn send(
+        raw: *anyopaque,
+        allocator: std.mem.Allocator,
+        request: zstd.Http.Request,
+        options: zstd.Http.SendOptions,
+    ) zstd.Http.ClientError!zstd.Http.Response {
+        const self: *GitHubWifTransport = @ptrCast(@alignCast(raw));
+        try options.checkActive();
+        self.calls += 1;
+        const authorization = for (request.headers) |header| {
+            if (std.ascii.eqlIgnoreCase(header.name, "Authorization")) break header.value;
+        } else "";
+        if (self.calls == 1) {
+            self.saw_subject_request = std.mem.startsWith(u8, request.url, "https://pipelines.actions.githubusercontent.com/") and
+                std.mem.eql(u8, authorization, "Bearer dummy-source-authorization");
+            return zstd.Http.cloneResponseAlloc(allocator, .{
+                .status = 200,
+                .body = "{\"value\":\"github-subject-jwt\"}",
+            });
+        }
+        if (self.calls == 2) {
+            self.saw_sts_request = std.mem.eql(u8, request.url, "https://sts.googleapis.com/v1/token") and
+                std.mem.indexOf(u8, request.body, "subject_token=github-subject-jwt") != null;
+            return zstd.Http.cloneResponseAlloc(allocator, .{
+                .status = 200,
+                .body = "{\"access_token\":\"github-sts-token\",\"expires_in\":600,\"token_type\":\"Bearer\"}",
+            });
+        }
+        self.saw_impersonation_request = std.mem.eql(
+            u8,
+            request.url,
+            "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/ziac-preview@acme-platform.iam.gserviceaccount.com:generateAccessToken",
+        ) and std.mem.eql(u8, authorization, "Bearer github-sts-token");
+        return zstd.Http.cloneResponseAlloc(allocator, .{
+            .status = 200,
+            .body = "{\"accessToken\":\"github-impersonated-token\",\"expireTime\":\"2023-11-14T23:13:20Z\"}",
+        });
     }
 };
 

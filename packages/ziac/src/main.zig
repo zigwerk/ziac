@@ -31,7 +31,7 @@ pub fn main(init: std.process.Init) !void {
     }
     const live_project = init.environ_map.get("ZIAC_LIVE_PROJECT");
     const state_bucket = init.environ_map.get("ZIAC_STATE_BUCKET");
-    const use_remote_state = state_bucket != null and !requestsAuthDoctor(args.items);
+    const use_remote_state = state_bucket != null and !requestsStateFreeCommand(args.items);
     const live_regions = if (init.environ_map.get("ZIAC_LIVE_REGIONS")) |csv|
         try ziac.stack_registry.regionsFromCsvAlloc(allocator, csv)
     else
@@ -145,6 +145,7 @@ fn requestsLiveProvider(args: []const []const u8) bool {
     return false;
 }
 
-fn requestsAuthDoctor(args: []const []const u8) bool {
+fn requestsStateFreeCommand(args: []const []const u8) bool {
+    if (args.len >= 1 and std.mem.eql(u8, args[0], "preview-stage")) return true;
     return args.len >= 2 and std.mem.eql(u8, args[0], "auth") and std.mem.eql(u8, args[1], "doctor");
 }

@@ -12,6 +12,7 @@ pub const resource = @import("resource.zig");
 pub const state = @import("state.zig");
 pub const state_format = @import("state_format.zig");
 pub const checkpoint = @import("checkpoint.zig");
+pub const ci = @import("ci.zig");
 pub const refresh = @import("refresh.zig");
 pub const importer = @import("importer.zig");
 pub const plan = @import("plan.zig");

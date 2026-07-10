@@ -1311,6 +1311,8 @@ Evidence:
 
 ### Task 8.3: CI Workload Identity And Preview Stages
 
+Status: implemented on 2026-07-10.
+
 Files:
 
 - Add documented GitHub Actions workflow.
@@ -1325,6 +1327,29 @@ Tests:
 - No service-account key JSON is required.
 
 Commit: `Add keyless Ziac CI deployments`
+
+Evidence:
+
+- `ci.previewStageAlloc` derives deterministic
+  `pr-<number>-<repository-hash>` identities with exact parsing, provider-safe
+  characters, and cross-repository isolation.
+- Bounded name and domain helpers preserve the complete preview stage. The
+  built-in stacks scope preview Artifact Registry, Cloud Run, load-balancer,
+  certificate, DNS, and regional resources while persistent identities remain
+  unchanged.
+- `preview-stage` exposes the same identity to shell and JSON workflows.
+  `destroy --preview-cleanup` rejects production, persistent, and malformed
+  stages before provider selection or lock acquisition and still requires
+  executor confirmation.
+- A GitHub Actions external-account fixture completes ADC URL subject-token,
+  STS, and service-account impersonation requests without key JSON. Diagnostics
+  redact both request and subject tokens.
+- The copyable workflow uses current OIDC/auth and immutable artifact actions,
+  same-repository PR gating, protected environments, GCS state, saved-plan
+  handoff, exact digest approval, and guarded close-event cleanup.
+- Temporary `gha-creds-*.json` files are excluded from Git and source archives.
+- The package suite contains 332 tests at this checkpoint: 331 pass and one
+  authenticated credential gate is skipped.
 
 ### Task 8.4: Rollouts And Recovery
 

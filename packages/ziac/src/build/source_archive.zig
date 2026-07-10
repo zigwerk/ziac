@@ -330,6 +330,7 @@ fn isMandatoryExcluded(path: []const u8) bool {
         }
     }
     if (std.mem.eql(u8, basename, ".env") or std.mem.startsWith(u8, basename, ".env.")) return true;
+    if (std.mem.startsWith(u8, basename, "gha-creds-") and std.mem.endsWith(u8, basename, ".json")) return true;
     return std.mem.endsWith(u8, basename, ".pem") or std.mem.endsWith(u8, basename, ".key");
 }
 

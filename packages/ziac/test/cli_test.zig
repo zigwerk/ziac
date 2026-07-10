@@ -35,6 +35,92 @@ test "cli plan prints deterministic create summary without writing state" {
     try std.testing.expect(!fs.exists(".ziac/state/hello-global/dev/resources.json"));
 }
 
+test "cli derives preview stage for shell and JSON workflows" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const human_code = try ziac.cli.run(std.testing.allocator, &.{
+        "preview-stage", "--repository", "Acme/Platform", "--change", "42",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, human_code);
+    try std.testing.expectEqualStrings("pr-42-9333e523\n", console.stdoutText());
+
+    console.stdout.clearRetainingCapacity();
+    const json_code = try ziac.cli.run(std.testing.allocator, &.{
+        "preview-stage", "--repository", "Acme/Platform", "--change", "42", "--json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, json_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"schema\":\"ziac.preview-stage.v1\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"stage\":\"pr-42-9333e523\"") != null);
+
+    console.stderr.clearRetainingCapacity();
+    const invalid_code = try ziac.cli.run(std.testing.allocator, &.{
+        "preview-stage", "--repository", "Acme/Platform", "--change", "0",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.usage, invalid_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "InvalidChangeNumber") != null);
+}
+
+test "cli preview cleanup rejects production before lock acquisition" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "destroy",
+        "--stack",
+        "hello-global",
+        "--stage",
+        "prod",
+        "--preview-cleanup",
+        "--confirm",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.invalid_graph, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "ProductionPreviewCleanupForbidden") != null);
+    try std.testing.expect(!try env.state.hasLock("hello-global", "prod"));
+}
+
+test "cli canonical preview cleanup retains destructive confirmation" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    const stage = "pr-42-9333e523";
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    state.setLineage("hello-global/pr-42-9333e523");
+    try state.put(.{
+        .resource_id = "gcp.run.Service.europe-west1.api-pr-42-9333e523",
+        .provider = .gcp,
+        .type_name = "gcp.run.Service",
+        .logical_id = "api-pr-42-9333e523",
+        .desired_hash = "preview",
+        .status = .created,
+    });
+    try ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(&fs)).saveResources("hello-global", stage, &state);
+
+    const refused = try ziac.cli.run(std.testing.allocator, &.{
+        "destroy", "--stack", "hello-global", "--stage", stage, "--preview-cleanup",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.provider_error, refused);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "DestructiveConfirmationRequired") != null);
+
+    console.stderr.clearRetainingCapacity();
+    const confirmed = try ziac.cli.run(std.testing.allocator, &.{
+        "destroy", "--stack", "hello-global", "--stage", stage, "--preview-cleanup", "--confirm",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, confirmed);
+}
+
 test "cli deploy persists state and redacted outputs" {
     var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer fs.deinit();

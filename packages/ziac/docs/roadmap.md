@@ -173,7 +173,9 @@ this checkout.
 - Immutable saved plans and digest-specific destructive approval: complete,
   including create-exclusive artifacts, current-graph validation, executor
   confirmation, and secret-reference-only persistence.
-- Workload Identity Federation and preview stages.
+- Keyless GitHub WIF and isolated preview stages: complete, including native
+  GitHub external-account ADC, repository-bound stage names, scoped GCP/DNS
+  identities, saved-plan workflow template, and production-proof cleanup.
 - Canary regional rollouts, rollback, recovery, and protection.
 - Release gate, complete docs, and clean-checkout end-to-end verification.
 

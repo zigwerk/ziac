@@ -1,0 +1,202 @@
+name: Ziac preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: ziac-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  ZIAC_LIVE_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+  ZIAC_LIVE_REGION: ${{ vars.GCP_PRIMARY_REGION }}
+  ZIAC_LIVE_REGIONS: ${{ vars.GCP_SERVICE_REGIONS }}
+  ZIAC_LIVE_IMAGE: ${{ vars.ZIAC_PREVIEW_IMAGE }}
+  ZIAC_LIVE_DOMAIN: ${{ vars.ZIAC_BASE_DOMAIN }}
+  ZIAC_LIVE_DNS_ZONE: ${{ vars.ZIAC_DNS_ZONE }}
+  ZIAC_STATE_BUCKET: ${{ vars.ZIAC_STATE_BUCKET }}
+  ZIAC_STATE_PREFIX: ${{ vars.ZIAC_STATE_PREFIX }}
+
+jobs:
+  plan:
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: ziac-preview-plan
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      stage: ${{ steps.stage.outputs.stage }}
+      plan_digest: ${{ steps.plan.outputs.plan_digest }}
+      approval_required: ${{ steps.plan.outputs.approval_required }}
+      artifact_name: ${{ steps.identity.outputs.artifact_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_ZIAC_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Build and verify Ziac
+        run: |
+          cd packages/ziac
+          zig build test
+          zig build
+
+      - id: stage
+        name: Derive preview stage
+        run: |
+          stage="$(
+            packages/ziac/zig-out/bin/ziac preview-stage \
+              --repository "${GITHUB_REPOSITORY}" \
+              --change "${{ github.event.pull_request.number }}"
+          )"
+          echo "stage=${stage}" >> "${GITHUB_OUTPUT}"
+
+      - id: identity
+        name: Derive artifact identity
+        run: |
+          echo "artifact_name=ziac-plan-${{ steps.stage.outputs.stage }}-${{ github.event.pull_request.head.sha }}" >> "${GITHUB_OUTPUT}"
+
+      - id: plan
+        name: Create immutable live plan
+        run: |
+          mkdir -p "${RUNNER_TEMP}/ziac-plan"
+          plan_path="${RUNNER_TEMP}/ziac-plan/preview.plan.json"
+          receipt_path="${RUNNER_TEMP}/ziac-plan/receipt.json"
+          packages/ziac/zig-out/bin/ziac plan \
+            --stack global-container \
+            --stage "${{ steps.stage.outputs.stage }}" \
+            --provider gcp \
+            --allow-live \
+            --out "${plan_path}" \
+            --json > "${receipt_path}"
+          cat "${receipt_path}"
+          echo "plan_digest=$(jq -r '.plan_digest' "${receipt_path}")" >> "${GITHUB_OUTPUT}"
+          echo "approval_required=$(jq -r '.approval_required' "${receipt_path}")" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload reviewed plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.identity.outputs.artifact_name }}
+          path: ${{ runner.temp }}/ziac-plan
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: false
+
+  deploy:
+    needs: plan
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: ziac-preview-deploy
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_ZIAC_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Build Ziac
+        run: |
+          cd packages/ziac
+          zig build
+
+      - name: Download reviewed plan
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.plan.outputs.artifact_name }}
+          path: ${{ runner.temp }}/ziac-plan
+
+      - name: Verify artifact receipt
+        run: |
+          test "$(jq -r '.plan_digest' "${RUNNER_TEMP}/ziac-plan/receipt.json")" = "${{ needs.plan.outputs.plan_digest }}"
+          test "$(jq -r '.approval_required' "${RUNNER_TEMP}/ziac-plan/receipt.json")" = "${{ needs.plan.outputs.approval_required }}"
+
+      - name: Apply reviewed plan
+        run: |
+          command=(
+            packages/ziac/zig-out/bin/ziac deploy
+            --stack global-container
+            --stage "${{ needs.plan.outputs.stage }}"
+            --provider gcp
+            --allow-live
+            --plan "${RUNNER_TEMP}/ziac-plan/preview.plan.json"
+          )
+          if [[ "${{ needs.plan.outputs.approval_required }}" == "true" ]]; then
+            command+=(--approve "${{ needs.plan.outputs.plan_digest }}")
+          fi
+          "${command[@]}"
+
+  cleanup:
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: ziac-preview-cleanup
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_ZIAC_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Build Ziac
+        run: |
+          cd packages/ziac
+          zig build
+
+      - name: Destroy exact preview stage
+        run: |
+          stage="$(
+            packages/ziac/zig-out/bin/ziac preview-stage \
+              --repository "${GITHUB_REPOSITORY}" \
+              --change "${{ github.event.pull_request.number }}"
+          )"
+          packages/ziac/zig-out/bin/ziac destroy \
+            --stack global-container \
+            --stage "${stage}" \
+            --provider gcp \
+            --allow-live \
+            --preview-cleanup \
+            --confirm

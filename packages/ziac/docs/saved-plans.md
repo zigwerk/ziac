@@ -99,3 +99,6 @@ Remote state generation checks and writer leases remain active during apply.
 Approval never disables state CAS, stale-plan rejection, or lifecycle
 protection.
 
+The complete keyless GitHub implementation, preview naming, environment
+controls, and cleanup policy are documented in `keyless-ci.md` and templated in
+`examples/github-actions/ziac-preview.yml`.

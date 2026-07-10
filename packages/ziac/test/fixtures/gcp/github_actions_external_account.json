@@ -1,0 +1,17 @@
+{
+  "type": "external_account",
+  "audience": "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/github/providers/acme-platform",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+  "token_url": "https://sts.googleapis.com/v1/token",
+  "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/ziac-preview@acme-platform.iam.gserviceaccount.com:generateAccessToken",
+  "credential_source": {
+    "url": "https://pipelines.actions.githubusercontent.com/fixture/oidc?api-version=2.0&audience=github-actions",
+    "headers": {
+      "Authorization": "Bearer dummy-source-authorization"
+    },
+    "format": {
+      "type": "json",
+      "subject_token_field_name": "value"
+    }
+  }
+}

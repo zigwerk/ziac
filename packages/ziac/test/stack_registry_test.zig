@@ -49,6 +49,29 @@ test "fixture registry rejects unknown stack names" {
     }));
 }
 
+test "fixture registry scopes preview repository service and generated image" {
+    var registry = ziac.stack_registry.fixtureRegistry();
+    var program = try registry.build(std.testing.allocator, .{
+        .stack = "hello-global",
+        .stage = "pr-42-9333e523",
+    });
+    defer program.deinit();
+
+    try std.testing.expectEqualStrings(
+        "gcp.artifact.Repository.europe-west1.hello-global-pr-42-9333e523",
+        program.graph.resources.items[0].id,
+    );
+    try std.testing.expectEqualStrings(
+        "gcp.run.Service.europe-west1.api-pr-42-9333e523",
+        program.graph.resources.items[1].id,
+    );
+    const service_inputs = try program.graph.resources.items[1].inputs.canonicalJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(service_inputs);
+    try std.testing.expect(std.mem.indexOf(u8, service_inputs, "/hello-global-pr-42-9333e523/api:latest") != null);
+    try std.testing.expect(program.outputs.items[2].source == .literal);
+    try std.testing.expectEqualStrings("api-pr-42-9333e523", program.outputs.items[2].source.literal);
+}
+
 test "configured registry builds the global ContainerService stack" {
     const regions = [_][]const u8{ "europe-west1", "us-central1" };
     var registry = ziac.stack_registry.configuredRegistry(.{
@@ -77,6 +100,49 @@ test "configured registry builds the global ContainerService stack" {
     try std.testing.expectEqualStrings("service_url_us-central1", program.outputs.items[4].name);
     try std.testing.expect(program.outputs.items[1].source == .resource_ref);
     try std.testing.expectEqualStrings("address", program.outputs.items[1].source.resource_ref.field);
+}
+
+test "configured registry isolates global preview names and domains" {
+    const regions = [_][]const u8{ "europe-west1", "us-central1" };
+    var registry = ziac.stack_registry.configuredRegistry(.{
+        .project_id = "test-ziac-disposable",
+        .region = regions[0],
+        .regions = &regions,
+        .service_account = "api@test-ziac-disposable.iam.gserviceaccount.com",
+        .image = "europe-west1-docker.pkg.dev/test-ziac-disposable/apps/api@sha256:abc",
+        .domain = "api.example.com",
+        .dns_zone = "example-com",
+    });
+    var first = try registry.build(std.testing.allocator, .{
+        .stack = "global-container",
+        .stage = "pr-42-9333e523",
+    });
+    defer first.deinit();
+    var second = try registry.build(std.testing.allocator, .{
+        .stack = "global-container",
+        .stage = "pr-43-9333e523",
+    });
+    defer second.deinit();
+
+    try std.testing.expectEqual(first.graph.resources.items.len, second.graph.resources.items.len);
+    for (first.graph.resources.items, second.graph.resources.items) |left, right| {
+        if (std.mem.eql(u8, left.type_name, "gcp.project.Service")) {
+            try std.testing.expectEqualStrings(left.id, right.id);
+            continue;
+        }
+        try std.testing.expect(!std.mem.eql(u8, left.id, right.id));
+        try std.testing.expect(std.mem.indexOf(u8, left.id, "pr-42-9333e523") != null);
+        try std.testing.expect(std.mem.indexOf(u8, right.id, "pr-43-9333e523") != null);
+    }
+    try std.testing.expect(first.outputs.items[0].source == .literal);
+    try std.testing.expectEqualStrings(
+        "https://pr-42-9333e523.api.example.com",
+        first.outputs.items[0].source.literal,
+    );
+    try std.testing.expectEqualStrings(
+        "https://pr-43-9333e523.api.example.com",
+        second.outputs.items[0].source.literal,
+    );
 }
 
 test "live region CSV parsing rejects empty entries" {

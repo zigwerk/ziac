@@ -60,6 +60,21 @@ using the exact digest printed by `plan`. Direct destructive deploys and all
 destroys require `--confirm`. Lifecycle-protected resources must first be
 unprotected in a separate deploy; approval never bypasses protection.
 
+Derive repository-bound preview stages and guard automated cleanup:
+
+```sh
+stage="$(zig-out/bin/ziac preview-stage \
+  --repository acme/platform \
+  --change 42)"
+zig-out/bin/ziac destroy --stack global-container --stage "$stage" \
+  --provider gcp --allow-live --preview-cleanup --confirm
+```
+
+Built-in preview stacks scope provider resources and DNS while persistent stage
+names remain compatible. The copyable keyless GitHub workflow uses native WIF,
+GCS state, saved plans, exact digest approval, and protected cleanup
+environments.
+
 Select the native provider explicitly for authenticated calls:
 
 ```sh
@@ -205,6 +220,10 @@ canonical operations without secret payloads, rejects target/state/graph/input
 or digest drift before provider access, and applies the loaded operations
 without replanning. The executor independently requires confirmation for every
 delete and replacement; saved plans bind that approval to the exact plan digest.
+Repository-bound preview stages now isolate GCS state and built-in GCP resource
+names. GitHub external-account ADC completes URL subject-token, STS, and
+service-account impersonation contracts without a long-lived Google key, and
+preview cleanup cannot target production or malformed stages.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts and
@@ -227,7 +246,8 @@ See `docs/secret-manager.md` for the secret payload boundary, and
 `docs/zig-service.md` for source-to-image deployment and typed app bindings. See
 `docs/remote-state.md` for GCS bootstrap, IAM, migration, conflicts, and
 recovery. See `docs/saved-plans.md` for review artifacts, stale-plan checks,
-digest approval, and CI handoff. See
+digest approval, and CI handoff. See `docs/keyless-ci.md` for WIF setup, preview
+identity, the workflow template, and guarded cleanup. See
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

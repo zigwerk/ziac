@@ -53,6 +53,7 @@ test "source archive applies mandatory and ziacignore exclusions" {
     try writeFile(tmp.dir, ".env.production", "TOKEN=secret\n");
     try writeFile(tmp.dir, "private.pem", "secret\n");
     try writeFile(tmp.dir, "private.key", "secret\n");
+    try writeFile(tmp.dir, "gha-creds-fixture.json", "temporary external account credential\n");
     try writeFile(tmp.dir, "secrets/token", "secret\n");
     try writeFile(tmp.dir, "nested/.secrets/token", "secret\n");
     try writeFile(tmp.dir, "ignored.log", "ignored\n");

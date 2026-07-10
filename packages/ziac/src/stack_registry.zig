@@ -1,10 +1,11 @@
 const std = @import("std");
+const ci = @import("ci.zig");
 const gcp = @import("gcp/root.zig");
 const output = @import("output.zig");
 const resource = @import("resource.zig");
 const state_mod = @import("state.zig");
 
-pub const StackError = gcp.global.container_service.BuildError || gcp.artifact_registry.BuildError || error{
+pub const StackError = gcp.global.container_service.BuildError || gcp.artifact_registry.BuildError || ci.Error || error{
     UnknownStack,
 };
 
@@ -92,8 +93,13 @@ pub const StackRegistry = struct {
     http_redirect: bool = true,
 
     pub fn build(self: StackRegistry, allocator: std.mem.Allocator, args: StackArgs) StackError!StackProgram {
-        if (std.mem.eql(u8, args.stack, "global-container")) return self.buildGlobalContainer(allocator);
+        if (std.mem.eql(u8, args.stack, "global-container")) return self.buildGlobalContainer(allocator, args.stage);
         if (!std.mem.eql(u8, args.stack, "hello-global")) return error.UnknownStack;
+
+        const repository_name = try ci.scopedResourceNameAlloc(allocator, "hello-global", args.stage, 63);
+        defer allocator.free(repository_name);
+        const service_name = try ci.scopedResourceNameAlloc(allocator, "api", args.stage, 49);
+        defer allocator.free(service_name);
 
         const provider = gcp.config.ProviderConfig{
             .project_id = self.project_id,
@@ -102,15 +108,15 @@ pub const StackRegistry = struct {
         };
 
         var repo = try gcp.artifact_registry.DockerRepository.build(allocator, provider, .{
-            .name = "hello-global",
+            .name = repository_name,
         });
         defer repo.deinit(allocator);
 
         const generated_image = if (self.image == null)
             try std.fmt.allocPrint(
                 allocator,
-                "{s}-docker.pkg.dev/{s}/hello-global/api:latest",
-                .{ self.region, self.project_id },
+                "{s}-docker.pkg.dev/{s}/{s}/api:latest",
+                .{ self.region, self.project_id, repository_name },
             )
         else
             null;
@@ -121,7 +127,7 @@ pub const StackRegistry = struct {
             .{ .name = "DATABASE_URL", .value = "postgres://user:sentinel-secret-for-tests@localhost:26257/app", .secret = true },
         };
         var service = try gcp.cloud_run.Service.build(allocator, provider, .{
-            .name = "api",
+            .name = service_name,
             .image = image,
             .env = env[0..],
         });
@@ -158,7 +164,7 @@ pub const StackRegistry = struct {
         }
         try appendReference(allocator, &outputs, "repository_url", repo.repository_url.resource_ref, false);
         try appendReference(allocator, &outputs, "service_url", service.service_url.resource_ref, false);
-        try appendLiteral(allocator, &outputs, "service_name", "api", false);
+        try appendLiteral(allocator, &outputs, "service_name", service_name, false);
         try appendLiteral(allocator, &outputs, "service_region", self.region, false);
         try appendReference(allocator, &outputs, "service_account", service.service_account.resource_ref, false);
         try appendLiteral(allocator, &outputs, "database_url", "postgres://user:sentinel-secret-for-tests@localhost:26257/app", true);
@@ -170,7 +176,15 @@ pub const StackRegistry = struct {
         };
     }
 
-    fn buildGlobalContainer(self: StackRegistry, allocator: std.mem.Allocator) StackError!StackProgram {
+    fn buildGlobalContainer(
+        self: StackRegistry,
+        allocator: std.mem.Allocator,
+        stage: []const u8,
+    ) StackError!StackProgram {
+        const component_name = try ci.scopedResourceNameAlloc(allocator, "api", stage, 49);
+        defer allocator.free(component_name);
+        const domain = try ci.previewDomainAlloc(allocator, self.domain orelse return error.MissingDomain, stage);
+        defer allocator.free(domain);
         const provider = gcp.config.ProviderConfig{
             .project_id = self.project_id,
             .primary_region = self.region,
@@ -179,10 +193,10 @@ pub const StackRegistry = struct {
             .service_account = self.service_account,
         };
         var component = try gcp.global.ContainerService.build(allocator, provider, .{
-            .name = "api",
+            .name = component_name,
             .image = self.image orelse return error.MissingImage,
             .regions = self.regions,
-            .domain = self.domain orelse return error.MissingDomain,
+            .domain = domain,
             .dns_zone = self.dns_zone,
             .http_redirect = self.http_redirect,
         });

@@ -1,6 +1,7 @@
 const std = @import("std");
 const zstd = @import("zigeffect_std");
 const checkpoint_mod = @import("checkpoint.zig");
+const ci_mod = @import("ci.zig");
 const executor = @import("executor.zig");
 const gcp_auth = @import("gcp/auth/root.zig");
 const importer = @import("importer.zig");
@@ -52,6 +53,9 @@ const Args = struct {
     out_path: ?[]const u8 = null,
     plan_path: ?[]const u8 = null,
     approval: ?[]const u8 = null,
+    repository: ?[]const u8 = null,
+    change_number: ?u64 = null,
+    preview_cleanup: bool = false,
 };
 
 const command_options = [_]zstd.Cli.OptionSpec{
@@ -130,6 +134,13 @@ const destroy_options = [_]zstd.Cli.OptionSpec{
     command_options[4],
     command_options[5],
     .{ .name = "confirm", .kind = .boolean, .help = "confirm destructive operations" },
+    .{ .name = "preview-cleanup", .kind = .boolean, .help = "require an exact preview stage" },
+};
+
+const preview_stage_options = [_]zstd.Cli.OptionSpec{
+    .{ .name = "repository", .kind = .string, .required = true, .help = "GitHub owner/repository" },
+    .{ .name = "change", .kind = .string, .required = true, .help = "positive pull request number" },
+    .{ .name = "json", .kind = .boolean, .help = "emit stable JSON" },
 };
 
 const unlock_options = [_]zstd.Cli.OptionSpec{
@@ -158,6 +169,11 @@ const auth_subcommands = [_]zstd.Cli.CommandSpec{
 };
 
 const subcommands = [_]zstd.Cli.CommandSpec{
+    .{
+        .name = "preview-stage",
+        .description = "derive a repository-bound preview stage",
+        .options = preview_stage_options[0..],
+    },
     .{
         .name = "plan",
         .description = "preview resource changes",
@@ -230,6 +246,7 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
     };
 
     if (std.mem.eql(u8, args.command, "plan")) return runPlan(allocator, env, args);
+    if (std.mem.eql(u8, args.command, "preview-stage")) return runPreviewStage(allocator, env, args);
     if (std.mem.eql(u8, args.command, "deploy")) return runDeploy(allocator, env, args);
     if (std.mem.eql(u8, args.command, "destroy")) return runDestroy(allocator, env, args);
     if (std.mem.eql(u8, args.command, "outputs")) return runOutputs(allocator, env, args);
@@ -258,6 +275,19 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
             .stage = "",
         };
     }
+    if (std.mem.eql(u8, parsed.command, "preview-stage")) {
+        const change_text = parsed.optionValue("change") orelse return error.MissingRequiredOption;
+        const change_number = std.fmt.parseInt(u64, change_text, 10) catch return error.InvalidChangeNumber;
+        if (change_number == 0) return error.InvalidChangeNumber;
+        return .{
+            .command = parsed.command,
+            .stack = "",
+            .stage = "",
+            .repository = parsed.optionValue("repository") orelse return error.MissingRequiredOption,
+            .change_number = change_number,
+            .json = parsed.optionValue("json") != null,
+        };
+    }
 
     return .{
         .command = parsed.command,
@@ -276,8 +306,41 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .out_path = parsed.optionValue("out"),
         .plan_path = parsed.optionValue("plan"),
         .approval = parsed.optionValue("approve"),
+        .preview_cleanup = parsed.optionValue("preview-cleanup") != null,
     };
 }
+
+fn runPreviewStage(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    const stage = ci_mod.previewStageAlloc(allocator, .{
+        .repository = args.repository orelse return error.MissingRequiredOption,
+        .change_number = args.change_number orelse return error.MissingRequiredOption,
+    }) catch |err| {
+        try writeError(env, "usage", err);
+        return Exit.usage;
+    };
+    defer allocator.free(stage);
+    if (args.json) {
+        const receipt = try std.json.Stringify.valueAlloc(allocator, PreviewStageReceipt{
+            .repository = args.repository.?,
+            .change_number = args.change_number.?,
+            .stage = stage,
+        }, .{});
+        defer allocator.free(receipt);
+        try env.console.writeOut(receipt);
+        try env.console.writeOut("\n");
+    } else {
+        try env.console.writeOut(stage);
+        try env.console.writeOut("\n");
+    }
+    return Exit.success;
+}
+
+const PreviewStageReceipt = struct {
+    schema: []const u8 = "ziac.preview-stage.v1",
+    repository: []const u8,
+    change_number: u64,
+    stage: []const u8,
+};
 
 fn runAuthDoctor(allocator: std.mem.Allocator, env: *Env) !u8 {
     const auth_env = env.auth_env orelse {
@@ -445,6 +508,9 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 }
 
 fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    if (args.preview_cleanup) {
+        ci_mod.validatePreviewCleanup(args.stage) catch |err| return handlePlanError(env, err);
+    }
     var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
         return handleStackError(env, err);
     };

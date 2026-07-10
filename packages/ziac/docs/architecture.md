@@ -21,6 +21,8 @@ Initial source domains:
   deadlines, cancellation, and causal operation facts.
 - `checkpoint.zig`: serialized state checkpoint interface and local-state
   adapter.
+- `ci.zig`: repository-bound preview identity, provider name/domain scoping,
+  and cleanup policy.
 - `refresh.zig`: read-only provider refresh into observed state.
 - `importer.zig`: validated adoption of existing provider resources.
 
@@ -76,6 +78,19 @@ checks its desired graph digest but never invokes a planner; it executes the
 loaded operation set after state and integrity checks. Delete and replacement
 plans require the exact saved digest through `--approve`. Lifecycle `protect`
 remains an absolute planning block, independent of confirmation or approval.
+
+Preview stages use `pr-<change>-<repository-hash-8>`. State is already
+stage-partitioned; `ci.scopedResourceNameAlloc` closes the provider identity
+boundary by appending that exact stage under a caller-supplied GCP name limit.
+Long bases retain a hash before the full stage suffix. Built-in preview stacks
+scope Artifact Registry, Cloud Run, global load-balancer descendants, and DNS,
+while persistent stages preserve existing names. `--preview-cleanup` validates
+the exact grammar before stack or provider work and can never select production.
+
+GitHub Actions WIF enters through the same native external-account ADC path as
+other OIDC providers: URL subject token, STS exchange, optional service-account
+impersonation, and token cache. Temporary `gha-creds-*.json` files are excluded
+from both version control and deterministic Zig source archives.
 
 Provider output descriptors carry their field name, Zig value type, and secrecy
 at comptime. Resource builders expose typed references instead of predicting
