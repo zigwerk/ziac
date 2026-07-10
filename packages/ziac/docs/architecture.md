@@ -69,3 +69,9 @@ descriptors. `validateBindings` reflects over the environment and supplied outpu
 struct types to enforce required and optional names, value types, secrecy, and
 regional scope. It returns the normalized binding struct type and emits stable
 `ZIAC100` through `ZIAC104` diagnostics for static contract failures.
+
+`stack.ProviderSet` canonicalizes a comptime provider tuple and rejects
+duplicates. `stack.Context(Set)` exposes GCP, CockroachDB, and local namespaces
+only when declared, with `ZIAC110` and `ZIAC111` diagnostics for missing cloud
+providers. The runtime provider registry is derived by iterating that same static
+set, so undeclared provider implementations cannot become available by accident.

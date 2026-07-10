@@ -56,7 +56,8 @@ interrupted-resume integration tests.
   tested.
 - App `Env` and binding validation: implemented and unit tested; compile-fail
   fixtures remain.
-- Provider-set validation.
+- Provider-set validation: implemented and unit tested; compile-fail fixtures
+  remain.
 - Stable compile-fail diagnostics.
 
 Gate: valid fixtures compile and invalid binding/provider/output fixtures fail

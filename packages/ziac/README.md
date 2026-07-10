@@ -59,7 +59,8 @@ stable JSON command receipts, and lineage/serial/graph plan preconditions are
 implemented. Engine V2 is complete. Typed public/secret provider outputs and
 dependency derivation are implemented. App `Env` field names, optionality, value
 types, secrecy, and regional scope now validate at comptime; provider-set
-contracts and compile-fail fixtures are next.
+contracts now canonically constrain typed namespaces and runtime registries.
+Compile-fail fixtures are next.
 
 See `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
