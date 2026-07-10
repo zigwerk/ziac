@@ -147,6 +147,44 @@ test "global ContainerService graph is deterministic" {
     }
 }
 
+test "global ContainerService applies the matching Direct VPC subnet per region" {
+    const regional_vpc = [_]ziac.gcp.global.container_service.RegionalDirectVpc{
+        .{ .region = "europe-west1", .config = .{
+            .network_output = ziac.PublicOutput([]const u8).known("projects/ziac-dev/global/networks/api-db"),
+            .subnetwork_output = ziac.PublicOutput([]const u8).known("projects/ziac-dev/regions/europe-west1/subnetworks/api-db-eu"),
+        } },
+        .{ .region = "us-central1", .config = .{
+            .network_output = ziac.PublicOutput([]const u8).known("projects/ziac-dev/global/networks/api-db"),
+            .subnetwork_output = ziac.PublicOutput([]const u8).known("projects/ziac-dev/regions/us-central1/subnetworks/api-db-us"),
+        } },
+    };
+    var component = try ziac.gcp.global.ContainerService.build(std.testing.allocator, provider, .{
+        .name = "api",
+        .image = "example/api@sha256:abc",
+        .regions = &regions,
+        .domain = "api.example.com",
+        .regional_direct_vpc = &regional_vpc,
+    });
+    defer component.deinit();
+
+    for (component.graph.resources.items) |node| {
+        if (!std.mem.eql(u8, node.type_name, "gcp.run.Service")) continue;
+        const region = inputString(node, "region");
+        const vpc = inputValue(node, "vpc_access").object;
+        const subnetwork = objectValue(vpc, "subnetwork").string;
+        try std.testing.expect(std.mem.indexOf(u8, subnetwork, region) != null);
+        try std.testing.expectEqualStrings("PRIVATE_RANGES_ONLY", objectValue(vpc, "egress").string);
+    }
+
+    try std.testing.expectError(error.RegionalVpcMismatch, ziac.gcp.global.ContainerService.build(std.testing.allocator, provider, .{
+        .name = "api",
+        .image = "example/api@sha256:abc",
+        .regions = &regions,
+        .domain = "api.example.com",
+        .regional_direct_vpc = regional_vpc[0..1],
+    }));
+}
+
 fn countType(graph: *const ziac.ResourceGraph, type_name: []const u8) usize {
     var count: usize = 0;
     for (graph.resources.items) |node| if (std.mem.eql(u8, node.type_name, type_name)) {

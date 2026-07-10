@@ -7,6 +7,9 @@ const value = @import("../value.zig");
 
 const ProviderError = provider_mod.ProviderError;
 const record_set_type = "gcp.dns.RecordSet";
+const managed_zone_type = "gcp.dns.ManagedZone";
+
+const Kind = enum { record_set, managed_zone };
 
 pub const Handler = struct {
     client: *client_mod.Client,
@@ -17,19 +20,19 @@ pub const Handler = struct {
         node: resource.ResourceNode,
         physical_override: ?[]const u8,
     ) ProviderError!provider_mod.ReadResult {
-        if (!supports(node)) return error.InvalidConfiguration;
-        const generated = try physicalIdAlloc(context.allocator, node);
+        const resource_kind = kind(node) orelse return error.InvalidConfiguration;
+        const generated = try physicalIdAlloc(context, node, resource_kind);
         defer context.allocator.free(generated);
         const physical_id = physical_override orelse generated;
         if (!std.mem.eql(u8, generated, physical_id)) return error.InvalidConfiguration;
-        const path = try restPathFromPhysicalIdAlloc(context.allocator, physical_id);
+        const path = try restPathFromPhysicalIdAlloc(context.allocator, physical_id, resource_kind);
         defer context.allocator.free(path);
         var response = self.request(context, .{ .api = .dns, .method = "GET", .path = path }) catch |err| {
             if (err == error.NotFound) return .absent;
             return err;
         };
         defer response.deinit(context.allocator);
-        return .{ .present = try resultFromJson(context, node, response.body) };
+        return .{ .present = try resultFromJson(context, node, resource_kind, response.body) };
     }
 
     pub fn diff(
@@ -38,15 +41,15 @@ pub const Handler = struct {
         observed: *const provider_mod.ResourceResult,
     ) ProviderError!provider_mod.DiffResult {
         try context.checkActive();
-        if (!supports(node)) return error.InvalidConfiguration;
-        const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
+        const resource_kind = kind(node) orelse return error.InvalidConfiguration;
+        const diff_kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
-        else if (sameIdentity(node.inputs, observed.observed_inputs))
+        else if (resource_kind == .record_set and try sameIdentity(context, node.inputs, observed.observed_inputs))
             .update
         else
             .replace;
-        const reasons: []const []const u8 = if (kind == .noop) &.{} else &.{"Cloud DNS desired state differs from observed record set"};
-        return provider_mod.DiffResult.init(context.allocator, kind, reasons);
+        const reasons: []const []const u8 = if (diff_kind == .noop) &.{} else &.{"Cloud DNS desired state differs from observed resource"};
+        return provider_mod.DiffResult.init(context.allocator, diff_kind, reasons);
     }
 
     pub fn create(
@@ -54,10 +57,10 @@ pub const Handler = struct {
         context: *provider_mod.OperationContext,
         node: resource.ResourceNode,
     ) ProviderError!provider_mod.ResourceResult {
-        if (!supports(node)) return error.InvalidConfiguration;
-        const path = try collectionPathAlloc(context.allocator, node);
+        const resource_kind = kind(node) orelse return error.InvalidConfiguration;
+        const path = try collectionPathAlloc(context.allocator, node, resource_kind);
         defer context.allocator.free(path);
-        return self.mutate(context, node, "POST", path);
+        return self.mutate(context, node, resource_kind, "POST", path);
     }
 
     pub fn update(
@@ -66,13 +69,14 @@ pub const Handler = struct {
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!provider_mod.ResourceResult {
-        if (!supports(node)) return error.InvalidConfiguration;
-        const expected = try physicalIdAlloc(context.allocator, node);
+        const resource_kind = kind(node) orelse return error.InvalidConfiguration;
+        if (resource_kind != .record_set) return error.InvalidConfiguration;
+        const expected = try physicalIdAlloc(context, node, resource_kind);
         defer context.allocator.free(expected);
         if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
-        const path = try restPathFromPhysicalIdAlloc(context.allocator, physical_id);
+        const path = try restPathFromPhysicalIdAlloc(context.allocator, physical_id, resource_kind);
         defer context.allocator.free(path);
-        return self.mutate(context, node, "PATCH", path);
+        return self.mutate(context, node, resource_kind, "PATCH", path);
     }
 
     pub fn delete(
@@ -81,11 +85,11 @@ pub const Handler = struct {
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!void {
-        if (!supports(node)) return error.InvalidConfiguration;
-        const expected = try physicalIdAlloc(context.allocator, node);
+        const resource_kind = kind(node) orelse return error.InvalidConfiguration;
+        const expected = try physicalIdAlloc(context, node, resource_kind);
         defer context.allocator.free(expected);
         if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
-        const path = try restPathFromPhysicalIdAlloc(context.allocator, physical_id);
+        const path = try restPathFromPhysicalIdAlloc(context.allocator, physical_id, resource_kind);
         defer context.allocator.free(path);
         var response = self.request(context, .{ .api = .dns, .method = "DELETE", .path = path }) catch |err| {
             if (err == error.NotFound) return;
@@ -98,14 +102,15 @@ pub const Handler = struct {
         self: Handler,
         context: *provider_mod.OperationContext,
         node: resource.ResourceNode,
+        resource_kind: Kind,
         method: []const u8,
         path: []const u8,
     ) ProviderError!provider_mod.ResourceResult {
-        const body = try desiredBodyAlloc(context, node);
+        const body = try desiredBodyAlloc(context, node, resource_kind);
         defer context.allocator.free(body);
         var response = try self.request(context, .{ .api = .dns, .method = method, .path = path, .body = body });
         defer response.deinit(context.allocator);
-        return resultFromJson(context, node, response.body);
+        return resultFromJson(context, node, resource_kind, response.body);
     }
 
     fn request(
@@ -120,10 +125,28 @@ pub const Handler = struct {
 };
 
 pub fn supports(node: resource.ResourceNode) bool {
-    return std.mem.eql(u8, node.type_name, record_set_type);
+    return kind(node) != null;
+}
+
+fn kind(node: resource.ResourceNode) ?Kind {
+    if (std.mem.eql(u8, node.type_name, record_set_type)) return .record_set;
+    if (std.mem.eql(u8, node.type_name, managed_zone_type)) return .managed_zone;
+    return null;
 }
 
 fn resultFromJson(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    resource_kind: Kind,
+    body: []const u8,
+) ProviderError!provider_mod.ResourceResult {
+    return switch (resource_kind) {
+        .record_set => recordSetResultFromJson(context, node, body),
+        .managed_zone => managedZoneResultFromJson(context, node, body),
+    };
+}
+
+fn recordSetResultFromJson(
     context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     body: []const u8,
@@ -144,7 +167,7 @@ fn resultFromJson(
     else
         remote_rrdatas_value;
     const normalized_fields = [_]value.Field{
-        .{ .name = "name", .value = .{ .string = name } },
+        .{ .name = "name", .value = try normalizedFqdnInput(context, node.inputs, "name", name) },
         .{ .name = "project_id", .value = .{ .string = try requiredString(node.inputs, "project_id") } },
         .{ .name = "rrdatas", .value = normalized_rrdatas },
         .{ .name = "ttl", .value = .{ .integer = ttl } },
@@ -166,34 +189,129 @@ fn resultFromJson(
     return provider_mod.ResourceResult.init(allocator, physical_id, .{ .object = &normalized_fields }, &outputs, null);
 }
 
-fn desiredBodyAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {
+fn managedZoneResultFromJson(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    body: []const u8,
+) ProviderError!provider_mod.ResourceResult {
+    const allocator = context.allocator;
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.ProviderBug;
+    defer parsed.deinit();
+    const remote = asObject(parsed.value) orelse return error.ProviderBug;
+    const name = try requiredJsonString(remote, "name");
+    const dns_name = try requiredJsonString(remote, "dnsName");
+    const visibility = try requiredJsonString(remote, "visibility");
+    if (!std.ascii.eqlIgnoreCase(visibility, "private")) return error.InvalidConfiguration;
+    const private_config = asObject(remote.get("privateVisibilityConfig") orelse return error.ProviderBug) orelse return error.ProviderBug;
+    const networks = asArray(private_config.get("networks") orelse return error.ProviderBug) orelse return error.ProviderBug;
+    if (networks.items.len != 1) return error.InvalidConfiguration;
+    const network_object = asObject(networks.items[0]) orelse return error.ProviderBug;
+    const network = try requiredJsonString(network_object, "networkUrl");
+    const fields = [_]value.Field{
+        .{ .name = "dns_name", .value = try normalizedFqdnInput(context, node.inputs, "dns_name", dns_name) },
+        .{ .name = "name", .value = .{ .string = name } },
+        .{ .name = "network", .value = try normalizedStringInput(context, node.inputs, "network", network) },
+        .{ .name = "project_id", .value = .{ .string = try requiredString(node.inputs, "project_id") } },
+        .{ .name = "visibility", .value = .{ .string = "PRIVATE" } },
+    };
+    const physical_id = try managedZonePhysicalIdAlloc(
+        allocator,
+        try requiredString(node.inputs, "project_id"),
+        name,
+    );
+    defer allocator.free(physical_id);
+    const outputs = [_]state.StateOutput{
+        .{ .name = "zone_name", .value = .{ .string = name } },
+        .{ .name = "dns_name", .value = .{ .string = dns_name } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, .{ .object = &fields }, &outputs, null);
+}
+
+fn desiredBodyAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    resource_kind: Kind,
+) ProviderError![]const u8 {
+    return switch (resource_kind) {
+        .record_set => recordSetDesiredBodyAlloc(context, node),
+        .managed_zone => managedZoneDesiredBodyAlloc(context, node),
+    };
+}
+
+fn recordSetDesiredBodyAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {
     const allocator = context.allocator;
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var body: std.json.ObjectMap = .empty;
-    try body.put(arena, "name", .{ .string = try requiredString(node.inputs, "name") });
+    const resolved_name = try resolveInputString(context, node.inputs, "name");
+    const name = try fqdnAlloc(arena, resolved_name);
+    try body.put(arena, "name", .{ .string = name });
     try body.put(arena, "type", .{ .string = try requiredString(node.inputs, "type") });
     try body.put(arena, "ttl", .{ .integer = try requiredInteger(node.inputs, "ttl") });
     try body.put(arena, "rrdatas", try valueStringListJson(context, arena, try requiredValue(node.inputs, "rrdatas")));
     return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = body }, .{}) catch return error.OutOfMemory;
 }
 
-fn collectionPathAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError![]const u8 {
-    return std.fmt.allocPrint(allocator, "/dns/v1/projects/{s}/managedZones/{s}/rrsets", .{
-        try requiredString(node.inputs, "project_id"),
-        try requiredString(node.inputs, "zone"),
-    }) catch return error.OutOfMemory;
+fn managedZoneDesiredBodyAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {
+    const allocator = context.allocator;
+    var arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var body: std.json.ObjectMap = .empty;
+    try body.put(arena, "name", .{ .string = try requiredString(node.inputs, "name") });
+    const resolved_dns_name = try resolveInputString(context, node.inputs, "dns_name");
+    try body.put(arena, "dnsName", .{ .string = try fqdnAlloc(arena, resolved_dns_name) });
+    try body.put(arena, "visibility", .{ .string = "private" });
+    const project_id = try requiredString(node.inputs, "project_id");
+    const network_url = try resolveInputString(context, node.inputs, "network");
+    if (!isProjectNetwork(network_url, project_id)) return error.InvalidConfiguration;
+    var network = std.json.ObjectMap.empty;
+    try network.put(arena, "networkUrl", .{ .string = network_url });
+    var networks = std.json.Array.init(arena);
+    try networks.append(.{ .object = network });
+    var private_config = std.json.ObjectMap.empty;
+    try private_config.put(arena, "networks", .{ .array = networks });
+    try body.put(arena, "privateVisibilityConfig", .{ .object = private_config });
+    return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = body }, .{}) catch return error.OutOfMemory;
 }
 
-fn physicalIdAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError![]const u8 {
-    return physicalIdFromIdentityAlloc(
-        allocator,
-        try requiredString(node.inputs, "project_id"),
-        try requiredString(node.inputs, "zone"),
-        try requiredString(node.inputs, "type"),
-        try requiredString(node.inputs, "name"),
-    );
+fn collectionPathAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, resource_kind: Kind) ProviderError![]const u8 {
+    return switch (resource_kind) {
+        .record_set => std.fmt.allocPrint(allocator, "/dns/v1/projects/{s}/managedZones/{s}/rrsets", .{
+            try requiredString(node.inputs, "project_id"),
+            try requiredString(node.inputs, "zone"),
+        }),
+        .managed_zone => std.fmt.allocPrint(allocator, "/dns/v1/projects/{s}/managedZones", .{
+            try requiredString(node.inputs, "project_id"),
+        }),
+    } catch return error.OutOfMemory;
+}
+
+fn physicalIdAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    resource_kind: Kind,
+) ProviderError![]const u8 {
+    return switch (resource_kind) {
+        .record_set => blk: {
+            const resolved_name = try resolveInputString(context, node.inputs, "name");
+            const name = try fqdnAlloc(context.allocator, resolved_name);
+            defer context.allocator.free(name);
+            break :blk physicalIdFromIdentityAlloc(
+                context.allocator,
+                try requiredString(node.inputs, "project_id"),
+                try requiredString(node.inputs, "zone"),
+                try requiredString(node.inputs, "type"),
+                name,
+            );
+        },
+        .managed_zone => managedZonePhysicalIdAlloc(
+            context.allocator,
+            try requiredString(node.inputs, "project_id"),
+            try requiredString(node.inputs, "name"),
+        ),
+    };
 }
 
 fn physicalIdFromIdentityAlloc(
@@ -211,12 +329,28 @@ fn physicalIdFromIdentityAlloc(
     }) catch return error.OutOfMemory;
 }
 
-fn restPathFromPhysicalIdAlloc(allocator: std.mem.Allocator, physical_id: []const u8) ProviderError![]const u8 {
+fn managedZonePhysicalIdAlloc(
+    allocator: std.mem.Allocator,
+    project_id: []const u8,
+    name: []const u8,
+) ProviderError![]const u8 {
+    return std.fmt.allocPrint(allocator, "projects/{s}/managedZones/{s}", .{ project_id, name }) catch return error.OutOfMemory;
+}
+
+fn restPathFromPhysicalIdAlloc(
+    allocator: std.mem.Allocator,
+    physical_id: []const u8,
+    resource_kind: Kind,
+) ProviderError![]const u8 {
     var segments = std.mem.splitScalar(u8, std.mem.trim(u8, physical_id, "/"), '/');
     if (!std.mem.eql(u8, segments.next() orelse return error.InvalidConfiguration, "projects")) return error.InvalidConfiguration;
     const project_id = segments.next() orelse return error.InvalidConfiguration;
     if (!std.mem.eql(u8, segments.next() orelse return error.InvalidConfiguration, "managedZones")) return error.InvalidConfiguration;
     const zone = segments.next() orelse return error.InvalidConfiguration;
+    if (resource_kind == .managed_zone) {
+        if (segments.next() != null) return error.InvalidConfiguration;
+        return std.fmt.allocPrint(allocator, "/dns/v1/projects/{s}/managedZones/{s}", .{ project_id, zone }) catch return error.OutOfMemory;
+    }
     if (!std.mem.eql(u8, segments.next() orelse return error.InvalidConfiguration, "rrsets")) return error.InvalidConfiguration;
     const record_type = segments.next() orelse return error.InvalidConfiguration;
     const name = segments.next() orelse return error.InvalidConfiguration;
@@ -229,13 +363,19 @@ fn restPathFromPhysicalIdAlloc(allocator: std.mem.Allocator, physical_id: []cons
     }) catch return error.OutOfMemory;
 }
 
-fn sameIdentity(desired: value.Value, observed: value.Value) bool {
-    for ([_][]const u8{ "project_id", "zone", "name", "type" }) |field| {
-        const desired_value = requiredString(desired, field) catch return false;
-        const observed_value = requiredString(observed, field) catch return false;
+fn sameIdentity(
+    context: *provider_mod.OperationContext,
+    desired: value.Value,
+    observed: value.Value,
+) ProviderError!bool {
+    for ([_][]const u8{ "project_id", "zone", "type" }) |field| {
+        const desired_value = try requiredString(desired, field);
+        const observed_value = try requiredString(observed, field);
         if (!std.mem.eql(u8, desired_value, observed_value)) return false;
     }
-    return true;
+    const desired_name = try resolveValueString(context, try requiredValue(desired, "name"));
+    const observed_name = try resolveValueString(context, try requiredValue(observed, "name"));
+    return fqdnEqual(desired_name, observed_name);
 }
 
 fn valueStringListJson(
@@ -310,6 +450,85 @@ fn jsonArrayValueAlloc(allocator: std.mem.Allocator, input: std.json.Array) Prov
         error.OutOfMemory => error.OutOfMemory,
         else => error.ProviderBug,
     };
+}
+
+fn normalizedFqdnInput(
+    context: *provider_mod.OperationContext,
+    inputs: value.Value,
+    name: []const u8,
+    remote: []const u8,
+) ProviderError!value.Value {
+    const desired = try requiredValue(inputs, name);
+    const resolved = try resolveValueString(context, desired);
+    return if (fqdnEqual(resolved, remote)) desired else .{ .string = remote };
+}
+
+fn normalizedStringInput(
+    context: *provider_mod.OperationContext,
+    inputs: value.Value,
+    name: []const u8,
+    remote: []const u8,
+) ProviderError!value.Value {
+    const desired = try requiredValue(inputs, name);
+    const resolved = try resolveValueString(context, desired);
+    return if (std.mem.eql(u8, resolved, remote)) desired else .{ .string = remote };
+}
+
+fn resolveInputString(
+    context: *provider_mod.OperationContext,
+    inputs: value.Value,
+    name: []const u8,
+) ProviderError![]const u8 {
+    return resolveValueString(context, try requiredValue(inputs, name));
+}
+
+fn resolveValueString(context: *provider_mod.OperationContext, input: value.Value) ProviderError![]const u8 {
+    return switch (input) {
+        .string => |string| string,
+        .output_ref => |reference| context.resolveOutputString(reference),
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn fqdnAlloc(allocator: std.mem.Allocator, name: []const u8) ProviderError![]const u8 {
+    if (!isValidDnsName(name)) return error.InvalidConfiguration;
+    if (name[name.len - 1] == '.') return allocator.dupe(u8, name) catch return error.OutOfMemory;
+    return std.fmt.allocPrint(allocator, "{s}.", .{name}) catch return error.OutOfMemory;
+}
+
+fn isValidDnsName(name: []const u8) bool {
+    if (name.len < 2 or name.len > 254) return false;
+    const trailing_dot = name[name.len - 1] == '.';
+    const labels_input = if (trailing_dot) name[0 .. name.len - 1] else name;
+    if (!trailing_dot and name.len == 254) return false;
+    var labels = std.mem.splitScalar(u8, labels_input, '.');
+    var count: usize = 0;
+    while (labels.next()) |label| : (count += 1) {
+        if (label.len == 0 or label.len > 63) return false;
+        if (std.mem.eql(u8, label, "*")) {
+            if (count != 0) return false;
+            continue;
+        }
+        for (label) |character| {
+            if (!(std.ascii.isLower(character) or std.ascii.isDigit(character) or character == '-' or character == '_')) return false;
+        }
+    }
+    return count >= 2;
+}
+
+fn isProjectNetwork(input: []const u8, project: []const u8) bool {
+    const marker = "projects/";
+    const start = std.mem.indexOf(u8, input, marker) orelse return false;
+    var segments = std.mem.splitScalar(u8, input[start..], '/');
+    return std.mem.eql(u8, segments.next() orelse return false, "projects") and
+        std.mem.eql(u8, segments.next() orelse return false, project) and
+        std.mem.eql(u8, segments.next() orelse return false, "global") and
+        std.mem.eql(u8, segments.next() orelse return false, "networks") and
+        (segments.next() orelse return false).len > 0 and segments.next() == null;
+}
+
+fn fqdnEqual(left: []const u8, right: []const u8) bool {
+    return std.mem.eql(u8, std.mem.trimEnd(u8, left, "."), std.mem.trimEnd(u8, right, "."));
 }
 
 fn requiredValue(input: value.Value, name: []const u8) ProviderError!value.Value {

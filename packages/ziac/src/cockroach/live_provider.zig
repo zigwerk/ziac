@@ -15,6 +15,9 @@ const cluster_type = "cockroach.Cluster";
 const existing_cluster_type = "cockroach.Cluster.Existing";
 const sql_user_type = "cockroach.SqlUser";
 const authorized_network_type = "cockroach.AuthorizedNetwork";
+const cluster_region_type = "cockroach.ClusterRegion";
+const private_endpoint_service_type = "cockroach.PrivateEndpointService";
+const private_endpoint_connection_type = "cockroach.PrivateEndpointConnection";
 
 pub const LiveProvider = struct {
     client: *client_mod.Client,
@@ -22,6 +25,7 @@ pub const LiveProvider = struct {
     sql_executor: ?sql.Executor = null,
     sql_retry_policy: sql_provider.RetryPolicy = .{},
     cluster_poll_interval_millis: u64 = 5_000,
+    private_endpoint_poll_interval_millis: u64 = 5_000,
     migration_lock: @import("zigeffect_std").fx.SpinLock = .{},
 
     pub fn init(client: *client_mod.Client) LiveProvider {
@@ -47,6 +51,9 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ReadResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (!isSupported(node)) return error.InvalidConfiguration;
+        if (isType(node, cluster_region_type)) return self.readClusterRegion(context, node);
+        if (isType(node, private_endpoint_service_type)) return self.readPrivateEndpointService(context, node);
+        if (isType(node, private_endpoint_connection_type)) return self.readPrivateEndpointConnection(context, node);
         if (isType(node, sql_user_type)) return self.readSqlUser(context, node);
         if (isType(node, authorized_network_type)) return self.readAuthorizedNetwork(context, node);
         if (sql_provider.supports(node)) return (try self.sqlHandler()).read(context, node);
@@ -72,6 +79,9 @@ pub const LiveProvider = struct {
         if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash)) {
             return provider_mod.DiffResult.init(context.allocator, .noop, &.{});
         }
+        if (isPrivateEndpointType(node)) {
+            return provider_mod.DiffResult.init(context.allocator, .replace, &.{"private endpoint identity changed"});
+        }
         if (isType(node, sql_user_type)) return sqlUserDiff(context.allocator, node.inputs, observed.observed_inputs);
         if (isType(node, authorized_network_type)) return authorizedNetworkDiff(context.allocator, node.inputs, observed.observed_inputs);
         if (isType(node, cluster_type)) return managedClusterDiff(context.allocator, node.inputs, observed.observed_inputs);
@@ -88,6 +98,9 @@ pub const LiveProvider = struct {
         node: resource.ResourceNode,
     ) ProviderError!provider_mod.ResourceResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+        if (isType(node, cluster_region_type)) return self.readRequiredClusterRegion(context, node);
+        if (isType(node, private_endpoint_service_type)) return self.ensurePrivateEndpointService(context, node);
+        if (isType(node, private_endpoint_connection_type)) return self.ensurePrivateEndpointConnection(context, node);
         if (isType(node, sql_user_type)) return self.ensureSqlUser(context, node);
         if (isType(node, authorized_network_type)) return self.writeAuthorizedNetwork(context, node, false);
         if (sql_provider.supports(node)) return (try self.sqlHandler()).create(context, node);
@@ -103,6 +116,10 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ResourceResult {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
+        if (isPrivateEndpointType(node)) {
+            if (!std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash)) return error.InvalidConfiguration;
+            return observed.clone(context.allocator);
+        }
         if (isType(node, sql_user_type)) {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return self.ensureSqlUser(context, node);
@@ -133,6 +150,16 @@ pub const LiveProvider = struct {
     ) ProviderError!void {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
+        if (isType(node, cluster_region_type) or isType(node, private_endpoint_service_type)) {
+            const expected = try privateRegionalPhysicalIdAlloc(context, node);
+            defer context.allocator.free(expected);
+            if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
+            return;
+        }
+        if (isType(node, private_endpoint_connection_type)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return self.deletePrivateEndpointConnection(context, node, physical_id);
+        }
         if (isType(node, sql_user_type)) {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return self.deleteSqlUser(context, node, physical_id);
@@ -162,6 +189,19 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (!isSupported(node)) return error.InvalidConfiguration;
+        if (isPrivateEndpointType(node)) {
+            const expected = if (isType(node, private_endpoint_connection_type))
+                try privateConnectionPhysicalIdAlloc(context, node)
+            else
+                try privateRegionalPhysicalIdAlloc(context, node);
+            defer context.allocator.free(expected);
+            if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
+            const found = try read(ptr, context, node);
+            return switch (found) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
         if (isType(node, sql_user_type)) {
             const expected = try sqlUserPhysicalIdAlloc(context.allocator, node);
             defer context.allocator.free(expected);
@@ -328,6 +368,174 @@ pub const LiveProvider = struct {
         }
     }
 
+    fn readClusterRegion(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ReadResult {
+        const cluster_id = try resolveInputString(context, node.inputs, "cluster_id");
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var cluster = self.client.getClusterAlloc(context, cluster_id, &diagnostic) catch |err| {
+            if (err == error.NotFound) return .absent;
+            return err;
+        };
+        defer cluster.deinit(context.allocator);
+        try validateGcpCluster(cluster, null, try inputString(node.inputs, "region"));
+        return .{ .present = try clusterRegionResult(context, node, cluster) };
+    }
+
+    fn readRequiredClusterRegion(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ResourceResult {
+        return switch (try self.readClusterRegion(context, node)) {
+            .absent => error.NotFound,
+            .present => |present| present,
+        };
+    }
+
+    fn readPrivateEndpointService(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ReadResult {
+        const cluster_id = try resolveInputString(context, node.inputs, "cluster_id");
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var cluster = self.client.getClusterAlloc(context, cluster_id, &diagnostic) catch |err| {
+            if (err == error.NotFound) return .absent;
+            return err;
+        };
+        defer cluster.deinit(context.allocator);
+        const region = try inputString(node.inputs, "region");
+        try validateGcpCluster(cluster, try inputString(node.inputs, "plan"), region);
+        const services = try self.client.listPrivateEndpointServicesAlloc(context, cluster_id, &diagnostic);
+        defer client_mod.freePrivateEndpointServices(context.allocator, services);
+        const service = findPrivateEndpointService(services, region) orelse return .absent;
+        return switch (service.status) {
+            .available => .{ .present = try privateEndpointServiceResult(context, node, service) },
+            .creating => .absent,
+            .create_failed, .deleting, .delete_failed => error.ProviderBug,
+        };
+    }
+
+    fn ensurePrivateEndpointService(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ResourceResult {
+        const cluster_id = try resolveInputString(context, node.inputs, "cluster_id");
+        const plan = try inputString(node.inputs, "plan");
+        const region = try inputString(node.inputs, "region");
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var cluster = try self.client.getClusterAlloc(context, cluster_id, &diagnostic);
+        defer cluster.deinit(context.allocator);
+        try validateGcpCluster(cluster, plan, region);
+
+        if (!std.mem.eql(u8, plan, "ADVANCED") and !std.mem.eql(u8, plan, "STANDARD")) {
+            return error.InvalidConfiguration;
+        }
+        var services = try self.client.listPrivateEndpointServicesAlloc(context, cluster_id, &diagnostic);
+        defer client_mod.freePrivateEndpointServices(context.allocator, services);
+        if (std.mem.eql(u8, plan, "ADVANCED") and findPrivateEndpointService(services, region) == null) {
+            const enabled_services = try self.client.enablePrivateEndpointServicesAlloc(context, cluster_id, &diagnostic);
+            client_mod.freePrivateEndpointServices(context.allocator, services);
+            services = enabled_services;
+        }
+        while (true) {
+            if (findPrivateEndpointService(services, region)) |service| {
+                switch (service.status) {
+                    .available => return privateEndpointServiceResult(context, node, service),
+                    .creating => {},
+                    .create_failed, .deleting, .delete_failed => return error.ProviderBug,
+                }
+            }
+            try context.checkActive();
+            context.sleep(self.private_endpoint_poll_interval_millis);
+            try context.checkActive();
+            const next = try self.client.listPrivateEndpointServicesAlloc(context, cluster_id, &diagnostic);
+            client_mod.freePrivateEndpointServices(context.allocator, services);
+            services = next;
+        }
+    }
+
+    fn readPrivateEndpointConnection(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ReadResult {
+        const cluster_id = try resolveInputString(context, node.inputs, "cluster_id");
+        const endpoint_id = try resolveInputString(context, node.inputs, "endpoint_id");
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        const connections = self.client.listPrivateEndpointConnectionsAlloc(context, cluster_id, &diagnostic) catch |err| {
+            if (err == error.NotFound) return .absent;
+            return err;
+        };
+        defer client_mod.freePrivateEndpointConnections(context.allocator, connections);
+        const connection = findPrivateEndpointConnection(connections, endpoint_id) orelse return .absent;
+        try validatePrivateEndpointConnection(context, node, connection);
+        return switch (connection.status) {
+            .available => .{ .present = try privateEndpointConnectionResult(context, node, connection) },
+            .pending, .pending_acceptance, .rejected => .absent,
+            .deleting, .deleted, .failed, .expired, .stale => error.ProviderBug,
+        };
+    }
+
+    fn ensurePrivateEndpointConnection(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ResourceResult {
+        const cluster_id = try resolveInputString(context, node.inputs, "cluster_id");
+        const endpoint_id = try resolveInputString(context, node.inputs, "endpoint_id");
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        var registered = false;
+        while (true) {
+            const connections = try self.client.listPrivateEndpointConnectionsAlloc(context, cluster_id, &diagnostic);
+            defer client_mod.freePrivateEndpointConnections(context.allocator, connections);
+            if (findPrivateEndpointConnection(connections, endpoint_id)) |connection| {
+                try validatePrivateEndpointConnection(context, node, connection);
+                registered = true;
+                switch (connection.status) {
+                    .available => return privateEndpointConnectionResult(context, node, connection),
+                    .pending, .pending_acceptance, .rejected => {},
+                    .deleting, .deleted, .failed, .expired, .stale => return error.ProviderBug,
+                }
+            } else if (!registered) {
+                try self.client.addPrivateEndpointConnection(context, cluster_id, endpoint_id, &diagnostic);
+                registered = true;
+                continue;
+            }
+            try context.checkActive();
+            context.sleep(self.private_endpoint_poll_interval_millis);
+            try context.checkActive();
+        }
+    }
+
+    fn deletePrivateEndpointConnection(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        const expected = try privateConnectionPhysicalIdAlloc(context, node);
+        defer context.allocator.free(expected);
+        if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        try self.client.deletePrivateEndpointConnection(
+            context,
+            try resolveInputString(context, node.inputs, "cluster_id"),
+            try resolveInputString(context, node.inputs, "endpoint_id"),
+            &diagnostic,
+        );
+    }
+
     fn readSqlUser(
         self: *LiveProvider,
         context: *provider_mod.OperationContext,
@@ -481,6 +689,185 @@ pub const LiveProvider = struct {
         };
     }
 };
+
+fn clusterRegionResult(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    cluster: client_mod.Cluster,
+) ProviderError!provider_mod.ResourceResult {
+    const region_name = try inputString(node.inputs, "region");
+    const region = findClusterRegion(cluster.regions, region_name) orelse return error.InvalidConfiguration;
+    const cluster_input = try normalizedResolvedInput(context, node.inputs, "cluster_id", cluster.id);
+    const fields = [_]value.Field{
+        .{ .name = "cluster_id", .value = cluster_input },
+        .{ .name = "region", .value = .{ .string = region.name } },
+    };
+    const physical_id = try privateRegionalPhysicalIdAlloc(context, node);
+    defer context.allocator.free(physical_id);
+    const outputs = [_]state.StateOutput{
+        .{ .name = "cluster_id", .value = .{ .string = cluster.id } },
+        .{ .name = "region", .value = .{ .string = region.name } },
+        .{ .name = "sql_dns", .value = .{ .string = region.sql_dns } },
+        .{ .name = "internal_dns", .value = .{ .string = region.internal_dns } },
+        .{ .name = "private_endpoint_dns", .value = .{ .string = region.private_endpoint_dns } },
+        .{ .name = "ui_dns", .value = .{ .string = region.ui_dns } },
+        .{ .name = "node_count", .value = .{ .integer = region.node_count } },
+        .{ .name = "primary", .value = .{ .boolean = region.primary orelse false } },
+    };
+    return provider_mod.ResourceResult.init(context.allocator, physical_id, .{ .object = &fields }, &outputs, null);
+}
+
+fn privateEndpointServiceResult(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    service: client_mod.PrivateEndpointService,
+) ProviderError!provider_mod.ResourceResult {
+    try validatePrivateEndpointService(service, try inputString(node.inputs, "region"));
+    const cluster_id = try resolveInputString(context, node.inputs, "cluster_id");
+    const fields = [_]value.Field{
+        .{ .name = "cluster_id", .value = try normalizedResolvedInput(context, node.inputs, "cluster_id", cluster_id) },
+        .{ .name = "plan", .value = .{ .string = try inputString(node.inputs, "plan") } },
+        .{ .name = "region", .value = .{ .string = service.region_name } },
+    };
+    const physical_id = try privateRegionalPhysicalIdAlloc(context, node);
+    defer context.allocator.free(physical_id);
+    const outputs = [_]state.StateOutput{
+        .{ .name = "service_attachment", .value = .{ .string = service.name } },
+        .{ .name = "endpoint_service_id", .value = .{ .string = service.endpoint_service_id } },
+        .{ .name = "region", .value = .{ .string = service.region_name } },
+        .{ .name = "status", .value = .{ .string = service.status.apiName() } },
+    };
+    return provider_mod.ResourceResult.init(context.allocator, physical_id, .{ .object = &fields }, &outputs, null);
+}
+
+fn privateEndpointConnectionResult(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    connection: client_mod.PrivateEndpointConnection,
+) ProviderError!provider_mod.ResourceResult {
+    try validatePrivateEndpointConnection(context, node, connection);
+    const expected_region = try inputString(node.inputs, "region");
+    const cluster_id = try resolveInputString(context, node.inputs, "cluster_id");
+    const fields = [_]value.Field{
+        .{ .name = "cluster_id", .value = try normalizedResolvedInput(context, node.inputs, "cluster_id", cluster_id) },
+        .{ .name = "endpoint_id", .value = try normalizedResolvedInput(context, node.inputs, "endpoint_id", connection.endpoint_id) },
+        .{ .name = "endpoint_service_id", .value = try normalizedResolvedInput(context, node.inputs, "endpoint_service_id", connection.endpoint_service_id) },
+        .{ .name = "region", .value = .{ .string = expected_region } },
+    };
+    const physical_id = try privateConnectionPhysicalIdAlloc(context, node);
+    defer context.allocator.free(physical_id);
+    const outputs = [_]state.StateOutput{
+        .{ .name = "endpoint_id", .value = .{ .string = connection.endpoint_id } },
+        .{ .name = "endpoint_service_id", .value = .{ .string = connection.endpoint_service_id } },
+        .{ .name = "region", .value = .{ .string = expected_region } },
+        .{ .name = "service_name", .value = .{ .string = connection.service_name } },
+        .{ .name = "status", .value = .{ .string = connection.status.apiName() } },
+    };
+    return provider_mod.ResourceResult.init(context.allocator, physical_id, .{ .object = &fields }, &outputs, null);
+}
+
+fn validatePrivateEndpointConnection(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    connection: client_mod.PrivateEndpointConnection,
+) ProviderError!void {
+    const expected_endpoint = try resolveInputString(context, node.inputs, "endpoint_id");
+    const expected_service = try resolveInputString(context, node.inputs, "endpoint_service_id");
+    const expected_region = try inputString(node.inputs, "region");
+    if (!std.mem.eql(u8, connection.cloud_provider, "GCP") or
+        !std.mem.eql(u8, connection.endpoint_id, expected_endpoint) or
+        !std.mem.eql(u8, connection.endpoint_service_id, expected_service) or
+        !std.mem.eql(u8, connection.region_name orelse return error.InvalidConfiguration, expected_region) or
+        !serviceAttachmentMatchesRegion(connection.service_name, expected_region))
+    {
+        return error.InvalidConfiguration;
+    }
+}
+
+fn normalizedResolvedInput(
+    context: *provider_mod.OperationContext,
+    inputs: value.Value,
+    name: []const u8,
+    remote: []const u8,
+) ProviderError!value.Value {
+    const desired = try inputValue(inputs, name);
+    const resolved = try resolveValueString(context, desired);
+    return if (std.mem.eql(u8, resolved, remote)) desired else .{ .string = remote };
+}
+
+fn privateRegionalPhysicalIdAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+) ProviderError![]const u8 {
+    return std.fmt.allocPrint(
+        context.allocator,
+        "{s}:{s}",
+        .{ try resolveInputString(context, node.inputs, "cluster_id"), try inputString(node.inputs, "region") },
+    ) catch return error.OutOfMemory;
+}
+
+fn privateConnectionPhysicalIdAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+) ProviderError![]const u8 {
+    return std.fmt.allocPrint(
+        context.allocator,
+        "{s}:{s}",
+        .{
+            try resolveInputString(context, node.inputs, "cluster_id"),
+            try resolveInputString(context, node.inputs, "endpoint_id"),
+        },
+    ) catch return error.OutOfMemory;
+}
+
+fn validateGcpCluster(cluster: client_mod.Cluster, expected_plan: ?[]const u8, region: []const u8) ProviderError!void {
+    if (!std.mem.eql(u8, cluster.cloud_provider orelse return error.InvalidConfiguration, "GCP")) return error.InvalidConfiguration;
+    if (expected_plan) |plan| {
+        if (!std.mem.eql(u8, cluster.plan orelse return error.InvalidConfiguration, plan)) return error.InvalidConfiguration;
+        if (!std.mem.eql(u8, plan, "STANDARD") and !std.mem.eql(u8, plan, "ADVANCED")) return error.InvalidConfiguration;
+    }
+    if (findClusterRegion(cluster.regions, region) == null) return error.InvalidConfiguration;
+}
+
+fn validatePrivateEndpointService(service: client_mod.PrivateEndpointService, expected_region: []const u8) ProviderError!void {
+    if (!std.mem.eql(u8, service.cloud_provider, "GCP") or
+        !std.mem.eql(u8, service.region_name, expected_region) or
+        service.endpoint_service_id.len == 0 or
+        !serviceAttachmentMatchesRegion(service.name, expected_region))
+    {
+        return error.InvalidConfiguration;
+    }
+}
+
+fn serviceAttachmentMatchesRegion(name: []const u8, expected_region: []const u8) bool {
+    const marker = "/regions/";
+    const start = (std.mem.indexOf(u8, name, marker) orelse return false) + marker.len;
+    const remainder = name[start..];
+    const end = std.mem.indexOfScalar(u8, remainder, '/') orelse return false;
+    return std.mem.eql(u8, remainder[0..end], expected_region) and
+        std.mem.startsWith(u8, remainder[end..], "/serviceAttachments/");
+}
+
+fn findClusterRegion(regions: []const client_mod.Region, expected: []const u8) ?client_mod.Region {
+    for (regions) |region| if (std.mem.eql(u8, region.name, expected)) return region;
+    return null;
+}
+
+fn findPrivateEndpointService(
+    services: []const client_mod.PrivateEndpointService,
+    region: []const u8,
+) ?client_mod.PrivateEndpointService {
+    for (services) |service| if (std.mem.eql(u8, service.region_name, region)) return service;
+    return null;
+}
+
+fn findPrivateEndpointConnection(
+    connections: []const client_mod.PrivateEndpointConnection,
+    endpoint_id: []const u8,
+) ?client_mod.PrivateEndpointConnection {
+    for (connections) |connection| if (std.mem.eql(u8, connection.endpoint_id, endpoint_id)) return connection;
+    return null;
+}
 
 fn authorizedNetworkResult(
     context: *provider_mod.OperationContext,
@@ -1060,7 +1447,12 @@ fn primaryRegion(regions: []const client_mod.Region) client_mod.Region {
 
 fn isSupported(node: resource.ResourceNode) bool {
     return isType(node, cluster_type) or isType(node, existing_cluster_type) or isType(node, sql_user_type) or
-        isType(node, authorized_network_type) or sql_provider.supports(node);
+        isType(node, authorized_network_type) or isPrivateEndpointType(node) or sql_provider.supports(node);
+}
+
+fn isPrivateEndpointType(node: resource.ResourceNode) bool {
+    return isType(node, cluster_region_type) or isType(node, private_endpoint_service_type) or
+        isType(node, private_endpoint_connection_type);
 }
 
 fn isType(node: resource.ResourceNode, type_name: []const u8) bool {

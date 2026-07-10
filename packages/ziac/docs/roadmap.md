@@ -13,8 +13,9 @@ automated and live tests pass.
 
 - Package scaffold, graph, local state, CLI, fake provider, and executable:
   implemented and tested.
-- GCP config, Artifact Registry, and Cloud Run resource builders: implemented as
-  plan-only foundations.
+- GCP config, Artifact Registry, Cloud Run, networking, global load balancing,
+  public DNS, private DNS, and PSC resource builders: implemented with native
+  provider lifecycles and scripted conformance coverage.
 - Engine V2 canonical values, owned desired/state records, provider lifecycle,
   refresh planning, and dependency-ordered bounded execution: implemented and
   tested.
@@ -33,9 +34,9 @@ automated and live tests pass.
 - Live GCP provider calls, raw global-routing resources, and the high-level
   global component are implemented behind explicit safety gates. The
   CockroachDB existing-cluster, protected cluster provisioning, SQL user,
-  database, grants, migrations, and native verified-TLS provider slices are
-  implemented. Authenticated cloud acceptance, private connectivity, remote
-  state, and source builds remain pending.
+  database, grants, migrations, native verified-TLS, and multi-region Private
+  Service Connect slices are implemented. Authenticated cloud acceptance,
+  remote state, and source builds remain pending.
 
 ## M0: Integration And Architecture
 
@@ -136,7 +137,11 @@ failure and destroys in reverse dependency order.
   CockroachDB gate.
 - Protected Basic, Standard, and Advanced cluster provisioning: scripted
   lifecycle complete; authenticated creation pending configured credentials.
-- Private Service Connect.
+- GCP Private Service Connect address and endpoint lifecycles, Cockroach
+  endpoint-service enablement and connection acceptance, VPC-bound private DNS,
+  per-region Cloud Run Direct VPC bindings, and the high-level private graph:
+  complete with scripted provider and composition tests; authenticated regional
+  data-path execution remains pending.
 
 Gate: the global Cloud Run sample reads and writes CockroachDB over TLS without
 secret plaintext in state or artifacts.

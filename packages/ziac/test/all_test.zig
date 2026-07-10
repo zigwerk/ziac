@@ -39,6 +39,9 @@ comptime {
     _ = @import("cockroach_authorized_network_test.zig");
     _ = @import("cockroach_authorized_network_live_provider_test.zig");
     _ = @import("cockroach_public_egress_test.zig");
+    _ = @import("cockroach_private_endpoint_test.zig");
+    _ = @import("cockroach_private_endpoint_live_provider_test.zig");
+    _ = @import("cockroach_private_service_connect_test.zig");
     _ = @import("cockroach_psql_executor_test.zig");
     _ = @import("gcp_project_iam_test.zig");
     _ = @import("gcp_secret_manager_test.zig");
@@ -46,6 +49,9 @@ comptime {
     _ = @import("gcp_secret_access_test.zig");
     _ = @import("gcp_cloud_run_live_provider_test.zig");
     _ = @import("gcp_compute_test.zig");
+    _ = @import("gcp_psc_test.zig");
+    _ = @import("gcp_psc_live_provider_test.zig");
+    _ = @import("gcp_private_dns_test.zig");
     _ = @import("gcp_compute_live_provider_test.zig");
     _ = @import("gcp_network_live_provider_test.zig");
     _ = @import("gcp_certificate_dns_test.zig");

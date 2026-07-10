@@ -50,14 +50,15 @@ Add `--json` to any command for the stable `ziac.command.v1` receipt. Commands
 that write resource state acquire an exclusive stack/stage lock; `unlock`
 requires the recorded lineage unless `--force` is supplied explicitly.
 
-The local CLI currently uses the fixture `hello-global` stack, deterministic
-JSON files under `.ziac/state/<stack>/<stage>/`, and a fake provider. Secret
-outputs are persisted and printed as `[REDACTED]`.
+The local CLI defaults to the fixture `hello-global` stack, deterministic JSON
+files under `.ziac/state/<stack>/<stage>/`, and a fake provider. Explicit live
+selection uses the native providers described below. Secret outputs are
+persisted and printed as `[REDACTED]`.
 
 ## GCP Provider Foundation
 
-`hello-global` still defaults to the fake provider while the live CLI safety
-gate is under construction. The package now also includes a native live Google
+`hello-global` still defaults to the fake provider for deterministic local
+work. The package also includes a native live Google
 provider for Service Usage, IAM, Artifact Registry, Secret Manager, and Cloud
 Run v2. It can enable and disable project APIs, manage service accounts with
 drift-aware updates and import, mutate IAM members while preserving policy
@@ -68,16 +69,23 @@ drift-aware Cloud Run services from complete canonical runtime specifications.
 
 The raw global load-balancer surface is implemented, including managed
 certificates, explicit certificate readiness polling, an optional HTTP-to-HTTPS
-redirect, and Cloud DNS record sets in an existing zone. The high-level
+redirect, Cloud DNS record sets in an existing zone, and VPC-bound private
+managed zones. The high-level
 `gcp.global.ContainerService` now assembles those resources with regional Cloud
-Run services and typed allocated-IP wiring. The authenticated two-region
-acceptance gate remains pending external configuration. CockroachDB provider
-config and retained existing-cluster references now decode exact GCP topology
-and regional connection endpoints through a scripted live-provider lifecycle.
+Run services and typed allocated-IP wiring. It can append a base graph and map a
+different typed Direct VPC subnet to each region. The authenticated two-region
+acceptance gate remains pending external configuration.
+
+`cockroach.private_service_connect.PrivateServiceConnect` composes a protected
+or adopted GCP Cockroach Standard/Advanced cluster with a global-routing VPC,
+one PSC endpoint and accepted Cockroach connection per region, private DNS, and
+the regional Cloud Run bindings. Every cross-provider value remains a typed
+output reference and the graph contains no public Cockroach allowlist.
 
 ## Delivery Status
 
-Ziac is currently a tested Engine V2 foundation, not yet a live deployment tool.
+Ziac is currently a tested Engine V2 and native-provider implementation with
+authenticated cloud acceptance still gated on external disposable accounts.
 It retains canonical desired inputs, refreshes through an explicit provider
 lifecycle, persists versioned physical state, and executes stable dependency
 levels with bounded parallelism, retry, deadlines, cancellation, and redacted
@@ -87,7 +95,7 @@ implemented. Engine V2 is complete. Typed public/secret provider outputs and
 dependency derivation are implemented. App `Env` field names, optionality, value
 types, secrecy, and regional scope now validate at comptime; provider-set
 contracts now canonically constrain typed namespaces and runtime registries.
-The build also compiles valid contract fixtures and proves all eight invalid
+The build also compiles valid contract fixtures and proves all nine invalid
 fixtures fail for their intended stable `ZIAC` diagnostic. Comptime Contracts M2
 is complete. The production HTTP contract and native Google ADC layer are also
 implemented: authorized-user refresh, native RS256 service-account assertions,
@@ -145,8 +153,10 @@ operations open. Redirect URL maps and HTTP proxies pass the same lifecycle
 contract. Cloud DNS record sets pass create/read/update/delete/import tests with
 stable project/zone/name/type identity.
 `gcp.global.ContainerService` builds a deterministic, dependency-complete graph
-with restricted direct ingress, optional DNS and HTTP redirect, and production
-warm-instance/probe validation.
+with restricted direct ingress, optional DNS and HTTP redirect, regional Direct
+VPC selection, base-graph composition, and production warm-instance/probe
+validation. Cockroach and GCP PSC resources now pass full scripted lifecycle
+tests, including endpoint acceptance and private DNS publication.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts and
@@ -156,6 +166,8 @@ the protected destroy workflow. See
 `docs/cockroach-connection-secret.md` for SQL-user and Secret Manager wiring.
 See `docs/public-static-egress.md` for the initial public Cockroach connectivity
 topology and its production safety policy.
+See `docs/private-service-connect.md` for the private multi-region Cockroach
+topology, Cloud Run composition, lifecycle, and operations.
 See `docs/cockroach-sql.md` for application database composition, SQL resource
 lifecycles, migration semantics, and native execution.
 See `docs/secret-manager.md` for the secret payload boundary, and

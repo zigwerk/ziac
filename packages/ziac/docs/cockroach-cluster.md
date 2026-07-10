@@ -59,7 +59,7 @@ and is blocked while protection is enabled.
 ## Advanced
 
 Advanced clusters expose node count, vCPUs per node, optional storage, and the
-GCP private-network creation settings needed by later PSC composition.
+GCP private-network creation settings consumed by PSC composition.
 
 ```zig
 var cluster = try ziac.cockroach.cluster.Cluster.build(allocator, .{}, .{
@@ -114,3 +114,7 @@ invalid. A missing cluster is treated as already deleted.
 
 For clusters that Ziac must never own, continue using the retained
 `ExistingCluster` resource.
+
+Standard and Advanced clusters can use the private multi-region topology in
+`docs/private-service-connect.md`. Basic clusters use public static egress when
+network access is required; the PSC component rejects Basic at comptime.

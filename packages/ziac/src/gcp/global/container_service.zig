@@ -11,6 +11,9 @@ pub const BuildError = cloud_run.BuildError || compute.BuildError || dns.BuildEr
     InsufficientRegions,
     ProductionMinInstancesRequired,
     ProductionProbeRequired,
+    ConflictingVpcConfiguration,
+    DuplicateVpcRegion,
+    RegionalVpcMismatch,
 };
 
 pub const HealthMode = enum {
@@ -18,7 +21,13 @@ pub const HealthMode = enum {
     production,
 };
 
+pub const RegionalDirectVpc = struct {
+    region: []const u8,
+    config: cloud_run.DirectVpc,
+};
+
 pub const ContainerServiceArgs = struct {
+    base_graph: ?*const resource.ResourceGraph = null,
     name: []const u8,
     image: []const u8,
     regions: []const []const u8 = &.{},
@@ -44,6 +53,7 @@ pub const ContainerServiceArgs = struct {
     env: []const cloud_run.EnvVar = &.{},
     secret_volumes: []const cloud_run.SecretVolume = &.{},
     direct_vpc: ?cloud_run.DirectVpc = null,
+    regional_direct_vpc: []const RegionalDirectVpc = &.{},
 };
 
 pub const ContainerService = struct {
@@ -66,6 +76,7 @@ pub const ContainerService = struct {
 
         var graph = resource.ResourceGraph.init(allocator);
         errdefer graph.deinit();
+        if (args.base_graph) |base_graph| try graph.appendGraph(base_graph);
         const backend_groups = try allocator.alloc([]const u8, regions.len);
         defer allocator.free(backend_groups);
         var initialized_groups: usize = 0;
@@ -97,7 +108,7 @@ pub const ContainerService = struct {
                 .service_account = args.service_account,
                 .env = args.env,
                 .secret_volumes = args.secret_volumes,
-                .direct_vpc = args.direct_vpc,
+                .direct_vpc = directVpcForRegion(args, region),
             });
             defer service.deinit(allocator);
             try graph.addResource(service.node);
@@ -289,10 +300,33 @@ fn validate(
             if (std.mem.eql(u8, region, other)) return error.DuplicateRegion;
         }
     }
+    if (args.direct_vpc != null and args.regional_direct_vpc.len > 0) return error.ConflictingVpcConfiguration;
+    if (args.regional_direct_vpc.len > 0) {
+        if (args.regional_direct_vpc.len != regions.len) return error.RegionalVpcMismatch;
+        for (args.regional_direct_vpc, 0..) |binding, index| {
+            for (args.regional_direct_vpc[index + 1 ..]) |other| {
+                if (std.mem.eql(u8, binding.region, other.region)) return error.DuplicateVpcRegion;
+            }
+            var found = false;
+            for (regions) |region| if (std.mem.eql(u8, binding.region, region)) {
+                found = true;
+                break;
+            };
+            if (!found) return error.RegionalVpcMismatch;
+        }
+    }
     if (args.health_mode == .production) {
         if (args.min_instances == 0) return error.ProductionMinInstancesRequired;
         if (args.startup_probe == null or args.liveness_probe == null) return error.ProductionProbeRequired;
     }
+}
+
+fn directVpcForRegion(args: ContainerServiceArgs, region: []const u8) ?cloud_run.DirectVpc {
+    if (args.regional_direct_vpc.len == 0) return args.direct_vpc;
+    for (args.regional_direct_vpc) |binding| {
+        if (std.mem.eql(u8, binding.region, region)) return binding.config;
+    }
+    unreachable;
 }
 
 fn resourceNameAlloc(

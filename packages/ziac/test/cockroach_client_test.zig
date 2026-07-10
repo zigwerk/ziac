@@ -352,6 +352,107 @@ test "Cockroach client lists puts patches and deletes allowlist entries" {
     try std.testing.expectEqualStrings("DELETE", transport.requests.items[3].method);
 }
 
+test "Cockroach client manages private endpoint services and connections" {
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = privateEndpointServicesJson("CREATING") },
+        .{ .status = 200, .body = privateEndpointServicesJson("AVAILABLE") },
+        .{ .status = 200, .body = privateEndpointConnectionsJson("STATUS_PENDING_ACCEPTANCE") },
+        .{ .status = 200, .body = "{}" },
+        .{ .status = 200, .body = privateEndpointConnectionsJson("STATUS_AVAILABLE") },
+        .{ .status = 204, .body = "" },
+        .{ .status = 404, .body = "{\"message\":\"missing\"}" },
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    const enabled = try client.enablePrivateEndpointServicesAlloc(&context, "cluster-1", &diagnostic);
+    defer cockroach.freePrivateEndpointServices(std.testing.allocator, enabled);
+    try std.testing.expectEqual(@as(usize, 1), enabled.len);
+    try std.testing.expectEqual(cockroach.PrivateEndpointServiceStatus.creating, enabled[0].status);
+
+    const services = try client.listPrivateEndpointServicesAlloc(&context, "cluster-1", &diagnostic);
+    defer cockroach.freePrivateEndpointServices(std.testing.allocator, services);
+    try std.testing.expectEqual(@as(usize, 1), services.len);
+    try std.testing.expectEqualStrings("europe-west1", services[0].region_name);
+    try std.testing.expectEqualStrings("GCP", services[0].cloud_provider);
+    try std.testing.expectEqualStrings("service-1", services[0].endpoint_service_id);
+    try std.testing.expectEqualStrings(
+        "projects/crl-prod/regions/europe-west1/serviceAttachments/crdb-1",
+        services[0].name,
+    );
+    try std.testing.expectEqual(cockroach.PrivateEndpointServiceStatus.available, services[0].status);
+    try std.testing.expectEqual(@as(usize, 1), services[0].availability_zone_ids.len);
+
+    const pending = try client.listPrivateEndpointConnectionsAlloc(&context, "cluster-1", &diagnostic);
+    defer cockroach.freePrivateEndpointConnections(std.testing.allocator, pending);
+    try std.testing.expectEqual(cockroach.PrivateEndpointConnectionStatus.pending_acceptance, pending[0].status);
+    try std.testing.expectEqualStrings("europe-west1", pending[0].region_name.?);
+
+    try client.addPrivateEndpointConnection(&context, "cluster-1", "123456789", &diagnostic);
+    const available = try client.listPrivateEndpointConnectionsAlloc(&context, "cluster-1", &diagnostic);
+    defer cockroach.freePrivateEndpointConnections(std.testing.allocator, available);
+    try std.testing.expectEqual(cockroach.PrivateEndpointConnectionStatus.available, available[0].status);
+    try std.testing.expectEqualStrings("123456789", available[0].endpoint_id);
+    try std.testing.expectEqualStrings("service-1", available[0].endpoint_service_id);
+    try std.testing.expectEqualStrings(
+        "projects/crl-prod/regions/europe-west1/serviceAttachments/crdb-1",
+        available[0].service_name,
+    );
+
+    try client.deletePrivateEndpointConnection(&context, "cluster-1", "123456789", &diagnostic);
+    try client.deletePrivateEndpointConnection(&context, "cluster-1", "123456789", &diagnostic);
+
+    const collection = "https://cockroachlabs.cloud/api/v1/clusters/cluster-1/networking/private-endpoint-services";
+    try std.testing.expectEqualStrings("POST", transport.requests.items[0].method);
+    try std.testing.expectEqualStrings(collection, transport.requests.items[0].url);
+    try std.testing.expectEqualStrings("GET", transport.requests.items[1].method);
+    try std.testing.expectEqualStrings(collection, transport.requests.items[1].url);
+    try std.testing.expectEqualStrings("GET", transport.requests.items[2].method);
+    try std.testing.expect(std.mem.endsWith(u8, transport.requests.items[2].url, "/networking/private-endpoint-connections"));
+    try std.testing.expectEqualStrings("POST", transport.requests.items[3].method);
+    try std.testing.expectEqualStrings("{\"endpoint_id\":\"123456789\"}", transport.requests.items[3].body);
+    try std.testing.expectEqualStrings("DELETE", transport.requests.items[5].method);
+    try std.testing.expect(std.mem.endsWith(
+        u8,
+        transport.requests.items[5].url,
+        "/networking/private-endpoint-connections/123456789",
+    ));
+}
+
+test "Cockroach client rejects unknown private endpoint statuses without leaking decoded fields" {
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = privateEndpointServicesJson("FUTURE_SERVICE_STATUS") },
+        .{ .status = 200, .body = privateEndpointConnectionsJson("FUTURE_CONNECTION_STATUS") },
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    try std.testing.expectError(
+        error.ProviderBug,
+        client.listPrivateEndpointServicesAlloc(&context, "cluster-1", &diagnostic),
+    );
+    try std.testing.expectError(
+        error.ProviderBug,
+        client.listPrivateEndpointConnectionsAlloc(&context, "cluster-1", &diagnostic),
+    );
+}
+
+fn privateEndpointServicesJson(comptime status: []const u8) []const u8 {
+    return "{\"services\":[{\"availability_zone_ids\":[\"europe-west1-b\"],\"cloud_provider\":\"GCP\",\"endpoint_service_id\":\"service-1\",\"name\":\"projects/crl-prod/regions/europe-west1/serviceAttachments/crdb-1\",\"region_name\":\"europe-west1\",\"status\":\"" ++ status ++ "\"}]}";
+}
+
+fn privateEndpointConnectionsJson(comptime status: []const u8) []const u8 {
+    return "{\"connections\":[{\"cloud_provider\":\"GCP\",\"endpoint_id\":\"123456789\",\"endpoint_service_id\":\"service-1\",\"region_name\":\"europe-west1\",\"service_name\":\"projects/crl-prod/regions/europe-west1/serviceAttachments/crdb-1\",\"status\":\"" ++ status ++ "\"}]}";
+}
+
 const ObservedRequest = struct {
     method: []const u8,
     url: []const u8,

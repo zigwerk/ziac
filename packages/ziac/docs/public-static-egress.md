@@ -105,7 +105,9 @@ and address dependencies. Retain the Cockroach cluster independently through
 does not delete that cluster.
 
 Use Private Service Connect instead when policy forbids public endpoints or
-public egress. That path is intentionally tracked separately in Task 6.6.
+public egress. The private path is implemented separately and documented in
+`docs/private-service-connect.md`; the two modes never create each other's
+networking resources.
 
 ## Verification
 

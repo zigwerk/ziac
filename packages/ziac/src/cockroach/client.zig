@@ -174,6 +174,113 @@ pub fn freeAllowlistEntries(allocator: std.mem.Allocator, entries: []const Allow
     allocator.free(entries);
 }
 
+pub const PrivateEndpointServiceStatus = enum {
+    creating,
+    available,
+    create_failed,
+    deleting,
+    delete_failed,
+
+    pub fn apiName(self: PrivateEndpointServiceStatus) []const u8 {
+        return switch (self) {
+            .creating => "CREATING",
+            .available => "AVAILABLE",
+            .create_failed => "CREATE_FAILED",
+            .deleting => "DELETING",
+            .delete_failed => "DELETE_FAILED",
+        };
+    }
+
+    fn parse(text: []const u8) ProviderError!PrivateEndpointServiceStatus {
+        inline for (std.meta.fields(PrivateEndpointServiceStatus)) |field| {
+            const candidate: PrivateEndpointServiceStatus = @enumFromInt(field.value);
+            if (std.mem.eql(u8, text, candidate.apiName())) return candidate;
+        }
+        return error.ProviderBug;
+    }
+};
+
+pub const PrivateEndpointService = struct {
+    availability_zone_ids: []const []const u8,
+    cloud_provider: []const u8,
+    endpoint_service_id: []const u8,
+    name: []const u8,
+    region_name: []const u8,
+    status: PrivateEndpointServiceStatus,
+
+    pub fn deinit(self: *PrivateEndpointService, allocator: std.mem.Allocator) void {
+        for (self.availability_zone_ids) |zone| allocator.free(zone);
+        allocator.free(self.availability_zone_ids);
+        allocator.free(self.cloud_provider);
+        allocator.free(self.endpoint_service_id);
+        allocator.free(self.name);
+        allocator.free(self.region_name);
+        self.* = undefined;
+    }
+};
+
+pub fn freePrivateEndpointServices(allocator: std.mem.Allocator, services: []const PrivateEndpointService) void {
+    for (services) |*service| @constCast(service).deinit(allocator);
+    allocator.free(services);
+}
+
+pub const PrivateEndpointConnectionStatus = enum {
+    pending,
+    pending_acceptance,
+    available,
+    deleting,
+    deleted,
+    rejected,
+    failed,
+    expired,
+    stale,
+
+    pub fn apiName(self: PrivateEndpointConnectionStatus) []const u8 {
+        return switch (self) {
+            .pending => "STATUS_PENDING",
+            .pending_acceptance => "STATUS_PENDING_ACCEPTANCE",
+            .available => "STATUS_AVAILABLE",
+            .deleting => "STATUS_DELETING",
+            .deleted => "STATUS_DELETED",
+            .rejected => "STATUS_REJECTED",
+            .failed => "STATUS_FAILED",
+            .expired => "STATUS_EXPIRED",
+            .stale => "STATUS_STALE",
+        };
+    }
+
+    fn parse(text: []const u8) ProviderError!PrivateEndpointConnectionStatus {
+        inline for (std.meta.fields(PrivateEndpointConnectionStatus)) |field| {
+            const candidate: PrivateEndpointConnectionStatus = @enumFromInt(field.value);
+            if (std.mem.eql(u8, text, candidate.apiName())) return candidate;
+        }
+        return error.ProviderBug;
+    }
+};
+
+pub const PrivateEndpointConnection = struct {
+    cloud_provider: []const u8,
+    endpoint_id: []const u8,
+    endpoint_service_id: []const u8,
+    region_name: ?[]const u8,
+    service_name: []const u8,
+    status: PrivateEndpointConnectionStatus,
+
+    pub fn deinit(self: *PrivateEndpointConnection, allocator: std.mem.Allocator) void {
+        allocator.free(self.cloud_provider);
+        allocator.free(self.endpoint_id);
+        allocator.free(self.endpoint_service_id);
+        if (self.region_name) |region| allocator.free(region);
+        allocator.free(self.service_name);
+        self.* = undefined;
+    }
+};
+
+pub fn freePrivateEndpointConnections(allocator: std.mem.Allocator, connections: []const PrivateEndpointConnection) void {
+    for (connections) |*connection| @constCast(connection).deinit(allocator);
+    allocator.free(connections);
+}
+
 pub const SqlUser = struct {
     name: []const u8,
 
@@ -312,6 +419,82 @@ pub const Client = struct {
             .method = "DELETE",
             .path = path,
         }, diagnostic) catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        response.deinit(context.allocator);
+    }
+
+    pub fn enablePrivateEndpointServicesAlloc(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError![]const PrivateEndpointService {
+        const path = try privateEndpointCollectionPathAlloc(context.allocator, cluster_id, "services");
+        defer context.allocator.free(path);
+        var response = try self.requestJsonWithRetryAlloc(context, .{ .method = "POST", .path = path }, diagnostic);
+        defer response.deinit(context.allocator);
+        return decodePrivateEndpointServicesAlloc(context.allocator, response.body);
+    }
+
+    pub fn listPrivateEndpointServicesAlloc(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError![]const PrivateEndpointService {
+        const path = try privateEndpointCollectionPathAlloc(context.allocator, cluster_id, "services");
+        defer context.allocator.free(path);
+        var response = try self.requestJsonWithRetryAlloc(context, .{ .method = "GET", .path = path }, diagnostic);
+        defer response.deinit(context.allocator);
+        return decodePrivateEndpointServicesAlloc(context.allocator, response.body);
+    }
+
+    pub fn listPrivateEndpointConnectionsAlloc(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError![]const PrivateEndpointConnection {
+        const path = try privateEndpointCollectionPathAlloc(context.allocator, cluster_id, "connections");
+        defer context.allocator.free(path);
+        var response = try self.requestJsonWithRetryAlloc(context, .{ .method = "GET", .path = path }, diagnostic);
+        defer response.deinit(context.allocator);
+        return decodePrivateEndpointConnectionsAlloc(context.allocator, response.body);
+    }
+
+    pub fn addPrivateEndpointConnection(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        endpoint_id: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        if (endpoint_id.len == 0) return error.InvalidConfiguration;
+        const path = try privateEndpointCollectionPathAlloc(context.allocator, cluster_id, "connections");
+        defer context.allocator.free(path);
+        const body = std.json.Stringify.valueAlloc(context.allocator, .{ .endpoint_id = endpoint_id }, .{}) catch return error.OutOfMemory;
+        defer context.allocator.free(body);
+        var response = try self.requestJsonWithRetryAlloc(context, .{ .method = "POST", .path = path, .body = body }, diagnostic);
+        response.deinit(context.allocator);
+    }
+
+    pub fn deletePrivateEndpointConnection(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        endpoint_id: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        if (endpoint_id.len == 0) return error.InvalidConfiguration;
+        const collection = try privateEndpointCollectionPathAlloc(context.allocator, cluster_id, "connections");
+        defer context.allocator.free(collection);
+        const encoded_endpoint = queryEncodeAlloc(context.allocator, endpoint_id) catch return error.OutOfMemory;
+        defer context.allocator.free(encoded_endpoint);
+        const path = std.fmt.allocPrint(context.allocator, "{s}/{s}", .{ collection, encoded_endpoint }) catch return error.OutOfMemory;
+        defer context.allocator.free(path);
+        var response = self.requestJsonWithRetryAlloc(context, .{ .method = "DELETE", .path = path }, diagnostic) catch |err| {
             if (err == error.NotFound) return;
             return err;
         };
@@ -807,6 +990,122 @@ const AllowlistResponseDecoded = struct {
     propagating: bool,
 };
 
+const PrivateEndpointServiceDecoded = struct {
+    availability_zone_ids: []const []const u8,
+    cloud_provider: []const u8,
+    endpoint_service_id: []const u8,
+    name: []const u8,
+    region_name: []const u8,
+    status: []const u8,
+};
+
+const PrivateEndpointServicesDecoded = struct {
+    services: []const PrivateEndpointServiceDecoded,
+};
+
+const PrivateEndpointConnectionDecoded = struct {
+    cloud_provider: []const u8,
+    endpoint_id: []const u8,
+    endpoint_service_id: []const u8,
+    region_name: ?[]const u8,
+    service_name: []const u8,
+    status: []const u8,
+};
+
+const PrivateEndpointConnectionsDecoded = struct {
+    connections: []const PrivateEndpointConnectionDecoded,
+};
+
+fn decodePrivateEndpointServicesAlloc(allocator: std.mem.Allocator, json: []const u8) ProviderError![]const PrivateEndpointService {
+    const service_schema = zstd.Schema.derive(PrivateEndpointServiceDecoded, .{
+        .availability_zone_ids = zstd.Schema.array(allocator, zstd.Schema.string()),
+    });
+    var decoded = zstd.Schema.decodeDetailedJsonAlloc(
+        allocator,
+        zstd.Schema.derive(PrivateEndpointServicesDecoded, .{
+            .services = zstd.Schema.array(allocator, service_schema),
+        }),
+        json,
+    ) catch return error.ProviderBug;
+    defer decoded.deinit();
+    if (!decoded.ok()) return error.ProviderBug;
+    const source = decoded.value.?.services;
+    const services = allocator.alloc(PrivateEndpointService, source.len) catch return error.OutOfMemory;
+    errdefer allocator.free(services);
+    var initialized: usize = 0;
+    errdefer for (services[0..initialized]) |*service| service.deinit(allocator);
+    for (source, 0..) |service, index| {
+        const status = try PrivateEndpointServiceStatus.parse(service.status);
+        const zones = allocator.alloc([]const u8, service.availability_zone_ids.len) catch return error.OutOfMemory;
+        errdefer allocator.free(zones);
+        var initialized_zones: usize = 0;
+        errdefer for (zones[0..initialized_zones]) |zone| allocator.free(zone);
+        for (service.availability_zone_ids, 0..) |zone, zone_index| {
+            zones[zone_index] = allocator.dupe(u8, zone) catch return error.OutOfMemory;
+            initialized_zones += 1;
+        }
+        const cloud_provider = allocator.dupe(u8, service.cloud_provider) catch return error.OutOfMemory;
+        errdefer allocator.free(cloud_provider);
+        const endpoint_service_id = allocator.dupe(u8, service.endpoint_service_id) catch return error.OutOfMemory;
+        errdefer allocator.free(endpoint_service_id);
+        const name = allocator.dupe(u8, service.name) catch return error.OutOfMemory;
+        errdefer allocator.free(name);
+        const region_name = allocator.dupe(u8, service.region_name) catch return error.OutOfMemory;
+        services[index] = .{
+            .availability_zone_ids = zones,
+            .cloud_provider = cloud_provider,
+            .endpoint_service_id = endpoint_service_id,
+            .name = name,
+            .region_name = region_name,
+            .status = status,
+        };
+        initialized += 1;
+    }
+    return services;
+}
+
+fn decodePrivateEndpointConnectionsAlloc(allocator: std.mem.Allocator, json: []const u8) ProviderError![]const PrivateEndpointConnection {
+    const connection_schema = zstd.Schema.derive(PrivateEndpointConnectionDecoded, .{
+        .region_name = zstd.Schema.optional(zstd.Schema.string()),
+    });
+    var decoded = zstd.Schema.decodeDetailedJsonAlloc(
+        allocator,
+        zstd.Schema.derive(PrivateEndpointConnectionsDecoded, .{
+            .connections = zstd.Schema.array(allocator, connection_schema),
+        }),
+        json,
+    ) catch return error.ProviderBug;
+    defer decoded.deinit();
+    if (!decoded.ok()) return error.ProviderBug;
+    const source = decoded.value.?.connections;
+    const connections = allocator.alloc(PrivateEndpointConnection, source.len) catch return error.OutOfMemory;
+    errdefer allocator.free(connections);
+    var initialized: usize = 0;
+    errdefer for (connections[0..initialized]) |*connection| connection.deinit(allocator);
+    for (source, 0..) |connection, index| {
+        const status = try PrivateEndpointConnectionStatus.parse(connection.status);
+        const cloud_provider = allocator.dupe(u8, connection.cloud_provider) catch return error.OutOfMemory;
+        errdefer allocator.free(cloud_provider);
+        const endpoint_id = allocator.dupe(u8, connection.endpoint_id) catch return error.OutOfMemory;
+        errdefer allocator.free(endpoint_id);
+        const endpoint_service_id = allocator.dupe(u8, connection.endpoint_service_id) catch return error.OutOfMemory;
+        errdefer allocator.free(endpoint_service_id);
+        const region_name = if (connection.region_name) |region| allocator.dupe(u8, region) catch return error.OutOfMemory else null;
+        errdefer if (region_name) |region| allocator.free(region);
+        const service_name = allocator.dupe(u8, connection.service_name) catch return error.OutOfMemory;
+        connections[index] = .{
+            .cloud_provider = cloud_provider,
+            .endpoint_id = endpoint_id,
+            .endpoint_service_id = endpoint_service_id,
+            .region_name = region_name,
+            .service_name = service_name,
+            .status = status,
+        };
+        initialized += 1;
+    }
+    return connections;
+}
+
 fn decodeAllowlistAlloc(allocator: std.mem.Allocator, json: []const u8) ProviderError![]const AllowlistEntry {
     var decoded = zstd.Schema.decodeDetailedJsonAlloc(
         allocator,
@@ -909,6 +1208,27 @@ fn allowlistCollectionPathAlloc(
         allocator,
         "/v1/clusters/{s}/networking/allowlist",
         .{encoded_cluster},
+    ) catch return error.OutOfMemory;
+}
+
+fn privateEndpointCollectionPathAlloc(
+    allocator: std.mem.Allocator,
+    cluster_id: []const u8,
+    kind: []const u8,
+) ProviderError![]const u8 {
+    if (cluster_id.len == 0) return error.InvalidConfiguration;
+    const suffix = if (std.mem.eql(u8, kind, "services"))
+        "private-endpoint-services"
+    else if (std.mem.eql(u8, kind, "connections"))
+        "private-endpoint-connections"
+    else
+        return error.InvalidConfiguration;
+    const encoded_cluster = queryEncodeAlloc(allocator, cluster_id) catch return error.OutOfMemory;
+    defer allocator.free(encoded_cluster);
+    return std.fmt.allocPrint(
+        allocator,
+        "/v1/clusters/{s}/networking/{s}",
+        .{ encoded_cluster, suffix },
     ) catch return error.OutOfMemory;
 }
 

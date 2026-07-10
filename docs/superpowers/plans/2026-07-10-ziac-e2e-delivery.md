@@ -1038,6 +1038,9 @@ Evidence:
 
 ### Task 6.6: Private Service Connect
 
+Status: implemented on 2026-07-10. Authenticated regional data-path execution
+remains the separate Task 6.7 gate.
+
 Resources:
 
 - Cockroach private connectivity configuration.
@@ -1052,6 +1055,29 @@ Tests:
 - No public allowlist is created in PSC mode.
 
 Commit: `Add CockroachDB GCP private connectivity`
+
+Evidence:
+
+- Typed Cockroach cluster-region, private-endpoint-service, and accepted
+  connection resources implement Standard and Advanced behavior, exact pinned
+  Cloud API requests, list-before-mutate interruption recovery, polling,
+  import, retention, and deletion semantics.
+- Typed GCP internal addresses and PSC forwarding rules implement regional
+  Compute lifecycles, expose connection IDs and statuses, enable global PSC
+  access, and deliberately finish before Cockroach acceptance to avoid a
+  dependency deadlock.
+- VPC-bound private managed zones and output-backed record names preserve typed
+  references and canonical trailing-dot normalization through refresh. The
+  live providers revalidate resolved project, region, IP, network, service
+  attachment, and DNS values before mutation.
+- `PrivateServiceConnect` creates a global-routing VPC and one complete private
+  regional path per declared Cockroach region, returning `PRIVATE_RANGES_ONLY`
+  Direct VPC bindings without constructing a public allowlist.
+- `ContainerService.base_graph` and `regional_direct_vpc` compose the protected
+  cluster, two regional PSC paths, two Cloud Run services, and the global HTTPS
+  load balancer into one validated 34-resource example graph.
+- Unit, scripted provider, compile-fail, example, and full repository gates are
+  recorded in `docs/private-service-connect.md` and the milestone commit.
 
 ### Task 6.7: Live Data Path Gate
 

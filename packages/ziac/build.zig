@@ -55,6 +55,7 @@ pub fn build(b: *std.Build) void {
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "global-container-service", "examples/global_container_service.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-application-database", "examples/cockroach_application_database.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-cluster", "examples/cockroach_cluster.zig");
+    addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-private-service-connect", "examples/cockroach_private_service_connect.zig");
 }
 
 fn addExample(

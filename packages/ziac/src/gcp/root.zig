@@ -17,6 +17,7 @@ pub const compute = @import("compute.zig");
 pub const compute_provider = @import("compute_provider.zig");
 pub const dns = @import("dns.zig");
 pub const dns_provider = @import("dns_provider.zig");
+pub const psc = @import("psc.zig");
 pub const global = @import("global/root.zig");
 
 pub const ValidationError = validation.ValidationError;

@@ -165,6 +165,190 @@ test "Cloud DNS resolves typed record data from dependency state" {
     try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "$output") == null);
 }
 
+test "Cloud DNS manages private zones with output-backed DNS names" {
+    const private_dns = ziac.PublicOutput([]const u8).fromResource(
+        "cockroach.ClusterRegion.api-db.europe-west1",
+        "private_endpoint_dns",
+    );
+    const network = ziac.PublicOutput([]const u8).fromResource("gcp.compute.Network.api-db", "self_link");
+    var zone = try ziac.gcp.dns.ManagedZone.build(std.testing.allocator, config, .{
+        .name = "api-db-eu",
+        .dns_name = private_dns,
+        .network = network,
+    });
+    defer zone.deinit(std.testing.allocator);
+    var state = try privateDnsState();
+    defer state.deinit();
+    const responses = [_]zstd.Http.Response{
+        notFound(),
+        privateZoneResponse(),
+        .{ .status = 200, .body = "{}" },
+        notFound(),
+        privateZoneResponse(),
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    const provider = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    context.state = &state;
+
+    var absent = try provider.readWithContext(&context, zone.node);
+    defer absent.deinit();
+    try std.testing.expect(absent == .absent);
+    var created = try provider.createWithContext(&context, zone.node);
+    defer created.deinit();
+    try std.testing.expectEqual(zone.node.inputs_hash, created.observed_hash);
+    try std.testing.expectEqualStrings("projects/ziac-dev/managedZones/api-db-eu", created.physical_id);
+    try std.testing.expectEqualStrings("private.eu.example.", outputString(created, "dns_name"));
+    try provider.deleteWithContext(&context, zone.node, created.physical_id);
+    var gone = try provider.readWithContext(&context, zone.node);
+    defer gone.deinit();
+    try std.testing.expect(gone == .absent);
+    var imported = try provider.importWithContext(&context, zone.node, created.physical_id);
+    defer imported.deinit();
+
+    try std.testing.expectEqualStrings("POST", harness.transport.requests.items[1].method);
+    try std.testing.expect(std.mem.endsWith(
+        u8,
+        harness.transport.requests.items[1].url,
+        "/dns/v1/projects/ziac-dev/managedZones",
+    ));
+    try std.testing.expectEqualStrings(
+        "{\"name\":\"api-db-eu\",\"dnsName\":\"private.eu.example.\",\"visibility\":\"private\",\"privateVisibilityConfig\":{\"networks\":[{\"networkUrl\":\"projects/ziac-dev/global/networks/api-db\"}]}}",
+        harness.transport.requests.items[1].body,
+    );
+}
+
+test "Cloud DNS rejects invalid resolved private zone inputs before mutation" {
+    const private_dns = ziac.PublicOutput([]const u8).fromResource(
+        "cockroach.ClusterRegion.api-db.europe-west1",
+        "private_endpoint_dns",
+    );
+    const network = ziac.PublicOutput([]const u8).fromResource("gcp.compute.Network.api-db", "self_link");
+    var zone = try ziac.gcp.dns.ManagedZone.build(std.testing.allocator, config, .{
+        .name = "api-db-eu",
+        .dns_name = private_dns,
+        .network = network,
+    });
+    defer zone.deinit(std.testing.allocator);
+    const responses = [_]zstd.Http.Response{};
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var wrong_network_state = try privateDnsStateWith(
+        "private.eu.example",
+        "projects/other-project/global/networks/api-db",
+    );
+    defer wrong_network_state.deinit();
+    context.state = &wrong_network_state;
+    try std.testing.expectError(
+        error.InvalidConfiguration,
+        harness.live.provider().createWithContext(&context, zone.node),
+    );
+
+    var invalid_dns_state = try privateDnsStateWith(
+        "bad name.example",
+        "projects/ziac-dev/global/networks/api-db",
+    );
+    defer invalid_dns_state.deinit();
+    context.state = &invalid_dns_state;
+    try std.testing.expectError(
+        error.InvalidConfiguration,
+        harness.live.provider().createWithContext(&context, zone.node),
+    );
+    try std.testing.expectEqual(@as(usize, 0), harness.transport.requests.items.len);
+}
+
+test "Cloud DNS resolves output-backed record names and normalizes trailing dot" {
+    const private_dns = ziac.PublicOutput([]const u8).fromResource(
+        "cockroach.ClusterRegion.api-db.europe-west1",
+        "private_endpoint_dns",
+    );
+    var record = try ziac.gcp.dns.RecordSet.build(std.testing.allocator, config, .{
+        .zone = "api-db-eu",
+        .name_output = private_dns,
+        .logical_name = "apex-europe-west1",
+        .record_type = .a,
+        .ttl = 60,
+        .rrdata_outputs = &.{ziac.PublicOutput([]const u8).fromResource(
+            "gcp.compute.PscEndpoint.europe-west1.api-db-eu",
+            "ip_address",
+        )},
+    });
+    defer record.deinit(std.testing.allocator);
+    var state = try privateDnsState();
+    defer state.deinit();
+    const responses = [_]zstd.Http.Response{.{
+        .status = 200,
+        .body = "{\"name\":\"private.eu.example.\",\"type\":\"A\",\"ttl\":60,\"rrdatas\":[\"10.42.0.2\"]}",
+    }};
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    context.state = &state;
+
+    var created = try harness.live.provider().createWithContext(&context, record.node);
+    defer created.deinit();
+    try std.testing.expectEqual(record.node.inputs_hash, created.observed_hash);
+    try std.testing.expectEqualStrings(
+        "projects/ziac-dev/managedZones/api-db-eu/rrsets/A/private.eu.example.",
+        created.physical_id,
+    );
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "private.eu.example.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "10.42.0.2") != null);
+}
+
+fn privateDnsState() !ziac.InMemoryStateStore {
+    return privateDnsStateWith(
+        "private.eu.example",
+        "projects/ziac-dev/global/networks/api-db",
+    );
+}
+
+fn privateDnsStateWith(dns_name: []const u8, network: []const u8) !ziac.InMemoryStateStore {
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    errdefer state.deinit();
+    try state.put(.{
+        .resource_id = "cockroach.ClusterRegion.api-db.europe-west1",
+        .provider = .cockroach,
+        .type_name = "cockroach.ClusterRegion",
+        .logical_id = "api-db.europe-west1",
+        .desired_hash = "region-hash",
+        .outputs = &.{.{ .name = "private_endpoint_dns", .value = .{ .string = dns_name } }},
+        .status = .created,
+    });
+    try state.put(.{
+        .resource_id = "gcp.compute.Network.api-db",
+        .provider = .gcp,
+        .type_name = "gcp.compute.Network",
+        .logical_id = "api-db",
+        .desired_hash = "network-hash",
+        .outputs = &.{.{ .name = "self_link", .value = .{ .string = network } }},
+        .status = .created,
+    });
+    try state.put(.{
+        .resource_id = "gcp.compute.PscEndpoint.europe-west1.api-db-eu",
+        .provider = .gcp,
+        .type_name = "gcp.compute.PscEndpoint",
+        .logical_id = "api-db-eu",
+        .desired_hash = "endpoint-hash",
+        .outputs = &.{.{ .name = "ip_address", .value = .{ .string = "10.42.0.2" } }},
+        .status = .created,
+    });
+    return state;
+}
+
+fn privateZoneResponse() zstd.Http.Response {
+    return .{
+        .status = 200,
+        .body = "{\"id\":\"42\",\"name\":\"api-db-eu\",\"dnsName\":\"private.eu.example.\",\"visibility\":\"private\",\"privateVisibilityConfig\":{\"networks\":[{\"networkUrl\":\"projects/ziac-dev/global/networks/api-db\"}]}}",
+    };
+}
+
 const Harness = struct {
     token_source: FixedTokenSource,
     cache: auth.TokenCache,

@@ -42,6 +42,12 @@ dependency order; destroy automatically reverses it so forwarding rules and
 proxies are removed before the address, certificate, backends, NEGs, and
 regional services.
 
+`base_graph` clones an existing graph before adding application resources. Use
+`regional_direct_vpc` to map exactly one typed Direct VPC configuration to each
+Cloud Run region. This lets PSC and public-static-egress components provide
+different regional subnets without copying self-links. A regional map and the
+single shared `direct_vpc` option are mutually exclusive.
+
 ## Traffic Policy
 
 Regional services use
@@ -83,3 +89,6 @@ with `ZIAC_LIVE_REGIONS`, `ZIAC_LIVE_IMAGE`, `ZIAC_LIVE_DOMAIN`, and optional
 `ZIAC_LIVE_DNS_ZONE`; live commands still require `--provider gcp --allow-live`,
 and credential-gated acceptance also requires `--live-test` plus a disposable
 project suffix.
+
+See `docs/private-service-connect.md` for a complete protected CockroachDB,
+regional Direct VPC, and global service composition.

@@ -13,6 +13,7 @@ const Kind = enum {
     subnetwork,
     router,
     regional_address,
+    psc_address,
     global_address,
     regional_neg,
     backend_service,
@@ -22,6 +23,7 @@ const Kind = enum {
     target_http_proxy,
     target_https_proxy,
     global_forwarding_rule,
+    psc_endpoint,
 };
 
 pub const CertificateReadinessPolicy = struct {
@@ -42,9 +44,10 @@ pub const Handler = struct {
     ) ProviderError!provider_mod.ReadResult {
         const resource_kind = kind(node) orelse return error.InvalidConfiguration;
         if (context.operation_handle) |handle| try self.waitOperation(context, node, resource_kind, handle);
-        const generated = if (physical_override == null) try physicalIdAlloc(context.allocator, node, resource_kind) else null;
-        defer if (generated) |physical_id| context.allocator.free(physical_id);
-        const physical_id = physical_override orelse generated.?;
+        const generated = try physicalIdAlloc(context.allocator, node, resource_kind);
+        defer context.allocator.free(generated);
+        const physical_id = physical_override orelse generated;
+        if (!std.mem.eql(u8, generated, physical_id)) return error.InvalidConfiguration;
         const path = try restResourcePathAlloc(context.allocator, physical_id);
         defer context.allocator.free(path);
         var response = self.request(context, .{ .api = .compute, .method = "GET", .path = path }) catch |err| {
@@ -66,7 +69,7 @@ pub const Handler = struct {
             .noop
         else switch (resource_kind) {
             .backend_service, .url_map, .redirect_url_map, .target_http_proxy, .target_https_proxy => if (sameIdentity(node.inputs, observed.observed_inputs)) .update else .replace,
-            .network, .subnetwork, .router, .regional_address, .global_address, .regional_neg, .managed_ssl_certificate, .global_forwarding_rule => .replace,
+            .network, .subnetwork, .router, .regional_address, .psc_address, .global_address, .regional_neg, .managed_ssl_certificate, .global_forwarding_rule, .psc_endpoint => .replace,
         };
         const reasons: []const []const u8 = if (diff_kind == .noop) &.{} else &.{"Compute desired state differs from observed resource"};
         return provider_mod.DiffResult.init(context.allocator, diff_kind, reasons);
@@ -98,6 +101,7 @@ pub const Handler = struct {
             .backend_service, .url_map, .redirect_url_map, .target_http_proxy, .target_https_proxy => {},
             else => return error.InvalidConfiguration,
         }
+        try validatePhysicalId(context.allocator, node, resource_kind, physical_id);
         const path = try restResourcePathAlloc(context.allocator, physical_id);
         defer context.allocator.free(path);
         var conflicts: usize = 0;
@@ -126,6 +130,7 @@ pub const Handler = struct {
         physical_id: []const u8,
     ) ProviderError!void {
         const resource_kind = kind(node) orelse return error.InvalidConfiguration;
+        try validatePhysicalId(context.allocator, node, resource_kind, physical_id);
         const path = try restResourcePathAlloc(context.allocator, physical_id);
         defer context.allocator.free(path);
         const handle = self.startOperation(context, path, "DELETE", "") catch |err| {
@@ -167,7 +172,7 @@ pub const Handler = struct {
         defer context.allocator.free(base);
         const project_id = try requiredString(node.inputs, "project_id");
         var target = switch (resource_kind) {
-            .subnetwork, .router, .regional_address, .regional_neg => operation.Target.computeRegionalAlloc(
+            .subnetwork, .router, .regional_address, .psc_address, .regional_neg, .psc_endpoint => operation.Target.computeRegionalAlloc(
                 context.allocator,
                 base,
                 project_id,
@@ -242,6 +247,7 @@ fn kind(node: resource.ResourceNode) ?Kind {
         .{ "gcp.compute.Subnetwork", Kind.subnetwork },
         .{ "gcp.compute.Router", Kind.router },
         .{ "gcp.compute.RegionalAddress", Kind.regional_address },
+        .{ "gcp.compute.PscAddress", Kind.psc_address },
         .{ "gcp.compute.GlobalAddress", Kind.global_address },
         .{ "gcp.compute.RegionServerlessNeg", Kind.regional_neg },
         .{ "gcp.compute.BackendService", Kind.backend_service },
@@ -251,6 +257,7 @@ fn kind(node: resource.ResourceNode) ?Kind {
         .{ "gcp.compute.TargetHttpProxy", Kind.target_http_proxy },
         .{ "gcp.compute.TargetHttpsProxy", Kind.target_https_proxy },
         .{ "gcp.compute.GlobalForwardingRule", Kind.global_forwarding_rule },
+        .{ "gcp.compute.PscEndpoint", Kind.psc_endpoint },
     };
     inline for (names) |entry| if (std.mem.eql(u8, node.type_name, entry[0])) return entry[1];
     return null;
@@ -267,12 +274,29 @@ fn pendingResult(
     const standard_outputs = [_]state.StateOutput{
         .{ .name = "self_link", .value = .{ .unknown_reason = "Compute operation pending" } },
     };
+    const address_outputs = [_]state.StateOutput{
+        .{ .name = "address", .value = .{ .unknown_reason = "Compute operation pending" } },
+        .{ .name = "self_link", .value = .{ .unknown_reason = "Compute operation pending" } },
+    };
+    const psc_endpoint_outputs = [_]state.StateOutput{
+        .{ .name = "ip_address", .value = .{ .unknown_reason = "Compute operation pending" } },
+        .{ .name = "psc_connection_id", .value = .{ .unknown_reason = "PSC connection not observed" } },
+        .{ .name = "psc_connection_status", .value = .{ .unknown_reason = "PSC connection not observed" } },
+        .{ .name = "self_link", .value = .{ .unknown_reason = "Compute operation pending" } },
+    };
     const certificate_outputs = [_]state.StateOutput{
         .{ .name = "self_link", .value = .{ .unknown_reason = "Compute operation pending" } },
         .{ .name = "status", .value = .{ .unknown_reason = "Certificate provisioning not observed" } },
         .{ .name = "domains_ready", .value = .{ .unknown_reason = "Certificate provisioning not observed" } },
     };
-    const outputs = if (resource_kind == .managed_ssl_certificate) certificate_outputs[0..] else standard_outputs[0..];
+    const outputs = if (resource_kind == .managed_ssl_certificate)
+        certificate_outputs[0..]
+    else if (resource_kind == .regional_address or resource_kind == .psc_address or resource_kind == .global_address)
+        address_outputs[0..]
+    else if (resource_kind == .psc_endpoint)
+        psc_endpoint_outputs[0..]
+    else
+        standard_outputs[0..];
     var result = try provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, outputs, handle);
     result.completed = false;
     return result;
@@ -297,12 +321,20 @@ fn resultFromJson(
     var outputs: [4]state.StateOutput = undefined;
     var count: usize = 0;
     switch (resource_kind) {
-        .regional_address, .global_address => {
+        .regional_address, .psc_address, .global_address => {
             outputs[count] = .{ .name = "address", .value = .{ .string = try requiredJsonString(remote, "address") } };
             count += 1;
         },
         .global_forwarding_rule => {
             outputs[count] = .{ .name = "ip_address", .value = .{ .string = try requiredJsonString(remote, "IPAddress") } };
+            count += 1;
+        },
+        .psc_endpoint => {
+            outputs[count] = .{ .name = "ip_address", .value = .{ .string = try requiredJsonString(remote, "IPAddress") } };
+            count += 1;
+            outputs[count] = .{ .name = "psc_connection_id", .value = .{ .string = try requiredJsonString(remote, "pscConnectionId") } };
+            count += 1;
+            outputs[count] = .{ .name = "psc_connection_status", .value = .{ .string = try requiredJsonString(remote, "pscConnectionStatus") } };
             count += 1;
         },
         .managed_ssl_certificate => {
@@ -356,6 +388,12 @@ fn normalizedInputsAlloc(
             try normalized.put(arena, "address_type", .{ .string = try requiredJsonString(remote, "addressType") });
             try normalized.put(arena, "network_tier", .{ .string = try requiredJsonString(remote, "networkTier") });
             try normalized.put(arena, "region", .{ .string = try requiredString(node.inputs, "region") });
+        },
+        .psc_address => {
+            try normalized.put(arena, "address_type", .{ .string = try requiredJsonString(remote, "addressType") });
+            try normalized.put(arena, "ip_version", .{ .string = try requiredJsonString(remote, "ipVersion") });
+            try normalized.put(arena, "region", .{ .string = try requiredString(node.inputs, "region") });
+            try normalized.put(arena, "subnetwork", try normalizedStringInput(context, node, "subnetwork", try requiredJsonString(remote, "subnetwork"), arena));
         },
         .global_address => try normalized.put(arena, "network_tier", .{ .string = try requiredJsonString(remote, "networkTier") }),
         .regional_neg => {
@@ -414,6 +452,16 @@ fn normalizedInputsAlloc(
             try normalized.put(arena, "port", .{ .integer = try firstPort(remote) });
             try normalized.put(arena, "target", .{ .string = try requiredJsonString(remote, "target") });
         },
+        .psc_endpoint => {
+            try normalized.put(arena, "address", try normalizedStringInput(context, node, "address", try requiredJsonString(remote, "IPAddress"), arena));
+            try normalized.put(arena, "address_resource", try valueToJson(arena, try requiredValue(node.inputs, "address_resource")));
+            try normalized.put(arena, "allow_psc_global_access", .{ .bool = try requiredJsonBool(remote, "allowPscGlobalAccess") });
+            try normalized.put(arena, "load_balancing_scheme", .{ .string = try requiredJsonString(remote, "loadBalancingScheme") });
+            try normalized.put(arena, "network", try normalizedStringInput(context, node, "network", try requiredJsonString(remote, "network"), arena));
+            try normalized.put(arena, "no_automate_dns_zone", .{ .bool = try requiredJsonBool(remote, "noAutomateDnsZone") });
+            try normalized.put(arena, "region", .{ .string = try requiredString(node.inputs, "region") });
+            try normalized.put(arena, "target", try normalizedStringInput(context, node, "target", try requiredJsonString(remote, "target"), arena));
+        },
     }
     const json = std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = normalized }, .{}) catch return error.OutOfMemory;
     defer allocator.free(json);
@@ -450,6 +498,19 @@ fn desiredBodyAlloc(
         .regional_address => {
             try body.put(arena, "addressType", .{ .string = try requiredString(node.inputs, "address_type") });
             try body.put(arena, "networkTier", .{ .string = try requiredString(node.inputs, "network_tier") });
+        },
+        .psc_address => {
+            const subnetwork = try resolveStringValue(context, try requiredValue(node.inputs, "subnetwork"));
+            if (!resourceMatches(
+                subnetwork,
+                try requiredString(node.inputs, "project_id"),
+                "regions",
+                try requiredString(node.inputs, "region"),
+                "subnetworks",
+            )) return error.InvalidConfiguration;
+            try body.put(arena, "addressType", .{ .string = try requiredString(node.inputs, "address_type") });
+            try body.put(arena, "ipVersion", .{ .string = try requiredString(node.inputs, "ip_version") });
+            try body.put(arena, "subnetwork", .{ .string = subnetwork });
         },
         .global_address => try body.put(arena, "networkTier", .{ .string = try requiredString(node.inputs, "network_tier") }),
         .regional_neg => {
@@ -505,6 +566,27 @@ fn desiredBodyAlloc(
             try body.put(arena, "target", .{ .string = try requiredString(node.inputs, "target") });
             try body.put(arena, "loadBalancingScheme", .{ .string = try requiredString(node.inputs, "load_balancing_scheme") });
             try body.put(arena, "networkTier", .{ .string = try requiredString(node.inputs, "network_tier") });
+        },
+        .psc_endpoint => {
+            const project_id = try requiredString(node.inputs, "project_id");
+            const region = try requiredString(node.inputs, "region");
+            const address = try resolveStringValue(context, try requiredValue(node.inputs, "address"));
+            const address_resource = try resolveStringValue(context, try requiredValue(node.inputs, "address_resource"));
+            const network = try resolveStringValue(context, try requiredValue(node.inputs, "network"));
+            const target = try resolveStringValue(context, try requiredValue(node.inputs, "target"));
+            if (!isIpv4(address) or
+                !resourceMatches(address_resource, project_id, "regions", region, "addresses") or
+                !resourceMatches(network, project_id, "global", "", "networks") or
+                !resourceMatches(target, "", "regions", region, "serviceAttachments"))
+            {
+                return error.InvalidConfiguration;
+            }
+            try body.put(arena, "IPAddress", .{ .string = address_resource });
+            try body.put(arena, "allowPscGlobalAccess", .{ .bool = try requiredBoolean(node.inputs, "allow_psc_global_access") });
+            try body.put(arena, "loadBalancingScheme", .{ .string = try requiredString(node.inputs, "load_balancing_scheme") });
+            try body.put(arena, "network", .{ .string = network });
+            try body.put(arena, "noAutomateDnsZone", .{ .bool = try requiredBoolean(node.inputs, "no_automate_dns_zone") });
+            try body.put(arena, "target", .{ .string = target });
         },
     }
     return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = body }, .{}) catch return error.OutOfMemory;
@@ -569,6 +651,10 @@ fn collectionPathAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode
             project_id,
             try requiredString(node.inputs, "region"),
         }),
+        .psc_address => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/regions/{s}/addresses", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+        }),
         .global_address => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/addresses", .{project_id}),
         .regional_neg => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/regions/{s}/networkEndpointGroups", .{
             project_id,
@@ -581,11 +667,26 @@ fn collectionPathAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode
         .target_http_proxy => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/targetHttpProxies", .{project_id}),
         .target_https_proxy => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/targetHttpsProxies", .{project_id}),
         .global_forwarding_rule => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/forwardingRules", .{project_id}),
+        .psc_endpoint => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/regions/{s}/forwardingRules", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+        }),
     } catch return error.OutOfMemory;
 }
 
 fn physicalIdAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, resource_kind: Kind) ProviderError![]const u8 {
     return physicalIdFromNameAlloc(allocator, node, resource_kind, try requiredString(node.inputs, "name"));
+}
+
+fn validatePhysicalId(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    resource_kind: Kind,
+    physical_id: []const u8,
+) ProviderError!void {
+    const expected = try physicalIdAlloc(allocator, node, resource_kind);
+    defer allocator.free(expected);
+    if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
 }
 
 fn physicalIdFromNameAlloc(
@@ -612,6 +713,11 @@ fn physicalIdFromNameAlloc(
             try requiredString(node.inputs, "region"),
             name,
         }),
+        .psc_address => std.fmt.allocPrint(allocator, "projects/{s}/regions/{s}/addresses/{s}", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+            name,
+        }),
         .global_address => std.fmt.allocPrint(allocator, "projects/{s}/global/addresses/{s}", .{ project_id, name }),
         .regional_neg => std.fmt.allocPrint(allocator, "projects/{s}/regions/{s}/networkEndpointGroups/{s}", .{
             project_id,
@@ -625,6 +731,11 @@ fn physicalIdFromNameAlloc(
         .target_http_proxy => std.fmt.allocPrint(allocator, "projects/{s}/global/targetHttpProxies/{s}", .{ project_id, name }),
         .target_https_proxy => std.fmt.allocPrint(allocator, "projects/{s}/global/targetHttpsProxies/{s}", .{ project_id, name }),
         .global_forwarding_rule => std.fmt.allocPrint(allocator, "projects/{s}/global/forwardingRules/{s}", .{ project_id, name }),
+        .psc_endpoint => std.fmt.allocPrint(allocator, "projects/{s}/regions/{s}/forwardingRules/{s}", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+            name,
+        }),
     } catch return error.OutOfMemory;
 }
 
@@ -706,6 +817,34 @@ fn resolveStringValue(context: *provider_mod.OperationContext, input: value.Valu
         .output_ref => |reference| context.resolveOutputString(reference),
         else => error.InvalidConfiguration,
     };
+}
+
+fn resourceMatches(
+    input: []const u8,
+    project: []const u8,
+    scope: []const u8,
+    region: []const u8,
+    collection: []const u8,
+) bool {
+    const start = std.mem.indexOf(u8, input, "projects/") orelse return false;
+    var segments = std.mem.splitScalar(u8, input[start..], '/');
+    if (!std.mem.eql(u8, segments.next() orelse return false, "projects")) return false;
+    const found_project = segments.next() orelse return false;
+    if (project.len > 0 and !std.mem.eql(u8, found_project, project)) return false;
+    if (!std.mem.eql(u8, segments.next() orelse return false, scope)) return false;
+    if (region.len > 0 and !std.mem.eql(u8, segments.next() orelse return false, region)) return false;
+    if (!std.mem.eql(u8, segments.next() orelse return false, collection)) return false;
+    return (segments.next() orelse return false).len > 0 and segments.next() == null;
+}
+
+fn isIpv4(address: []const u8) bool {
+    var octets = std.mem.splitScalar(u8, address, '.');
+    var count: usize = 0;
+    while (octets.next()) |octet| : (count += 1) {
+        if (octet.len == 0) return false;
+        _ = std.fmt.parseInt(u8, octet, 10) catch return false;
+    }
+    return count == 4;
 }
 
 fn normalizedStringInput(
