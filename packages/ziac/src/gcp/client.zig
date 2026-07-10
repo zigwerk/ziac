@@ -65,6 +65,10 @@ pub const Diagnostic = struct {
     google_status: ?[]const u8 = null,
     message: ?[]const u8 = null,
     retry_after_millis: ?u64 = null,
+    service: ?[]const u8 = null,
+    quota_metric: ?[]const u8 = null,
+    quota_limit: ?[]const u8 = null,
+    quota_subject: ?[]const u8 = null,
 
     pub fn init(allocator: std.mem.Allocator) Diagnostic {
         return .{ .allocator = allocator };
@@ -74,11 +78,19 @@ pub const Diagnostic = struct {
         if (self.request_id) |value| self.allocator.free(value);
         if (self.google_status) |value| self.allocator.free(value);
         if (self.message) |value| self.allocator.free(value);
+        if (self.service) |value| self.allocator.free(value);
+        if (self.quota_metric) |value| self.allocator.free(value);
+        if (self.quota_limit) |value| self.allocator.free(value);
+        if (self.quota_subject) |value| self.allocator.free(value);
         self.status = null;
         self.request_id = null;
         self.google_status = null;
         self.message = null;
         self.retry_after_millis = null;
+        self.service = null;
+        self.quota_metric = null;
+        self.quota_limit = null;
+        self.quota_subject = null;
     }
 
     pub fn deinit(self: *Diagnostic) void {
@@ -164,6 +176,18 @@ pub const Client = struct {
                 diagnostic.google_status,
                 diagnostic.retry_after_millis != null,
             );
+            context.recordDiagnostic(.{
+                .category = provider_error.category(err),
+                .service = diagnostic.service orelse if (request.api) |api| @tagName(api) else null,
+                .status = diagnostic.status,
+                .google_status = diagnostic.google_status,
+                .request_id = diagnostic.request_id,
+                .message = diagnostic.message,
+                .retry_after_millis = diagnostic.retry_after_millis,
+                .quota_metric = diagnostic.quota_metric,
+                .quota_limit = diagnostic.quota_limit,
+                .quota_subject = diagnostic.quota_subject,
+            });
             response.deinit(context.allocator);
             return err;
         }
@@ -211,8 +235,57 @@ fn captureDiagnostic(
         diagnostic.google_status = try diagnostic.allocator.dupe(u8, value);
     }
     if (jsonString(error_object.get("message"))) |value| {
-        diagnostic.message = try zstd.Secrets.redactAlloc(diagnostic.allocator, value);
+        const bounded = value[0..@min(value.len, max_diagnostic_field_bytes)];
+        diagnostic.message = try zstd.Secrets.redactAlloc(diagnostic.allocator, bounded);
     }
+    try captureQuotaDetails(diagnostic, error_object.get("details"));
+}
+
+fn captureQuotaDetails(diagnostic: *Diagnostic, maybe_details: ?std.json.Value) std.mem.Allocator.Error!void {
+    const details = jsonArray(maybe_details) orelse return;
+    for (details.items) |detail_value| {
+        const detail = jsonObject(detail_value) orelse continue;
+        const type_name = jsonString(detail.get("@type")) orelse continue;
+        if (std.mem.endsWith(u8, type_name, "google.rpc.QuotaInfo")) {
+            if (diagnostic.service == null) diagnostic.service = try cloneDiagnosticText(diagnostic.allocator, jsonString(detail.get("service")));
+            if (diagnostic.quota_metric == null) diagnostic.quota_metric = try cloneDiagnosticText(diagnostic.allocator, jsonString(detail.get("quotaMetric")));
+            if (diagnostic.quota_limit == null) diagnostic.quota_limit = try cloneDiagnosticText(diagnostic.allocator, jsonString(detail.get("quotaId")));
+            continue;
+        }
+        if (!std.mem.endsWith(u8, type_name, "google.rpc.QuotaFailure")) continue;
+        const violations = jsonArray(detail.get("violations")) orelse continue;
+        if (violations.items.len == 0) continue;
+        const violation = jsonObject(violations.items[0]) orelse continue;
+        if (diagnostic.quota_subject == null) {
+            diagnostic.quota_subject = try cloneDiagnosticText(diagnostic.allocator, jsonString(violation.get("subject")));
+        }
+    }
+}
+
+const max_diagnostic_field_bytes = 512;
+
+fn cloneDiagnosticText(
+    allocator: std.mem.Allocator,
+    maybe_text: ?[]const u8,
+) std.mem.Allocator.Error!?[]const u8 {
+    const text = maybe_text orelse return null;
+    const owned: []const u8 = try allocator.dupe(u8, text[0..@min(text.len, max_diagnostic_field_bytes)]);
+    return owned;
+}
+
+fn jsonObject(value: std.json.Value) ?std.json.ObjectMap {
+    return switch (value) {
+        .object => |object| object,
+        else => null,
+    };
+}
+
+fn jsonArray(maybe_value: ?std.json.Value) ?std.json.Array {
+    const value = maybe_value orelse return null;
+    return switch (value) {
+        .array => |array| array,
+        else => null,
+    };
 }
 
 fn jsonString(value: ?std.json.Value) ?[]const u8 {

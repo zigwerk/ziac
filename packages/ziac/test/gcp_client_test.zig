@@ -57,7 +57,7 @@ test "GCP JSON client maps Google failures and retains redacted diagnostics" {
                 .{ .name = "Retry-After", .value = "2" },
                 .{ .name = "X-Request-Id", .value = "request-limited" },
             },
-            .body = "{\"error\":{\"code\":429,\"status\":\"RESOURCE_EXHAUSTED\",\"message\":\"sentinel-secret-for-tests\"}}",
+            .body = "{\"error\":{\"code\":429,\"status\":\"RESOURCE_EXHAUSTED\",\"message\":\"sentinel-secret-for-tests\",\"details\":[{\"@type\":\"type.googleapis.com/google.rpc.QuotaInfo\",\"service\":\"compute.googleapis.com\",\"quotaMetric\":\"compute.googleapis.com/backend_services\",\"quotaId\":\"BACKEND-SERVICES-per-project\"},{\"@type\":\"type.googleapis.com/google.rpc.QuotaFailure\",\"violations\":[{\"subject\":\"project:ziac-dev\",\"description\":\"backend service quota exhausted\"}]}]}}",
         },
         .{ .status = 503, .body = "{\"error\":{\"code\":503,\"status\":\"UNAVAILABLE\",\"message\":\"later\"}}" },
     };
@@ -76,6 +76,9 @@ test "GCP JSON client maps Google failures and retains redacted diagnostics" {
     defer cache.deinit(std.testing.allocator);
     var client = gclient.Client.init(transport.client(), &cache, .{});
     var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var recorder = ziac.provider_error.DiagnosticRecorder.init(std.testing.allocator);
+    defer recorder.deinit();
+    context.diagnostics = &recorder;
     var diagnostic = gclient.Diagnostic.init(std.testing.allocator);
     defer diagnostic.deinit();
 
@@ -89,6 +92,14 @@ test "GCP JSON client maps Google failures and retains redacted diagnostics" {
             try std.testing.expectEqual(@as(?u64, 2_000), diagnostic.retry_after_millis);
             try std.testing.expectEqualStrings("[REDACTED]", diagnostic.message.?);
             try std.testing.expect(std.mem.indexOf(u8, diagnostic.message.?, "sentinel-secret-for-tests") == null);
+            var recorded = (try recorder.snapshotAlloc(std.testing.allocator)).?;
+            defer recorded.deinit();
+            try std.testing.expectEqual(ziac.provider_error.Category.rate_limited, recorded.category);
+            try std.testing.expectEqualStrings("compute.googleapis.com", recorded.service.?);
+            try std.testing.expectEqualStrings("compute.googleapis.com/backend_services", recorded.quota_metric.?);
+            try std.testing.expectEqualStrings("BACKEND-SERVICES-per-project", recorded.quota_limit.?);
+            try std.testing.expectEqualStrings("project:ziac-dev", recorded.quota_subject.?);
+            try std.testing.expectEqualStrings("[REDACTED]", recorded.message.?);
         }
     }
 }

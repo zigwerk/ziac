@@ -14,6 +14,8 @@ pub const BuildError = cloud_run.BuildError || compute.BuildError || dns.BuildEr
     ConflictingVpcConfiguration,
     DuplicateVpcRegion,
     RegionalVpcMismatch,
+    MissingCanaryRegion,
+    CanaryRegionNotFound,
 };
 
 pub const HealthMode = enum {
@@ -24,6 +26,16 @@ pub const HealthMode = enum {
 pub const RegionalDirectVpc = struct {
     region: []const u8,
     config: cloud_run.DirectVpc,
+};
+
+pub const RolloutStrategy = enum {
+    parallel,
+    canary_then_fleet,
+};
+
+pub const RolloutPolicy = struct {
+    strategy: RolloutStrategy = .parallel,
+    canary_region: ?[]const u8 = null,
 };
 
 pub const ContainerServiceArgs = struct {
@@ -55,6 +67,7 @@ pub const ContainerServiceArgs = struct {
     secret_volumes: []const cloud_run.SecretVolume = &.{},
     direct_vpc: ?cloud_run.DirectVpc = null,
     regional_direct_vpc: []const RegionalDirectVpc = &.{},
+    rollout: RolloutPolicy = .{},
 };
 
 pub const ContainerService = struct {
@@ -135,6 +148,7 @@ pub const ContainerService = struct {
             neg_resource_ids[index] = try allocator.dupe(u8, neg.node.id);
             initialized_neg_ids += 1;
         }
+        try addRolloutDependencies(allocator, &graph, args, regions);
 
         const address_name = try resourceNameAlloc(allocator, args.name, "ip");
         defer allocator.free(address_name);
@@ -320,6 +334,31 @@ fn validate(
     if (args.health_mode == .production) {
         if (args.min_instances == 0) return error.ProductionMinInstancesRequired;
         if (args.startup_probe == null or args.liveness_probe == null) return error.ProductionProbeRequired;
+    }
+    if (args.rollout.strategy == .canary_then_fleet) {
+        const canary = args.rollout.canary_region orelse return error.MissingCanaryRegion;
+        if (canary.len == 0) return error.MissingCanaryRegion;
+        for (regions) |region| {
+            if (std.mem.eql(u8, canary, region)) break;
+        } else return error.CanaryRegionNotFound;
+    }
+}
+
+fn addRolloutDependencies(
+    allocator: std.mem.Allocator,
+    graph: *resource.ResourceGraph,
+    args: ContainerServiceArgs,
+    regions: []const []const u8,
+) BuildError!void {
+    if (args.rollout.strategy == .parallel) return;
+    const canary = args.rollout.canary_region.?;
+    const canary_id = try std.fmt.allocPrint(allocator, "gcp.run.Service.{s}.{s}", .{ canary, args.name });
+    defer allocator.free(canary_id);
+    for (regions) |region| {
+        if (std.mem.eql(u8, region, canary)) continue;
+        const service_id = try std.fmt.allocPrint(allocator, "gcp.run.Service.{s}.{s}", .{ region, args.name });
+        defer allocator.free(service_id);
+        try graph.addDependency(service_id, canary_id);
     }
 }
 

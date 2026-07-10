@@ -9,7 +9,9 @@ const local_state = @import("local_state.zig");
 const plan_mod = @import("plan.zig");
 const plan_format = @import("plan_format.zig");
 const provider_mod = @import("provider.zig");
+const provider_error = @import("provider_error.zig");
 const refresh = @import("refresh.zig");
+const rollout_mod = @import("rollout.zig");
 const stack_registry = @import("stack_registry.zig");
 const state_mod = @import("state.zig");
 const state_backend = @import("state_backend.zig");
@@ -137,6 +139,16 @@ const destroy_options = [_]zstd.Cli.OptionSpec{
     .{ .name = "preview-cleanup", .kind = .boolean, .help = "require an exact preview stage" },
 };
 
+const rollback_options = [_]zstd.Cli.OptionSpec{
+    command_options[0],
+    command_options[1],
+    command_options[2],
+    command_options[3],
+    command_options[4],
+    command_options[5],
+    .{ .name = "confirm", .kind = .boolean, .help = "confirm rollback to prior immutable images" },
+};
+
 const preview_stage_options = [_]zstd.Cli.OptionSpec{
     .{ .name = "repository", .kind = .string, .required = true, .help = "GitHub owner/repository" },
     .{ .name = "change", .kind = .string, .required = true, .help = "positive pull request number" },
@@ -188,6 +200,11 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .name = "destroy",
         .description = "delete managed resources",
         .options = destroy_options[0..],
+    },
+    .{
+        .name = "rollback",
+        .description = "restore previous regional Cloud Run images",
+        .options = rollback_options[0..],
     },
     .{
         .name = "outputs",
@@ -249,6 +266,7 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
     if (std.mem.eql(u8, args.command, "preview-stage")) return runPreviewStage(allocator, env, args);
     if (std.mem.eql(u8, args.command, "deploy")) return runDeploy(allocator, env, args);
     if (std.mem.eql(u8, args.command, "destroy")) return runDestroy(allocator, env, args);
+    if (std.mem.eql(u8, args.command, "rollback")) return runRollback(allocator, env, args);
     if (std.mem.eql(u8, args.command, "outputs")) return runOutputs(allocator, env, args);
     if (std.mem.eql(u8, args.command, "state")) return runState(allocator, env, args);
     if (std.mem.eql(u8, args.command, "state-migrate")) return runStateMigrate(allocator, env, args);
@@ -484,11 +502,14 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         .stage = args.stage,
         .lock_owner_id = command_lock.owner_id,
     };
+    var diagnostics = provider_error.DiagnosticRecorder.init(allocator);
+    defer diagnostics.deinit();
     executor.executePlan(allocator, planned, &loaded.store, providers, .{
         .checkpoint = checkpoint.checkpoint(),
         .destructive_confirmation = destructive_confirmation,
+        .diagnostics = &diagnostics,
     }) catch |err| {
-        return handleApplyError(env, err);
+        return handleApplyErrorWithDiagnostics(env, err, &diagnostics);
     };
 
     env.state.saveResources(args.stack, args.stage, &loaded.store) catch |err| {
@@ -555,6 +576,75 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     try writePlan(env, args, &planned, loaded.store.serialValue(), null);
     if (!args.json) try env.console.writeOut("Destroy complete\n");
     return Exit.success;
+}
+
+fn runRollback(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    if (!args.confirm) return handleApplyError(env, error.DestructiveConfirmationRequired);
+    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+        return handleStackError(env, err);
+    };
+    defer program.deinit();
+    var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer command_lock.deinit();
+    var loaded = env.state.loadResources(args.stack, args.stage) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer loaded.deinit();
+    var rollback = rollout_mod.buildRollbackGraphAlloc(allocator, &program.graph, &loaded.store) catch |err| {
+        return handlePlanError(env, err);
+    };
+    defer rollback.deinit();
+    var planned = plan_mod.buildPlan(allocator, &rollback.graph, &loaded.store) catch |err| {
+        return handlePlanError(env, err);
+    };
+    defer planned.deinit();
+    validateRollbackPlan(&planned, rollback.target_count) catch |err| return handlePlanError(env, err);
+
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = selectProviders(env, args, &rollback.graph, &fake_provider) catch |err| {
+        return handleProviderSelectionError(env, err);
+    };
+    var checkpoint = checkpoint_mod.Resources{
+        .store = env.state,
+        .stack = args.stack,
+        .stage = args.stage,
+        .lock_owner_id = command_lock.owner_id,
+    };
+    var diagnostics = provider_error.DiagnosticRecorder.init(allocator);
+    defer diagnostics.deinit();
+    executor.executePlan(allocator, &planned, &loaded.store, providers, .{
+        .checkpoint = checkpoint.checkpoint(),
+        .diagnostics = &diagnostics,
+    }) catch |err| return handleApplyErrorWithDiagnostics(env, err, &diagnostics);
+    env.state.saveResources(args.stack, args.stage, &loaded.store) catch |err| {
+        return handleStateError(env, err);
+    };
+    const resolved_outputs = program.resolveOutputsAlloc(allocator, &loaded.store) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer stack_registry.StackProgram.freeResolvedOutputs(allocator, resolved_outputs);
+    env.state.saveOutputs(args.stack, args.stage, resolved_outputs) catch |err| {
+        return handleStateError(env, err);
+    };
+    try writePlan(env, args, &planned, loaded.store.serialValue(), null);
+    if (!args.json) try env.console.writeOut("Rollback complete\n");
+    return Exit.success;
+}
+
+fn validateRollbackPlan(planned: *const plan_mod.Plan, target_count: usize) error{RollbackPlanUnsafe}!void {
+    var updates: usize = 0;
+    for (planned.operations) |operation| switch (operation.kind) {
+        .update => {
+            if (!std.mem.eql(u8, operation.resource.type_name, "gcp.run.Service")) return error.RollbackPlanUnsafe;
+            updates += 1;
+        },
+        .noop, .read => {},
+        .create, .replace, .delete => return error.RollbackPlanUnsafe,
+    };
+    if (updates < target_count) return error.RollbackPlanUnsafe;
 }
 
 fn fakeProviderRegistry(fake: *provider_mod.FakeProvider) provider_mod.ProviderRegistry {
@@ -1040,6 +1130,22 @@ fn handlePlanError(env: *Env, err: anyerror) !u8 {
 
 fn handleApplyError(env: *Env, err: anyerror) !u8 {
     try writeError(env, "provider", err);
+    return Exit.provider_error;
+}
+
+fn handleApplyErrorWithDiagnostics(
+    env: *Env,
+    err: anyerror,
+    diagnostics: *provider_error.DiagnosticRecorder,
+) !u8 {
+    try writeError(env, "provider", err);
+    if (try diagnostics.snapshotAlloc(env.console.allocator)) |owned| {
+        var diagnostic = owned;
+        defer diagnostic.deinit();
+        const rendered = try diagnostic.formatAlloc(env.console.allocator);
+        defer env.console.allocator.free(rendered);
+        try env.console.stderr.print(env.console.allocator, "provider diagnostic: {s}\n", .{rendered});
+    }
     return Exit.provider_error;
 }
 

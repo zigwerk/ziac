@@ -1353,6 +1353,8 @@ Evidence:
 
 ### Task 8.4: Rollouts And Recovery
 
+Status: implemented on 2026-07-10.
+
 Features:
 
 - Canary region selection.
@@ -1370,6 +1372,27 @@ Tests:
 - Crash at every checkpoint resumes safely.
 
 Commit: `Add guarded Ziac global rollouts`
+
+Evidence:
+
+- `ContainerService` supports explicit parallel or canary-then-fleet regional
+  ordering. The built-in global stack uses its primary region as canary, and
+  the dependency is part of graph/saved-plan integrity.
+- Cloud Run schema v3 exposes current/prior image, latest-created/latest-ready
+  revision, and readiness outputs. Reconciliation, terminal condition, and
+  revision equality gate operation completion.
+- `rollout.buildRollbackGraphAlloc` clones the complete graph, rewrites only
+  eligible Cloud Run images to immutable prior digests, preserves partial
+  regions, and rejects state divergence or missing history.
+- `rollback --confirm` checks confirmation before lock/provider work and reuses
+  normal lineage/serial planning, provider execution, operation handles,
+  checkpoints, remote CAS, and output persistence. Repetition cannot toggle the
+  image forward.
+- Generic bounded diagnostics carry redacted GCP request, retry, and quota
+  identifiers from HTTP clients through concurrent executor contexts to CLI
+  failures without persistence.
+- The package suite contains 343 tests at this checkpoint: 342 pass and one
+  authenticated credential gate is skipped.
 
 ### Task 8.5: Public Documentation And Release Gate
 

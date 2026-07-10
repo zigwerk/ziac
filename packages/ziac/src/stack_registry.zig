@@ -199,6 +199,10 @@ pub const StackRegistry = struct {
             .domain = domain,
             .dns_zone = self.dns_zone,
             .http_redirect = self.http_redirect,
+            .rollout = .{
+                .strategy = .canary_then_fleet,
+                .canary_region = self.region,
+            },
         });
         defer component.deinit();
 

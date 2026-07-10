@@ -224,6 +224,12 @@ Repository-bound preview stages now isolate GCS state and built-in GCP resource
 names. GitHub external-account ADC completes URL subject-token, STS, and
 service-account impersonation contracts without a long-lived Google key, and
 preview cleanup cannot target production or malformed stages.
+The built-in global stack now gates fleet regions on a primary-region canary.
+Cloud Run operations complete only after revision readiness, state retains the
+current and immediately previous immutable image, and `rollback --confirm`
+builds a checkpointed inverse graph without unrelated mutations. Bounded GCP
+quota, request-ID, and retry diagnostics reach deploy and rollback failures
+without entering persistent artifacts.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts and
@@ -248,6 +254,8 @@ See `docs/secret-manager.md` for the secret payload boundary, and
 recovery. See `docs/saved-plans.md` for review artifacts, stale-plan checks,
 digest approval, and CI handoff. See `docs/keyless-ci.md` for WIF setup, preview
 identity, the workflow template, and guarded cleanup. See
+`docs/rollouts-recovery.md` for canary ordering, readiness, rollback, and
+incident recovery. See
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

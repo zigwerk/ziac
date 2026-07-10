@@ -17,11 +17,15 @@ test "cloud run service builds stable resource and typed provider outputs" {
     try std.testing.expectEqualStrings("gcp.run.Service.europe-west1.api", service.node.id);
     try std.testing.expectEqual(ziac.resource.ProviderId.gcp, service.node.provider);
     try std.testing.expectEqualStrings("gcp.run.Service", service.node.type_name);
-    try std.testing.expectEqual(@as(u32, 2), service.node.schema_version);
+    try std.testing.expectEqual(@as(u32, 3), service.node.schema_version);
     try std.testing.expectEqualStrings("api", service.node.logical_id);
     try std.testing.expectEqualStrings("service_url", service.service_url.resource_ref.field);
     try std.testing.expectEqualStrings("service_account", service.service_account.resource_ref.field);
     try std.testing.expectEqualStrings("latest_revision", service.latest_revision.resource_ref.field);
+    try std.testing.expectEqualStrings("latest_created_revision", service.latest_created_revision.resource_ref.field);
+    try std.testing.expectEqualStrings("image_ref", service.image_ref.resource_ref.field);
+    try std.testing.expectEqualStrings("previous_image_ref", service.previous_image_ref.resource_ref.field);
+    try std.testing.expectEqualStrings("ready", service.ready.resource_ref.field);
 
     const inputs = try service.node.inputs.canonicalJsonAlloc(std.testing.allocator);
     defer std.testing.allocator.free(inputs);

@@ -92,6 +92,33 @@ test "provider errors have stable failure categories" {
     );
 }
 
+test "provider diagnostic recorder owns bounded redacted failure context" {
+    var recorder = ziac.provider_error.DiagnosticRecorder.init(std.testing.allocator);
+    defer recorder.deinit();
+    try recorder.record(.{
+        .category = .quota,
+        .service = "compute",
+        .status = 429,
+        .google_status = "RESOURCE_EXHAUSTED",
+        .request_id = "request-quota",
+        .message = "[REDACTED]\nforged-line",
+        .quota_metric = "compute.googleapis.com/backend_services",
+        .quota_limit = "BACKEND-SERVICES-per-project",
+        .quota_subject = "project:ziac-dev",
+    });
+
+    var diagnostic = (try recorder.snapshotAlloc(std.testing.allocator)).?;
+    defer diagnostic.deinit();
+    try std.testing.expectEqual(ziac.provider_error.Category.quota, diagnostic.category);
+    try std.testing.expectEqualStrings("compute.googleapis.com/backend_services", diagnostic.quota_metric.?);
+    const rendered = try diagnostic.formatAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "quota_metric=compute.googleapis.com/backend_services") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "quota_limit=BACKEND-SERVICES-per-project") != null);
+    try std.testing.expect(std.mem.indexOfScalar(u8, rendered, '\n') == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "sentinel-secret-for-tests") == null);
+}
+
 test "apply persists provider physical state outputs and observed hash" {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     defer graph.deinit();

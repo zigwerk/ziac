@@ -91,7 +91,12 @@ test "configured registry builds the global ContainerService stack" {
     defer program.deinit();
 
     try std.testing.expectEqual(@as(usize, 14), program.graph.resources.items.len);
-    try std.testing.expectEqual(@as(usize, 13), program.graph.dependencies.items.len);
+    try std.testing.expectEqual(@as(usize, 14), program.graph.dependencies.items.len);
+    try std.testing.expect(hasDependency(
+        &program.graph,
+        "gcp.run.Service.us-central1.api",
+        "gcp.run.Service.europe-west1.api",
+    ));
     try std.testing.expectEqual(@as(usize, 5), program.outputs.items.len);
     try std.testing.expectEqualStrings("url", program.outputs.items[0].name);
     try std.testing.expectEqualStrings("ip_address", program.outputs.items[1].name);
@@ -100,6 +105,13 @@ test "configured registry builds the global ContainerService stack" {
     try std.testing.expectEqualStrings("service_url_us-central1", program.outputs.items[4].name);
     try std.testing.expect(program.outputs.items[1].source == .resource_ref);
     try std.testing.expectEqualStrings("address", program.outputs.items[1].source.resource_ref.field);
+}
+
+fn hasDependency(graph: *const ziac.ResourceGraph, from: []const u8, to: []const u8) bool {
+    for (graph.dependencies.items) |edge| {
+        if (std.mem.eql(u8, edge.from, from) and std.mem.eql(u8, edge.to, to)) return true;
+    }
+    return false;
 }
 
 test "configured registry isolates global preview names and domains" {

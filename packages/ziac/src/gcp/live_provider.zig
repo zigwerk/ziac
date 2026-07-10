@@ -131,7 +131,7 @@ pub const LiveProvider = struct {
         if (isType(node, project_member_type)) return self.ensureProjectMember(context, node, true);
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed.physical_id);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
-        if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed.physical_id);
+        if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed);
         if (network_provider.supports(node)) return self.networkHandler().update(context, node, observed.physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().update(context, node, observed.physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().update(context, node, observed.physical_id);

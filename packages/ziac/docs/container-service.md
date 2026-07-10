@@ -13,6 +13,10 @@ var service = try ziac.gcp.global.ContainerService.build(allocator, gcp, .{
     .regions = &regions,
     .domain = "api.example.com",
     .dns_zone = "example-com",
+    .rollout = .{
+        .strategy = .canary_then_fleet,
+        .canary_region = regions[0],
+    },
 });
 defer service.deinit();
 ```
@@ -48,6 +52,12 @@ Cloud Run region. This lets PSC and public-static-egress components provide
 different regional subnets without copying self-links. A regional map and the
 single shared `direct_vpc` option are mutually exclusive.
 
+`rollout.strategy = .canary_then_fleet` adds a dependency from every other
+regional Cloud Run service to the selected canary. Cloud Run operation and
+revision readiness must complete in the canary before fleet updates can start.
+The built-in `global-container` stack selects the provider primary region as
+canary; the component library retains `.parallel` as its compatibility default.
+
 ## Traffic Policy
 
 Regional services use
@@ -62,6 +72,10 @@ The component requires at least two unique regions and Premium network tier.
 region plus startup and liveness probes. Cloud Run validates all probe, scaling,
 resource, environment, secret-volume, and Direct VPC settings before graph
 construction completes.
+
+Serverless NEG backends do not support capacity scalers or balancing-mode
+weights. Canary progression therefore occurs between Cloud Run regional service
+operations, not through an unsupported load-balancer control.
 
 The backend service enables consecutive-5xx and consecutive-gateway outlier
 detection with 100% enforcement, a one-second analysis interval, and a
@@ -92,3 +106,5 @@ project suffix.
 
 See `docs/private-service-connect.md` for a complete protected CockroachDB,
 regional Direct VPC, and global service composition.
+See `docs/rollouts-recovery.md` for canary failure, rollback, interruption, and
+quota runbooks.

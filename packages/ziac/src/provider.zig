@@ -6,6 +6,7 @@ const state = @import("state.zig");
 const value = @import("value.zig");
 
 pub const ProviderError = provider_error.ProviderError;
+pub const ProviderDiagnosticRecorder = provider_error.DiagnosticRecorder;
 
 pub const DiffKind = enum {
     noop,
@@ -127,6 +128,7 @@ pub const OperationContext = struct {
     physical_id: ?[]const u8 = null,
     operation_handle: ?[]const u8 = null,
     destructive_confirmation: bool = false,
+    diagnostics: ?*provider_error.DiagnosticRecorder = null,
 
     pub fn init(allocator: std.mem.Allocator) OperationContext {
         return .{ .allocator = allocator };
@@ -154,6 +156,11 @@ pub const OperationContext = struct {
         if (self.deadline_millis) |deadline| {
             if (self.nowMillis() >= deadline) return error.ProviderTimeout;
         }
+    }
+
+    pub fn recordDiagnostic(self: *OperationContext, source: provider_error.DiagnosticSource) void {
+        const recorder = self.diagnostics orelse return;
+        recorder.record(source) catch {};
     }
 
     pub fn resolveOutputString(
@@ -333,6 +340,7 @@ pub const FakeProvider = struct {
     allocator: std.mem.Allocator,
     remotes: std.StringHashMap(RemoteRecord),
     fail_next: ?ProviderError = null,
+    diagnostic_next: ?provider_error.DiagnosticSource = null,
     replace_changes: bool = false,
     reads: usize = 0,
     creates: usize = 0,
@@ -418,9 +426,11 @@ pub const FakeProvider = struct {
         self.active_operations -= 1;
     }
 
-    fn takeFailureLocked(self: *FakeProvider) ProviderError!void {
+    fn takeFailureLocked(self: *FakeProvider, context: *OperationContext) ProviderError!void {
         if (self.fail_next) |err| {
             self.fail_next = null;
+            if (self.diagnostic_next) |diagnostic| context.recordDiagnostic(diagnostic);
+            self.diagnostic_next = null;
             return err;
         }
     }
@@ -435,7 +445,7 @@ pub const FakeProvider = struct {
         defer self.endOperation();
         self.mutex.lock();
         defer self.mutex.unlock();
-        try self.takeFailureLocked();
+        try self.takeFailureLocked(context);
         self.reads += 1;
         if (self.last_read_physical_id) |physical_id| self.allocator.free(physical_id);
         self.last_read_physical_id = if (context.physical_id) |physical_id|
@@ -457,7 +467,7 @@ pub const FakeProvider = struct {
         defer self.endOperation();
         self.mutex.lock();
         defer self.mutex.unlock();
-        try self.takeFailureLocked();
+        try self.takeFailureLocked(context);
         if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash)) {
             return DiffResult.init(context.allocator, .noop, &.{});
         }
@@ -478,7 +488,7 @@ pub const FakeProvider = struct {
         defer self.endOperation();
         self.mutex.lock();
         defer self.mutex.unlock();
-        try self.takeFailureLocked();
+        try self.takeFailureLocked(context);
         if (self.remotes.contains(node.id)) return error.Conflict;
         self.creates += 1;
 
@@ -500,7 +510,7 @@ pub const FakeProvider = struct {
         defer self.endOperation();
         self.mutex.lock();
         defer self.mutex.unlock();
-        try self.takeFailureLocked();
+        try self.takeFailureLocked(context);
         const remote = self.remotes.getPtr(node.id) orelse return error.NotFound;
         self.updates += 1;
 
@@ -526,7 +536,7 @@ pub const FakeProvider = struct {
         defer self.endOperation();
         self.mutex.lock();
         defer self.mutex.unlock();
-        try self.takeFailureLocked();
+        try self.takeFailureLocked(context);
         self.deletes += 1;
         self.last_delete_destructive_confirmation = context.destructive_confirmation;
         if (self.remotes.fetchRemove(node.id)) |removed| {
@@ -546,7 +556,7 @@ pub const FakeProvider = struct {
         defer self.endOperation();
         self.mutex.lock();
         defer self.mutex.unlock();
-        try self.takeFailureLocked();
+        try self.takeFailureLocked(context);
         if (self.remotes.contains(node.id)) return error.Conflict;
         self.imports += 1;
         try self.insertRemote(node, physical_id);
@@ -560,7 +570,7 @@ pub const FakeProvider = struct {
     ) ProviderError!void {
         const resource_id = try self.allocator.dupe(u8, node.id);
         errdefer self.allocator.free(resource_id);
-        var output_source: [3]state.StateOutput = undefined;
+        var output_source: [8]state.StateOutput = undefined;
         output_source[0] = .{ .name = "physical_id", .value = .{ .string = physical_id } };
         var output_count: usize = 1;
         var dynamic_output: ?[]const u8 = null;
@@ -618,6 +628,31 @@ pub const FakeProvider = struct {
                 output_source[output_count] = .{
                     .name = "service_account",
                     .value = .{ .string = service_account.? },
+                };
+                output_count += 1;
+                output_source[output_count] = .{
+                    .name = "latest_revision",
+                    .value = .{ .string = "fake-revision" },
+                };
+                output_count += 1;
+                output_source[output_count] = .{
+                    .name = "latest_created_revision",
+                    .value = .{ .string = "fake-revision" },
+                };
+                output_count += 1;
+                output_source[output_count] = .{
+                    .name = "image_ref",
+                    .value = .{ .string = inputString(node, "image") orelse "unknown-image" },
+                };
+                output_count += 1;
+                output_source[output_count] = .{
+                    .name = "previous_image_ref",
+                    .value = .{ .unknown_reason = "No previous Cloud Run image" },
+                };
+                output_count += 1;
+                output_source[output_count] = .{
+                    .name = "ready",
+                    .value = .{ .boolean = true },
                 };
                 output_count += 1;
             }

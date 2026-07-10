@@ -109,11 +109,19 @@ pub const Service = struct {
         pub const ServiceUrl = output.Descriptor("service_url", []const u8, .public);
         pub const ServiceAccount = output.Descriptor("service_account", []const u8, .public);
         pub const LatestRevision = output.Descriptor("latest_revision", []const u8, .public);
+        pub const LatestCreatedRevision = output.Descriptor("latest_created_revision", []const u8, .public);
+        pub const ImageRef = output.Descriptor("image_ref", []const u8, .public);
+        pub const PreviousImageRef = output.Descriptor("previous_image_ref", []const u8, .public);
+        pub const Ready = output.Descriptor("ready", bool, .public);
 
         pub fn field(comptime name: []const u8) type {
             if (std.mem.eql(u8, name, "service_url")) return ServiceUrl;
             if (std.mem.eql(u8, name, "service_account")) return ServiceAccount;
             if (std.mem.eql(u8, name, "latest_revision")) return LatestRevision;
+            if (std.mem.eql(u8, name, "latest_created_revision")) return LatestCreatedRevision;
+            if (std.mem.eql(u8, name, "image_ref")) return ImageRef;
+            if (std.mem.eql(u8, name, "previous_image_ref")) return PreviousImageRef;
+            if (std.mem.eql(u8, name, "ready")) return Ready;
             @compileError("ZIAC120 unknown gcp.run.Service output field: " ++ name);
         }
     };
@@ -122,6 +130,10 @@ pub const Service = struct {
     service_url: Outputs.ServiceUrl.OutputType,
     service_account: Outputs.ServiceAccount.OutputType,
     latest_revision: Outputs.LatestRevision.OutputType,
+    latest_created_revision: Outputs.LatestCreatedRevision.OutputType,
+    image_ref: Outputs.ImageRef.OutputType,
+    previous_image_ref: Outputs.PreviousImageRef.OutputType,
+    ready: Outputs.Ready.OutputType,
 
     pub fn build(
         allocator: std.mem.Allocator,
@@ -186,7 +198,7 @@ pub const Service = struct {
             .id = id,
             .provider = .gcp,
             .type_name = "gcp.run.Service",
-            .schema_version = 2,
+            .schema_version = 3,
             .logical_id = args.name,
             .inputs = .{ .object = &input_fields },
         }) catch |err| switch (err) {
@@ -200,6 +212,10 @@ pub const Service = struct {
             .service_url = Outputs.ServiceUrl.fromResource(node.id),
             .service_account = Outputs.ServiceAccount.fromResource(node.id),
             .latest_revision = Outputs.LatestRevision.fromResource(node.id),
+            .latest_created_revision = Outputs.LatestCreatedRevision.fromResource(node.id),
+            .image_ref = Outputs.ImageRef.fromResource(node.id),
+            .previous_image_ref = Outputs.PreviousImageRef.fromResource(node.id),
+            .ready = Outputs.Ready.fromResource(node.id),
         };
     }
 

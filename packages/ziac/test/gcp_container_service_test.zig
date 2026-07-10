@@ -147,6 +147,66 @@ test "global ContainerService graph is deterministic" {
     }
 }
 
+test "global ContainerService gates the fleet on one regional canary" {
+    const rollout_regions = [_][]const u8{ "europe-west1", "us-central1", "asia-northeast1" };
+    var component = try ziac.gcp.global.ContainerService.build(std.testing.allocator, provider, .{
+        .name = "api",
+        .image = "example/api@sha256:abc",
+        .regions = &rollout_regions,
+        .domain = "api.example.com",
+        .rollout = .{
+            .strategy = .canary_then_fleet,
+            .canary_region = "europe-west1",
+        },
+    });
+    defer component.deinit();
+
+    try std.testing.expect(hasDependency(
+        &component.graph,
+        "gcp.run.Service.us-central1.api",
+        "gcp.run.Service.europe-west1.api",
+    ));
+    try std.testing.expect(hasDependency(
+        &component.graph,
+        "gcp.run.Service.asia-northeast1.api",
+        "gcp.run.Service.europe-west1.api",
+    ));
+    try std.testing.expect(!hasDependency(
+        &component.graph,
+        "gcp.run.Service.europe-west1.api",
+        "gcp.run.Service.us-central1.api",
+    ));
+    try component.graph.validateAcyclic();
+}
+
+test "global ContainerService rejects missing and unknown canary regions" {
+    try std.testing.expectError(error.MissingCanaryRegion, ziac.gcp.global.ContainerService.build(
+        std.testing.allocator,
+        provider,
+        .{
+            .name = "api",
+            .image = "example/api@sha256:abc",
+            .regions = &regions,
+            .domain = "api.example.com",
+            .rollout = .{ .strategy = .canary_then_fleet },
+        },
+    ));
+    try std.testing.expectError(error.CanaryRegionNotFound, ziac.gcp.global.ContainerService.build(
+        std.testing.allocator,
+        provider,
+        .{
+            .name = "api",
+            .image = "example/api@sha256:abc",
+            .regions = &regions,
+            .domain = "api.example.com",
+            .rollout = .{
+                .strategy = .canary_then_fleet,
+                .canary_region = "asia-northeast1",
+            },
+        },
+    ));
+}
+
 test "global ContainerService wires a typed image output into every region" {
     const digest = "1111111111111111111111111111111111111111111111111111111111111111";
     var image = try ziac.gcp.cloud_build.ZigImage.build(std.testing.allocator, provider, .{
@@ -248,6 +308,13 @@ fn dependencyCount(graph: *const ziac.ResourceGraph, dependency_id: []const u8) 
         count += 1;
     };
     return count;
+}
+
+fn hasDependency(graph: *const ziac.ResourceGraph, from: []const u8, to: []const u8) bool {
+    for (graph.dependencies.items) |edge| {
+        if (std.mem.eql(u8, edge.from, from) and std.mem.eql(u8, edge.to, to)) return true;
+    }
+    return false;
 }
 
 fn findType(graph: *const ziac.ResourceGraph, type_name: []const u8) ziac.ResourceNode {

@@ -72,26 +72,26 @@ pub const Handler = struct {
         defer context.allocator.free(path);
         const handle = try self.startOperation(context, path, "POST", body);
         defer context.allocator.free(handle);
-        return pendingResult(context.allocator, node, handle);
+        return pendingResult(context, node, handle, null);
     }
 
     pub fn update(
         self: Handler,
         context: *provider_mod.OperationContext,
         node: resource.ResourceNode,
-        physical_id: []const u8,
+        observed: *const provider_mod.ResourceResult,
     ) ProviderError!provider_mod.ResourceResult {
         const body = try serviceBodyAlloc(context, node);
         defer context.allocator.free(body);
         const path = try std.fmt.allocPrint(
             context.allocator,
             "/v2/{s}?updateMask=labels,ingress,invokerIamDisabled,template",
-            .{physical_id},
+            .{observed.physical_id},
         );
         defer context.allocator.free(path);
         const handle = try self.startOperation(context, path, "PATCH", body);
         defer context.allocator.free(handle);
-        return pendingResult(context.allocator, node, handle);
+        return pendingResult(context, node, handle, observed);
     }
 
     pub fn delete(
@@ -163,21 +163,50 @@ pub const Handler = struct {
 };
 
 fn pendingResult(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     handle: []const u8,
+    observed: ?*const provider_mod.ResourceResult,
 ) ProviderError!provider_mod.ResourceResult {
+    const allocator = context.allocator;
     const physical_id = try serviceNameAlloc(allocator, node);
     defer allocator.free(physical_id);
     const service_account = try requiredString(node.inputs, "service_account");
+    const current_image_text = if (observed) |current|
+        try resolveStringValue(context, try requiredValue(current.observed_inputs, "image"))
+    else
+        null;
+    const current_image: value.Value = if (current_image_text) |image|
+        .{ .string = image }
+    else
+        .{ .unknown_reason = "Cloud Run operation pending" };
+    const previous_image = try pendingPreviousImageAlloc(context, node, current_image_text);
+    defer if (previous_image == .string) allocator.free(previous_image.string);
     const outputs = [_]state.StateOutput{
         .{ .name = "service_url", .value = .{ .unknown_reason = "Cloud Run operation pending" } },
         .{ .name = "service_account", .value = .{ .string = service_account } },
         .{ .name = "latest_revision", .value = .{ .unknown_reason = "Cloud Run operation pending" } },
+        .{ .name = "latest_created_revision", .value = .{ .unknown_reason = "Cloud Run operation pending" } },
+        .{ .name = "image_ref", .value = current_image },
+        .{ .name = "previous_image_ref", .value = previous_image },
+        .{ .name = "ready", .value = .{ .boolean = false } },
     };
     var result = try provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, handle);
     result.completed = false;
     return result;
+}
+
+fn pendingPreviousImageAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    current_image: ?[]const u8,
+) ProviderError!value.Value {
+    const current = current_image orelse return .{ .unknown_reason = "No previous Cloud Run image" };
+    const desired = try resolveStringValue(context, try requiredValue(node.inputs, "image"));
+    if (!std.mem.eql(u8, current, desired)) {
+        return .{ .string = try context.allocator.dupe(u8, current) };
+    }
+    return previousImageValueAlloc(context, node.id, current);
 }
 
 fn resultFromServiceJson(
@@ -189,19 +218,78 @@ fn resultFromServiceJson(
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.ProviderBug;
     defer parsed.deinit();
     const root = asObject(parsed.value) orelse return error.ProviderBug;
+    try validateServiceReady(root);
     const physical_id = asString(root.get("name")) orelse return error.ProviderBug;
     const uri = asString(root.get("uri")) orelse return error.ProviderBug;
     const revision = asString(root.get("latestReadyRevision")) orelse return error.ProviderBug;
+    const created_revision = asString(root.get("latestCreatedRevision")) orelse return error.ProviderBug;
     const template = try requiredObject(root, "template");
     const service_account = try requiredJsonString(template, "serviceAccount");
+    const containers_value = template.get("containers") orelse return error.ProviderBug;
+    const containers = asArray(containers_value) orelse return error.ProviderBug;
+    if (containers.items.len == 0) return error.ProviderBug;
+    const container = asObject(containers.items[0]) orelse return error.ProviderBug;
+    const image_ref = try requiredJsonString(container, "image");
+    const previous_image = try previousImageValueAlloc(context, node.id, image_ref);
+    defer if (previous_image == .string) allocator.free(previous_image.string);
     var observed = try normalizedInputsAlloc(context, node, root);
     defer observed.deinit(allocator);
     const outputs = [_]state.StateOutput{
         .{ .name = "service_url", .value = .{ .string = uri } },
         .{ .name = "service_account", .value = .{ .string = service_account } },
         .{ .name = "latest_revision", .value = .{ .string = revision } },
+        .{ .name = "latest_created_revision", .value = .{ .string = created_revision } },
+        .{ .name = "image_ref", .value = .{ .string = image_ref } },
+        .{ .name = "previous_image_ref", .value = previous_image },
+        .{ .name = "ready", .value = .{ .boolean = true } },
     };
     return provider_mod.ResourceResult.init(allocator, physical_id, observed, &outputs, null);
+}
+
+fn validateServiceReady(root: std.json.ObjectMap) ProviderError!void {
+    const reconciling = jsonBool(root.get("reconciling")) orelse return error.ProviderBug;
+    if (reconciling) return error.TransientFailure;
+    const terminal = try requiredObject(root, "terminalCondition");
+    const condition = try requiredJsonString(terminal, "state");
+    if (std.mem.eql(u8, condition, "CONDITION_FAILED")) return error.RemoteOperationFailed;
+    if (!std.mem.eql(u8, condition, "CONDITION_SUCCEEDED")) return error.TransientFailure;
+    const created = try requiredJsonString(root, "latestCreatedRevision");
+    const ready = try requiredJsonString(root, "latestReadyRevision");
+    if (!std.mem.eql(u8, created, ready)) return error.TransientFailure;
+}
+
+fn previousImageValueAlloc(
+    context: *provider_mod.OperationContext,
+    resource_id: []const u8,
+    current_image: []const u8,
+) ProviderError!value.Value {
+    const store = context.state orelse return .{ .unknown_reason = "No previous Cloud Run image" };
+    const maybe_record = store.getOwned(context.allocator, resource_id) catch |err| return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.DuplicateField, error.MissingRecord => error.ProviderBug,
+    };
+    var record = maybe_record orelse return .{ .unknown_reason = "No previous Cloud Run image" };
+    defer record.deinit(context.allocator);
+    const observed_image = stateOutputString(record.outputs, "image_ref");
+    if (observed_image) |image| {
+        if (!std.mem.eql(u8, image, current_image)) {
+            return .{ .string = try context.allocator.dupe(u8, image) };
+        }
+    }
+    const previous = stateOutputString(record.outputs, "previous_image_ref") orelse
+        return .{ .unknown_reason = "No previous Cloud Run image" };
+    return .{ .string = try context.allocator.dupe(u8, previous) };
+}
+
+fn stateOutputString(outputs: []const state.StateOutput, name: []const u8) ?[]const u8 {
+    for (outputs) |provider_output| {
+        if (!std.mem.eql(u8, provider_output.name, name)) continue;
+        return switch (provider_output.value) {
+            .string => |text| text,
+            else => null,
+        };
+    }
+    return null;
 }
 
 fn serviceBodyAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {

@@ -16,6 +16,10 @@ pub fn buildGlobalService(allocator: std.mem.Allocator) !ziac.gcp.global.Contain
         .regions = &regions,
         .domain = "api.example.com",
         .dns_zone = "example-com",
+        .rollout = .{
+            .strategy = .canary_then_fleet,
+            .canary_region = regions[0],
+        },
     });
 }
 
@@ -34,5 +38,5 @@ test "global ContainerService example builds the complete graph" {
     defer component.deinit();
     try std.testing.expectEqualStrings("https://api.example.com", component.url.value);
     try std.testing.expectEqual(@as(usize, 14), component.graph.resources.items.len);
-    try std.testing.expectEqual(@as(usize, 13), component.graph.dependencies.items.len);
+    try std.testing.expectEqual(@as(usize, 14), component.graph.dependencies.items.len);
 }

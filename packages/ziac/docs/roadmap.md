@@ -176,7 +176,8 @@ this checkout.
 - Keyless GitHub WIF and isolated preview stages: complete, including native
   GitHub external-account ADC, repository-bound stage names, scoped GCP/DNS
   identities, saved-plan workflow template, and production-proof cleanup.
-- Canary regional rollouts, rollback, recovery, and protection.
+- Canary regional rollouts, revision readiness, guarded digest rollback,
+  interruption recovery, and quota/rate diagnostics: complete.
 - Release gate, complete docs, and clean-checkout end-to-end verification.
 
 Gate: all automated suites and the configured live end-to-end workflow pass,

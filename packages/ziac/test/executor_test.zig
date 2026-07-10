@@ -262,6 +262,39 @@ test "non-retryable failures stop immediately" {
     try std.testing.expectEqual(@as(u64, 100), clock.nowMs());
 }
 
+test "executor propagates bounded provider diagnostics from operation contexts" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try addNode(&graph, "service");
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    var plan = try ziac.plan.buildPlan(std.testing.allocator, &graph, &state);
+    defer plan.deinit();
+    var fake = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.fail_next = error.QuotaExceeded;
+    fake.diagnostic_next = .{
+        .category = .quota,
+        .service = "compute.googleapis.com",
+        .status = 429,
+        .quota_metric = "compute.googleapis.com/backend_services",
+        .quota_limit = "BACKEND-SERVICES-per-project",
+    };
+    var diagnostics = ziac.provider_error.DiagnosticRecorder.init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    try std.testing.expectError(
+        error.QuotaExceeded,
+        ziac.executor.executePlan(std.testing.allocator, &plan, &state, registryFor(&fake), .{
+            .diagnostics = &diagnostics,
+        }),
+    );
+    var recorded = (try diagnostics.snapshotAlloc(std.testing.allocator)).?;
+    defer recorded.deinit();
+    try std.testing.expectEqualStrings("compute.googleapis.com/backend_services", recorded.quota_metric.?);
+    try std.testing.expectEqualStrings("BACKEND-SERVICES-per-project", recorded.quota_limit.?);
+}
+
 test "operation timeout prevents a retry beyond the resource deadline" {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     defer graph.deinit();

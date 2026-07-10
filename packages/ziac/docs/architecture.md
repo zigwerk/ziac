@@ -23,6 +23,8 @@ Initial source domains:
   adapter.
 - `ci.zig`: repository-bound preview identity, provider name/domain scoping,
   and cleanup policy.
+- `rollout.zig`: complete-graph Cloud Run rollback transformation and immutable
+  image-history validation.
 - `refresh.zig`: read-only provider refresh into observed state.
 - `importer.zig`: validated adoption of existing provider resources.
 
@@ -32,6 +34,11 @@ receives an `OperationContext` containing its allocator, clock, absolute
 deadline, cooperative cancellation handle, and read-only access to dependency
 outputs in the current state snapshot. Providers must not retain the context or
 borrowed output values after returning.
+
+Operation contexts can also publish a bounded provider diagnostic to a shared,
+thread-safe recorder. GCP maps redacted HTTP status, request ID, retry delay,
+and quota identifiers into that generic shape before discarding the response.
+Diagnostics remain process-local and are not part of state or plans.
 
 Plans own sorted dependency IDs for every operation. Apply phases execute
 dependencies before consumers; destroy phases reverse that relationship.
@@ -91,6 +98,13 @@ GitHub Actions WIF enters through the same native external-account ADC path as
 other OIDC providers: URL subject token, STS exchange, optional service-account
 impersonation, and token cache. Temporary `gha-creds-*.json` files are excluded
 from both version control and deterministic Zig source archives.
+
+Global Cloud Run rollout ordering is graph-native. Under
+`canary_then_fleet`, every fleet service depends on one canary service, so its
+Google operation and revision readiness complete before the fleet level runs.
+Rollback clones the complete graph, rewrites only eligible service image inputs
+to stored prior digests, and rejects any plan containing unrelated mutation or
+destruction.
 
 Provider output descriptors carry their field name, Zig value type, and secrecy
 at comptime. Resource builders expose typed references instead of predicting

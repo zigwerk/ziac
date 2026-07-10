@@ -1,6 +1,6 @@
-# Ziac Cloud Run V2 Contract
+# Ziac Cloud Run V3 Contract
 
-`gcp.run.Service` is a schema-version-2 resource backed by the Cloud Run Admin
+`gcp.run.Service` is a schema-version-3 resource backed by the Cloud Run Admin
 API v2. The resource builder retains a complete canonical runtime declaration;
 the provider does not depend on temporary builder values or synthetic URLs.
 
@@ -34,19 +34,26 @@ container resources, probes, environment, volumes, scaling, VPC access, and
 identity. Equivalent live state hashes to the desired document and plans noop.
 Project, region, and service name changes replace; runtime changes update.
 
-Live outputs are `service_url` from the API's canonical `uri`,
-`service_account` from the revision template, and `latest_revision` from
-`latestReadyRevision`.
+Live outputs include `service_url`, `service_account`, `latest_revision`,
+`latest_created_revision`, `image_ref`, `previous_image_ref`, and `ready`.
+Current and previous image outputs form the guarded rollback boundary; they
+contain immutable references, never image contents or registry credentials.
 
 ## Operations And Recovery
 
 Create and patch return a pending resource result with the Google operation
 name. Apply writes that handle and deterministic physical service name to the
 checkpoint before polling. It then completes the operation in the same deploy
-and writes terminal outputs with the handle cleared.
+and writes terminal outputs with the handle cleared. Completion additionally
+requires reconciliation to stop, a succeeded terminal condition, and matching
+latest-created/latest-ready revisions. Pending reconciliation is transient and
+a failed terminal condition is a remote-operation failure.
 
 If the process stops after the pending checkpoint, refresh, refreshed planning,
 and executor resume pass both physical ID and operation handle into the provider
 read context. The read polls the original operation and adopts its response,
 without issuing a duplicate create or update. Delete currently polls to
 completion inside the provider because the delete vtable has no result handle.
+
+See `rollouts-recovery.md` for regional canary ordering, image history, guarded
+rollback, and quota diagnostics.

@@ -47,6 +47,7 @@ pub const ExecuteOptions = struct {
     causal_store: ?*fx.CausalStore = null,
     checkpoint: ?checkpoint_mod.Checkpoint = null,
     destructive_confirmation: bool = false,
+    diagnostics: ?*provider_mod.ProviderDiagnosticRecorder = null,
 };
 
 pub const ExecutionLevel = struct {
@@ -352,6 +353,7 @@ fn operationContext(
             operation.resource.lifecycle.operation_timeout_millis,
         ) catch std.math.maxInt(u64),
         .destructive_confirmation = environment.options.destructive_confirmation,
+        .diagnostics = environment.options.diagnostics,
     };
 }
 

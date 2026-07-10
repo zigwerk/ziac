@@ -121,6 +121,141 @@ test "cli canonical preview cleanup retains destructive confirmation" {
     try std.testing.expectEqual(ziac.cli.Exit.success, confirmed);
 }
 
+test "cli rollback requires confirmation before lock acquisition" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "rollback", "--stack", "hello-global", "--stage", "prod",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.provider_error, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "DestructiveConfirmationRequired") != null);
+    try std.testing.expect(!try env.state.hasLock("hello-global", "prod"));
+}
+
+test "cli rollback rejects mutable current Cloud Run images" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    _ = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy", "--stack", "hello-global", "--stage", "prod",
+    }, &env);
+    console.stderr.clearRetainingCapacity();
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "rollback", "--stack", "hello-global", "--stage", "prod", "--confirm",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.invalid_graph, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "RollbackImageNotImmutable") != null);
+    try std.testing.expect(!try env.state.hasLock("hello-global", "prod"));
+}
+
+test "cli rollback applies the previous global image through normal state checkpoints" {
+    const image_v1 = "europe-west1-docker.pkg.dev/test-ziac-disposable/apps/api@sha256:1111111111111111111111111111111111111111111111111111111111111111";
+    const image_v2 = "europe-west1-docker.pkg.dev/test-ziac-disposable/apps/api@sha256:2222222222222222222222222222222222222222222222222222222222222222";
+    const service_regions = [_][]const u8{ "europe-west1", "us-central1" };
+    var registry = ziac.stack_registry.configuredRegistry(.{
+        .project_id = "test-ziac-disposable",
+        .region = service_regions[0],
+        .regions = &service_regions,
+        .service_account = "api@test-ziac-disposable.iam.gserviceaccount.com",
+        .image = image_v2,
+        .domain = "api.example.com",
+        .dns_zone = "example-com",
+    });
+    var program = try registry.build(std.testing.allocator, .{ .stack = "global-container", .stage = "prod" });
+    defer program.deinit();
+
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    state.setLineage("global-container/prod");
+    for (program.graph.resources.items) |node| {
+        const desired_hash = std.fmt.bytesToHex(node.inputs_hash, .lower);
+        const service_outputs = [_]ziac.state.StateOutput{
+            .{ .name = "image_ref", .value = .{ .string = image_v2 } },
+            .{ .name = "previous_image_ref", .value = .{ .string = image_v1 } },
+        };
+        const address_outputs = [_]ziac.state.StateOutput{
+            .{ .name = "address", .value = .{ .string = "203.0.113.10" } },
+        };
+        const certificate_outputs = [_]ziac.state.StateOutput{
+            .{ .name = "status", .value = .{ .string = "ACTIVE" } },
+        };
+        const outputs: []const ziac.state.StateOutput = if (std.mem.eql(u8, node.type_name, "gcp.run.Service"))
+            &service_outputs
+        else if (std.mem.eql(u8, node.type_name, "gcp.compute.GlobalAddress"))
+            &address_outputs
+        else if (std.mem.eql(u8, node.type_name, "gcp.compute.ManagedSslCertificate"))
+            &certificate_outputs
+        else
+            &.{};
+        try state.put(.{
+            .resource_id = node.id,
+            .provider = node.provider,
+            .type_name = node.type_name,
+            .schema_version = node.schema_version,
+            .logical_id = node.logical_id,
+            .physical_id = node.id,
+            .desired_hash = desired_hash[0..],
+            .observed_hash = desired_hash[0..],
+            .outputs = outputs,
+            .status = .updated,
+        });
+    }
+    const local_store = ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(&fs));
+    try local_store.saveResources("global-container", "prod", &state);
+    var local = ziac.state_backend.Local.init(local_store);
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = ziac.cli.Env{
+        .console = &console,
+        .registry = registry,
+        .state = local.store(),
+    };
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "rollback", "--stack", "global-container", "--stage", "prod", "--confirm",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Rollback complete") != null);
+    var loaded = try env.state.loadResources("global-container", "prod");
+    defer loaded.deinit();
+    for (service_regions) |region| {
+        const resource_id = try std.fmt.allocPrint(std.testing.allocator, "gcp.run.Service.{s}.api", .{region});
+        defer std.testing.allocator.free(resource_id);
+        const record = loaded.store.get(resource_id).?;
+        try std.testing.expectEqualStrings(image_v1, stateOutputString(record.outputs, "image_ref").?);
+    }
+
+    console.stdout.clearRetainingCapacity();
+    console.stderr.clearRetainingCapacity();
+    const repeated = try ziac.cli.run(std.testing.allocator, &.{
+        "rollback", "--stack", "global-container", "--stage", "prod", "--confirm",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.invalid_graph, repeated);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "RollbackUnavailable") != null);
+}
+
+fn stateOutputString(outputs: []const ziac.state.StateOutput, name: []const u8) ?[]const u8 {
+    for (outputs) |provider_output| {
+        if (!std.mem.eql(u8, provider_output.name, name)) continue;
+        return switch (provider_output.value) {
+            .string => |text| text,
+            else => null,
+        };
+    }
+    return null;
+}
+
 test "cli deploy persists state and redacted outputs" {
     var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer fs.deinit();

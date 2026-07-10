@@ -32,8 +32,11 @@ test "live GCP Cloud Run lifecycle checkpoints and resumes operations" {
         .image = "api:v2",
     });
     defer changed.deinit(std.testing.allocator);
+    var store = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer store.deinit();
     const live = harness.live.provider();
     var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    context.state = &store;
 
     var before = try live.readWithContext(&context, service.node);
     defer before.deinit();
@@ -49,6 +52,24 @@ test "live GCP Cloud Run lifecycle checkpoints and resumes operations" {
     try std.testing.expect(present == .present);
     try std.testing.expectEqualStrings("https://api-europe-west1.example.run.app", present.present.outputs[0].value.string);
     try std.testing.expectEqualStrings("api-00001-old", present.present.outputs[2].value.string);
+    try std.testing.expectEqualStrings("api-00001-old", present.present.outputs[3].value.string);
+    try std.testing.expectEqualStrings("api:v1", present.present.outputs[4].value.string);
+    try std.testing.expect(present.present.outputs[5].value == .unknown_reason);
+    try std.testing.expect(present.present.outputs[6].value.boolean);
+    const desired_hash = std.fmt.bytesToHex(service.node.inputs_hash, .lower);
+    const observed_hash = std.fmt.bytesToHex(present.present.observed_hash, .lower);
+    try store.put(.{
+        .resource_id = service.node.id,
+        .provider = .gcp,
+        .type_name = service.node.type_name,
+        .schema_version = service.node.schema_version,
+        .logical_id = service.node.logical_id,
+        .physical_id = present.present.physical_id,
+        .desired_hash = desired_hash[0..],
+        .observed_hash = observed_hash[0..],
+        .outputs = present.present.outputs,
+        .status = .created,
+    });
     var noop = try live.diffWithContext(&context, service.node, &present.present);
     defer noop.deinit();
     try std.testing.expectEqual(ziac.provider.DiffKind.noop, noop.kind);
@@ -60,12 +81,17 @@ test "live GCP Cloud Run lifecycle checkpoints and resumes operations" {
     var updating = try live.updateWithContext(&context, changed.node, &present.present);
     defer updating.deinit();
     try std.testing.expect(!updating.completed);
+    try std.testing.expectEqualStrings("api:v1", updating.outputs[4].value.string);
+    try std.testing.expectEqualStrings("api:v1", updating.outputs[5].value.string);
     context.physical_id = updating.physical_id;
     context.operation_handle = updating.operation_handle;
     var updated = try live.readWithContext(&context, changed.node);
     defer updated.deinit();
     try std.testing.expectEqual(changed.node.inputs_hash, updated.present.observed_hash);
     try std.testing.expectEqualStrings("api-00002-new", updated.present.outputs[2].value.string);
+    try std.testing.expectEqualStrings("api:v2", updated.present.outputs[4].value.string);
+    try std.testing.expectEqualStrings("api:v1", updated.present.outputs[5].value.string);
+    try std.testing.expect(updated.present.outputs[6].value.boolean);
 
     context.operation_handle = null;
     try live.deleteWithContext(&context, changed.node, updating.physical_id);
@@ -84,6 +110,31 @@ test "live GCP Cloud Run lifecycle checkpoints and resumes operations" {
     try std.testing.expectEqualStrings(
         "https://run.example.test/v2/projects/ziac-dev/locations/europe-west1/operations/create-api",
         harness.transport.requests.items[2].url,
+    );
+}
+
+test "live GCP Cloud Run waits for reconciliation and rejects failed terminal readiness" {
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = serviceStatusJson("api:v2", "api-00002-new", "api-00001-old", true, "CONDITION_PENDING") },
+        .{ .status = 200, .body = serviceStatusJson("api:v2", "api-00002-new", "api-00001-old", false, "CONDITION_FAILED") },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var service = try ziac.gcp.cloud_run.Service.build(std.testing.allocator, providerConfig(), .{
+        .name = "api",
+        .image = "api:v2",
+    });
+    defer service.deinit(std.testing.allocator);
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    try std.testing.expectError(
+        error.TransientFailure,
+        harness.live.provider().readWithContext(&context, service.node),
+    );
+    try std.testing.expectError(
+        error.RemoteOperationFailed,
+        harness.live.provider().readWithContext(&context, service.node),
     );
 }
 
@@ -207,10 +258,12 @@ test "live GCP Cloud Run resolves and preserves typed image and env outputs" {
     const mode_id = "local.Config.mode";
     const secret_id = "gcp.secret.SecretVersion.database.initial";
     const image_ref = "europe-west1-docker.pkg.dev/ziac-dev/services/api@sha256:abc";
+    const previous_image_ref = "europe-west1-docker.pkg.dev/ziac-dev/services/api@sha256:previous";
     const service_json = comptime serviceJsonWithEnv(image_ref, "api-00001-output");
     const responses = [_]zstd.Http.Response{
         operationStarted("create-output-aware"),
         .{ .status = 200, .body = service_json },
+        operationStarted("update-output-aware"),
     };
     var harness: Harness = undefined;
     harness.init(&responses);
@@ -249,6 +302,28 @@ test "live GCP Cloud Run resolves and preserves typed image and env outputs" {
     defer present.deinit();
     try std.testing.expect(present == .present);
     try std.testing.expectEqual(service.node.inputs_hash, present.present.observed_hash);
+    const desired_hash = std.fmt.bytesToHex(service.node.inputs_hash, .lower);
+    const observed_hash = std.fmt.bytesToHex(present.present.observed_hash, .lower);
+    const service_outputs = [_]ziac.state.StateOutput{
+        .{ .name = "image_ref", .value = .{ .string = image_ref } },
+        .{ .name = "previous_image_ref", .value = .{ .string = previous_image_ref } },
+    };
+    try store.put(.{
+        .resource_id = service.node.id,
+        .provider = .gcp,
+        .type_name = service.node.type_name,
+        .schema_version = service.node.schema_version,
+        .logical_id = service.node.logical_id,
+        .physical_id = present.present.physical_id,
+        .desired_hash = desired_hash[0..],
+        .observed_hash = observed_hash[0..],
+        .outputs = &service_outputs,
+        .status = .created,
+    });
+    var updating = try harness.live.provider().updateWithContext(&context, service.node, &present.present);
+    defer updating.deinit();
+    try std.testing.expectEqualStrings(image_ref, updating.outputs[4].value.string);
+    try std.testing.expectEqualStrings(previous_image_ref, updating.outputs[5].value.string);
 }
 
 test "live GCP Cloud Run rejects secret references from another provider" {
@@ -372,7 +447,17 @@ fn operationDone(comptime operation_id: []const u8, comptime service: []const u8
 }
 
 fn serviceJson(comptime image: []const u8, comptime revision: []const u8) []const u8 {
-    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"latestReadyRevision\":\"" ++ revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[]}}";
+    return serviceStatusJson(image, revision, revision, false, "CONDITION_SUCCEEDED");
+}
+
+fn serviceStatusJson(
+    comptime image: []const u8,
+    comptime created_revision: []const u8,
+    comptime ready_revision: []const u8,
+    comptime reconciling: bool,
+    comptime condition: []const u8,
+) []const u8 {
+    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"reconciling\":" ++ (if (reconciling) "true" else "false") ++ ",\"terminalCondition\":{\"state\":\"" ++ condition ++ "\"},\"latestCreatedRevision\":\"" ++ created_revision ++ "\",\"latestReadyRevision\":\"" ++ ready_revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[]}}";
 }
 
 fn serviceJsonWithVpc(
@@ -381,9 +466,9 @@ fn serviceJsonWithVpc(
     comptime network: []const u8,
     comptime subnetwork: []const u8,
 ) []const u8 {
-    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"latestReadyRevision\":\"" ++ revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[],\"vpcAccess\":{\"egress\":\"ALL_TRAFFIC\",\"networkInterfaces\":[{\"network\":\"" ++ network ++ "\",\"subnetwork\":\"" ++ subnetwork ++ "\",\"tags\":[]}]}}}";
+    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"reconciling\":false,\"terminalCondition\":{\"state\":\"CONDITION_SUCCEEDED\"},\"latestCreatedRevision\":\"" ++ revision ++ "\",\"latestReadyRevision\":\"" ++ revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[],\"vpcAccess\":{\"egress\":\"ALL_TRAFFIC\",\"networkInterfaces\":[{\"network\":\"" ++ network ++ "\",\"subnetwork\":\"" ++ subnetwork ++ "\",\"tags\":[]}]}}}";
 }
 
 fn serviceJsonWithEnv(comptime image: []const u8, comptime revision: []const u8) []const u8 {
-    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"latestReadyRevision\":\"" ++ revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[{\"name\":\"MODE\",\"value\":\"production\"},{\"name\":\"DATABASE_URL\",\"valueSource\":{\"secretKeyRef\":{\"secret\":\"projects/ziac-dev/secrets/database-url\",\"version\":\"7\"}}}],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[]}}";
+    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"reconciling\":false,\"terminalCondition\":{\"state\":\"CONDITION_SUCCEEDED\"},\"latestCreatedRevision\":\"" ++ revision ++ "\",\"latestReadyRevision\":\"" ++ revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[{\"name\":\"MODE\",\"value\":\"production\"},{\"name\":\"DATABASE_URL\",\"valueSource\":{\"secretKeyRef\":{\"secret\":\"projects/ziac-dev/secrets/database-url\",\"version\":\"7\"}}}],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[]}}";
 }
