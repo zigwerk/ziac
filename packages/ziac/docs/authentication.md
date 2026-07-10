@@ -1,0 +1,82 @@
+# Ziac Google Authentication
+
+Ziac implements Google Application Default Credentials natively in Zig. It does
+not shell out to `gcloud`, and provider clients consume the same owned HTTP and
+token-source contracts in tests and live execution.
+
+## Discovery Order
+
+Ziac follows Google's documented ADC order:
+
+1. `GOOGLE_APPLICATION_CREDENTIALS`
+2. The well-known gcloud ADC file
+3. The attached service account through the metadata server
+
+The well-known file is `$HOME/.config/gcloud/application_default_credentials.json`
+on Linux and macOS, or `%APPDATA%/gcloud/application_default_credentials.json`
+on Windows. An explicit environment path that cannot be read is a hard error;
+Ziac does not silently fall through to another identity.
+
+Run discovery without acquiring a token:
+
+```sh
+ziac auth doctor
+```
+
+The command emits `ziac.gcp-auth-doctor.v1` JSON containing only the source and
+credential kind. Credential paths, refresh tokens, private keys, subject tokens,
+client secrets, and access tokens are never included.
+
+## Credential Types
+
+### Authorized User
+
+Ziac reads the local ADC `authorized_user` shape and sends a form-encoded
+`refresh_token` grant to the configured token URI. The client ID, optional client
+secret, and refresh token are treated as credential material and redacted from
+HTTP diagnostics.
+
+### Service Account
+
+Ziac builds an RS256 JWT assertion with `iss`, `scope`, `aud`, `iat`, and a
+one-hour `exp`. Its native signer accepts Google PKCS#8 and PKCS#1 PEM keys,
+constructs PKCS#1 v1.5 SHA-256 signatures, and uses Zig's constant-time modular
+exponentiation. No external crypto process is required.
+
+Service-account keys are supported for compatibility, but Workload Identity
+Federation or an attached service account should be preferred because static
+private keys have a larger security blast radius.
+
+### External Account
+
+The initial external-account surface supports subject tokens from:
+
+- a file containing text or a configured JSON field;
+- an HTTP URL with owned request headers and text or JSON response format.
+
+Ziac exchanges the subject token at Google STS using the RFC 8693 grant,
+audience, scope, requested-token-type, subject-token, and subject-token-type
+fields. If `service_account_impersonation_url` is present, Ziac then calls IAM
+Credentials `generateAccessToken` with the federated token and retains the
+impersonated token's RFC 3339 expiry.
+
+Executable-sourced credentials and cloud-specific AWS environment sources are
+not part of the initial Ziac surface. They must fail as unsupported rather than
+running an untrusted executable implicitly.
+
+### Metadata
+
+The metadata source requests the default attached service-account token from
+`metadata.google.internal` with `Metadata-Flavor: Google`. Token responses own
+their bytes and derive an absolute expiry from `expires_in`.
+
+## Cache And Ownership
+
+`TokenCache` owns its cached token and returns an owned clone to each caller. It
+refreshes when the remaining lifetime is at or below the configured skew; Ziac
+uses a five-minute skew for live clients. Replaced token bytes and temporary
+subject-token or bearer-header buffers are zeroed before release.
+
+All auth paths use the shared `zigeffect-std` HTTP client interface. Scripted
+tests therefore exercise the same request bodies, headers, status handling,
+body limits, cancellation, and redaction boundaries used by live providers.

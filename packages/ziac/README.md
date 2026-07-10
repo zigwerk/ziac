@@ -62,9 +62,14 @@ types, secrecy, and regional scope now validate at comptime; provider-set
 contracts now canonically constrain typed namespaces and runtime registries.
 The build also compiles valid contract fixtures and proves all eight invalid
 fixtures fail for their intended stable `ZIAC` diagnostic. Comptime Contracts M2
-is complete.
+is complete. The production HTTP contract and native Google ADC layer are also
+implemented: authorized-user refresh, native RS256 service-account assertions,
+file/URL Workload Identity Federation, optional service-account impersonation,
+metadata tokens, secure refresh caching, and `ziac auth doctor` all pass
+deterministic tests without invoking `gcloud`.
 
-See `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
+See `docs/authentication.md` for the authentication contract and
+`docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and
 `docs/superpowers/plans/2026-07-10-ziac-e2e-delivery.md`.

@@ -2,6 +2,7 @@ const std = @import("std");
 const zstd = @import("zigeffect_std");
 const checkpoint_mod = @import("checkpoint.zig");
 const executor = @import("executor.zig");
+const gcp_auth = @import("gcp/auth/root.zig");
 const importer = @import("importer.zig");
 const local_state = @import("local_state.zig");
 const plan_mod = @import("plan.zig");
@@ -17,12 +18,15 @@ pub const Exit = struct {
     pub const invalid_graph: u8 = 4;
     pub const state_error: u8 = 5;
     pub const provider_error: u8 = 6;
+    pub const auth_error: u8 = 7;
 };
 
 pub const Env = struct {
     console: *zstd.Console.CapturedConsole,
     registry: stack_registry.StackRegistry,
     state: local_state.Store,
+    auth_env: ?*zstd.Env.EnvMap = null,
+    auth_files: ?gcp_auth.FileReader = null,
 };
 
 const Args = struct {
@@ -72,6 +76,13 @@ const unlock_options = [_]zstd.Cli.OptionSpec{
     .{ .name = "force", .kind = .boolean, .help = "override lineage check" },
 };
 
+const auth_subcommands = [_]zstd.Cli.CommandSpec{
+    .{
+        .name = "doctor",
+        .description = "inspect Google Application Default Credentials",
+    },
+};
+
 const subcommands = [_]zstd.Cli.CommandSpec{
     .{
         .name = "plan",
@@ -113,6 +124,11 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .description = "remove a local state writer lock",
         .options = unlock_options[0..],
     },
+    .{
+        .name = "auth",
+        .description = "inspect authentication",
+        .subcommands = auth_subcommands[0..],
+    },
 };
 
 pub fn commandSpec() zstd.Cli.CommandSpec {
@@ -137,6 +153,7 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
     if (std.mem.eql(u8, args.command, "refresh")) return runRefresh(allocator, env, args);
     if (std.mem.eql(u8, args.command, "import")) return runImport(allocator, env, args);
     if (std.mem.eql(u8, args.command, "unlock")) return runUnlock(env, args);
+    if (std.mem.eql(u8, args.command, "doctor")) return runAuthDoctor(allocator, env);
 
     try writeError(env, "usage", error.UnknownSubcommand);
     return Exit.usage;
@@ -148,6 +165,14 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
 
     if (std.mem.eql(u8, parsed.command, "ziac")) return error.MissingSubcommand;
 
+    if (std.mem.eql(u8, parsed.command, "doctor")) {
+        return .{
+            .command = parsed.command,
+            .stack = "",
+            .stage = "",
+        };
+    }
+
     return .{
         .command = parsed.command,
         .stack = parsed.optionValue("stack") orelse return error.MissingRequiredOption,
@@ -158,6 +183,30 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .force = parsed.optionValue("force") != null,
         .json = parsed.optionValue("json") != null,
     };
+}
+
+fn runAuthDoctor(allocator: std.mem.Allocator, env: *Env) !u8 {
+    const auth_env = env.auth_env orelse {
+        try writeError(env, "auth", error.AuthEnvironmentUnavailable);
+        return Exit.auth_error;
+    };
+    var auth_files = env.auth_files orelse {
+        try writeError(env, "auth", error.AuthFileSystemUnavailable);
+        return Exit.auth_error;
+    };
+    var resolved = gcp_auth.resolveAdcAlloc(allocator, auth_env.*, &auth_files) catch |err| {
+        try writeError(env, "auth", err);
+        return Exit.auth_error;
+    };
+    defer resolved.deinit(allocator);
+    const diagnostic = resolved.doctorJsonAlloc(allocator) catch |err| {
+        try writeError(env, "auth", err);
+        return Exit.auth_error;
+    };
+    defer allocator.free(diagnostic);
+    try env.console.writeOut(diagnostic);
+    try env.console.writeOut("\n");
+    return Exit.success;
 }
 
 fn runPlan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {

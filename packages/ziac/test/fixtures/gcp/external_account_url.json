@@ -1,0 +1,17 @@
+{
+  "type": "external_account",
+  "audience": "//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/dummy-pool/providers/dummy-provider",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+  "token_url": "https://sts.googleapis.com/v1/token",
+  "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/dummy-service@dummy-project.iam.gserviceaccount.com:generateAccessToken",
+  "credential_source": {
+    "url": "https://oidc.example.test/token",
+    "headers": {
+      "Authorization": "Bearer dummy-source-authorization"
+    },
+    "format": {
+      "type": "json",
+      "subject_token_field_name": "value"
+    }
+  }
+}

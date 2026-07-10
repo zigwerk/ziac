@@ -71,10 +71,10 @@ with their expected Ziac diagnostic codes.
 
 - Owned HTTP response headers, structured errors, timeout, cancellation, and
   `Retry-After` support: complete.
-- Native Google Application Default Credentials and token caching.
+- Native Google Application Default Credentials and token caching: complete.
 - Google REST and long-running operation client.
 - Version-pinned CockroachDB Cloud API client.
-- `ziac auth doctor`.
+- `ziac auth doctor`: complete.
 
 Gate: Google and Cockroach scripted transport suites pass without leaking
 credentials.

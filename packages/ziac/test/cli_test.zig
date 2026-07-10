@@ -190,3 +190,25 @@ test "cli refresh and lineage-checked unlock commands are available" {
     try std.testing.expectEqual(@as(u8, 0), unlock_code);
     try std.testing.expect(!try env.state.hasLock("hello-global", "dev"));
 }
+
+test "cli auth doctor reports ADC source without stack options or secrets" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    try fs.writeFile("/adc.json", @embedFile("fixtures/gcp/authorized_user.json"));
+    var auth_env = ziac.zstd.Env.EnvMap.init(std.testing.allocator);
+    defer auth_env.deinit();
+    try auth_env.put("GOOGLE_APPLICATION_CREDENTIALS", "/adc.json");
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+    env.auth_env = &auth_env;
+    env.auth_files = ziac.gcp.auth.memoryFileReader(&fs);
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{ "auth", "doctor" }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.gcp-auth-doctor.v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "authorized_user") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "dummy-client-secret") == null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "dummy-refresh-token") == null);
+}

@@ -23,10 +23,17 @@ pub fn main(init: std.process.Init) !void {
 
     var cwd = std.Io.Dir.cwd();
     var local_fs = ziac.zstd.FileSystem.LocalFileSystem.init(&cwd, io);
+    var auth_env = ziac.zstd.Env.EnvMap.init(allocator);
+    defer auth_env.deinit();
+    for ([_][]const u8{ "GOOGLE_APPLICATION_CREDENTIALS", "HOME", "APPDATA" }) |name| {
+        if (init.environ_map.get(name)) |value| try auth_env.put(name, value);
+    }
     var env = ziac.cli.Env{
         .console = &console,
         .registry = ziac.stack_registry.fixtureRegistry(),
         .state = ziac.local_state.Store.init(allocator, ziac.local_state.localFiles.store(&local_fs)),
+        .auth_env = &auth_env,
+        .auth_files = ziac.gcp.auth.localFileReader(&local_fs),
     };
 
     const code = try ziac.cli.run(allocator, args.items, &env);

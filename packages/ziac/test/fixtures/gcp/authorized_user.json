@@ -1,0 +1,7 @@
+{
+  "type": "authorized_user",
+  "client_id": "dummy-client.apps.googleusercontent.com",
+  "client_secret": "dummy-client-secret",
+  "refresh_token": "dummy-refresh-token",
+  "quota_project_id": "dummy-billing-project"
+}
