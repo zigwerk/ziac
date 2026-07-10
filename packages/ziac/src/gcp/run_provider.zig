@@ -31,7 +31,7 @@ pub const Handler = struct {
             return err;
         };
         defer response.deinit(context.allocator);
-        return .{ .present = try resultFromServiceJson(context.allocator, node, response.body) };
+        return .{ .present = try resultFromServiceJson(context, node, response.body) };
     }
 
     pub fn diff(
@@ -62,7 +62,7 @@ pub const Handler = struct {
         const project_id = try requiredString(node.inputs, "project_id");
         const region = try requiredString(node.inputs, "region");
         const name = try requiredString(node.inputs, "name");
-        const body = try serviceBodyAlloc(context.allocator, node);
+        const body = try serviceBodyAlloc(context, node);
         defer context.allocator.free(body);
         const path = try std.fmt.allocPrint(
             context.allocator,
@@ -81,7 +81,7 @@ pub const Handler = struct {
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!provider_mod.ResourceResult {
-        const body = try serviceBodyAlloc(context.allocator, node);
+        const body = try serviceBodyAlloc(context, node);
         defer context.allocator.free(body);
         const path = try std.fmt.allocPrint(
             context.allocator,
@@ -148,7 +148,7 @@ pub const Handler = struct {
         const response_value = operation_object.get("response") orelse return null;
         const service_json = std.json.Stringify.valueAlloc(context.allocator, response_value, .{}) catch return error.OutOfMemory;
         defer context.allocator.free(service_json);
-        return try resultFromServiceJson(context.allocator, node, service_json);
+        return try resultFromServiceJson(context, node, service_json);
     }
 
     fn request(
@@ -181,10 +181,11 @@ fn pendingResult(
 }
 
 fn resultFromServiceJson(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     body: []const u8,
 ) ProviderError!provider_mod.ResourceResult {
+    const allocator = context.allocator;
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.ProviderBug;
     defer parsed.deinit();
     const root = asObject(parsed.value) orelse return error.ProviderBug;
@@ -193,7 +194,7 @@ fn resultFromServiceJson(
     const revision = asString(root.get("latestReadyRevision")) orelse return error.ProviderBug;
     const template = try requiredObject(root, "template");
     const service_account = try requiredJsonString(template, "serviceAccount");
-    var observed = try normalizedInputsAlloc(allocator, node, root);
+    var observed = try normalizedInputsAlloc(context, node, root);
     defer observed.deinit(allocator);
     const outputs = [_]state.StateOutput{
         .{ .name = "service_url", .value = .{ .string = uri } },
@@ -203,7 +204,8 @@ fn resultFromServiceJson(
     return provider_mod.ResourceResult.init(allocator, physical_id, observed, &outputs, null);
 }
 
-fn serviceBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError![]const u8 {
+fn serviceBodyAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {
+    const allocator = context.allocator;
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -250,7 +252,7 @@ fn serviceBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) P
     try containers.append(.{ .object = container });
     try template.put(arena, "containers", .{ .array = containers });
     try template.put(arena, "volumes", volume_config.volumes);
-    if (try vpcRequestJson(arena, try requiredValue(node.inputs, "vpc_access"))) |vpc| {
+    if (try vpcRequestJson(context, arena, try requiredValue(node.inputs, "vpc_access"))) |vpc| {
         try template.put(arena, "vpcAccess", vpc);
     }
     try root.put(arena, "template", .{ .object = template });
@@ -258,10 +260,11 @@ fn serviceBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) P
 }
 
 fn normalizedInputsAlloc(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     remote: std.json.ObjectMap,
 ) ProviderError!value.Value {
+    const allocator = context.allocator;
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -305,7 +308,12 @@ fn normalizedInputsAlloc(
     try normalized.put(arena, "service_account", .{ .string = try requiredJsonString(template, "serviceAccount") });
     try normalized.put(arena, "startup_probe", try normalizedProbeJson(arena, container.get("startupProbe")));
     try normalized.put(arena, "timeout_seconds", .{ .integer = try durationSeconds(template.get("timeout")) });
-    try normalized.put(arena, "vpc_access", try normalizedVpcJson(arena, template.get("vpcAccess")));
+    try normalized.put(arena, "vpc_access", try normalizedVpcJson(
+        context,
+        arena,
+        template.get("vpcAccess"),
+        try requiredValue(node.inputs, "vpc_access"),
+    ));
 
     const json = std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = normalized }, .{}) catch return error.OutOfMemory;
     defer allocator.free(json);
@@ -396,15 +404,19 @@ fn putProbe(
     try container.put(arena, api_name, .{ .object = probe });
 }
 
-fn vpcRequestJson(arena: std.mem.Allocator, input: value.Value) ProviderError!?std.json.Value {
+fn vpcRequestJson(
+    context: *provider_mod.OperationContext,
+    arena: std.mem.Allocator,
+    input: value.Value,
+) ProviderError!?std.json.Value {
     const fields = switch (input) {
         .object => |fields| fields,
         else => return error.InvalidConfiguration,
     };
     if (fields.len == 0) return null;
     var interface: std.json.ObjectMap = .empty;
-    const network = try requiredString(input, "network");
-    const subnetwork = try requiredString(input, "subnetwork");
+    const network = try resolveStringValue(context, try requiredValue(input, "network"));
+    const subnetwork = try resolveStringValue(context, try requiredValue(input, "subnetwork"));
     if (network.len != 0) try interface.put(arena, "network", .{ .string = network });
     if (subnetwork.len != 0) try interface.put(arena, "subnetwork", .{ .string = subnetwork });
     try interface.put(arena, "tags", try stringListJson(arena, try requiredValue(input, "tags")));
@@ -493,17 +505,39 @@ fn normalizedVolumesJson(
     return .{ .array = normalized };
 }
 
-fn normalizedVpcJson(arena: std.mem.Allocator, maybe_vpc: ?std.json.Value) ProviderError!std.json.Value {
-    const vpc_value = maybe_vpc orelse return emptyJsonObject();
+fn normalizedVpcJson(
+    context: *provider_mod.OperationContext,
+    arena: std.mem.Allocator,
+    maybe_vpc: ?std.json.Value,
+    desired: value.Value,
+) ProviderError!std.json.Value {
+    const desired_fields = switch (desired) {
+        .object => |fields| fields,
+        else => return error.InvalidConfiguration,
+    };
+    const vpc_value = maybe_vpc orelse {
+        if (desired_fields.len == 0) return emptyJsonObject();
+        return error.ProviderBug;
+    };
     const vpc = asObject(vpc_value) orelse return error.ProviderBug;
     const interfaces_value = vpc.get("networkInterfaces") orelse return error.ProviderBug;
     const interfaces = asArray(interfaces_value) orelse return error.ProviderBug;
     if (interfaces.items.len == 0) return error.ProviderBug;
     const interface = asObject(interfaces.items[0]) orelse return error.ProviderBug;
+    const desired_network = try requiredValue(desired, "network");
+    const desired_subnetwork = try requiredValue(desired, "subnetwork");
+    const remote_network = asString(interface.get("network")) orelse "";
+    const remote_subnetwork = asString(interface.get("subnetwork")) orelse "";
     var normalized: std.json.ObjectMap = .empty;
     try normalized.put(arena, "egress", .{ .string = try requiredJsonString(vpc, "egress") });
-    try normalized.put(arena, "network", .{ .string = asString(interface.get("network")) orelse "" });
-    try normalized.put(arena, "subnetwork", .{ .string = asString(interface.get("subnetwork")) orelse "" });
+    try normalized.put(arena, "network", if (std.mem.eql(u8, try resolveStringValue(context, desired_network), remote_network))
+        try canonicalValueToJson(arena, desired_network)
+    else
+        .{ .string = remote_network });
+    try normalized.put(arena, "subnetwork", if (std.mem.eql(u8, try resolveStringValue(context, desired_subnetwork), remote_subnetwork))
+        try canonicalValueToJson(arena, desired_subnetwork)
+    else
+        .{ .string = remote_subnetwork });
     try normalized.put(arena, "tags", interface.get("tags") orelse emptyJsonArray(arena));
     return .{ .object = normalized };
 }
@@ -552,6 +586,25 @@ fn plainValueToJson(arena: std.mem.Allocator, input: value.Value) ProviderError!
         },
         .secret_ref, .output_ref, .unknown_reason => error.InvalidConfiguration,
     };
+}
+
+fn resolveStringValue(
+    context: *provider_mod.OperationContext,
+    input: value.Value,
+) ProviderError![]const u8 {
+    return switch (input) {
+        .string => |string| string,
+        .output_ref => |reference| context.resolveOutputString(reference),
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn canonicalValueToJson(arena: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {
+    const json = input.canonicalJsonAlloc(arena) catch |err| switch (err) {
+        error.DuplicateField => return error.InvalidConfiguration,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+    return std.json.parseFromSliceLeaky(std.json.Value, arena, json, .{}) catch return error.ProviderBug;
 }
 
 fn requiredValue(input: value.Value, name: []const u8) ProviderError!value.Value {

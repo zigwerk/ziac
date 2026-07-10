@@ -9,6 +9,10 @@ const value = @import("../value.zig");
 const ProviderError = provider_mod.ProviderError;
 
 const Kind = enum {
+    network,
+    subnetwork,
+    router,
+    regional_address,
     global_address,
     regional_neg,
     backend_service,
@@ -62,7 +66,7 @@ pub const Handler = struct {
             .noop
         else switch (resource_kind) {
             .backend_service, .url_map, .redirect_url_map, .target_http_proxy, .target_https_proxy => if (sameIdentity(node.inputs, observed.observed_inputs)) .update else .replace,
-            .global_address, .regional_neg, .managed_ssl_certificate, .global_forwarding_rule => .replace,
+            .network, .subnetwork, .router, .regional_address, .global_address, .regional_neg, .managed_ssl_certificate, .global_forwarding_rule => .replace,
         };
         const reasons: []const []const u8 = if (diff_kind == .noop) &.{} else &.{"Compute desired state differs from observed resource"};
         return provider_mod.DiffResult.init(context.allocator, diff_kind, reasons);
@@ -163,7 +167,7 @@ pub const Handler = struct {
         defer context.allocator.free(base);
         const project_id = try requiredString(node.inputs, "project_id");
         var target = switch (resource_kind) {
-            .regional_neg => operation.Target.computeRegionalAlloc(
+            .subnetwork, .router, .regional_address, .regional_neg => operation.Target.computeRegionalAlloc(
                 context.allocator,
                 base,
                 project_id,
@@ -234,6 +238,10 @@ pub fn waitManagedSslCertificateReady(
 
 fn kind(node: resource.ResourceNode) ?Kind {
     const names = .{
+        .{ "gcp.compute.Network", Kind.network },
+        .{ "gcp.compute.Subnetwork", Kind.subnetwork },
+        .{ "gcp.compute.Router", Kind.router },
+        .{ "gcp.compute.RegionalAddress", Kind.regional_address },
         .{ "gcp.compute.GlobalAddress", Kind.global_address },
         .{ "gcp.compute.RegionServerlessNeg", Kind.regional_neg },
         .{ "gcp.compute.BackendService", Kind.backend_service },
@@ -289,7 +297,7 @@ fn resultFromJson(
     var outputs: [4]state.StateOutput = undefined;
     var count: usize = 0;
     switch (resource_kind) {
-        .global_address => {
+        .regional_address, .global_address => {
             outputs[count] = .{ .name = "address", .value = .{ .string = try requiredJsonString(remote, "address") } };
             count += 1;
         },
@@ -329,6 +337,26 @@ fn normalizedInputsAlloc(
     try normalized.put(arena, "name", .{ .string = try requiredJsonString(remote, "name") });
     try normalized.put(arena, "project_id", .{ .string = try requiredString(node.inputs, "project_id") });
     switch (resource_kind) {
+        .network => {
+            try normalized.put(arena, "auto_create_subnetworks", .{ .bool = try requiredJsonBool(remote, "autoCreateSubnetworks") });
+            const routing = try requiredObject(remote, "routingConfig");
+            try normalized.put(arena, "routing_mode", .{ .string = try requiredJsonString(routing, "routingMode") });
+        },
+        .subnetwork => {
+            try normalized.put(arena, "ip_cidr_range", .{ .string = try requiredJsonString(remote, "ipCidrRange") });
+            try normalized.put(arena, "network", try normalizedStringInput(context, node, "network", try requiredJsonString(remote, "network"), arena));
+            try normalized.put(arena, "private_ip_google_access", .{ .bool = try requiredJsonBool(remote, "privateIpGoogleAccess") });
+            try normalized.put(arena, "region", .{ .string = try requiredString(node.inputs, "region") });
+        },
+        .router => {
+            try normalized.put(arena, "network", try normalizedStringInput(context, node, "network", try requiredJsonString(remote, "network"), arena));
+            try normalized.put(arena, "region", .{ .string = try requiredString(node.inputs, "region") });
+        },
+        .regional_address => {
+            try normalized.put(arena, "address_type", .{ .string = try requiredJsonString(remote, "addressType") });
+            try normalized.put(arena, "network_tier", .{ .string = try requiredJsonString(remote, "networkTier") });
+            try normalized.put(arena, "region", .{ .string = try requiredString(node.inputs, "region") });
+        },
         .global_address => try normalized.put(arena, "network_tier", .{ .string = try requiredJsonString(remote, "networkTier") }),
         .regional_neg => {
             const cloud_run = try requiredObject(remote, "cloudRun");
@@ -407,6 +435,22 @@ fn desiredBodyAlloc(
     var body: std.json.ObjectMap = .empty;
     try body.put(arena, "name", .{ .string = try requiredString(node.inputs, "name") });
     switch (resource_kind) {
+        .network => {
+            try body.put(arena, "autoCreateSubnetworks", .{ .bool = try requiredBoolean(node.inputs, "auto_create_subnetworks") });
+            var routing: std.json.ObjectMap = .empty;
+            try routing.put(arena, "routingMode", .{ .string = try requiredString(node.inputs, "routing_mode") });
+            try body.put(arena, "routingConfig", .{ .object = routing });
+        },
+        .subnetwork => {
+            try body.put(arena, "ipCidrRange", .{ .string = try requiredString(node.inputs, "ip_cidr_range") });
+            try body.put(arena, "network", .{ .string = try resolveStringValue(context, try requiredValue(node.inputs, "network")) });
+            try body.put(arena, "privateIpGoogleAccess", .{ .bool = try requiredBoolean(node.inputs, "private_ip_google_access") });
+        },
+        .router => try body.put(arena, "network", .{ .string = try resolveStringValue(context, try requiredValue(node.inputs, "network")) }),
+        .regional_address => {
+            try body.put(arena, "addressType", .{ .string = try requiredString(node.inputs, "address_type") });
+            try body.put(arena, "networkTier", .{ .string = try requiredString(node.inputs, "network_tier") });
+        },
         .global_address => try body.put(arena, "networkTier", .{ .string = try requiredString(node.inputs, "network_tier") }),
         .regional_neg => {
             try body.put(arena, "networkEndpointType", .{ .string = "SERVERLESS" });
@@ -512,6 +556,19 @@ fn cloneJsonValue(allocator: std.mem.Allocator, input: std.json.Value) ProviderE
 fn collectionPathAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, resource_kind: Kind) ProviderError![]const u8 {
     const project_id = try requiredString(node.inputs, "project_id");
     return switch (resource_kind) {
+        .network => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/networks", .{project_id}),
+        .subnetwork => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/regions/{s}/subnetworks", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+        }),
+        .router => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/regions/{s}/routers", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+        }),
+        .regional_address => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/regions/{s}/addresses", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+        }),
         .global_address => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/addresses", .{project_id}),
         .regional_neg => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/regions/{s}/networkEndpointGroups", .{
             project_id,
@@ -539,6 +596,22 @@ fn physicalIdFromNameAlloc(
 ) ProviderError![]const u8 {
     const project_id = try requiredString(node.inputs, "project_id");
     return switch (resource_kind) {
+        .network => std.fmt.allocPrint(allocator, "projects/{s}/global/networks/{s}", .{ project_id, name }),
+        .subnetwork => std.fmt.allocPrint(allocator, "projects/{s}/regions/{s}/subnetworks/{s}", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+            name,
+        }),
+        .router => std.fmt.allocPrint(allocator, "projects/{s}/regions/{s}/routers/{s}", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+            name,
+        }),
+        .regional_address => std.fmt.allocPrint(allocator, "projects/{s}/regions/{s}/addresses/{s}", .{
+            project_id,
+            try requiredString(node.inputs, "region"),
+            name,
+        }),
         .global_address => std.fmt.allocPrint(allocator, "projects/{s}/global/addresses/{s}", .{ project_id, name }),
         .regional_neg => std.fmt.allocPrint(allocator, "projects/{s}/regions/{s}/networkEndpointGroups/{s}", .{
             project_id,
@@ -633,6 +706,20 @@ fn resolveStringValue(context: *provider_mod.OperationContext, input: value.Valu
         .output_ref => |reference| context.resolveOutputString(reference),
         else => error.InvalidConfiguration,
     };
+}
+
+fn normalizedStringInput(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    field: []const u8,
+    remote: []const u8,
+    arena: std.mem.Allocator,
+) ProviderError!std.json.Value {
+    const desired = try requiredValue(node.inputs, field);
+    return if (std.mem.eql(u8, try resolveStringValue(context, desired), remote))
+        try valueToJson(arena, desired)
+    else
+        .{ .string = remote };
 }
 
 fn valueToJson(allocator: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {

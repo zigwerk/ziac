@@ -11,6 +11,7 @@ const value = @import("../value.zig");
 const ProviderError = provider_mod.ProviderError;
 const existing_cluster_type = "cockroach.Cluster.Existing";
 const sql_user_type = "cockroach.SqlUser";
+const authorized_network_type = "cockroach.AuthorizedNetwork";
 
 pub const LiveProvider = struct {
     client: *client_mod.Client,
@@ -40,6 +41,7 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (!isSupported(node)) return error.InvalidConfiguration;
         if (isType(node, sql_user_type)) return self.readSqlUser(context, node);
+        if (isType(node, authorized_network_type)) return self.readAuthorizedNetwork(context, node);
         var diagnostic = client_mod.Diagnostic.init(context.allocator);
         defer diagnostic.deinit();
         var cluster = self.client.getClusterAlloc(context, try inputString(node.inputs, "cluster_id"), &diagnostic) catch |err| {
@@ -62,6 +64,7 @@ pub const LiveProvider = struct {
             return provider_mod.DiffResult.init(context.allocator, .noop, &.{});
         }
         if (isType(node, sql_user_type)) return sqlUserDiff(context.allocator, node.inputs, observed.observed_inputs);
+        if (isType(node, authorized_network_type)) return authorizedNetworkDiff(context.allocator, node.inputs, observed.observed_inputs);
         return topologyDiff(context.allocator, node.inputs, observed.observed_inputs);
     }
 
@@ -72,6 +75,7 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, sql_user_type)) return self.ensureSqlUser(context, node);
+        if (isType(node, authorized_network_type)) return self.writeAuthorizedNetwork(context, node, false);
         return self.readExact(context, node);
     }
 
@@ -86,6 +90,10 @@ pub const LiveProvider = struct {
         if (isType(node, sql_user_type)) {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return self.ensureSqlUser(context, node);
+        }
+        if (isType(node, authorized_network_type)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return self.writeAuthorizedNetwork(context, node, true);
         }
         var result_diff = try topologyDiff(context.allocator, node.inputs, observed.observed_inputs);
         defer result_diff.deinit();
@@ -105,6 +113,10 @@ pub const LiveProvider = struct {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return self.deleteSqlUser(context, node, physical_id);
         }
+        if (isType(node, authorized_network_type)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return self.deleteAuthorizedNetwork(context, node, physical_id);
+        }
         if (!std.mem.eql(u8, try inputString(node.inputs, "cluster_id"), physical_id)) {
             return error.InvalidConfiguration;
         }
@@ -123,6 +135,15 @@ pub const LiveProvider = struct {
             defer context.allocator.free(expected);
             if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
             return switch (try self.readSqlUser(context, node)) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (isType(node, authorized_network_type)) {
+            const expected = try authorizedNetworkPhysicalIdAlloc(context, node);
+            defer context.allocator.free(expected);
+            if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
+            return switch (try self.readAuthorizedNetwork(context, node)) {
                 .absent => error.NotFound,
                 .present => |present| present,
             };
@@ -228,7 +249,135 @@ pub const LiveProvider = struct {
             &diagnostic,
         );
     }
+
+    fn readAuthorizedNetwork(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ReadResult {
+        const cluster_id = try inputString(node.inputs, "cluster_id");
+        const expected_ip = try resolveInputString(context, node.inputs, "ip_address");
+        const expected_mask = try inputU8(node.inputs, "cidr_mask");
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        const entries = try self.client.listAllowlistEntriesAlloc(context, cluster_id, &diagnostic);
+        defer client_mod.freeAllowlistEntries(context.allocator, entries);
+        for (entries) |entry| {
+            if (entry.cidr_mask == expected_mask and std.mem.eql(u8, entry.cidr_ip, expected_ip)) {
+                return .{ .present = try authorizedNetworkResult(context, node, entry) };
+            }
+        }
+        return .absent;
+    }
+
+    fn writeAuthorizedNetwork(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        update_existing: bool,
+    ) ProviderError!provider_mod.ResourceResult {
+        const cluster_id = try inputString(node.inputs, "cluster_id");
+        const entry = client_mod.AllowlistEntry{
+            .cidr_ip = try resolveInputString(context, node.inputs, "ip_address"),
+            .cidr_mask = try inputU8(node.inputs, "cidr_mask"),
+            .name = try inputString(node.inputs, "name"),
+            .sql = try inputBoolean(node.inputs, "sql"),
+            .ui = try inputBoolean(node.inputs, "ui"),
+        };
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        if (update_existing) {
+            try self.client.updateAllowlistEntry(context, cluster_id, entry, &diagnostic);
+        } else {
+            try self.client.putAllowlistEntry(context, cluster_id, entry, &diagnostic);
+        }
+        return authorizedNetworkResult(context, node, entry);
+    }
+
+    fn deleteAuthorizedNetwork(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        const expected = try authorizedNetworkPhysicalIdAlloc(context, node);
+        defer context.allocator.free(expected);
+        if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        try self.client.deleteAllowlistEntry(
+            context,
+            try inputString(node.inputs, "cluster_id"),
+            try resolveInputString(context, node.inputs, "ip_address"),
+            try inputU8(node.inputs, "cidr_mask"),
+            &diagnostic,
+        );
+    }
 };
+
+fn authorizedNetworkResult(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    entry: client_mod.AllowlistEntry,
+) ProviderError!provider_mod.ResourceResult {
+    const allocator = context.allocator;
+    const desired_address = try inputValue(node.inputs, "ip_address");
+    const resolved_address = try resolveValueString(context, desired_address);
+    const address_value: value.Value = if (std.mem.eql(u8, resolved_address, entry.cidr_ip))
+        desired_address
+    else
+        .{ .string = entry.cidr_ip };
+    const fields = [_]value.Field{
+        .{ .name = "cidr_mask", .value = .{ .integer = entry.cidr_mask } },
+        .{ .name = "cluster_id", .value = .{ .string = try inputString(node.inputs, "cluster_id") } },
+        .{ .name = "ip_address", .value = address_value },
+        .{ .name = "name", .value = .{ .string = entry.name orelse "" } },
+        .{ .name = "sql", .value = .{ .boolean = entry.sql } },
+        .{ .name = "ui", .value = .{ .boolean = entry.ui } },
+    };
+    const physical_id = try authorizedNetworkPhysicalIdAlloc(context, node);
+    defer allocator.free(physical_id);
+    const cidr = try std.fmt.allocPrint(allocator, "{s}/{d}", .{ entry.cidr_ip, entry.cidr_mask });
+    defer allocator.free(cidr);
+    const outputs = [_]state.StateOutput{
+        .{ .name = "cidr", .value = .{ .string = cidr } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, .{ .object = &fields }, &outputs, null);
+}
+
+fn authorizedNetworkPhysicalIdAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+) ProviderError![]const u8 {
+    return std.fmt.allocPrint(
+        context.allocator,
+        "clusters/{s}/networking/allowlist/{s}/{d}",
+        .{
+            try inputString(node.inputs, "cluster_id"),
+            try resolveInputString(context, node.inputs, "ip_address"),
+            try inputU8(node.inputs, "cidr_mask"),
+        },
+    ) catch return error.OutOfMemory;
+}
+
+fn authorizedNetworkDiff(
+    allocator: std.mem.Allocator,
+    desired: value.Value,
+    observed: value.Value,
+) ProviderError!provider_mod.DiffResult {
+    inline for (&.{ "cluster_id", "cidr_mask", "ip_address" }) |field| {
+        const desired_value = try inputValue(desired, field);
+        const observed_value = try inputValue(observed, field);
+        const desired_json = desired_value.canonicalJsonAlloc(allocator) catch return error.OutOfMemory;
+        defer allocator.free(desired_json);
+        const observed_json = observed_value.canonicalJsonAlloc(allocator) catch return error.OutOfMemory;
+        defer allocator.free(observed_json);
+        if (!std.mem.eql(u8, desired_json, observed_json)) {
+            return provider_mod.DiffResult.init(allocator, .replace, &.{"authorized network identity changed"});
+        }
+    }
+    return provider_mod.DiffResult.init(allocator, .update, &.{"authorized network flags changed"});
+}
 
 fn sqlUserResult(
     allocator: std.mem.Allocator,
@@ -367,18 +516,55 @@ fn appendOwnedReason(
 }
 
 fn inputString(input: value.Value, name: []const u8) ProviderError![]const u8 {
+    const found = try inputValue(input, name);
+    return switch (found) {
+        .string => |text| text,
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn inputValue(input: value.Value, name: []const u8) ProviderError!value.Value {
     const fields = switch (input) {
         .object => |fields| fields,
         else => return error.InvalidConfiguration,
     };
     for (fields) |field| {
-        if (!std.mem.eql(u8, field.name, name)) continue;
-        return switch (field.value) {
-            .string => |text| text,
-            else => error.InvalidConfiguration,
-        };
+        if (std.mem.eql(u8, field.name, name)) return field.value;
     }
     return error.InvalidConfiguration;
+}
+
+fn inputU8(input: value.Value, name: []const u8) ProviderError!u8 {
+    return switch (try inputValue(input, name)) {
+        .integer => |integer| if (integer >= 0 and integer <= std.math.maxInt(u8)) @intCast(integer) else error.InvalidConfiguration,
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn inputBoolean(input: value.Value, name: []const u8) ProviderError!bool {
+    return switch (try inputValue(input, name)) {
+        .boolean => |boolean| boolean,
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn resolveInputString(
+    context: *provider_mod.OperationContext,
+    input: value.Value,
+    name: []const u8,
+) ProviderError![]const u8 {
+    return resolveValueString(context, try inputValue(input, name));
+}
+
+fn resolveValueString(
+    context: *provider_mod.OperationContext,
+    input: value.Value,
+) ProviderError![]const u8 {
+    return switch (input) {
+        .string => |text| text,
+        .output_ref => |reference| context.resolveOutputString(reference),
+        else => error.InvalidConfiguration,
+    };
 }
 
 fn inputSecretReference(
@@ -436,7 +622,7 @@ fn primaryRegion(regions: []const client_mod.Region) client_mod.Region {
 }
 
 fn isSupported(node: resource.ResourceNode) bool {
-    return isType(node, existing_cluster_type) or isType(node, sql_user_type);
+    return isType(node, existing_cluster_type) or isType(node, sql_user_type) or isType(node, authorized_network_type);
 }
 
 fn isType(node: resource.ResourceNode, type_name: []const u8) bool {

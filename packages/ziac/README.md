@@ -107,6 +107,11 @@ secret-first graph for cryptographically generated `verify-full` connection
 URIs and idempotent SQL-user create/reset/delete behavior. State retains only
 the typed Secret Manager version reference, and a failed user write converges
 from that persisted version on retry.
+`cockroach.public_egress.PublicStaticEgress` now creates a custom VPC plus one
+subnet, router, Premium static address, manual NAT, and SQL-only Cockroach `/32`
+allowlist per Cloud Run region. Direct VPC consumes typed network outputs, and
+the NAT lifecycle preserves unrelated router configuration during updates and
+destroy.
 The first Live GCP Primitives slice is implemented behind the provider
 interface: typed project-service, service-account, and project-member resources
 pass full scripted read/diff/create/update/delete/import lifecycles. Service
@@ -136,6 +141,8 @@ See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts and
 `docs/cockroach-existing-cluster.md` for retained cluster adoption. See
 `docs/cockroach-connection-secret.md` for SQL-user and Secret Manager wiring.
+See `docs/public-static-egress.md` for the initial public Cockroach connectivity
+topology and its production safety policy.
 See `docs/secret-manager.md` for the secret payload boundary, and
 `docs/cloud-run.md` for the Cloud Run request and lifecycle contract. See
 `docs/live-gcp.md` for CLI selection and disposable-project safeguards, and

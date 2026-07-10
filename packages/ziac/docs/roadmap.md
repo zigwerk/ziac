@@ -126,7 +126,9 @@ failure and destroys in reverse dependency order.
   refresh/import lifecycle: complete.
 - Idempotent SQL users, generated GCP Secret Manager connection bindings, and
   persisted-secret retry convergence: complete.
-- Direct VPC egress, static NAT addresses, and narrow public allowlists.
+- Direct VPC egress, static NAT addresses, and narrow public allowlists:
+  complete with scripted GCP/Cockroach lifecycles; authenticated live execution
+  pending.
 - Database, grants, migrations, transaction retry handling, and native pooled
   SQL/TLS runtime.
 - Protected cluster provisioning and Private Service Connect.

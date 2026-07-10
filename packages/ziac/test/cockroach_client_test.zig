@@ -199,6 +199,45 @@ test "Cockroach client creates resets and deletes SQL users without retaining re
     try std.testing.expectEqualStrings("DELETE", transport.requests.items[2].method);
 }
 
+test "Cockroach client lists puts patches and deletes allowlist entries" {
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = "{\"allowlist\":[{\"cidr_ip\":\"203.0.113.10\",\"cidr_mask\":32,\"name\":\"api-eu\",\"sql\":true,\"ui\":false}],\"propagating\":false}" },
+        .{ .status = 200, .body = "{}" },
+        .{ .status = 200, .body = "{}" },
+        .{ .status = 204, .body = "" },
+        .{ .status = 404, .body = "{\"message\":\"missing\"}" },
+    };
+    var transport = RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var client = cockroach.Client.init(transport.client(), "dummy-key", .{});
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var diagnostic = cockroach.Diagnostic.init(std.testing.allocator);
+    defer diagnostic.deinit();
+
+    const entries = try client.listAllowlistEntriesAlloc(&context, "cluster-1", &diagnostic);
+    defer cockroach.freeAllowlistEntries(std.testing.allocator, entries);
+    try std.testing.expectEqual(@as(usize, 1), entries.len);
+    try std.testing.expectEqualStrings("203.0.113.10", entries[0].cidr_ip);
+    try std.testing.expectEqual(@as(u8, 32), entries[0].cidr_mask);
+    try std.testing.expect(entries[0].sql);
+    try client.putAllowlistEntry(&context, "cluster-1", entries[0], &diagnostic);
+    try client.updateAllowlistEntry(&context, "cluster-1", .{
+        .cidr_ip = "203.0.113.10",
+        .cidr_mask = 32,
+        .name = "api-eu-renamed",
+        .sql = true,
+        .ui = false,
+    }, &diagnostic);
+    try client.deleteAllowlistEntry(&context, "cluster-1", "203.0.113.10", 32, &diagnostic);
+    try client.deleteAllowlistEntry(&context, "cluster-1", "203.0.113.10", 32, &diagnostic);
+
+    try std.testing.expectEqualStrings("PUT", transport.requests.items[1].method);
+    try std.testing.expect(std.mem.endsWith(u8, transport.requests.items[1].url, "/networking/allowlist/203.0.113.10/32"));
+    try std.testing.expect(std.mem.indexOf(u8, transport.requests.items[1].body, "\"sql\":true") != null);
+    try std.testing.expectEqualStrings("PATCH", transport.requests.items[2].method);
+    try std.testing.expectEqualStrings("DELETE", transport.requests.items[3].method);
+}
+
 const ObservedRequest = struct {
     method: []const u8,
     url: []const u8,

@@ -160,6 +160,48 @@ test "live GCP Cloud Run request encodes runtime secrets probes volumes and Dire
     try std.testing.expect(std.mem.indexOf(u8, body, "sentinel-secret-for-tests") == null);
 }
 
+test "live GCP Cloud Run resolves and preserves typed Direct VPC outputs" {
+    const network_id = "gcp.compute.Network.runtime";
+    const subnet_id = "gcp.compute.Subnetwork.europe-west1.runtime";
+    const network_link = "projects/ziac-dev/global/networks/runtime";
+    const subnet_link = "projects/ziac-dev/regions/europe-west1/subnetworks/runtime";
+    const responses = [_]zstd.Http.Response{
+        operationStarted("create-typed-vpc"),
+        .{ .status = 200, .body = serviceJsonWithVpc("api:v1", "api-00001-vpc", network_link, subnet_link) },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var store = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer store.deinit();
+    try putOutput(&store, network_id, "self_link", network_link);
+    try putOutput(&store, subnet_id, "self_link", subnet_link);
+    var service = try ziac.gcp.cloud_run.Service.build(std.testing.allocator, providerConfig(), .{
+        .name = "api",
+        .image = "api:v1",
+        .direct_vpc = .{
+            .network_output = ziac.PublicOutput([]const u8).fromResource(network_id, "self_link"),
+            .subnetwork_output = ziac.PublicOutput([]const u8).fromResource(subnet_id, "self_link"),
+            .egress = .all_traffic,
+        },
+    });
+    defer service.deinit(std.testing.allocator);
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    context.state = &store;
+
+    var creating = try harness.live.provider().createWithContext(&context, service.node);
+    defer creating.deinit();
+    const body = harness.transport.requests.items[0].body;
+    try std.testing.expect(std.mem.indexOf(u8, body, network_link) != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, subnet_link) != null);
+
+    context.physical_id = creating.physical_id;
+    var present = try harness.live.provider().readWithContext(&context, service.node);
+    defer present.deinit();
+    try std.testing.expect(present == .present);
+    try std.testing.expectEqual(service.node.inputs_hash, present.present.observed_hash);
+}
+
 const Harness = struct {
     token_source: FixedTokenSource,
     cache: auth.TokenCache,
@@ -205,6 +247,18 @@ fn providerConfig() ziac.gcp.config.ProviderConfig {
     };
 }
 
+fn putOutput(store: *ziac.InMemoryStateStore, resource_id: []const u8, name: []const u8, output_value: []const u8) !void {
+    try store.put(.{
+        .resource_id = resource_id,
+        .provider = .gcp,
+        .type_name = resource_id,
+        .logical_id = resource_id,
+        .desired_hash = "hash",
+        .outputs = &.{.{ .name = name, .value = .{ .string = output_value } }},
+        .status = .created,
+    });
+}
+
 fn notFound() zstd.Http.Response {
     return .{ .status = 404, .body = "{\"error\":{\"code\":404,\"status\":\"NOT_FOUND\",\"message\":\"missing\"}}" };
 }
@@ -225,4 +279,13 @@ fn operationDone(comptime operation_id: []const u8, comptime service: []const u8
 
 fn serviceJson(comptime image: []const u8, comptime revision: []const u8) []const u8 {
     return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"latestReadyRevision\":\"" ++ revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[]}}";
+}
+
+fn serviceJsonWithVpc(
+    comptime image: []const u8,
+    comptime revision: []const u8,
+    comptime network: []const u8,
+    comptime subnetwork: []const u8,
+) []const u8 {
+    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"latestReadyRevision\":\"" ++ revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[],\"vpcAccess\":{\"egress\":\"ALL_TRAFFIC\",\"networkInterfaces\":[{\"network\":\"" ++ network ++ "\",\"subnetwork\":\"" ++ subnetwork ++ "\",\"tags\":[]}]}}}";
 }

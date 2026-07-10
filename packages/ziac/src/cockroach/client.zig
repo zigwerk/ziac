@@ -108,6 +108,25 @@ pub const Region = struct {
     }
 };
 
+pub const AllowlistEntry = struct {
+    cidr_ip: []const u8,
+    cidr_mask: u8,
+    name: ?[]const u8 = null,
+    sql: bool,
+    ui: bool,
+
+    pub fn deinit(self: *AllowlistEntry, allocator: std.mem.Allocator) void {
+        allocator.free(self.cidr_ip);
+        if (self.name) |name| allocator.free(name);
+        self.* = undefined;
+    }
+};
+
+pub fn freeAllowlistEntries(allocator: std.mem.Allocator, entries: []const AllowlistEntry) void {
+    for (entries) |*entry| @constCast(entry).deinit(allocator);
+    allocator.free(entries);
+}
+
 pub const SqlUser = struct {
     name: []const u8,
 
@@ -296,6 +315,76 @@ pub const Client = struct {
         response.deinit(context.allocator);
     }
 
+    pub fn listAllowlistEntriesAlloc(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError![]const AllowlistEntry {
+        const path = try allowlistCollectionPathAlloc(context.allocator, cluster_id);
+        defer context.allocator.free(path);
+        var response = try self.requestJsonWithRetryAlloc(context, .{ .method = "GET", .path = path }, diagnostic);
+        defer response.deinit(context.allocator);
+        return decodeAllowlistAlloc(context.allocator, response.body);
+    }
+
+    pub fn putAllowlistEntry(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        entry: AllowlistEntry,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        return self.writeAllowlistEntry(context, cluster_id, entry, "PUT", diagnostic);
+    }
+
+    pub fn updateAllowlistEntry(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        entry: AllowlistEntry,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        return self.writeAllowlistEntry(context, cluster_id, entry, "PATCH", diagnostic);
+    }
+
+    pub fn deleteAllowlistEntry(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        cidr_ip: []const u8,
+        cidr_mask: u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        const path = try allowlistEntryPathAlloc(context.allocator, cluster_id, cidr_ip, cidr_mask);
+        defer context.allocator.free(path);
+        var response = self.requestJsonAlloc(context, .{ .method = "DELETE", .path = path }, diagnostic) catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        response.deinit(context.allocator);
+    }
+
+    fn writeAllowlistEntry(
+        self: *Client,
+        context: *provider.OperationContext,
+        cluster_id: []const u8,
+        entry: AllowlistEntry,
+        method: []const u8,
+        diagnostic: *Diagnostic,
+    ) ProviderError!void {
+        const path = try allowlistEntryPathAlloc(context.allocator, cluster_id, entry.cidr_ip, entry.cidr_mask);
+        defer context.allocator.free(path);
+        const body = std.json.Stringify.valueAlloc(context.allocator, .{
+            .name = entry.name,
+            .sql = entry.sql,
+            .ui = entry.ui,
+        }, .{}) catch return error.OutOfMemory;
+        defer context.allocator.free(body);
+        var response = try self.requestJsonAlloc(context, .{ .method = method, .path = path, .body = body }, diagnostic);
+        response.deinit(context.allocator);
+    }
+
     pub fn requestJsonWithRetryAlloc(
         self: *Client,
         context: *provider.OperationContext,
@@ -404,6 +493,50 @@ const SqlUserPageDecoded = struct {
     pagination: ?PaginationDecoded,
 };
 
+const AllowlistEntryDecoded = struct {
+    cidr_ip: []const u8,
+    cidr_mask: i64,
+    name: ?[]const u8,
+    sql: bool,
+    ui: bool,
+};
+
+const AllowlistResponseDecoded = struct {
+    allowlist: []const AllowlistEntryDecoded,
+    propagating: bool,
+};
+
+fn decodeAllowlistAlloc(allocator: std.mem.Allocator, json: []const u8) ProviderError![]const AllowlistEntry {
+    var decoded = zstd.Schema.decodeDetailedJsonAlloc(
+        allocator,
+        zstd.Schema.derive(AllowlistResponseDecoded, .{
+            .allowlist = zstd.Schema.array(allocator, zstd.Schema.derive(AllowlistEntryDecoded, .{})),
+        }),
+        json,
+    ) catch return error.ProviderBug;
+    defer decoded.deinit();
+    if (!decoded.ok()) return error.ProviderBug;
+    const entries = allocator.alloc(AllowlistEntry, decoded.value.?.allowlist.len) catch return error.OutOfMemory;
+    errdefer allocator.free(entries);
+    var initialized: usize = 0;
+    errdefer for (entries[0..initialized]) |*entry| entry.deinit(allocator);
+    for (decoded.value.?.allowlist, 0..) |entry, index| {
+        if (entry.cidr_mask < 0 or entry.cidr_mask > 32) return error.ProviderBug;
+        const cidr_ip = allocator.dupe(u8, entry.cidr_ip) catch return error.OutOfMemory;
+        errdefer allocator.free(cidr_ip);
+        const name = if (entry.name) |name| allocator.dupe(u8, name) catch return error.OutOfMemory else null;
+        entries[index] = .{
+            .cidr_ip = cidr_ip,
+            .cidr_mask = @intCast(entry.cidr_mask),
+            .name = name,
+            .sql = entry.sql,
+            .ui = entry.ui,
+        };
+        initialized += 1;
+    }
+    return entries;
+}
+
 const SqlUserPage = struct {
     users: []const SqlUser,
     next_page: ?[]const u8,
@@ -457,6 +590,32 @@ fn sqlUsersPathAlloc(
         return std.fmt.allocPrint(allocator, "/v1/clusters/{s}/sql-users?page={s}", .{ encoded_cluster, encoded });
     }
     return std.fmt.allocPrint(allocator, "/v1/clusters/{s}/sql-users", .{encoded_cluster});
+}
+
+fn allowlistCollectionPathAlloc(
+    allocator: std.mem.Allocator,
+    cluster_id: []const u8,
+) ProviderError![]const u8 {
+    const encoded_cluster = queryEncodeAlloc(allocator, cluster_id) catch return error.OutOfMemory;
+    defer allocator.free(encoded_cluster);
+    return std.fmt.allocPrint(
+        allocator,
+        "/v1/clusters/{s}/networking/allowlist",
+        .{encoded_cluster},
+    ) catch return error.OutOfMemory;
+}
+
+fn allowlistEntryPathAlloc(
+    allocator: std.mem.Allocator,
+    cluster_id: []const u8,
+    cidr_ip: []const u8,
+    cidr_mask: u8,
+) ProviderError![]const u8 {
+    const collection = try allowlistCollectionPathAlloc(allocator, cluster_id);
+    defer allocator.free(collection);
+    const encoded_ip = queryEncodeAlloc(allocator, cidr_ip) catch return error.OutOfMemory;
+    defer allocator.free(encoded_ip);
+    return std.fmt.allocPrint(allocator, "{s}/{s}/{d}", .{ collection, encoded_ip, cidr_mask }) catch return error.OutOfMemory;
 }
 
 fn sqlUserPathAlloc(

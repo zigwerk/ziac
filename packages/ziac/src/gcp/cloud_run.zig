@@ -69,6 +69,8 @@ pub const SecretVolume = struct {
 pub const DirectVpc = struct {
     network: []const u8 = "",
     subnetwork: []const u8 = "",
+    network_output: ?output.Output([]const u8, .public) = null,
+    subnetwork_output: ?output.Output([]const u8, .public) = null,
     tags: []const []const u8 = &.{},
     egress: VpcEgress = .private_ranges_only,
 };
@@ -217,7 +219,8 @@ fn validate(provider: config_mod.ProviderConfig, args: ServiceArgs) BuildError!v
     try validateProbe(args.liveness_probe);
     try validateProbe(args.readiness_probe);
     if (args.direct_vpc) |vpc| {
-        if (vpc.network.len == 0 and vpc.subnetwork.len == 0) return error.InvalidVpcAccess;
+        if ((vpc.network.len == 0) == (vpc.network_output == null) or
+            (vpc.subnetwork.len == 0) == (vpc.subnetwork_output == null)) return error.InvalidVpcAccess;
     }
     for (args.secret_volumes, 0..) |volume, index| {
         if (volume.name.len == 0 or volume.secret.len == 0 or volume.version.len == 0 or
@@ -316,13 +319,30 @@ fn vpcValueOwned(allocator: std.mem.Allocator, maybe_vpc: ?DirectVpc) BuildError
     const vpc = maybe_vpc orelse return ownedValue(allocator, .{ .object = &.{} });
     const tags = try stringValuesAlloc(allocator, vpc.tags);
     defer allocator.free(tags);
+    const network = try directVpcInputValue(vpc.network, vpc.network_output);
+    const subnetwork = try directVpcInputValue(vpc.subnetwork, vpc.subnetwork_output);
     const fields = [_]value.Field{
         .{ .name = "egress", .value = .{ .string = vpc.egress.apiName() } },
-        .{ .name = "network", .value = .{ .string = vpc.network } },
-        .{ .name = "subnetwork", .value = .{ .string = vpc.subnetwork } },
+        .{ .name = "network", .value = network },
+        .{ .name = "subnetwork", .value = subnetwork },
         .{ .name = "tags", .value = .{ .list = tags } },
     };
     return ownedValue(allocator, .{ .object = &fields });
+}
+
+fn directVpcInputValue(
+    literal: []const u8,
+    maybe_output: ?output.Output([]const u8, .public),
+) BuildError!value.Value {
+    if (maybe_output) |typed_output| return switch (typed_output) {
+        .value => |known| .{ .string = known },
+        .resource_ref => |reference| .{ .output_ref = .{
+            .resource_id = reference.resource_id,
+            .field = reference.field,
+        } },
+        .unknown_reason => error.InvalidVpcAccess,
+    };
+    return .{ .string = literal };
 }
 
 fn ownedValue(allocator: std.mem.Allocator, source: value.Value) BuildError!value.Value {

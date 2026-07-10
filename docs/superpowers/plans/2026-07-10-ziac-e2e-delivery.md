@@ -916,6 +916,9 @@ Commit: `Add CockroachDB connection secret bindings`
 
 ### Task 6.3: Public Static Egress Networking
 
+Status: completed on 2026-07-10. Authenticated GCP and Cockroach Cloud
+verification is owned by Task 6.7.
+
 GCP resources:
 
 - VPC
@@ -935,6 +938,24 @@ Tests:
 - Cockroach allowlist receives only the reserved addresses.
 - Unrestricted production CIDRs fail validation.
 - Networking dependencies are automatic.
+
+Evidence:
+
+- `PublicStaticEgress` creates one custom global VPC and five resources per
+  region: subnet, router, Premium address, manual Router NAT, and SQL-only `/32`
+  Cockroach authorized-network entry.
+- Cloud Run Direct VPC accepts typed network/subnetwork outputs, resolves them
+  only at provider execution, and normalizes concrete API links back to those
+  references on refresh.
+- Router NAT uses a fingerprinted read-modify-patch lifecycle that preserves
+  unrelated router fields and NATs, retries conflicts, and removes only its own
+  nested entry.
+- Scripted transport tests cover all Compute and Cockroach resource lifecycles,
+  exact allowlist requests, typed output resolution, and component dependency
+  shape. The Ziac suite passes 207 tests.
+- The production policy rejects non-Premium networking, duplicate or mismatched
+  regions, broad subnet CIDRs, invalid NAT port sizing, and any Cockroach
+  allowlist broader than `/32`.
 
 Commit: `Add safe CockroachDB public connectivity`
 

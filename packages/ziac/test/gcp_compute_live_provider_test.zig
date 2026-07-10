@@ -14,6 +14,55 @@ const config = ziac.gcp.config.ProviderConfig{
 };
 
 test "live Compute provider manages all global load balancer primitives" {
+    var network = try ziac.gcp.network.Network.build(std.testing.allocator, config, .{ .name = "api-egress" });
+    defer network.deinit(std.testing.allocator);
+    try exerciseLifecycle(
+        network.node,
+        "{\"name\":\"api-egress\",\"selfLink\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/global/networks/api-egress\",\"autoCreateSubnetworks\":false,\"routingConfig\":{\"routingMode\":\"GLOBAL\"}}",
+        "/global/networks",
+        false,
+    );
+
+    const network_link = ziac.PublicOutput([]const u8).known("https://compute.googleapis.com/compute/v1/projects/ziac-dev/global/networks/api-egress");
+    var subnet = try ziac.gcp.network.Subnetwork.build(std.testing.allocator, config, .{
+        .name = "api-europe-west1",
+        .region = "europe-west1",
+        .ip_cidr_range = "10.42.0.0/24",
+        .network = network_link,
+    });
+    defer subnet.deinit(std.testing.allocator);
+    try exerciseLifecycle(
+        subnet.node,
+        "{\"name\":\"api-europe-west1\",\"selfLink\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/regions/europe-west1/subnetworks/api-europe-west1\",\"network\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/global/networks/api-egress\",\"ipCidrRange\":\"10.42.0.0/24\",\"privateIpGoogleAccess\":true}",
+        "/regions/europe-west1/subnetworks",
+        true,
+    );
+
+    var router = try ziac.gcp.network.Router.build(std.testing.allocator, config, .{
+        .name = "api-europe-west1",
+        .region = "europe-west1",
+        .network = network_link,
+    });
+    defer router.deinit(std.testing.allocator);
+    try exerciseLifecycle(
+        router.node,
+        "{\"name\":\"api-europe-west1\",\"selfLink\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/regions/europe-west1/routers/api-europe-west1\",\"network\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/global/networks/api-egress\"}",
+        "/regions/europe-west1/routers",
+        true,
+    );
+
+    var regional_address = try ziac.gcp.network.RegionalAddress.build(std.testing.allocator, config, .{
+        .name = "api-europe-west1",
+        .region = "europe-west1",
+    });
+    defer regional_address.deinit(std.testing.allocator);
+    try exerciseLifecycle(
+        regional_address.node,
+        "{\"name\":\"api-europe-west1\",\"selfLink\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/regions/europe-west1/addresses/api-europe-west1\",\"address\":\"203.0.113.10\",\"addressType\":\"EXTERNAL\",\"networkTier\":\"PREMIUM\"}",
+        "/regions/europe-west1/addresses",
+        true,
+    );
+
     var address = try ziac.gcp.compute.GlobalAddress.build(std.testing.allocator, config, .{ .name = "api-ip" });
     defer address.deinit(std.testing.allocator);
     try exerciseLifecycle(

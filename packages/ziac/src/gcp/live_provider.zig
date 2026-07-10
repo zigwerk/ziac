@@ -2,6 +2,7 @@ const std = @import("std");
 const client_mod = @import("client.zig");
 const compute_provider = @import("compute_provider.zig");
 const dns_provider = @import("dns_provider.zig");
+const network_provider = @import("network_provider.zig");
 const operation = @import("operation.zig");
 const run_provider = @import("run_provider.zig");
 const provider_mod = @import("../provider.zig");
@@ -58,6 +59,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
         if (isType(node, secret_iam_member_type)) return self.readSecretIamMember(context, node);
         if (isType(node, cloud_run_service_type)) return self.runHandler().read(context, node, null);
+        if (network_provider.supports(node)) return self.networkHandler().read(context, node, null);
         if (compute_provider.supports(node)) return self.computeHandler().read(context, node, null);
         if (dns_provider.supports(node)) return self.dnsHandler().read(context, node, null);
         return error.InvalidConfiguration;
@@ -72,6 +74,7 @@ pub const LiveProvider = struct {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
         if (isType(node, cloud_run_service_type)) return run_provider.Handler.diff(context, node, observed);
+        if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (compute_provider.supports(node)) return compute_provider.Handler.diff(context, node, observed);
         if (dns_provider.supports(node)) return dns_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
@@ -100,6 +103,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
         if (isType(node, secret_iam_member_type)) return self.ensureSecretIamMember(context, node, true);
         if (isType(node, cloud_run_service_type)) return self.runHandler().create(context, node);
+        if (network_provider.supports(node)) return self.networkHandler().create(context, node);
         if (compute_provider.supports(node)) return self.computeHandler().create(context, node);
         if (dns_provider.supports(node)) return self.dnsHandler().create(context, node);
         return error.InvalidConfiguration;
@@ -117,6 +121,7 @@ pub const LiveProvider = struct {
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed.physical_id);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed.physical_id);
+        if (network_provider.supports(node)) return self.networkHandler().update(context, node, observed.physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().update(context, node, observed.physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().update(context, node, observed.physical_id);
         return error.InvalidConfiguration;
@@ -135,6 +140,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.destroySecretVersion(context, physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().delete(context, physical_id);
+        if (network_provider.supports(node)) return self.networkHandler().delete(context, node, physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().delete(context, node, physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
@@ -208,6 +214,13 @@ pub const LiveProvider = struct {
         }
         if (isType(node, cloud_run_service_type)) {
             const result = try self.runHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (network_provider.supports(node)) {
+            const result = try self.networkHandler().read(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -831,6 +844,14 @@ pub const LiveProvider = struct {
         };
     }
 
+    fn networkHandler(self: *LiveProvider) network_provider.Handler {
+        return .{
+            .client = self.client,
+            .operation_policy = self.operation_policy,
+            .conflict_retries = self.compute_conflict_retries,
+        };
+    }
+
     fn dnsHandler(self: *LiveProvider) dns_provider.Handler {
         return .{ .client = self.client };
     }
@@ -1253,6 +1274,7 @@ fn isSupported(node: resource.ResourceNode) bool {
         isType(node, secret_version_type) or
         isType(node, secret_iam_member_type) or
         isType(node, cloud_run_service_type) or
+        network_provider.supports(node) or
         compute_provider.supports(node) or
         dns_provider.supports(node);
 }
