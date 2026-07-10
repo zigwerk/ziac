@@ -5,6 +5,7 @@ const resource = @import("resource.zig");
 pub const StackError = error{
     UnknownStack,
     DuplicateResource,
+    DuplicateField,
     MissingResource,
     OutOfMemory,
     MissingProjectId,
@@ -32,7 +33,6 @@ pub const StackProgram = struct {
     allocator: std.mem.Allocator,
     graph: resource.ResourceGraph,
     outputs: std.ArrayList(OutputEntry),
-    owned_resource_ids: std.ArrayList([]const u8),
 
     pub fn deinit(self: *StackProgram) void {
         self.graph.deinit();
@@ -40,10 +40,6 @@ pub const StackProgram = struct {
             self.allocator.free(entry.value);
         }
         self.outputs.deinit(self.allocator);
-        for (self.owned_resource_ids.items) |id| {
-            self.allocator.free(id);
-        }
-        self.owned_resource_ids.deinit(self.allocator);
     }
 };
 
@@ -57,10 +53,10 @@ pub const StackRegistry = struct {
             .service_account = "hello-global@ziac-dev.iam.gserviceaccount.com",
         };
 
-        const repo = try gcp.artifact_registry.DockerRepository.build(allocator, provider, .{
+        var repo = try gcp.artifact_registry.DockerRepository.build(allocator, provider, .{
             .name = "hello-global",
         });
-        defer allocator.free(repo.repository_url);
+        defer repo.deinit(allocator);
 
         const image = try std.fmt.allocPrint(allocator, "{s}/api:latest", .{repo.repository_url});
         defer allocator.free(image);
@@ -68,38 +64,32 @@ pub const StackRegistry = struct {
         const env = [_]gcp.cloud_run.EnvVar{
             .{ .name = "DATABASE_URL", .value = "postgres://user:sentinel-secret-for-tests@localhost:26257/app", .secret = true },
         };
-        const service = try gcp.cloud_run.Service.build(allocator, provider, .{
+        var service = try gcp.cloud_run.Service.build(allocator, provider, .{
             .name = "api",
             .image = image,
             .env = env[0..],
         });
-        defer allocator.free(service.service_url);
-        defer allocator.free(service.service_account);
-
-        var owned_resource_ids = std.ArrayList([]const u8).empty;
-        errdefer {
-            for (owned_resource_ids.items) |id| allocator.free(id);
-            owned_resource_ids.deinit(allocator);
-        }
-        try owned_resource_ids.append(allocator, repo.node.id);
-        try owned_resource_ids.append(allocator, service.node.id);
+        defer service.deinit(allocator);
 
         var graph = resource.ResourceGraph.init(allocator);
         errdefer graph.deinit();
         graph.addResource(repo.node) catch |err| switch (err) {
             error.DuplicateResource => return error.DuplicateResource,
+            error.DuplicateField => return error.DuplicateField,
             error.MissingResource => return error.MissingResource,
             error.OutOfMemory => return error.OutOfMemory,
             error.DependencyCycle => unreachable,
         };
         graph.addResource(service.node) catch |err| switch (err) {
             error.DuplicateResource => return error.DuplicateResource,
+            error.DuplicateField => return error.DuplicateField,
             error.MissingResource => return error.MissingResource,
             error.OutOfMemory => return error.OutOfMemory,
             error.DependencyCycle => unreachable,
         };
         graph.addDependency(service.node.id, repo.node.id) catch |err| switch (err) {
             error.DuplicateResource => return error.DuplicateResource,
+            error.DuplicateField => return error.DuplicateField,
             error.MissingResource => return error.MissingResource,
             error.OutOfMemory => return error.OutOfMemory,
             error.DependencyCycle => unreachable,
@@ -121,7 +111,6 @@ pub const StackRegistry = struct {
             .allocator = allocator,
             .graph = graph,
             .outputs = outputs,
-            .owned_resource_ids = owned_resource_ids,
         };
     }
 };

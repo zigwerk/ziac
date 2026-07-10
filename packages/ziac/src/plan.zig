@@ -38,7 +38,7 @@ pub fn buildPlan(
     graph.validateAcyclic() catch |err| switch (err) {
         error.DependencyCycle => return error.DependencyCycle,
         error.OutOfMemory => return error.OutOfMemory,
-        error.DuplicateResource, error.MissingResource => unreachable,
+        error.DuplicateResource, error.DuplicateField, error.MissingResource => unreachable,
     };
 
     var operations = std.ArrayList(PlanOperation).empty;

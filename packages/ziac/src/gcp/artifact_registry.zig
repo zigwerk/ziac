@@ -1,9 +1,10 @@
 const std = @import("std");
 const config_mod = @import("config.zig");
 const resource = @import("../resource.zig");
+const value = @import("../value.zig");
 const validation = @import("validation.zig");
 
-pub const BuildError = validation.ValidationError || std.mem.Allocator.Error;
+pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || error{DuplicateField};
 
 pub const DockerRepositoryArgs = struct {
     name: []const u8,
@@ -25,22 +26,48 @@ pub const DockerRepository = struct {
         if (location.len == 0) return error.MissingRegion;
 
         const id = try std.fmt.allocPrint(allocator, "gcp.artifact.Repository.{s}.{s}", .{ location, args.name });
-        errdefer allocator.free(id);
+        defer allocator.free(id);
         const repository_url = try std.fmt.allocPrint(allocator, "{s}-docker.pkg.dev/{s}/{s}", .{ location, provider.project_id, args.name });
         errdefer allocator.free(repository_url);
 
+        const label_fields = try allocator.alloc(value.Field, provider.labels.len);
+        defer allocator.free(label_fields);
+        for (provider.labels, 0..) |label, index| {
+            label_fields[index] = .{ .name = label.key, .value = .{ .string = label.value } };
+        }
+        const input_fields = [_]value.Field{
+            .{ .name = "format", .value = .{ .string = "DOCKER" } },
+            .{ .name = "labels", .value = .{ .object = label_fields } },
+            .{ .name = "location", .value = .{ .string = location } },
+            .{ .name = "name", .value = .{ .string = args.name } },
+            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
+        };
+        const node = resource.ResourceNode.initOwned(allocator, .{
+            .id = id,
+            .provider = .gcp,
+            .type_name = "gcp.artifact.Repository",
+            .schema_version = 1,
+            .logical_id = args.name,
+            .inputs = .{ .object = input_fields[0..] },
+        }) catch |err| switch (err) {
+            error.DuplicateField => return error.DuplicateField,
+            error.OutOfMemory => return error.OutOfMemory,
+            error.DuplicateResource, error.MissingResource, error.DependencyCycle => unreachable,
+        };
+        errdefer {
+            var mutable_node = node;
+            mutable_node.deinit(allocator);
+        }
+
         return .{
-            .node = .{
-                .id = id,
-                .type_name = "gcp.artifact.Repository",
-                .logical_id = args.name,
-            },
+            .node = node,
             .repository_url = repository_url,
         };
     }
 
     pub fn deinit(self: *DockerRepository, allocator: std.mem.Allocator) void {
-        allocator.free(self.node.id);
+        self.node.deinit(allocator);
         allocator.free(self.repository_url);
+        self.* = undefined;
     }
 };

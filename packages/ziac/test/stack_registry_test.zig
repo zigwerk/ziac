@@ -13,6 +13,10 @@ test "fixture registry builds hello global stack graph and outputs" {
     try std.testing.expectEqual(@as(usize, 2), program.graph.resources.items.len);
     try std.testing.expectEqualStrings("gcp.artifact.Repository.europe-west1.hello-global", program.graph.resources.items[0].id);
     try std.testing.expectEqualStrings("gcp.run.Service.europe-west1.api", program.graph.resources.items[1].id);
+    const service_inputs = try program.graph.resources.items[1].inputs.canonicalJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(service_inputs);
+    try std.testing.expect(std.mem.indexOf(u8, service_inputs, "api:latest") != null);
+    try std.testing.expect(std.mem.indexOf(u8, service_inputs, "sentinel-secret-for-tests") == null);
     try std.testing.expectEqual(@as(usize, 1), program.graph.dependencies.items.len);
     try std.testing.expectEqualStrings("gcp.run.Service.europe-west1.api", program.graph.dependencies.items[0].from);
     try std.testing.expectEqualStrings("gcp.artifact.Repository.europe-west1.hello-global", program.graph.dependencies.items[0].to);
