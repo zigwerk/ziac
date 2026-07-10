@@ -30,6 +30,12 @@ Addresses, NEGs, managed certificates, and forwarding rules classify managed
 changes as replacement. Backend services, URL maps, and HTTP/HTTPS proxies
 update in place when project and name are unchanged.
 
+Forwarding rules accept either a literal IP or the typed `address` output from
+`GlobalAddress`. The live provider verifies the remote `IPAddress` against the
+resolved value and normalizes a match back to the typed reference. High-level
+components use this path; they do not pass an address resource URL where the
+Compute API requires an allocated IP.
+
 Managed certificate creation completes when the Compute operation completes;
 Google may still report `PROVISIONING` while it validates DNS and issues the
 certificate. Reads expose `status` and `domains_ready`. Call

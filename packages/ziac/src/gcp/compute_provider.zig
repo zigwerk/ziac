@@ -48,7 +48,7 @@ pub const Handler = struct {
             return err;
         };
         defer response.deinit(context.allocator);
-        return .{ .present = try resultFromJson(context.allocator, node, resource_kind, response.body) };
+        return .{ .present = try resultFromJson(context, node, resource_kind, response.body) };
     }
 
     pub fn diff(
@@ -74,7 +74,7 @@ pub const Handler = struct {
         node: resource.ResourceNode,
     ) ProviderError!provider_mod.ResourceResult {
         const resource_kind = kind(node) orelse return error.InvalidConfiguration;
-        const body = try desiredBodyAlloc(context.allocator, node, resource_kind);
+        const body = try desiredBodyAlloc(context, node, resource_kind);
         defer context.allocator.free(body);
         const path = try collectionPathAlloc(context.allocator, node, resource_kind);
         defer context.allocator.free(path);
@@ -100,7 +100,7 @@ pub const Handler = struct {
         while (true) {
             var remote = try self.request(context, .{ .api = .compute, .method = "GET", .path = path });
             defer remote.deinit(context.allocator);
-            const merged = try mergeUpdateBodyAlloc(context.allocator, node, resource_kind, remote.body);
+            const merged = try mergeUpdateBodyAlloc(context, node, resource_kind, remote.body);
             defer context.allocator.free(merged);
             const method = if (resource_kind == .backend_service) "PUT" else "PATCH";
             const handle = self.startOperation(context, path, method, merged) catch |err| {
@@ -271,11 +271,12 @@ fn pendingResult(
 }
 
 fn resultFromJson(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     resource_kind: Kind,
     body: []const u8,
 ) ProviderError!provider_mod.ResourceResult {
+    const allocator = context.allocator;
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.ProviderBug;
     defer parsed.deinit();
     const remote = asObject(parsed.value) orelse return error.ProviderBug;
@@ -283,7 +284,7 @@ fn resultFromJson(
     const self_link = try requiredJsonString(remote, "selfLink");
     const physical_id = try physicalIdFromNameAlloc(allocator, node, resource_kind, name);
     defer allocator.free(physical_id);
-    var observed = try normalizedInputsAlloc(allocator, node, resource_kind, remote);
+    var observed = try normalizedInputsAlloc(context, node, resource_kind, remote);
     defer observed.deinit(allocator);
     var outputs: [4]state.StateOutput = undefined;
     var count: usize = 0;
@@ -315,11 +316,12 @@ fn resultFromJson(
 }
 
 fn normalizedInputsAlloc(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     resource_kind: Kind,
     remote: std.json.ObjectMap,
 ) ProviderError!value.Value {
+    const allocator = context.allocator;
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -367,7 +369,17 @@ fn normalizedInputsAlloc(
             try normalized.put(arena, "ssl_certificates", remote.get("sslCertificates") orelse return error.ProviderBug);
         },
         .global_forwarding_rule => {
-            try normalized.put(arena, "address", .{ .string = try requiredString(node.inputs, "address") });
+            const desired_address = try requiredValue(node.inputs, "address");
+            const resolved_address = try resolveStringValue(context, desired_address);
+            const remote_address = try requiredJsonString(remote, "IPAddress");
+            try normalized.put(
+                arena,
+                "address",
+                if (std.mem.eql(u8, resolved_address, remote_address))
+                    try valueToJson(arena, desired_address)
+                else
+                    .{ .string = remote_address },
+            );
             try normalized.put(arena, "load_balancing_scheme", .{ .string = try requiredJsonString(remote, "loadBalancingScheme") });
             try normalized.put(arena, "network_tier", .{ .string = try requiredJsonString(remote, "networkTier") });
             try normalized.put(arena, "port", .{ .integer = try firstPort(remote) });
@@ -382,7 +394,12 @@ fn normalizedInputsAlloc(
     };
 }
 
-fn desiredBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, resource_kind: Kind) ProviderError![]const u8 {
+fn desiredBodyAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    resource_kind: Kind,
+) ProviderError![]const u8 {
+    const allocator = context.allocator;
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -432,7 +449,7 @@ fn desiredBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, r
             try body.put(arena, "sslCertificates", try stringListJson(arena, try requiredValue(node.inputs, "ssl_certificates")));
         },
         .global_forwarding_rule => {
-            try body.put(arena, "IPAddress", .{ .string = try requiredString(node.inputs, "address") });
+            try body.put(arena, "IPAddress", .{ .string = try resolveStringValue(context, try requiredValue(node.inputs, "address")) });
             try body.put(arena, "IPProtocol", .{ .string = "TCP" });
             const port_range = try std.fmt.allocPrint(arena, "{d}-{d}", .{
                 try requiredInteger(node.inputs, "port"),
@@ -448,18 +465,19 @@ fn desiredBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, r
 }
 
 fn mergeUpdateBodyAlloc(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     resource_kind: Kind,
     remote_json: []const u8,
 ) ProviderError![]const u8 {
+    const allocator = context.allocator;
     var remote = std.json.parseFromSlice(std.json.Value, allocator, remote_json, .{}) catch return error.ProviderBug;
     defer remote.deinit();
     const object = switch (remote.value) {
         .object => |*object| object,
         else => return error.ProviderBug,
     };
-    const desired_json = try desiredBodyAlloc(allocator, node, resource_kind);
+    const desired_json = try desiredBodyAlloc(context, node, resource_kind);
     defer allocator.free(desired_json);
     var desired = std.json.parseFromSlice(std.json.Value, allocator, desired_json, .{}) catch return error.ProviderBug;
     defer desired.deinit();
@@ -605,6 +623,22 @@ fn requiredBoolean(input: value.Value, name: []const u8) ProviderError!bool {
         .boolean => |boolean| boolean,
         else => error.InvalidConfiguration,
     };
+}
+
+fn resolveStringValue(context: *provider_mod.OperationContext, input: value.Value) ProviderError![]const u8 {
+    return switch (input) {
+        .string => |string| string,
+        .output_ref => |reference| context.resolveOutputString(reference),
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn valueToJson(allocator: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {
+    const json = input.canonicalJsonAlloc(allocator) catch |err| switch (err) {
+        error.DuplicateField => return error.InvalidConfiguration,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+    return std.json.parseFromSliceLeaky(std.json.Value, allocator, json, .{}) catch return error.ProviderBug;
 }
 
 fn requiredObject(object: std.json.ObjectMap, name: []const u8) ProviderError!std.json.ObjectMap {

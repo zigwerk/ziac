@@ -777,6 +777,9 @@ Commit: `Add GCP certificate and DNS resources`
 
 ### Task 5.3: ContainerService Expansion
 
+Status: completed on 2026-07-10, with authenticated regional failure testing
+owned by Task 5.4.
+
 Prerequisite completed on 2026-07-10: provider outputs are canonical desired
 input values, derive graph dependencies recursively, and resolve from dependency
 state during provider execution. Cloud DNS uses this path for the allocated
@@ -799,6 +802,16 @@ Tests:
 Acceptance:
 
 - The component graph is deterministic and contains no hand-authored ordering.
+
+Evidence:
+
+- Two regions produce two Cloud Run services and two serverless NEGs while all
+  global resources remain singletons.
+- Typed allocated-address inputs drive both forwarding rules and optional DNS;
+  graph insertion derives their dependency edges automatically.
+- Premium tier, unique/two-region minimum, production warm instances, probes,
+  domain, DNS, Cloud Run runtime validation, and restricted ingress are covered.
+- The package builds and tests the `global-container-service` example.
 
 Commit: `Add global GCP ContainerService component`
 

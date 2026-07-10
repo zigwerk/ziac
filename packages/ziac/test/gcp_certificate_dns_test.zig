@@ -27,7 +27,7 @@ test "managed certificate and HTTP redirect resources build stable declarations"
     defer proxy.deinit(std.testing.allocator);
     var forwarding = try ziac.gcp.compute.GlobalForwardingRule.build(std.testing.allocator, provider, .{
         .name = "api-http",
-        .address = "projects/ziac-dev/global/addresses/api-ip",
+        .address = "203.0.113.10",
         .target = "projects/ziac-dev/global/targetHttpProxies/api-http",
         .port = 80,
     });

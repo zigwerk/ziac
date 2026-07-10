@@ -40,7 +40,7 @@ test "Compute load balancer resources build stable typed declarations" {
     defer proxy.deinit(std.testing.allocator);
     var forwarding = try ziac.gcp.compute.GlobalForwardingRule.build(std.testing.allocator, provider, .{
         .name = "api-https",
-        .address = "projects/ziac-dev/global/addresses/api-ip",
+        .address = "203.0.113.10",
         .target = "projects/ziac-dev/global/targetHttpsProxies/api-https",
     });
     defer forwarding.deinit(std.testing.allocator);
@@ -86,4 +86,17 @@ test "Compute global resources require Premium tier and unique backend regions" 
             .backends = &duplicate,
         }),
     );
+}
+
+test "global forwarding rules retain typed allocated address inputs" {
+    const address = ziac.Output([]const u8, .public).fromResource("gcp.compute.GlobalAddress.api-ip", "address");
+    var forwarding = try ziac.gcp.compute.GlobalForwardingRule.build(std.testing.allocator, provider, .{
+        .name = "api-https",
+        .address_output = address,
+        .target = "projects/ziac-dev/global/targetHttpsProxies/api-https",
+    });
+    defer forwarding.deinit(std.testing.allocator);
+    const json = try forwarding.node.inputs.canonicalJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(json);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"address\":{\"$output\":{\"field\":\"address\",\"resource\":\"gcp.compute.GlobalAddress.api-ip\"}}") != null);
 }

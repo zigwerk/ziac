@@ -33,5 +33,6 @@ comptime {
     _ = @import("gcp_certificate_dns_test.zig");
     _ = @import("gcp_certificate_live_provider_test.zig");
     _ = @import("gcp_dns_live_provider_test.zig");
+    _ = @import("gcp_container_service_test.zig");
     _ = @import("gcp_live_provider_test.zig");
 }

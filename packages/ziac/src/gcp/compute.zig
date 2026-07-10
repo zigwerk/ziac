@@ -9,6 +9,7 @@ pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || 
     DuplicateField,
     DuplicateBackendRegion,
     DuplicateDomain,
+    InvalidAddressInput,
     InvalidDomain,
     MissingBackend,
     MissingCertificate,
@@ -362,7 +363,8 @@ pub const TargetHttpProxy = struct {
 
 pub const GlobalForwardingRuleArgs = struct {
     name: []const u8,
-    address: []const u8,
+    address: []const u8 = "",
+    address_output: ?output.Output([]const u8, .public) = null,
     target: []const u8,
     port: u16 = 443,
 };
@@ -383,10 +385,19 @@ pub const GlobalForwardingRule = struct {
         args: GlobalForwardingRuleArgs,
     ) BuildError!GlobalForwardingRule {
         try validateGlobal(provider, args.name);
-        if (args.address.len == 0 or args.target.len == 0) return error.MissingBackend;
+        if ((args.address.len == 0) == (args.address_output == null)) return error.InvalidAddressInput;
+        if (args.target.len == 0) return error.MissingBackend;
         if (args.port == 0) return error.InvalidPort;
+        const address_value: value.Value = if (args.address_output) |address_output| switch (address_output) {
+            .value => |known| .{ .string = known },
+            .resource_ref => |reference| .{ .output_ref = .{
+                .resource_id = reference.resource_id,
+                .field = reference.field,
+            } },
+            .unknown_reason => return error.InvalidAddressInput,
+        } else .{ .string = args.address };
         const fields = [_]value.Field{
-            .{ .name = "address", .value = .{ .string = args.address } },
+            .{ .name = "address", .value = address_value },
             .{ .name = "load_balancing_scheme", .value = .{ .string = "EXTERNAL_MANAGED" } },
             .{ .name = "name", .value = .{ .string = args.name } },
             .{ .name = "network_tier", .value = .{ .string = "PREMIUM" } },

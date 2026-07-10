@@ -100,7 +100,7 @@ test "live Compute provider manages all global load balancer primitives" {
 
     var forwarding = try ziac.gcp.compute.GlobalForwardingRule.build(std.testing.allocator, config, .{
         .name = "api-https",
-        .address = "projects/ziac-dev/global/addresses/api-ip",
+        .address = "203.0.113.10",
         .target = "projects/ziac-dev/global/targetHttpsProxies/api-https",
     });
     defer forwarding.deinit(std.testing.allocator);
@@ -159,6 +159,44 @@ test "live Compute backend update preserves fields and retries fingerprint confl
     try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[2].body, "\"fingerprint\":\"fingerprint-a\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[4].body, "\"fingerprint\":\"fingerprint-b\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[4].body, "api-europe-west1-v2") != null);
+}
+
+test "live Compute forwarding rules resolve and normalize allocated address outputs" {
+    const address = ziac.Output([]const u8, .public).fromResource("gcp.compute.GlobalAddress.api-ip", "address");
+    var forwarding = try ziac.gcp.compute.GlobalForwardingRule.build(std.testing.allocator, config, .{
+        .name = "api-https",
+        .address_output = address,
+        .target = "projects/ziac-dev/global/targetHttpsProxies/api-https",
+    });
+    defer forwarding.deinit(std.testing.allocator);
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    try state.put(.{
+        .resource_id = "gcp.compute.GlobalAddress.api-ip",
+        .type_name = "gcp.compute.GlobalAddress",
+        .logical_id = "api-ip",
+        .desired_hash = "address-hash",
+        .outputs = &.{.{ .name = "address", .value = .{ .string = "203.0.113.10" } }},
+        .status = .created,
+    });
+    const forwarding_json = "{\"name\":\"api-https\",\"selfLink\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/global/forwardingRules/api-https\",\"IPAddress\":\"203.0.113.10\",\"IPProtocol\":\"TCP\",\"portRange\":\"443-443\",\"target\":\"projects/ziac-dev/global/targetHttpsProxies/api-https\",\"loadBalancingScheme\":\"EXTERNAL_MANAGED\",\"networkTier\":\"PREMIUM\"}";
+    const responses = [_]zstd.Http.Response{
+        operation("insert-forwarding"),
+        .{ .status = 200, .body = forwarding_json },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    const provider = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    context.state = &state;
+
+    var creating = try provider.createWithContext(&context, forwarding.node);
+    defer creating.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "\"IPAddress\":\"203.0.113.10\"") != null);
+    var observed = try provider.readWithContext(&context, forwarding.node);
+    defer observed.deinit();
+    try std.testing.expectEqual(forwarding.node.inputs_hash, observed.present.observed_hash);
 }
 
 fn exerciseLifecycle(

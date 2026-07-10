@@ -107,9 +107,11 @@ Run region with real physical state and outputs.
   forwarding rule scripted lifecycles: complete.
 - Managed TLS, explicit certificate readiness, optional HTTP-to-HTTPS redirect,
   and existing-zone Cloud DNS record sets: scripted lifecycles complete.
-- `ziac.gcp.global.ContainerService`.
-- Premium-tier validation, restricted Cloud Run ingress, readiness, and regional
-  failover policy.
+- `ziac.gcp.global.ContainerService`: deterministic graph and example complete.
+- Premium-tier, unique-region, restricted Cloud Run ingress, and production
+  warm-instance/probe policy: implemented and tested.
+- Authenticated certificate readiness and regional failover/failback: live gate
+  pending.
 
 Gate: a live two-region HTTPS service remains available during a tested regional
 failure and destroys in reverse dependency order.

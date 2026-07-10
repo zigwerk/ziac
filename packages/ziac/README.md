@@ -65,8 +65,10 @@ drift-aware Cloud Run services from complete canonical runtime specifications.
 The raw global load-balancer surface is implemented, including managed
 certificates, explicit certificate readiness polling, an optional HTTP-to-HTTPS
 redirect, and Cloud DNS record sets in an existing zone. The high-level
-`ContainerService`, authenticated two-region acceptance gate, and CockroachDB
-resources remain on the acceptance-gated roadmap.
+`gcp.global.ContainerService` now assembles those resources with regional Cloud
+Run services and typed allocated-IP wiring. The authenticated two-region
+acceptance gate and CockroachDB resources remain on the acceptance-gated
+roadmap.
 
 ## Delivery Status
 
@@ -115,6 +117,9 @@ Managed SSL certificates expose provisioning readiness without holding create
 operations open. Redirect URL maps and HTTP proxies pass the same lifecycle
 contract. Cloud DNS record sets pass create/read/update/delete/import tests with
 stable project/zone/name/type identity.
+`gcp.global.ContainerService` builds a deterministic, dependency-complete graph
+with restricted direct ingress, optional DNS and HTTP redirect, and production
+warm-instance/probe validation.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts. See
@@ -123,6 +128,7 @@ See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/live-gcp.md` for CLI selection and disposable-project safeguards, and
 `docs/compute-load-balancer.md` for the raw load-balancer resources. See
 `docs/cloud-dns.md` for existing-zone DNS ownership and import. See
+`docs/container-service.md` for the high-level global component. See
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

@@ -50,6 +50,7 @@ pub fn build(b: *std.Build) void {
     const examples_step = b.step("examples", "Build Ziac examples");
     examples_step.dependOn(test_step);
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "local-cli", "examples/local_cli.zig");
+    addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "global-container-service", "examples/global_container_service.zig");
 }
 
 fn addExample(

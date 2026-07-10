@@ -18,8 +18,10 @@ The canonical service inputs include:
 
 The default ingress is `INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER`, which accepts
 traffic from internal sources and external Application Load Balancers without
-opening the service to direct external `run.app` ingress. Public invocation is
-off unless declared explicitly.
+opening the service to direct external `run.app` ingress. The raw resource keeps
+the invoker IAM check enabled unless declared explicitly. `ContainerService`
+disables that check for load-balancer traffic while retaining restricted
+ingress, so its global URL is public and its direct `run.app` URL is not.
 
 ## Translation And Drift
 
