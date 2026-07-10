@@ -10,6 +10,7 @@ const provider_mod = @import("provider.zig");
 const refresh = @import("refresh.zig");
 const stack_registry = @import("stack_registry.zig");
 const state_mod = @import("state.zig");
+const state_backend = @import("state_backend.zig");
 
 pub const Exit = struct {
     pub const success: u8 = 0;
@@ -24,7 +25,8 @@ pub const Exit = struct {
 pub const Env = struct {
     console: *zstd.Console.CapturedConsole,
     registry: stack_registry.StackRegistry,
-    state: local_state.Store,
+    state: state_backend.Store,
+    migration_source: ?local_state.Store = null,
     auth_env: ?*zstd.Env.EnvMap = null,
     auth_files: ?gcp_auth.FileReader = null,
     live_providers: ?provider_mod.ProviderRegistry = null,
@@ -155,6 +157,11 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .options = command_options[0..],
     },
     .{
+        .name = "state-migrate",
+        .description = "migrate local state to the selected backend",
+        .options = command_options[0..3],
+    },
+    .{
         .name = "refresh",
         .description = "refresh observed provider state",
         .options = command_options[0..],
@@ -200,6 +207,7 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
     if (std.mem.eql(u8, args.command, "destroy")) return runDestroy(allocator, env, args);
     if (std.mem.eql(u8, args.command, "outputs")) return runOutputs(allocator, env, args);
     if (std.mem.eql(u8, args.command, "state")) return runState(allocator, env, args);
+    if (std.mem.eql(u8, args.command, "state-migrate")) return runStateMigrate(allocator, env, args);
     if (std.mem.eql(u8, args.command, "refresh")) return runRefresh(allocator, env, args);
     if (std.mem.eql(u8, args.command, "import")) return runImport(allocator, env, args);
     if (std.mem.eql(u8, args.command, "unlock")) return runUnlock(env, args);
@@ -322,10 +330,11 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     defer planned.deinit();
 
-    var checkpoint = checkpoint_mod.LocalResources{
+    var checkpoint = checkpoint_mod.Resources{
         .store = env.state,
         .stack = args.stack,
         .stage = args.stage,
+        .lock_owner_id = command_lock.owner_id,
     };
     executor.executePlan(allocator, &planned, &loaded.store, providers, .{
         .checkpoint = checkpoint.checkpoint(),
@@ -374,10 +383,11 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     defer planned.deinit();
 
-    var checkpoint = checkpoint_mod.LocalResources{
+    var checkpoint = checkpoint_mod.Resources{
         .store = env.state,
         .stack = args.stack,
         .stage = args.stage,
+        .lock_owner_id = command_lock.owner_id,
     };
     executor.executePlan(allocator, &planned, &loaded.store, providers, .{
         .checkpoint = checkpoint.checkpoint(),
@@ -503,6 +513,30 @@ fn runState(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     return Exit.success;
 }
 
+fn runStateMigrate(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    const source = env.migration_source orelse {
+        try writeError(env, "state", error.MigrationSourceUnavailable);
+        return Exit.state_error;
+    };
+    var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer command_lock.deinit();
+    state_backend.migrateLocalToBackend(allocator, source, env.state, args.stack, args.stage) catch |err| {
+        return handleStateError(env, err);
+    };
+    var loaded = env.state.loadResources(args.stack, args.stage) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer loaded.deinit();
+    if (args.json) {
+        try writeCommandJson(env, args, loaded.store.serialValue(), .{});
+    } else {
+        try env.console.writeOut("State migration complete\n");
+    }
+    return Exit.success;
+}
+
 fn runRefresh(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
         return handleStackError(env, err);
@@ -521,10 +555,11 @@ fn runRefresh(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
     defer loaded.deinit();
-    var checkpoint = checkpoint_mod.LocalResources{
+    var checkpoint = checkpoint_mod.Resources{
         .store = env.state,
         .stack = args.stack,
         .stage = args.stage,
+        .lock_owner_id = command_lock.owner_id,
     };
     refresh.refreshGraph(allocator, &program.graph, &loaded.store, providers, checkpoint.checkpoint()) catch |err| {
         return handleApplyError(env, err);
@@ -558,10 +593,11 @@ fn runImport(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
     defer loaded.deinit();
-    var checkpoint = checkpoint_mod.LocalResources{
+    var checkpoint = checkpoint_mod.Resources{
         .store = env.state,
         .stack = args.stack,
         .stage = args.stage,
+        .lock_owner_id = command_lock.owner_id,
     };
     importer.importResource(
         allocator,
@@ -736,7 +772,7 @@ fn writeCommandJson(env: *Env, args: Args, serial: u64, counts: OperationCounts)
 
 const CommandLock = struct {
     allocator: std.mem.Allocator,
-    store: local_state.Store,
+    store: state_backend.Store,
     stack: []const u8,
     stage: []const u8,
     owner_id: []const u8,

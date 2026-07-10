@@ -186,6 +186,7 @@ pub const LockOptions = struct {
     owner_id: []const u8,
     command: []const u8,
     acquired_at_millis: u64,
+    expires_at_millis: ?u64 = null,
 };
 
 pub const LockMetadata = struct {
@@ -193,9 +194,15 @@ pub const LockMetadata = struct {
     owner_id: []const u8,
     command: []const u8,
     acquired_at_millis: u64,
+    expires_at_millis: ?u64 = null,
 
     pub fn isStale(self: LockMetadata, now_millis: u64, stale_after_millis: u64) bool {
+        if (self.expires_at_millis) |expires| return now_millis >= expires;
         return now_millis -| self.acquired_at_millis >= stale_after_millis;
+    }
+
+    pub fn isExpired(self: LockMetadata, now_millis: u64) bool {
+        return if (self.expires_at_millis) |expires| now_millis >= expires else false;
     }
 };
 
@@ -242,6 +249,7 @@ pub const Store = struct {
             .owner_id = options.owner_id,
             .command = options.command,
             .acquired_at_millis = options.acquired_at_millis,
+            .expires_at_millis = options.expires_at_millis,
         });
         defer self.allocator.free(content);
         self.files.createExclusiveFile(path, content) catch |err| switch (err) {
@@ -359,20 +367,21 @@ pub const Store = struct {
     }
 };
 
-fn lockJsonAlloc(allocator: std.mem.Allocator, metadata: LockMetadata) ![]const u8 {
+pub fn lockJsonAlloc(allocator: std.mem.Allocator, metadata: LockMetadata) ![]const u8 {
     var output = std.ArrayList(u8).empty;
     errdefer output.deinit(allocator);
     try output.append(allocator, '{');
-    try appendIntField(&output, allocator, "format_version", 1, false);
+    try appendIntField(&output, allocator, "format_version", 2, false);
     try appendStringField(&output, allocator, "lineage_id", metadata.lineage_id, true);
     try appendStringField(&output, allocator, "owner_id", metadata.owner_id, true);
     try appendStringField(&output, allocator, "command", metadata.command, true);
     try appendIntField(&output, allocator, "acquired_at_millis", metadata.acquired_at_millis, true);
+    try appendOptionalIntField(&output, allocator, "expires_at_millis", metadata.expires_at_millis, true);
     try output.append(allocator, '}');
     return output.toOwnedSlice(allocator);
 }
 
-fn parseLock(allocator: std.mem.Allocator, content: []const u8) !LoadedLock {
+pub fn parseLock(allocator: std.mem.Allocator, content: []const u8) !LoadedLock {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
     const arena_allocator = arena.allocator();
@@ -382,7 +391,8 @@ fn parseLock(allocator: std.mem.Allocator, content: []const u8) !LoadedLock {
         .object => |object| object,
         else => return error.InvalidLockFile,
     };
-    if (try jsonU32(root, "format_version") != 1) return error.InvalidLockFile;
+    const format_version = try jsonU32(root, "format_version");
+    if (format_version != 1 and format_version != 2) return error.InvalidLockFile;
     return .{
         .arena = arena,
         .metadata = .{
@@ -390,6 +400,7 @@ fn parseLock(allocator: std.mem.Allocator, content: []const u8) !LoadedLock {
             .owner_id = try arena_allocator.dupe(u8, try jsonString(root, "owner_id")),
             .command = try arena_allocator.dupe(u8, try jsonString(root, "command")),
             .acquired_at_millis = try jsonU64(root, "acquired_at_millis"),
+            .expires_at_millis = if (format_version == 2) try jsonOptionalU64(root, "expires_at_millis") else null,
         },
     };
 }
@@ -420,7 +431,7 @@ pub const LoadedOutputs = struct {
     }
 };
 
-fn emptyResources(
+pub fn emptyResources(
     allocator: std.mem.Allocator,
     stack: []const u8,
     stage: []const u8,
@@ -439,7 +450,7 @@ fn emptyResources(
     };
 }
 
-fn resourcesJsonAlloc(
+pub fn resourcesJsonAlloc(
     allocator: std.mem.Allocator,
     stack: []const u8,
     stage: []const u8,
@@ -514,7 +525,7 @@ fn appendStateOutputsField(
     try output.append(allocator, ']');
 }
 
-fn outputsJsonAlloc(
+pub fn outputsJsonAlloc(
     allocator: std.mem.Allocator,
     outputs: []const stack_registry.OutputEntry,
 ) ![]const u8 {
@@ -583,6 +594,20 @@ fn appendIntField(
     try output.print(allocator, "\"{s}\":{d}", .{ escaped_name, value });
 }
 
+fn appendOptionalIntField(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    value: ?u64,
+    prefix_comma: bool,
+) !void {
+    if (value) |inner| return appendIntField(output, allocator, name, inner, prefix_comma);
+    if (prefix_comma) try output.append(allocator, ',');
+    const escaped_name = try zstd.Json.escapeStringAlloc(allocator, name);
+    defer allocator.free(escaped_name);
+    try output.print(allocator, "\"{s}\":null", .{escaped_name});
+}
+
 fn appendStringArrayField(
     output: *std.ArrayList(u8),
     allocator: std.mem.Allocator,
@@ -617,7 +642,7 @@ fn appendBoolField(
     try output.print(allocator, "\"{s}\":{}", .{ escaped_name, value });
 }
 
-fn parseResources(
+pub fn parseResources(
     allocator: std.mem.Allocator,
     content: []const u8,
     expected_stack: []const u8,
@@ -831,7 +856,7 @@ fn providerFromTypeName(type_name: []const u8) resource.ProviderId {
     return .local;
 }
 
-fn parseOutputs(allocator: std.mem.Allocator, content: []const u8) !LoadedOutputs {
+pub fn parseOutputs(allocator: std.mem.Allocator, content: []const u8) !LoadedOutputs {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
     const arena_allocator = arena.allocator();
@@ -907,6 +932,15 @@ fn jsonU64(object: std.json.ObjectMap, field: []const u8) !u64 {
     };
     if (integer < 0) return error.InvalidStateFile;
     return @intCast(integer);
+}
+
+fn jsonOptionalU64(object: std.json.ObjectMap, field: []const u8) !?u64 {
+    const value = object.get(field) orelse return error.InvalidLockFile;
+    return switch (value) {
+        .null => null,
+        .integer => |integer| if (integer >= 0) @intCast(integer) else error.InvalidLockFile,
+        else => error.InvalidLockFile,
+    };
 }
 
 fn jsonBool(object: std.json.ObjectMap, field: []const u8) !bool {

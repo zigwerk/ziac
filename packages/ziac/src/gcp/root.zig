@@ -14,6 +14,7 @@ pub const secret_manager = @import("secret_manager.zig");
 pub const secret_access = @import("secret_access.zig");
 pub const storage = @import("storage.zig");
 pub const storage_provider = @import("storage_provider.zig");
+pub const gcs_state = @import("gcs_state.zig");
 pub const cloud_build = @import("cloud_build.zig");
 pub const cloud_build_provider = @import("cloud_build_provider.zig");
 pub const run_provider = @import("run_provider.zig");

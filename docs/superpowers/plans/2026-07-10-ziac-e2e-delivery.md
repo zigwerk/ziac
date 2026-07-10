@@ -1237,6 +1237,8 @@ Commit: `Verify Zig source to global Cloud Run deployment`
 
 ### Task 8.1: GCS State Backend
 
+Status: implemented on 2026-07-10.
+
 Files:
 
 - Add `packages/ziac/src/state_backend.zig`.
@@ -1253,6 +1255,22 @@ Tests:
 - Local-to-GCS migration preserves lineage.
 
 Commit: `Add GCS remote state locking`
+
+Evidence:
+
+- A backend facade preserves the existing v2 state format and executor
+  checkpoint contract across local and remote stores.
+- Fake object storage proves generation-zero create, exact-generation update
+  and delete, stale writer rejection, and two-writer state conflicts.
+- GCS reads metadata then pins media bytes to that generation. Scripted HTTP
+  tests assert every create, update, and delete precondition and 412 mapping.
+- Lock v2 records owner, command, lineage, acquisition, and expiry. Active
+  conflicts, renewal, exact-generation release, and stale takeover pass.
+- `ZIAC_STATE_BUCKET` selects GCS through native ADC without silent local
+  fallback. `state-migrate` preserves lineage, serial, typed secret references,
+  and redacted outputs while retaining the local recovery copy.
+- The package suite contains 310 tests at this checkpoint: 309 pass and one
+  authenticated credential gate is skipped.
 
 ### Task 8.2: Saved Plans And Approval
 

@@ -36,6 +36,16 @@ zig-out/bin/ziac unlock --stack hello-global --stage dev \
 zig-out/bin/ziac destroy --stack hello-global --stage dev
 ```
 
+Select generation-locked GCS state through ADC and migrate an existing local
+stack without deleting its local recovery copy:
+
+```sh
+export ZIAC_STATE_BUCKET=my-ziac-state
+export ZIAC_STATE_PREFIX=ziac/state # optional
+zig-out/bin/ziac state-migrate --stack hello-global --stage dev
+zig-out/bin/ziac plan --stack hello-global --stage dev
+```
+
 Select the native provider explicitly for authenticated calls:
 
 ```sh
@@ -171,6 +181,10 @@ with restricted direct ingress, optional DNS and HTTP redirect, regional Direct
 VPC selection, base-graph composition, and production warm-instance/probe
 validation. Cockroach and GCP PSC resources now pass full scripted lifecycle
 tests, including endpoint acceptance and private DNS publication.
+GCS remote state uses generation-pinned reads, generation-zero creates,
+exact-generation updates/deletes, expiring owner leases, per-checkpoint renewal,
+and lineage-preserving local migration. Missing remote ADC fails closed instead
+of falling back to local files.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts and
@@ -191,6 +205,8 @@ See `docs/secret-manager.md` for the secret payload boundary, and
 `docs/cloud-dns.md` for existing-zone DNS ownership and import. See
 `docs/container-service.md` for the high-level global component. See
 `docs/zig-service.md` for source-to-image deployment and typed app bindings. See
+`docs/remote-state.md` for GCS bootstrap, IAM, migration, conflicts, and
+recovery. See
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

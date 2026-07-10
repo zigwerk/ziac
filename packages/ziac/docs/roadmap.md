@@ -167,7 +167,9 @@ this checkout.
 
 ## M8: Production Operations
 
-- GCS remote state with generation locking.
+- GCS remote state with generation locking: complete, including expiring
+  writer leases, checkpoint renewal, fail-closed ADC selection, and verified
+  local migration.
 - Saved plan preconditions and approval.
 - Workload Identity Federation and preview stages.
 - Canary regional rollouts, rollback, recovery, and protection.

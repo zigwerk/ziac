@@ -52,6 +52,15 @@ checks lineage unless an explicit override is supplied. The CLI exposes
 `refresh`, `import`, and `unlock`, and all commands can emit a versioned
 `ziac.command.v1` JSON receipt.
 
+`state_backend.Store` generalizes that persistence contract without changing
+the in-memory state or executor. The local adapter delegates to atomic files.
+The remote adapter consumes an object store whose only writes require absence
+or an exact observed generation. Its GCS implementation reads metadata then
+downloads bytes pinned to that generation, and all upload/delete requests carry
+`ifGenerationMatch`. A mismatch is a terminal state conflict, never an
+unconditional retry. Remote lock format v2 adds owner expiry; stale takeover,
+renewal, release, and forced unlock all compare the exact inspected generation.
+
 Every plan captures the state lineage hash, state serial, canonical desired graph
 digest, and an operation-integrity digest. The executor validates all four before
 refresh, resume, or provider access. Resource and dependency insertion order do

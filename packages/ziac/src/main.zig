@@ -30,6 +30,8 @@ pub fn main(init: std.process.Init) !void {
         if (init.environ_map.get(name)) |value| try auth_env.put(name, value);
     }
     const live_project = init.environ_map.get("ZIAC_LIVE_PROJECT");
+    const state_bucket = init.environ_map.get("ZIAC_STATE_BUCKET");
+    const use_remote_state = state_bucket != null and !requestsAuthDoctor(args.items);
     const live_regions = if (init.environ_map.get("ZIAC_LIVE_REGIONS")) |csv|
         try ziac.stack_registry.regionsFromCsvAlloc(allocator, csv)
     else
@@ -65,7 +67,7 @@ pub fn main(init: std.process.Init) !void {
     var cockroach_client: ziac.cockroach.client.Client = undefined;
     var cockroach_provider: ziac.cockroach.live_provider.LiveProvider = undefined;
     var live_providers: ?ziac.provider.ProviderRegistry = null;
-    if (requestsLiveProvider(args.items)) {
+    if (requestsLiveProvider(args.items) or use_remote_state) {
         if (ziac.gcp.auth.resolveAdcAlloc(allocator, auth_env, &auth_files)) |resolved| {
             resolved_adc = resolved;
             adc_source = ziac.gcp.auth.AdcTokenSource.init(
@@ -88,10 +90,36 @@ pub fn main(init: std.process.Init) !void {
             live_providers = providers;
         } else |_| {}
     }
+    if (use_remote_state and token_cache == null) {
+        try console.stderr.print(allocator, "state: {s}\n", .{@errorName(error.StateAuthenticationUnavailable)});
+        try std.Io.File.stderr().writeStreamingAll(io, console.stderrText());
+        std.process.exit(ziac.cli.Exit.auth_error);
+    }
+
+    var local_backend = ziac.state_backend.Local.init(ziac.local_state.Store.init(
+        allocator,
+        ziac.local_state.localFiles.store(&local_fs),
+    ));
+    var selected_state = local_backend.store();
+    var state_context = ziac.provider.OperationContext.init(allocator);
+    var gcs_objects: ziac.gcp.gcs_state.Store = undefined;
+    var remote_state: ziac.state_backend.Remote = undefined;
+    var remote_state_initialized = false;
+    defer if (remote_state_initialized) remote_state.deinit();
+    if (use_remote_state) {
+        const bucket = state_bucket.?;
+        gcs_objects = try ziac.gcp.gcs_state.Store.init(&google_client, &state_context, bucket);
+        remote_state = try ziac.state_backend.Remote.init(allocator, gcs_objects.objectStore(), .{
+            .prefix = init.environ_map.get("ZIAC_STATE_PREFIX") orelse "ziac/state",
+        });
+        remote_state_initialized = true;
+        selected_state = remote_state.store();
+    }
     var env = ziac.cli.Env{
         .console = &console,
         .registry = registry,
-        .state = ziac.local_state.Store.init(allocator, ziac.local_state.localFiles.store(&local_fs)),
+        .state = selected_state,
+        .migration_source = if (remote_state_initialized) local_backend.delegate else null,
         .auth_env = &auth_env,
         .auth_files = auth_files,
         .live_providers = live_providers,
@@ -114,4 +142,8 @@ fn requestsLiveProvider(args: []const []const u8) bool {
         if (index + 1 < args.len and std.mem.eql(u8, args[index + 1], "gcp")) return true;
     }
     return false;
+}
+
+fn requestsAuthDoctor(args: []const []const u8) bool {
+    return args.len >= 2 and std.mem.eql(u8, args[0], "auth") and std.mem.eql(u8, args[1], "doctor");
 }

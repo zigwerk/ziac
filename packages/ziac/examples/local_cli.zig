@@ -6,11 +6,15 @@ pub fn runLocalCliExample(allocator: std.mem.Allocator) ![]const u8 {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(allocator);
     defer console.deinit();
+    var local = ziac.state_backend.Local.init(ziac.local_state.Store.init(
+        allocator,
+        ziac.local_state.memoryFiles(&fs),
+    ));
 
     var env = ziac.cli.Env{
         .console = &console,
         .registry = ziac.stack_registry.fixtureRegistry(),
-        .state = ziac.local_state.Store.init(allocator, ziac.local_state.memoryFiles(&fs)),
+        .state = local.store(),
     };
 
     _ = try ziac.cli.run(allocator, &.{ "plan", "--stack", "hello-global", "--stage", "dev" }, &env);

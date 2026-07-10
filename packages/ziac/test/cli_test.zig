@@ -2,13 +2,18 @@ const std = @import("std");
 const ziac = @import("ziac");
 
 fn testEnv(
+    local: *ziac.state_backend.Local,
     fs: *ziac.zstd.FileSystem.MemoryFileSystem,
     console: *ziac.zstd.Console.CapturedConsole,
 ) ziac.cli.Env {
+    local.* = ziac.state_backend.Local.init(ziac.local_state.Store.init(
+        std.testing.allocator,
+        ziac.local_state.memoryFiles(fs),
+    ));
     return .{
         .console = console,
         .registry = ziac.stack_registry.fixtureRegistry(),
-        .state = ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(fs)),
+        .state = local.store(),
     };
 }
 
@@ -18,7 +23,8 @@ test "cli plan prints deterministic create summary without writing state" {
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
 
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     const code = try ziac.cli.run(std.testing.allocator, &.{ "plan", "--stack", "hello-global", "--stage", "dev" }, &env);
 
     try std.testing.expectEqual(@as(u8, 0), code);
@@ -34,7 +40,8 @@ test "cli deploy persists state and redacted outputs" {
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
 
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     const code = try ziac.cli.run(std.testing.allocator, &.{ "deploy", "--stack", "hello-global", "--stage", "dev" }, &env);
 
     try std.testing.expectEqual(@as(u8, 0), code);
@@ -44,12 +51,82 @@ test "cli deploy persists state and redacted outputs" {
     try std.testing.expect(std.mem.indexOf(u8, outputs, "sentinel-secret-for-tests") == null);
 }
 
+test "cli migrates local state to the selected remote backend" {
+    var files = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer files.deinit();
+    const local_store = ziac.local_state.Store.init(std.testing.allocator, ziac.local_state.memoryFiles(&files));
+    var source = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer source.deinit();
+    source.setLineage("hello-global/prod");
+    try source.put(.{
+        .resource_id = "test.Resource.api",
+        .type_name = "test.Resource",
+        .logical_id = "api",
+        .desired_hash = "v1",
+        .status = .created,
+    });
+    try local_store.saveResources("hello-global", "prod", &source);
+
+    var objects = ziac.state_backend.MemoryObjectStore.init(std.testing.allocator);
+    defer objects.deinit();
+    var remote = try ziac.state_backend.Remote.init(std.testing.allocator, objects.objectStore(), .{});
+    defer remote.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = ziac.cli.Env{
+        .console = &console,
+        .registry = ziac.stack_registry.fixtureRegistry(),
+        .state = remote.store(),
+        .migration_source = local_store,
+    };
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "state-migrate",
+        "--stack",
+        "hello-global",
+        "--stage",
+        "prod",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "State migration complete") != null);
+    var loaded = try env.state.loadResources("hello-global", "prod");
+    defer loaded.deinit();
+    try std.testing.expectEqual(@as(u64, 1), loaded.store.serialValue());
+}
+
+test "cli deploy checkpoints resources outputs and lock through remote state" {
+    var objects = ziac.state_backend.MemoryObjectStore.init(std.testing.allocator);
+    defer objects.deinit();
+    var remote = try ziac.state_backend.Remote.init(std.testing.allocator, objects.objectStore(), .{});
+    defer remote.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = ziac.cli.Env{
+        .console = &console,
+        .registry = ziac.stack_registry.fixtureRegistry(),
+        .state = remote.store(),
+    };
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy",
+        "--stack",
+        "hello-global",
+        "--stage",
+        "remote",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(objects.content("ziac/state/hello-global/remote/resources.json") != null);
+    try std.testing.expect(objects.content("ziac/state/hello-global/remote/outputs.json") != null);
+    try std.testing.expect(objects.content("ziac/state/hello-global/remote/lock.json") == null);
+}
+
 test "cli outputs prints redacted secret values" {
     var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
 
     _ = try ziac.cli.run(std.testing.allocator, &.{ "deploy", "--stack", "hello-global", "--stage", "dev" }, &env);
     console.stdout.clearRetainingCapacity();
@@ -67,7 +144,8 @@ test "cli destroy marks resource deleted" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
 
     _ = try ziac.cli.run(std.testing.allocator, &.{ "deploy", "--stack", "hello-global", "--stage", "dev" }, &env);
     console.stdout.clearRetainingCapacity();
@@ -83,7 +161,8 @@ test "cli destroy accepts explicit destructive confirmation" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
 
     _ = try ziac.cli.run(std.testing.allocator, &.{ "deploy", "--stack", "hello-global", "--stage", "dev" }, &env);
     console.stdout.clearRetainingCapacity();
@@ -102,7 +181,8 @@ test "cli state prints persisted resource status" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
 
     _ = try ziac.cli.run(std.testing.allocator, &.{ "deploy", "--stack", "hello-global", "--stage", "dev" }, &env);
     console.stdout.clearRetainingCapacity();
@@ -118,7 +198,8 @@ test "cli plan emits stable JSON command output" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
 
     const code = try ziac.cli.run(
         std.testing.allocator,
@@ -138,7 +219,8 @@ test "cli writer reports lock conflict without removing another owner lock" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     try env.state.acquireLock("hello-global", "dev", .{
         .owner_id = "other-writer",
         .command = "deploy",
@@ -161,7 +243,8 @@ test "cli import validates IDs and persists a valid imported resource" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     const resource_id = "gcp.run.Service.europe-west1.api";
 
     const invalid = try ziac.cli.run(
@@ -187,7 +270,8 @@ test "cli refresh and lineage-checked unlock commands are available" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
 
     const refresh_code = try ziac.cli.run(
         std.testing.allocator,
@@ -219,7 +303,8 @@ test "cli auth doctor reports ADC source without stack options or secrets" {
     try auth_env.put("GOOGLE_APPLICATION_CREDENTIALS", "/adc.json");
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     env.auth_env = &auth_env;
     env.auth_files = ziac.gcp.auth.memoryFileReader(&fs);
 
@@ -237,7 +322,8 @@ test "cli selects an injected live GCP registry only when explicitly allowed" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     env.registry = ziac.stack_registry.configuredRegistry(.{
         .project_id = "test-ziac-disposable",
         .image = "europe-west1-docker.pkg.dev/test-ziac-disposable/hello-global/api:v1",
@@ -270,7 +356,8 @@ test "cli live GCP selection fails before state mutation when providers are unav
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     env.live_project_id = "test-ziac-disposable";
 
     const code = try ziac.cli.run(std.testing.allocator, &.{
@@ -295,7 +382,8 @@ test "cli plans the configured global ContainerService stack" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     const regions = [_][]const u8{ "europe-west1", "us-central1" };
     env.registry = ziac.stack_registry.configuredRegistry(.{
         .project_id = "test-ziac-disposable",
@@ -338,7 +426,8 @@ test "cli fail-region requires the explicit disposable live-test gate" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
 
     const code = try ziac.cli.run(std.testing.allocator, &.{
         "fail-region",
@@ -363,7 +452,8 @@ test "cli fail-region deletes one remote service and preserves state for restora
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     const regions = [_][]const u8{ "europe-west1", "us-central1" };
     env.registry = ziac.stack_registry.configuredRegistry(.{
         .project_id = "test-ziac-disposable",
@@ -425,7 +515,8 @@ test "cli live test rejects a non-disposable GCP project before mutation" {
     defer fs.deinit();
     var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
     defer console.deinit();
-    var env = testEnv(&fs, &console);
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
     var live = ziac.provider.FakeProvider.init(std.testing.allocator);
     defer live.deinit();
     var providers = ziac.provider.ProviderRegistry{};

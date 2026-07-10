@@ -55,6 +55,7 @@ pub const Request = struct {
     body: []const u8 = "",
     content_type: []const u8 = "application/json",
     accept: []const u8 = "application/json",
+    response_body_limit: usize = 1024 * 1024,
 };
 
 pub const Diagnostic = struct {
@@ -134,6 +135,7 @@ pub const Client = struct {
             .{ .name = "x-goog-api-client", .value = user_agent },
         };
         var send_options = zstd.Http.SendOptions{};
+        send_options.response_body_limit = request.response_body_limit;
         if (context.cancellation) |cancellation| {
             send_options.cancellation = .{
                 .ptr = cancellation.ptr,

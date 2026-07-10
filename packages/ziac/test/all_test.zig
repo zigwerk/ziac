@@ -16,6 +16,7 @@ comptime {
     _ = @import("stack_registry_test.zig");
     _ = @import("provider_set_test.zig");
     _ = @import("local_state_test.zig");
+    _ = @import("state_backend_test.zig");
     _ = @import("cli_test.zig");
     _ = @import("source_archive_test.zig");
     _ = @import("zig_recipe_test.zig");
@@ -28,6 +29,7 @@ comptime {
     _ = @import("gcp_auth_test.zig");
     _ = @import("gcp_client_test.zig");
     _ = @import("gcp_storage_live_provider_test.zig");
+    _ = @import("gcp_gcs_state_test.zig");
     _ = @import("gcp_cloud_build_live_provider_test.zig");
     _ = @import("gcp_operation_test.zig");
     _ = @import("cockroach_client_test.zig");

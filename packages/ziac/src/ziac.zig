@@ -22,6 +22,7 @@ pub const executor = @import("executor.zig");
 pub const stack_registry = @import("stack_registry.zig");
 pub const stack = @import("stack.zig");
 pub const local_state = @import("local_state.zig");
+pub const state_backend = @import("state_backend.zig");
 pub const cli = @import("cli.zig");
 pub const build = @import("build/root.zig");
 pub const gcp = @import("gcp/root.zig");
