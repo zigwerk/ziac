@@ -1,4 +1,5 @@
 const std = @import("std");
+const fx = @import("zigeffect_std").fx;
 const resource = @import("resource.zig");
 const value = @import("value.zig");
 
@@ -103,6 +104,7 @@ pub const InMemoryStateStore = struct {
     allocator: std.mem.Allocator,
     records: std.StringHashMap(StateRecord),
     serial: u64 = 0,
+    mutex: fx.SpinLock = .{},
 
     pub fn init(allocator: std.mem.Allocator) InMemoryStateStore {
         return .{
@@ -121,6 +123,8 @@ pub const InMemoryStateStore = struct {
     pub fn put(self: *InMemoryStateStore, record: StateRecord) StateError!void {
         var owned = try StateRecord.initOwned(self.allocator, record);
         errdefer owned.deinit(self.allocator);
+        self.mutex.lock();
+        defer self.mutex.unlock();
 
         if (self.records.getPtr(record.resource_id)) |existing| {
             const stable_resource_id = existing.resource_id;
@@ -137,16 +141,33 @@ pub const InMemoryStateStore = struct {
     }
 
     pub fn get(self: *InMemoryStateStore, resource_id: []const u8) ?StateRecord {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         return self.records.get(resource_id);
     }
 
+    pub fn getOwned(
+        self: *InMemoryStateStore,
+        allocator: std.mem.Allocator,
+        resource_id: []const u8,
+    ) StateError!?StateRecord {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const record = self.records.get(resource_id) orelse return null;
+        return try StateRecord.initOwned(allocator, record);
+    }
+
     pub fn markFailed(self: *InMemoryStateStore, resource_id: []const u8) StateError!void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         const record = self.records.getPtr(resource_id) orelse return error.MissingRecord;
         record.status = .failed;
         self.serial += 1;
     }
 
     pub fn recordsAlloc(self: *InMemoryStateStore, allocator: std.mem.Allocator) StateError![]StateRecord {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         var records = std.ArrayList(StateRecord).empty;
         errdefer records.deinit(allocator);
 

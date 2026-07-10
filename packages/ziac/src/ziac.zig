@@ -13,6 +13,7 @@ pub const plan = @import("plan.zig");
 pub const provider = @import("provider.zig");
 pub const provider_error = @import("provider_error.zig");
 pub const apply = @import("apply.zig");
+pub const executor = @import("executor.zig");
 pub const stack_registry = @import("stack_registry.zig");
 pub const local_state = @import("local_state.zig");
 pub const cli = @import("cli.zig");

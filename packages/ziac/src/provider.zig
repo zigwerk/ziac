@@ -1,4 +1,5 @@
 const std = @import("std");
+const fx = @import("zigeffect_std").fx;
 const provider_error = @import("provider_error.zig");
 const resource = @import("resource.zig");
 const state = @import("state.zig");
@@ -105,21 +106,74 @@ pub const ReadResult = union(enum) {
     }
 };
 
+pub const Cancellation = struct {
+    ptr: *const anyopaque,
+    isCancelledFn: *const fn (*const anyopaque) bool,
+
+    pub fn isCancelled(self: Cancellation) bool {
+        return self.isCancelledFn(self.ptr);
+    }
+};
+
+pub const OperationContext = struct {
+    allocator: std.mem.Allocator,
+    clock: ?*fx.Clock = null,
+    cancellation: ?Cancellation = null,
+    deadline_millis: ?u64 = null,
+
+    pub fn init(allocator: std.mem.Allocator) OperationContext {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn nowMillis(self: *const OperationContext) u64 {
+        if (self.clock) |clock| return clock.nowMs();
+        var clock = fx.Clock.system();
+        return clock.nowMs();
+    }
+
+    pub fn sleep(self: *OperationContext, delay_millis: u64) void {
+        if (self.clock) |clock| {
+            clock.sleep(delay_millis);
+            return;
+        }
+        var clock = fx.Clock.system();
+        clock.sleep(delay_millis);
+    }
+
+    pub fn checkActive(self: *const OperationContext) ProviderError!void {
+        if (self.cancellation) |cancellation| {
+            if (cancellation.isCancelled()) return error.ProviderCancelled;
+        }
+        if (self.deadline_millis) |deadline| {
+            if (self.nowMillis() >= deadline) return error.ProviderTimeout;
+        }
+    }
+};
+
 pub const Provider = struct {
     ptr: *anyopaque,
-    readFn: *const fn (*anyopaque, std.mem.Allocator, resource.ResourceNode) ProviderError!ReadResult,
-    diffFn: *const fn (*anyopaque, std.mem.Allocator, resource.ResourceNode, *const ResourceResult) ProviderError!DiffResult,
-    createFn: *const fn (*anyopaque, std.mem.Allocator, resource.ResourceNode) ProviderError!ResourceResult,
-    updateFn: *const fn (*anyopaque, std.mem.Allocator, resource.ResourceNode, *const ResourceResult) ProviderError!ResourceResult,
-    deleteFn: *const fn (*anyopaque, resource.ResourceNode, []const u8) ProviderError!void,
-    importFn: *const fn (*anyopaque, std.mem.Allocator, resource.ResourceNode, []const u8) ProviderError!ResourceResult,
+    readFn: *const fn (*anyopaque, *OperationContext, resource.ResourceNode) ProviderError!ReadResult,
+    diffFn: *const fn (*anyopaque, *OperationContext, resource.ResourceNode, *const ResourceResult) ProviderError!DiffResult,
+    createFn: *const fn (*anyopaque, *OperationContext, resource.ResourceNode) ProviderError!ResourceResult,
+    updateFn: *const fn (*anyopaque, *OperationContext, resource.ResourceNode, *const ResourceResult) ProviderError!ResourceResult,
+    deleteFn: *const fn (*anyopaque, *OperationContext, resource.ResourceNode, []const u8) ProviderError!void,
+    importFn: *const fn (*anyopaque, *OperationContext, resource.ResourceNode, []const u8) ProviderError!ResourceResult,
 
     pub fn read(
         self: Provider,
         allocator: std.mem.Allocator,
         node: resource.ResourceNode,
     ) ProviderError!ReadResult {
-        return self.readFn(self.ptr, allocator, node);
+        var context = OperationContext.init(allocator);
+        return self.readWithContext(&context, node);
+    }
+
+    pub fn readWithContext(
+        self: Provider,
+        context: *OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!ReadResult {
+        return self.readFn(self.ptr, context, node);
     }
 
     pub fn diff(
@@ -128,7 +182,17 @@ pub const Provider = struct {
         node: resource.ResourceNode,
         observed: *const ResourceResult,
     ) ProviderError!DiffResult {
-        return self.diffFn(self.ptr, allocator, node, observed);
+        var context = OperationContext.init(allocator);
+        return self.diffWithContext(&context, node, observed);
+    }
+
+    pub fn diffWithContext(
+        self: Provider,
+        context: *OperationContext,
+        node: resource.ResourceNode,
+        observed: *const ResourceResult,
+    ) ProviderError!DiffResult {
+        return self.diffFn(self.ptr, context, node, observed);
     }
 
     pub fn create(
@@ -136,7 +200,16 @@ pub const Provider = struct {
         allocator: std.mem.Allocator,
         node: resource.ResourceNode,
     ) ProviderError!ResourceResult {
-        return self.createFn(self.ptr, allocator, node);
+        var context = OperationContext.init(allocator);
+        return self.createWithContext(&context, node);
+    }
+
+    pub fn createWithContext(
+        self: Provider,
+        context: *OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!ResourceResult {
+        return self.createFn(self.ptr, context, node);
     }
 
     pub fn update(
@@ -145,11 +218,31 @@ pub const Provider = struct {
         node: resource.ResourceNode,
         observed: *const ResourceResult,
     ) ProviderError!ResourceResult {
-        return self.updateFn(self.ptr, allocator, node, observed);
+        var context = OperationContext.init(allocator);
+        return self.updateWithContext(&context, node, observed);
+    }
+
+    pub fn updateWithContext(
+        self: Provider,
+        context: *OperationContext,
+        node: resource.ResourceNode,
+        observed: *const ResourceResult,
+    ) ProviderError!ResourceResult {
+        return self.updateFn(self.ptr, context, node, observed);
     }
 
     pub fn delete(self: Provider, node: resource.ResourceNode, physical_id: []const u8) ProviderError!void {
-        return self.deleteFn(self.ptr, node, physical_id);
+        var context = OperationContext.init(std.heap.page_allocator);
+        return self.deleteWithContext(&context, node, physical_id);
+    }
+
+    pub fn deleteWithContext(
+        self: Provider,
+        context: *OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        return self.deleteFn(self.ptr, context, node, physical_id);
     }
 
     pub fn importResource(
@@ -158,7 +251,17 @@ pub const Provider = struct {
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!ResourceResult {
-        return self.importFn(self.ptr, allocator, node, physical_id);
+        var context = OperationContext.init(allocator);
+        return self.importWithContext(&context, node, physical_id);
+    }
+
+    pub fn importWithContext(
+        self: Provider,
+        context: *OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!ResourceResult {
+        return self.importFn(self.ptr, context, node, physical_id);
     }
 };
 
@@ -197,6 +300,11 @@ pub const FakeProvider = struct {
     updates: usize = 0,
     deletes: usize = 0,
     imports: usize = 0,
+    operation_delay_millis: u64 = 0,
+    mutex: fx.SpinLock = .{},
+    active_operations: usize = 0,
+    max_concurrent_operations: usize = 0,
+    operation_attempts: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator) FakeProvider {
         return .{
@@ -224,7 +332,49 @@ pub const FakeProvider = struct {
         };
     }
 
-    fn takeFailure(self: *FakeProvider) ProviderError!void {
+    pub fn operationAttempts(self: *FakeProvider) usize {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        return self.operation_attempts;
+    }
+
+    pub fn maxConcurrentOperations(self: *FakeProvider) usize {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        return self.max_concurrent_operations;
+    }
+
+    fn beginOperation(self: *FakeProvider, context: *OperationContext) ProviderError!void {
+        self.mutex.lock();
+        self.operation_attempts += 1;
+        self.active_operations += 1;
+        self.max_concurrent_operations = @max(self.max_concurrent_operations, self.active_operations);
+        const delay_millis = self.operation_delay_millis;
+        self.mutex.unlock();
+
+        var remaining = delay_millis;
+        while (remaining > 0) {
+            context.checkActive() catch |err| {
+                self.endOperation();
+                return err;
+            };
+            const interval = @min(remaining, 2);
+            context.sleep(interval);
+            remaining -= interval;
+        }
+        context.checkActive() catch |err| {
+            self.endOperation();
+            return err;
+        };
+    }
+
+    fn endOperation(self: *FakeProvider) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        self.active_operations -= 1;
+    }
+
+    fn takeFailureLocked(self: *FakeProvider) ProviderError!void {
         if (self.fail_next) |err| {
             self.fail_next = null;
             return err;
@@ -233,29 +383,37 @@ pub const FakeProvider = struct {
 
     fn read(
         raw: *anyopaque,
-        allocator: std.mem.Allocator,
+        context: *OperationContext,
         node: resource.ResourceNode,
     ) ProviderError!ReadResult {
         const self: *FakeProvider = @ptrCast(@alignCast(raw));
-        try self.takeFailure();
+        try self.beginOperation(context);
+        defer self.endOperation();
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        try self.takeFailureLocked();
         self.reads += 1;
         const remote = self.remotes.get(node.id) orelse return .absent;
-        return .{ .present = try remote.result.clone(allocator) };
+        return .{ .present = try remote.result.clone(context.allocator) };
     }
 
     fn diff(
         raw: *anyopaque,
-        allocator: std.mem.Allocator,
+        context: *OperationContext,
         node: resource.ResourceNode,
         observed: *const ResourceResult,
     ) ProviderError!DiffResult {
         const self: *FakeProvider = @ptrCast(@alignCast(raw));
-        try self.takeFailure();
+        try self.beginOperation(context);
+        defer self.endOperation();
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        try self.takeFailureLocked();
         if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash)) {
-            return DiffResult.init(allocator, .noop, &.{});
+            return DiffResult.init(context.allocator, .noop, &.{});
         }
         return DiffResult.init(
-            allocator,
+            context.allocator,
             if (self.replace_changes) .replace else .update,
             &.{"desired inputs changed"},
         );
@@ -263,29 +421,37 @@ pub const FakeProvider = struct {
 
     fn create(
         raw: *anyopaque,
-        allocator: std.mem.Allocator,
+        context: *OperationContext,
         node: resource.ResourceNode,
     ) ProviderError!ResourceResult {
         const self: *FakeProvider = @ptrCast(@alignCast(raw));
-        try self.takeFailure();
+        try self.beginOperation(context);
+        defer self.endOperation();
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        try self.takeFailureLocked();
         if (self.remotes.contains(node.id)) return error.Conflict;
         self.creates += 1;
 
         const physical_id = try std.fmt.allocPrint(self.allocator, "fake/{s}", .{node.id});
         defer self.allocator.free(physical_id);
         try self.insertRemote(node, physical_id);
-        return (self.remotes.get(node.id) orelse return error.ProviderBug).result.clone(allocator);
+        return (self.remotes.get(node.id) orelse return error.ProviderBug).result.clone(context.allocator);
     }
 
     fn update(
         raw: *anyopaque,
-        allocator: std.mem.Allocator,
+        context: *OperationContext,
         node: resource.ResourceNode,
         observed: *const ResourceResult,
     ) ProviderError!ResourceResult {
         _ = observed;
         const self: *FakeProvider = @ptrCast(@alignCast(raw));
-        try self.takeFailure();
+        try self.beginOperation(context);
+        defer self.endOperation();
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        try self.takeFailureLocked();
         const remote = self.remotes.getPtr(node.id) orelse return error.NotFound;
         self.updates += 1;
 
@@ -296,17 +462,22 @@ pub const FakeProvider = struct {
         remote.result.observed_inputs.deinit(self.allocator);
         remote.result.observed_inputs = inputs;
         remote.result.observed_hash = node.inputs_hash;
-        return remote.result.clone(allocator);
+        return remote.result.clone(context.allocator);
     }
 
     fn delete(
         raw: *anyopaque,
+        context: *OperationContext,
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!void {
         _ = physical_id;
         const self: *FakeProvider = @ptrCast(@alignCast(raw));
-        try self.takeFailure();
+        try self.beginOperation(context);
+        defer self.endOperation();
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        try self.takeFailureLocked();
         self.deletes += 1;
         if (self.remotes.fetchRemove(node.id)) |removed| {
             var remote = removed.value;
@@ -316,16 +487,20 @@ pub const FakeProvider = struct {
 
     fn importResource(
         raw: *anyopaque,
-        allocator: std.mem.Allocator,
+        context: *OperationContext,
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!ResourceResult {
         const self: *FakeProvider = @ptrCast(@alignCast(raw));
-        try self.takeFailure();
+        try self.beginOperation(context);
+        defer self.endOperation();
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        try self.takeFailureLocked();
         if (self.remotes.contains(node.id)) return error.Conflict;
         self.imports += 1;
         try self.insertRemote(node, physical_id);
-        return (self.remotes.get(node.id) orelse return error.ProviderBug).result.clone(allocator);
+        return (self.remotes.get(node.id) orelse return error.ProviderBug).result.clone(context.allocator);
     }
 
     fn insertRemote(

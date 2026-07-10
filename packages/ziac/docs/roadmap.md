@@ -15,6 +15,11 @@ automated and live tests pass.
   implemented and tested.
 - GCP config, Artifact Registry, and Cloud Run resource builders: implemented as
   plan-only foundations.
+- Engine V2 canonical values, owned desired/state records, provider lifecycle,
+  refresh planning, and dependency-ordered bounded execution: implemented and
+  tested.
+- Engine V2 checkpoint/resume, atomic state persistence, and writer locking: in
+  progress.
 - Live GCP calls, global routing, CockroachDB, comptime app bindings, remote
   state, and source builds: not yet implemented.
 

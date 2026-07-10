@@ -13,120 +13,148 @@ pub fn applyPlan(
     provider: provider_mod.Provider,
 ) ApplyError!void {
     for (planned.operations) |operation| {
-        switch (operation.kind) {
-            .create => try applyCreate(allocator, store, provider, operation.resource, .created),
-            .update => try applyUpdate(allocator, store, provider, operation.resource),
-            .replace => try applyReplace(allocator, store, provider, operation.resource),
-            .delete => try applyDelete(store, provider, operation.resource),
-            .read, .noop => {},
-        }
+        try applyOperation(allocator, operation, store, provider);
+    }
+}
+
+pub fn applyOperation(
+    allocator: std.mem.Allocator,
+    operation: plan_mod.PlanOperation,
+    store: *state_mod.InMemoryStateStore,
+    provider: provider_mod.Provider,
+) ApplyError!void {
+    var context = provider_mod.OperationContext.init(allocator);
+    return applyOperationWithContext(&context, operation, store, provider);
+}
+
+pub fn applyOperationWithContext(
+    context: *provider_mod.OperationContext,
+    operation: plan_mod.PlanOperation,
+    store: *state_mod.InMemoryStateStore,
+    provider: provider_mod.Provider,
+) ApplyError!void {
+    switch (operation.kind) {
+        .create => try applyCreate(context, store, provider, operation, .created),
+        .update => try applyUpdate(context, store, provider, operation),
+        .replace => try applyReplace(context, store, provider, operation),
+        .delete => try applyDelete(context, store, provider, operation),
+        .read, .noop => {},
     }
 }
 
 fn applyCreate(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     store: *state_mod.InMemoryStateStore,
     provider: provider_mod.Provider,
-    node: resource_mod.ResourceNode,
+    operation: plan_mod.PlanOperation,
     final_status: state_mod.ResourceStatus,
 ) ApplyError!void {
-    try putPendingState(store, node, .creating);
-    var result = provider.create(allocator, node) catch |err| {
+    const node = operation.resource;
+    try putPendingState(context.allocator, store, node, operation.dependencies, .creating);
+    var result = provider.createWithContext(context, node) catch |err| {
         try store.markFailed(node.id);
         return err;
     };
     defer result.deinit();
-    try putResultState(store, node, result, final_status);
+    try putResultState(store, node, operation.dependencies, result, final_status);
 }
 
 fn applyUpdate(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     store: *state_mod.InMemoryStateStore,
     provider: provider_mod.Provider,
-    node: resource_mod.ResourceNode,
+    operation: plan_mod.PlanOperation,
 ) ApplyError!void {
-    try putPendingState(store, node, .updating);
-    var read = provider.read(allocator, node) catch |err| {
+    const node = operation.resource;
+    try putPendingState(context.allocator, store, node, operation.dependencies, .updating);
+    var read = provider.readWithContext(context, node) catch |err| {
         try store.markFailed(node.id);
         return err;
     };
     defer read.deinit();
 
     var result = switch (read) {
-        .absent => provider.create(allocator, node),
-        .present => |*observed| provider.update(allocator, node, observed),
+        .absent => provider.createWithContext(context, node),
+        .present => |*observed| provider.updateWithContext(context, node, observed),
     } catch |err| {
         try store.markFailed(node.id);
         return err;
     };
     defer result.deinit();
-    try putResultState(store, node, result, .updated);
+    try putResultState(store, node, operation.dependencies, result, .updated);
 }
 
 fn applyReplace(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     store: *state_mod.InMemoryStateStore,
     provider: provider_mod.Provider,
-    node: resource_mod.ResourceNode,
+    operation: plan_mod.PlanOperation,
 ) ApplyError!void {
-    try putPendingState(store, node, .replacing);
-    var read = provider.read(allocator, node) catch |err| {
+    const node = operation.resource;
+    try putPendingState(context.allocator, store, node, operation.dependencies, .replacing);
+    var read = provider.readWithContext(context, node) catch |err| {
         try store.markFailed(node.id);
         return err;
     };
     defer read.deinit();
     switch (read) {
         .absent => {},
-        .present => |observed| provider.delete(node, observed.physical_id) catch |err| {
+        .present => |observed| provider.deleteWithContext(context, node, observed.physical_id) catch |err| {
             try store.markFailed(node.id);
             return err;
         },
     }
 
-    var result = provider.create(allocator, node) catch |err| {
+    var result = provider.createWithContext(context, node) catch |err| {
         try store.markFailed(node.id);
         return err;
     };
     defer result.deinit();
-    try putResultState(store, node, result, .created);
+    try putResultState(store, node, operation.dependencies, result, .created);
 }
 
 fn applyDelete(
+    context: *provider_mod.OperationContext,
     store: *state_mod.InMemoryStateStore,
     provider: provider_mod.Provider,
-    node: resource_mod.ResourceNode,
+    operation: plan_mod.PlanOperation,
 ) ApplyError!void {
-    const existing = store.get(node.id) orelse return error.MissingRecord;
+    const node = operation.resource;
+    var existing = (try store.getOwned(context.allocator, node.id)) orelse return error.MissingRecord;
+    defer existing.deinit(context.allocator);
     var deleting = existing;
     deleting.status = .deleting;
     try store.put(deleting);
 
-    const pending = store.get(node.id) orelse return error.MissingRecord;
     if (!node.lifecycle.retain_on_delete) {
-        provider.delete(node, pending.physical_id orelse node.id) catch |err| {
+        provider.deleteWithContext(context, node, existing.physical_id orelse node.id) catch |err| {
             try store.markFailed(node.id);
             return err;
         };
     }
-    var deleted = store.get(node.id) orelse return error.MissingRecord;
-    deleted.status = .deleted;
-    deleted.operation_handle = null;
-    try store.put(deleted);
+    existing.status = .deleted;
+    existing.operation_handle = null;
+    try store.put(existing);
 }
 
 fn putPendingState(
+    allocator: std.mem.Allocator,
     store: *state_mod.InMemoryStateStore,
     node: resource_mod.ResourceNode,
+    dependencies: []const []const u8,
     status: state_mod.ResourceStatus,
 ) ApplyError!void {
     const desired_hash = std.fmt.bytesToHex(node.inputs_hash, .lower);
-    if (store.get(node.id)) |existing| {
+    if (try store.getOwned(allocator, node.id)) |owned_existing| {
+        var existing = owned_existing;
+        defer existing.deinit(allocator);
         var pending = existing;
         pending.provider = node.provider;
         pending.type_name = node.type_name;
         pending.schema_version = node.schema_version;
         pending.logical_id = node.logical_id;
         pending.desired_hash = desired_hash[0..];
+        pending.dependencies = dependencies;
         pending.protect = node.lifecycle.protect;
         pending.retain_on_delete = node.lifecycle.retain_on_delete;
         pending.status = status;
@@ -140,6 +168,7 @@ fn putPendingState(
         .schema_version = node.schema_version,
         .logical_id = node.logical_id,
         .desired_hash = desired_hash[0..],
+        .dependencies = dependencies,
         .protect = node.lifecycle.protect,
         .retain_on_delete = node.lifecycle.retain_on_delete,
         .status = status,
@@ -149,12 +178,12 @@ fn putPendingState(
 fn putResultState(
     store: *state_mod.InMemoryStateStore,
     node: resource_mod.ResourceNode,
+    dependencies: []const []const u8,
     result: provider_mod.ResourceResult,
     status: state_mod.ResourceStatus,
 ) ApplyError!void {
     const desired_hash = std.fmt.bytesToHex(node.inputs_hash, .lower);
     const observed_hash = std.fmt.bytesToHex(result.observed_hash, .lower);
-    const dependencies = if (store.get(node.id)) |existing| existing.dependencies else &.{};
     try store.put(.{
         .resource_id = node.id,
         .provider = node.provider,

@@ -24,6 +24,7 @@ pub const OperationKind = enum {
 pub const PlanOperation = struct {
     kind: OperationKind,
     resource: resource.ResourceNode,
+    dependencies: []const []const u8 = &.{},
     reasons: []const []const u8 = &.{},
 };
 
@@ -32,7 +33,7 @@ pub const Plan = struct {
     operations: []PlanOperation,
 
     pub fn deinit(self: *Plan) void {
-        freeOperationReasons(self.allocator, self.operations);
+        freeOperationMetadata(self.allocator, self.operations);
         self.allocator.free(self.operations);
         self.* = undefined;
     }
@@ -50,15 +51,15 @@ pub fn buildPlan(
     for (graph.resources.items) |node| {
         const existing = store.get(node.id);
         if (existing == null or existing.?.status == .deleted) {
-            try appendOperation(allocator, &operations, .create, node, &.{"resource is not in state"});
+            try appendGraphOperation(allocator, &operations, graph, .create, node, &.{"resource is not in state"});
             continue;
         }
 
         const desired_hash = std.fmt.bytesToHex(node.inputs_hash, .lower);
         if (std.mem.eql(u8, existing.?.desired_hash, desired_hash[0..])) {
-            try appendOperation(allocator, &operations, .noop, node, &.{});
+            try appendGraphOperation(allocator, &operations, graph, .noop, node, &.{});
         } else {
-            try appendOperation(allocator, &operations, .update, node, &.{"desired inputs changed"});
+            try appendGraphOperation(allocator, &operations, graph, .update, node, &.{"desired inputs changed"});
         }
     }
     try appendRemovedResources(allocator, &operations, graph, store);
@@ -80,9 +81,10 @@ pub fn buildRefreshedPlan(
         var read = try provider.read(allocator, node);
         defer read.deinit();
         switch (read) {
-            .absent => try appendOperation(
+            .absent => try appendGraphOperation(
                 allocator,
                 &operations,
+                graph,
                 .create,
                 node,
                 &.{"remote resource is absent"},
@@ -96,7 +98,7 @@ pub fn buildRefreshedPlan(
                     .replace => .replace,
                 };
                 if (kind == .replace and node.lifecycle.protect) return error.ProtectedResource;
-                try appendOperation(allocator, &operations, kind, node, diff.reasons);
+                try appendGraphOperation(allocator, &operations, graph, kind, node, diff.reasons);
             },
         }
     }
@@ -116,7 +118,14 @@ pub fn buildDestroyPlan(
     for (records) |record| {
         if (record.status == .deleted) continue;
         if (record.protect) return error.ProtectedResource;
-        try appendOperation(allocator, &operations, .delete, nodeFromRecord(record), &.{"destroy requested"});
+        try appendOperation(
+            allocator,
+            &operations,
+            .delete,
+            nodeFromRecord(record),
+            record.dependencies,
+            &.{"destroy requested"},
+        );
     }
     return finishPlan(allocator, &operations);
 }
@@ -145,6 +154,7 @@ fn appendRemovedResources(
             operations,
             .delete,
             nodeFromRecord(record),
+            record.dependencies,
             &.{"resource was removed from desired graph"},
         );
     }
@@ -176,15 +186,36 @@ fn appendOperation(
     operations: *std.ArrayList(PlanOperation),
     kind: OperationKind,
     node: resource.ResourceNode,
+    dependencies: []const []const u8,
     reasons: []const []const u8,
 ) std.mem.Allocator.Error!void {
+    const owned_dependencies = try cloneStrings(allocator, dependencies);
+    errdefer freeStrings(allocator, owned_dependencies);
     const owned_reasons = try cloneStrings(allocator, reasons);
     errdefer freeStrings(allocator, owned_reasons);
     try operations.append(allocator, .{
         .kind = kind,
         .resource = node,
+        .dependencies = owned_dependencies,
         .reasons = owned_reasons,
     });
+}
+
+fn appendGraphOperation(
+    allocator: std.mem.Allocator,
+    operations: *std.ArrayList(PlanOperation),
+    graph: *const resource.ResourceGraph,
+    kind: OperationKind,
+    node: resource.ResourceNode,
+    reasons: []const []const u8,
+) std.mem.Allocator.Error!void {
+    var dependencies = std.ArrayList([]const u8).empty;
+    defer dependencies.deinit(allocator);
+    for (graph.dependencies.items) |edge| {
+        if (std.mem.eql(u8, edge.from, node.id)) try dependencies.append(allocator, edge.to);
+    }
+    std.mem.sort([]const u8, dependencies.items, {}, lessThanString);
+    try appendOperation(allocator, operations, kind, node, dependencies.items, reasons);
 }
 
 fn finishPlan(
@@ -201,12 +232,15 @@ fn deinitOperationList(
     allocator: std.mem.Allocator,
     operations: *std.ArrayList(PlanOperation),
 ) void {
-    freeOperationReasons(allocator, operations.items);
+    freeOperationMetadata(allocator, operations.items);
     operations.deinit(allocator);
 }
 
-fn freeOperationReasons(allocator: std.mem.Allocator, operations: []const PlanOperation) void {
-    for (operations) |operation| freeStrings(allocator, operation.reasons);
+fn freeOperationMetadata(allocator: std.mem.Allocator, operations: []const PlanOperation) void {
+    for (operations) |operation| {
+        freeStrings(allocator, operation.dependencies);
+        freeStrings(allocator, operation.reasons);
+    }
 }
 
 fn cloneStrings(
@@ -229,4 +263,8 @@ fn cloneStrings(
 fn freeStrings(allocator: std.mem.Allocator, strings: []const []const u8) void {
     for (strings) |inner| allocator.free(inner);
     allocator.free(strings);
+}
+
+fn lessThanString(_: void, left: []const u8, right: []const u8) bool {
+    return std.mem.lessThan(u8, left, right);
 }

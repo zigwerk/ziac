@@ -30,19 +30,22 @@ outputs are persisted and printed as `[REDACTED]`.
 
 ## GCP Provider Foundation
 
-The current GCP support is plan-only. `hello-global` now models an Artifact
+The current GCP support is provider-simulated. `hello-global` models an Artifact
 Registry Docker repository and Cloud Run service, then runs through the local
-planner, JSON state store, and fake provider.
+planner, dependency-ordered zigeffect executor, JSON state store, and fake remote
+provider.
 
 Live Google API calls, Cloud Run deployment, load balancers, and CockroachDB
 resources are intentionally deferred until the typed provider model is stable.
 
 ## Delivery Status
 
-Ziac is currently a tested planning foundation, not yet a live deployment tool.
-The end-to-end delivery sequence starts by retaining complete desired resource
-inputs and upgrading the provider/state lifecycle before adding authenticated
-Google and CockroachDB API operations.
+Ziac is currently a tested Engine V2 foundation, not yet a live deployment tool.
+It retains canonical desired inputs, refreshes through an explicit provider
+lifecycle, persists versioned physical state, and executes stable dependency
+levels with bounded parallelism, retry, deadlines, cancellation, and redacted
+causal facts. Checkpoint/resume and state locking are the remaining M1 work before
+authenticated Google and CockroachDB API operations.
 
 See `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
