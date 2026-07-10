@@ -44,3 +44,8 @@ Date: 2026-07-10
   prerequisites that remain unset.
 - Commit the release milestone only after diff, credential, and generated-file
   checks pass.
+
+Status: complete for the credential-free scope. Commit `3759c0fc` passed the
+release gate from a detached clean worktree with 54/54 steps and 351/352 tests;
+the remaining skip is authenticated Cockroach Cloud acceptance. Repository,
+zigeffect, tool-hygiene, and local CockroachDB verified-TLS gates also passed.

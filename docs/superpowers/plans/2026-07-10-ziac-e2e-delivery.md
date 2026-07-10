@@ -1441,6 +1441,10 @@ Evidence:
 
 ### Task 8.6: Final End-To-End Verification
 
+Status: automated clean-checkout verification passed on 2026-07-10;
+authenticated cloud verification is blocked on external configuration and is
+not reported as complete.
+
 From a clean checkout:
 
 1. Authenticate through ADC/WIF.
@@ -1464,6 +1468,41 @@ M8 Gate And Goal Completion:
 - Documentation reproduces the workflow from a clean environment.
 
 Commit: `Complete Ziac end-to-end delivery`
+
+Current evidence:
+
+- Detached commit `3759c0fca7d02cc6a85a6ebcca7219c3a79bc279` passed
+  `zig build release-gate --summary all` from a new Git worktree with 54 of 54
+  build steps successful and 351 of 352 tests passing. The sole skip is the
+  explicit Cockroach Cloud credential gate.
+- The clean checkout built and probed the generated Zig 0.15.2 arm64 image as a
+  distroless `nonroot:nonroot` container. Static, required-file, generated
+  credential, private-key, and secret-sentinel checks passed.
+- Repository verification passed: `bun run check` reported 413 pass and 11
+  documented live skips; the zigeffect workbench reported 100 pass.
+- `zigeffect-std` and `zigeffect-postgres` tests/examples passed, and tool
+  hygiene passed for all 46 tools.
+- The native pool and Ziac SQL lifecycle passed against
+  `cockroachdb/cockroach:v26.2.3` with `verify-full` TLS.
+- `ziac auth doctor` selected the attached-service-account metadata source and
+  reported ready without exposing a token.
+- The live harness failed closed before provider mutation with
+  `missing required environment variable: ZIAC_LIVE_PROJECT`.
+
+External inputs still absent in this environment:
+
+- disposable `ZIAC_LIVE_PROJECT`, immutable `ZIAC_LIVE_IMAGE`, two or more
+  `ZIAC_LIVE_REGIONS`, `ZIAC_LIVE_DOMAIN`, and `ZIAC_LIVE_DNS_ZONE`;
+- `ZIAC_STATE_BUCKET` for generation-locked shared state;
+- disposable `ZIAC_COCKROACH_ADMIN_LIVE_URL` and
+  `ZIAC_COCKROACH_APP_LIVE_URL`, plus `COCKROACH_API_KEY` for Cloud API/PSC
+  acceptance.
+
+Consequently the required live observations for global HTTPS routing,
+cross-region failover, Cloud Run-to-Cockroach private TLS, source update,
+provider interruption recovery, import, and protected-data destroy remain
+unexecuted. M8 and the end-to-end goal remain open until those manifest gates
+pass.
 
 ---
 
