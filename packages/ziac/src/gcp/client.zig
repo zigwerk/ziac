@@ -10,6 +10,7 @@ pub const version = "0.1.0-alpha";
 pub const Api = enum {
     service_usage,
     iam,
+    resource_manager,
     artifact_registry,
     run,
     compute,
@@ -20,6 +21,7 @@ pub const Api = enum {
 pub const Endpoints = struct {
     service_usage: []const u8 = "https://serviceusage.googleapis.com",
     iam: []const u8 = "https://iam.googleapis.com",
+    resource_manager: []const u8 = "https://cloudresourcemanager.googleapis.com",
     artifact_registry: []const u8 = "https://artifactregistry.googleapis.com",
     run: []const u8 = "https://run.googleapis.com",
     compute: []const u8 = "https://compute.googleapis.com",
@@ -30,6 +32,7 @@ pub const Endpoints = struct {
         return switch (api) {
             .service_usage => self.service_usage,
             .iam => self.iam,
+            .resource_manager => self.resource_manager,
             .artifact_registry => self.artifact_registry,
             .run => self.run,
             .compute => self.compute,

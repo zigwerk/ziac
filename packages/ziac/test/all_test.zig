@@ -24,4 +24,6 @@ comptime {
     _ = @import("gcp_client_test.zig");
     _ = @import("gcp_operation_test.zig");
     _ = @import("cockroach_client_test.zig");
+    _ = @import("gcp_project_iam_test.zig");
+    _ = @import("gcp_live_provider_test.zig");
 }

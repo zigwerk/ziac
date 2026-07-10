@@ -84,8 +84,9 @@ credentials.
 
 ## M4: Live GCP Primitives
 
-- Project API enablement.
-- IAM service accounts and bindings.
+- Project API enablement: scripted lifecycle complete; live gate pending.
+- IAM service accounts and bindings: scripted lifecycle complete; live gate
+  pending.
 - Artifact Registry.
 - Secret Manager.
 - Cloud Run v2.

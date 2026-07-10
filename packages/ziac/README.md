@@ -40,13 +40,15 @@ outputs are persisted and printed as `[REDACTED]`.
 
 ## GCP Provider Foundation
 
-The current GCP support is provider-simulated. `hello-global` models an Artifact
-Registry Docker repository and Cloud Run service, then runs through the local
-planner, dependency-ordered zigeffect executor, JSON state store, and fake remote
-provider.
+`hello-global` still defaults to the fake provider while the live CLI safety
+gate is under construction. The package now also includes a native live Google
+provider for Service Usage and IAM. It can enable and disable project APIs,
+manage service accounts with drift-aware updates and import, and mutate project
+IAM members while preserving policy etags, conditional bindings, and unrelated
+fields.
 
-Live Google API calls, Cloud Run deployment, load balancers, and CockroachDB
-resources are intentionally deferred until the typed provider model is stable.
+Artifact Registry, Secret Manager, Cloud Run, load balancers, and CockroachDB
+resources remain on the acceptance-gated roadmap.
 
 ## Delivery Status
 
@@ -74,6 +76,11 @@ The CockroachDB Cloud client pins `Cc-Version: 2024-09-16`, keeps API keys
 secret, decodes clusters and SQL users through typed schemas, and performs
 bounded `Retry-After`-aware pagination. Transport and Authentication M3 is
 complete.
+The first Live GCP Primitives slice is implemented behind the provider
+interface: typed project-service, service-account, and project-member resources
+pass full scripted read/diff/create/update/delete/import lifecycles. Service
+Usage long-running operations and IAM etag conflict retries are covered. The
+credential-gated disposable-project smoke test remains part of the M4 gate.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts, and

@@ -5,6 +5,9 @@ pub const cloud_run = @import("cloud_run.zig");
 pub const auth = @import("auth/root.zig");
 pub const client = @import("client.zig");
 pub const operation = @import("operation.zig");
+pub const project_service = @import("project_service.zig");
+pub const iam = @import("iam.zig");
+pub const live_provider = @import("live_provider.zig");
 
 pub const ValidationError = validation.ValidationError;
 pub const ProviderConfig = config.ProviderConfig;

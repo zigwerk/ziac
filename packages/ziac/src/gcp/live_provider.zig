@@ -1,0 +1,573 @@
+const std = @import("std");
+const client_mod = @import("client.zig");
+const operation = @import("operation.zig");
+const provider_mod = @import("../provider.zig");
+const resource = @import("../resource.zig");
+const state = @import("../state.zig");
+const value = @import("../value.zig");
+
+const ProviderError = provider_mod.ProviderError;
+
+const project_service_type = "gcp.project.Service";
+const service_account_type = "gcp.iam.ServiceAccount";
+const project_member_type = "gcp.iam.ProjectMember";
+
+pub const LiveProvider = struct {
+    client: *client_mod.Client,
+    operation_policy: operation.Policy = .{},
+    iam_conflict_retries: usize = 3,
+
+    pub fn init(client: *client_mod.Client) LiveProvider {
+        return .{ .client = client };
+    }
+
+    pub fn provider(self: *LiveProvider) provider_mod.Provider {
+        return .{
+            .ptr = self,
+            .readFn = read,
+            .diffFn = diff,
+            .createFn = create,
+            .updateFn = update,
+            .deleteFn = delete,
+            .importFn = importResource,
+        };
+    }
+
+    fn read(ptr: *anyopaque, context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError!provider_mod.ReadResult {
+        const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+        if (isType(node, project_service_type)) return self.readProjectService(context, node);
+        if (isType(node, service_account_type)) return self.readServiceAccount(context, node, null);
+        if (isType(node, project_member_type)) return self.readProjectMember(context, node);
+        return error.InvalidConfiguration;
+    }
+
+    fn diff(
+        _: *anyopaque,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        observed: *const provider_mod.ResourceResult,
+    ) ProviderError!provider_mod.DiffResult {
+        try context.checkActive();
+        if (!isSupported(node)) return error.InvalidConfiguration;
+        const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
+            .noop
+        else if (isType(node, project_service_type))
+            .replace
+        else
+            .update;
+        const reasons: []const []const u8 = if (kind == .noop) &.{} else &.{"observed inputs differ from desired inputs"};
+        return provider_mod.DiffResult.init(context.allocator, kind, reasons);
+    }
+
+    fn create(ptr: *anyopaque, context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError!provider_mod.ResourceResult {
+        const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+        if (isType(node, project_service_type)) return self.enableProjectService(context, node);
+        if (isType(node, service_account_type)) return self.createServiceAccount(context, node);
+        if (isType(node, project_member_type)) return self.ensureProjectMember(context, node, true);
+        return error.InvalidConfiguration;
+    }
+
+    fn update(
+        ptr: *anyopaque,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        observed: *const provider_mod.ResourceResult,
+    ) ProviderError!provider_mod.ResourceResult {
+        const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+        if (isType(node, service_account_type)) return self.updateServiceAccount(context, node, observed.physical_id);
+        if (isType(node, project_member_type)) return self.ensureProjectMember(context, node, true);
+        return error.InvalidConfiguration;
+    }
+
+    fn delete(
+        ptr: *anyopaque,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+        if (isType(node, project_service_type)) return self.disableProjectService(context, physical_id);
+        if (isType(node, service_account_type)) return self.deleteServiceAccount(context, physical_id);
+        if (isType(node, project_member_type)) {
+            var removed = try self.ensureProjectMember(context, node, false);
+            removed.deinit();
+            return;
+        }
+        return error.InvalidConfiguration;
+    }
+
+    fn importResource(
+        ptr: *anyopaque,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!provider_mod.ResourceResult {
+        const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+        if (isType(node, service_account_type)) {
+            const result = try self.readServiceAccount(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (isType(node, project_service_type)) {
+            const result = try self.readProjectService(context, node);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (isType(node, project_member_type)) {
+            const result = try self.readProjectMember(context, node);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        return error.InvalidConfiguration;
+    }
+
+    fn readProjectService(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ReadResult {
+        const physical_id = try projectServiceNameAlloc(context.allocator, node);
+        defer context.allocator.free(physical_id);
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}", .{physical_id});
+        defer context.allocator.free(path);
+        var response = self.request(context, .{ .api = .service_usage, .method = "GET", .path = path }) catch |err| {
+            if (err == error.NotFound) return .absent;
+            return err;
+        };
+        defer response.deinit(context.allocator);
+
+        var parsed = std.json.parseFromSlice(std.json.Value, context.allocator, response.body, .{}) catch return error.ProviderBug;
+        defer parsed.deinit();
+        const object = jsonObject(parsed.value) orelse return error.ProviderBug;
+        const service_state = jsonString(object.get("state")) orelse return error.ProviderBug;
+        if (!std.mem.eql(u8, service_state, "ENABLED")) return .absent;
+        return .{ .present = try projectServiceResult(context.allocator, node, physical_id, null) };
+    }
+
+    fn enableProjectService(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ResourceResult {
+        const physical_id = try projectServiceNameAlloc(context.allocator, node);
+        defer context.allocator.free(physical_id);
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}:enable", .{physical_id});
+        defer context.allocator.free(path);
+        const operation_name = try self.startOperation(context, .service_usage, path, "POST", "{}");
+        defer context.allocator.free(operation_name);
+        try self.waitForServiceUsageOperation(context, operation_name);
+        return projectServiceResult(context.allocator, node, physical_id, operation_name);
+    }
+
+    fn disableProjectService(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}:disable", .{physical_id});
+        defer context.allocator.free(path);
+        const operation_name = self.startOperation(context, .service_usage, path, "POST", "{}") catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        defer context.allocator.free(operation_name);
+        try self.waitForServiceUsageOperation(context, operation_name);
+    }
+
+    fn startOperation(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        api: client_mod.Api,
+        path: []const u8,
+        method: []const u8,
+        body: []const u8,
+    ) ProviderError![]const u8 {
+        var response = try self.request(context, .{ .api = api, .method = method, .path = path, .body = body });
+        defer response.deinit(context.allocator);
+        var parsed = std.json.parseFromSlice(std.json.Value, context.allocator, response.body, .{}) catch return error.ProviderBug;
+        defer parsed.deinit();
+        const object = jsonObject(parsed.value) orelse return error.ProviderBug;
+        const name = jsonString(object.get("name")) orelse return error.ProviderBug;
+        return context.allocator.dupe(u8, name) catch return error.OutOfMemory;
+    }
+
+    fn waitForServiceUsageOperation(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        operation_name: []const u8,
+    ) ProviderError!void {
+        const base = try std.fmt.allocPrint(
+            context.allocator,
+            "{s}/v1",
+            .{std.mem.trimEnd(u8, self.client.endpoints.service_usage, "/")},
+        );
+        defer context.allocator.free(base);
+        var target = operation.Target.genericAlloc(context.allocator, base, operation_name) catch return error.OutOfMemory;
+        defer target.deinit(context.allocator);
+        var result = try operation.waitAlloc(self.client, context, target, self.operation_policy);
+        result.deinit(context.allocator);
+    }
+
+    fn readServiceAccount(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_override: ?[]const u8,
+    ) ProviderError!provider_mod.ReadResult {
+        const generated = if (physical_override == null) try serviceAccountNameAlloc(context.allocator, node) else null;
+        defer if (generated) |name| context.allocator.free(name);
+        const physical_id = physical_override orelse generated.?;
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}", .{physical_id});
+        defer context.allocator.free(path);
+        var response = self.request(context, .{ .api = .iam, .method = "GET", .path = path }) catch |err| {
+            if (err == error.NotFound) return .absent;
+            return err;
+        };
+        defer response.deinit(context.allocator);
+        return .{ .present = try serviceAccountResultFromJson(context.allocator, node, response.body) };
+    }
+
+    fn createServiceAccount(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ResourceResult {
+        const project_id = try requiredInput(node, "project_id");
+        const account_id = try requiredInput(node, "account_id");
+        const display_name = try requiredInput(node, "display_name");
+        const description = try requiredInput(node, "description");
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/projects/{s}/serviceAccounts", .{project_id});
+        defer context.allocator.free(path);
+        const body = std.json.Stringify.valueAlloc(context.allocator, .{
+            .accountId = account_id,
+            .serviceAccount = .{
+                .displayName = display_name,
+                .description = description,
+            },
+        }, .{}) catch return error.OutOfMemory;
+        defer context.allocator.free(body);
+        var response = try self.request(context, .{ .api = .iam, .method = "POST", .path = path, .body = body });
+        defer response.deinit(context.allocator);
+        return serviceAccountResultFromJson(context.allocator, node, response.body);
+    }
+
+    fn updateServiceAccount(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!provider_mod.ResourceResult {
+        const display_name = try requiredInput(node, "display_name");
+        const description = try requiredInput(node, "description");
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}", .{physical_id});
+        defer context.allocator.free(path);
+        const body = std.json.Stringify.valueAlloc(context.allocator, .{
+            .serviceAccount = .{
+                .name = physical_id,
+                .displayName = display_name,
+                .description = description,
+            },
+            .updateMask = "displayName,description",
+        }, .{}) catch return error.OutOfMemory;
+        defer context.allocator.free(body);
+        var response = try self.request(context, .{ .api = .iam, .method = "PATCH", .path = path, .body = body });
+        defer response.deinit(context.allocator);
+        return serviceAccountResultFromJson(context.allocator, node, response.body);
+    }
+
+    fn deleteServiceAccount(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}", .{physical_id});
+        defer context.allocator.free(path);
+        var response = self.request(context, .{ .api = .iam, .method = "DELETE", .path = path }) catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        response.deinit(context.allocator);
+    }
+
+    fn readProjectMember(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ReadResult {
+        const project_id = try requiredInput(node, "project_id");
+        const role = try requiredInput(node, "role");
+        const member = try requiredInput(node, "member");
+        var policy = try self.getProjectPolicy(context, project_id);
+        defer policy.deinit();
+        if (!policyHasMember(policy.value, role, member)) return .absent;
+        return .{ .present = try projectMemberResult(context.allocator, node) };
+    }
+
+    fn ensureProjectMember(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        should_exist: bool,
+    ) ProviderError!provider_mod.ResourceResult {
+        const project_id = try requiredInput(node, "project_id");
+        const role = try requiredInput(node, "role");
+        const member = try requiredInput(node, "member");
+        var conflicts: usize = 0;
+        while (true) {
+            try context.checkActive();
+            var policy = try self.getProjectPolicy(context, project_id);
+            defer policy.deinit();
+            const changed = try mutatePolicy(&policy, role, member, should_exist);
+            if (!changed) return projectMemberResult(context.allocator, node);
+            self.setProjectPolicy(context, project_id, policy.value) catch |err| {
+                if (err == error.Conflict and conflicts < self.iam_conflict_retries) {
+                    conflicts += 1;
+                    continue;
+                }
+                return err;
+            };
+            return projectMemberResult(context.allocator, node);
+        }
+    }
+
+    fn getProjectPolicy(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        project_id: []const u8,
+    ) ProviderError!std.json.Parsed(std.json.Value) {
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/projects/{s}:getIamPolicy", .{project_id});
+        defer context.allocator.free(path);
+        var response = try self.request(context, .{
+            .api = .resource_manager,
+            .method = "POST",
+            .path = path,
+            .body = "{\"options\":{\"requestedPolicyVersion\":3}}",
+        });
+        defer response.deinit(context.allocator);
+        return std.json.parseFromSlice(std.json.Value, context.allocator, response.body, .{}) catch return error.ProviderBug;
+    }
+
+    fn setProjectPolicy(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        project_id: []const u8,
+        policy: std.json.Value,
+    ) ProviderError!void {
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/projects/{s}:setIamPolicy", .{project_id});
+        defer context.allocator.free(path);
+        const body = std.json.Stringify.valueAlloc(context.allocator, .{ .policy = policy }, .{}) catch return error.OutOfMemory;
+        defer context.allocator.free(body);
+        var response = try self.request(context, .{ .api = .resource_manager, .method = "POST", .path = path, .body = body });
+        response.deinit(context.allocator);
+    }
+
+    fn request(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        request_value: client_mod.Request,
+    ) ProviderError!@import("zigeffect_std").Http.Response {
+        var diagnostic = client_mod.Diagnostic.init(context.allocator);
+        defer diagnostic.deinit();
+        return self.client.requestJsonAlloc(context, request_value, &diagnostic);
+    }
+};
+
+fn projectServiceResult(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    physical_id: []const u8,
+    operation_handle: ?[]const u8,
+) ProviderError!provider_mod.ResourceResult {
+    const outputs = [_]state.StateOutput{
+        .{ .name = "resource_name", .value = .{ .string = physical_id } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, operation_handle);
+}
+
+fn serviceAccountResultFromJson(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    body: []const u8,
+) ProviderError!provider_mod.ResourceResult {
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.ProviderBug;
+    defer parsed.deinit();
+    const object = jsonObject(parsed.value) orelse return error.ProviderBug;
+    const name = jsonString(object.get("name")) orelse return error.ProviderBug;
+    const email = jsonString(object.get("email")) orelse return error.ProviderBug;
+    const unique_id = jsonString(object.get("uniqueId")) orelse return error.ProviderBug;
+    const display_name = jsonString(object.get("displayName")) orelse "";
+    const description = jsonString(object.get("description")) orelse "";
+    const account_id = try requiredInput(node, "account_id");
+    const project_id = try requiredInput(node, "project_id");
+    const fields = [_]value.Field{
+        .{ .name = "account_id", .value = .{ .string = account_id } },
+        .{ .name = "description", .value = .{ .string = description } },
+        .{ .name = "display_name", .value = .{ .string = display_name } },
+        .{ .name = "project_id", .value = .{ .string = project_id } },
+    };
+    const outputs = [_]state.StateOutput{
+        .{ .name = "email", .value = .{ .string = email } },
+        .{ .name = "unique_id", .value = .{ .string = unique_id } },
+    };
+    return provider_mod.ResourceResult.init(allocator, name, .{ .object = &fields }, &outputs, null);
+}
+
+fn projectMemberResult(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError!provider_mod.ResourceResult {
+    const project_id = try requiredInput(node, "project_id");
+    const name = try requiredInput(node, "name");
+    const role = try requiredInput(node, "role");
+    const member = try requiredInput(node, "member");
+    const physical_id = try std.fmt.allocPrint(allocator, "projects/{s}/iam/{s}", .{ project_id, name });
+    defer allocator.free(physical_id);
+    const binding_id = try std.fmt.allocPrint(allocator, "{s}|{s}|{s}", .{ project_id, role, member });
+    defer allocator.free(binding_id);
+    const outputs = [_]state.StateOutput{
+        .{ .name = "binding_id", .value = .{ .string = binding_id } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, null);
+}
+
+fn policyHasMember(policy: std.json.Value, role: []const u8, member: []const u8) bool {
+    const object = jsonObject(policy) orelse return false;
+    const bindings_value = object.get("bindings") orelse return false;
+    const bindings = switch (bindings_value) {
+        .array => |array| array.items,
+        else => return false,
+    };
+    for (bindings) |binding_value| {
+        const binding = jsonObject(binding_value) orelse continue;
+        if (binding.get("condition") != null) continue;
+        const binding_role = jsonString(binding.get("role")) orelse continue;
+        if (!std.mem.eql(u8, binding_role, role)) continue;
+        const members_value = binding.get("members") orelse continue;
+        const members = switch (members_value) {
+            .array => |array| array.items,
+            else => continue,
+        };
+        for (members) |member_value| {
+            const candidate = jsonString(member_value) orelse continue;
+            if (std.mem.eql(u8, candidate, member)) return true;
+        }
+    }
+    return false;
+}
+
+fn mutatePolicy(
+    parsed: *std.json.Parsed(std.json.Value),
+    role: []const u8,
+    member: []const u8,
+    should_exist: bool,
+) ProviderError!bool {
+    const allocator = parsed.arena.allocator();
+    const root = switch (parsed.value) {
+        .object => |*object| object,
+        else => return error.ProviderBug,
+    };
+    var bindings_value = root.getPtr("bindings");
+    if (bindings_value == null) {
+        if (!should_exist) return false;
+        try root.put(allocator, "bindings", .{ .array = std.json.Array.init(allocator) });
+        bindings_value = root.getPtr("bindings");
+    }
+    const bindings = switch (bindings_value.?.*) {
+        .array => |*array| array,
+        else => return error.ProviderBug,
+    };
+
+    for (bindings.items, 0..) |*binding_value, binding_index| {
+        const binding = switch (binding_value.*) {
+            .object => |*object| object,
+            else => continue,
+        };
+        if (binding.get("condition") != null) continue;
+        const binding_role = jsonString(binding.get("role")) orelse continue;
+        if (!std.mem.eql(u8, binding_role, role)) continue;
+        const members_value = binding.getPtr("members") orelse continue;
+        const members = switch (members_value.*) {
+            .array => |*array| array,
+            else => continue,
+        };
+        for (members.items, 0..) |member_value, member_index| {
+            const candidate = jsonString(member_value) orelse continue;
+            if (!std.mem.eql(u8, candidate, member)) continue;
+            if (should_exist) return false;
+            _ = members.orderedRemove(member_index);
+            if (members.items.len == 0) _ = bindings.orderedRemove(binding_index);
+            return true;
+        }
+        if (!should_exist) return false;
+        try members.append(.{ .string = member });
+        return true;
+    }
+
+    if (!should_exist) return false;
+    var members = std.json.Array.init(allocator);
+    try members.append(.{ .string = member });
+    var binding: std.json.ObjectMap = .empty;
+    try binding.put(allocator, "role", .{ .string = role });
+    try binding.put(allocator, "members", .{ .array = members });
+    try bindings.append(.{ .object = binding });
+    return true;
+}
+
+fn projectServiceNameAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError![]const u8 {
+    const project_id = try requiredInput(node, "project_id");
+    const service = try requiredInput(node, "service");
+    return std.fmt.allocPrint(allocator, "projects/{s}/services/{s}", .{ project_id, service }) catch return error.OutOfMemory;
+}
+
+fn serviceAccountNameAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError![]const u8 {
+    const project_id = try requiredInput(node, "project_id");
+    const account_id = try requiredInput(node, "account_id");
+    return std.fmt.allocPrint(
+        allocator,
+        "projects/{s}/serviceAccounts/{s}@{s}.iam.gserviceaccount.com",
+        .{ project_id, account_id, project_id },
+    ) catch return error.OutOfMemory;
+}
+
+fn requiredInput(node: resource.ResourceNode, name: []const u8) ProviderError![]const u8 {
+    const fields = switch (node.inputs) {
+        .object => |fields| fields,
+        else => return error.InvalidConfiguration,
+    };
+    for (fields) |field| {
+        if (!std.mem.eql(u8, field.name, name)) continue;
+        return switch (field.value) {
+            .string => |text| text,
+            else => error.InvalidConfiguration,
+        };
+    }
+    return error.InvalidConfiguration;
+}
+
+fn jsonObject(json_value: std.json.Value) ?std.json.ObjectMap {
+    return switch (json_value) {
+        .object => |object| object,
+        else => null,
+    };
+}
+
+fn jsonString(json_value: ?std.json.Value) ?[]const u8 {
+    const present = json_value orelse return null;
+    return switch (present) {
+        .string => |text| text,
+        else => null,
+    };
+}
+
+fn isType(node: resource.ResourceNode, expected: []const u8) bool {
+    return std.mem.eql(u8, node.type_name, expected);
+}
+
+fn isSupported(node: resource.ResourceNode) bool {
+    return isType(node, project_service_type) or
+        isType(node, service_account_type) or
+        isType(node, project_member_type);
+}
