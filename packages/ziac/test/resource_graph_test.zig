@@ -109,3 +109,18 @@ test "dependency edges use graph owned resource ids" {
     try std.testing.expectEqualStrings(graph.resources.items[1].id, graph.dependencies.items[0].from);
     try std.testing.expectEqualStrings(graph.resources.items[0].id, graph.dependencies.items[0].to);
 }
+
+test "binding a typed output derives one deduplicated dependency edge" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try graph.addResource(.{ .id = "producer", .type_name = "test.Producer", .logical_id = "producer" });
+    try graph.addResource(.{ .id = "consumer", .type_name = "test.Consumer", .logical_id = "consumer" });
+    const output = ziac.Output([]const u8, .public).fromResource("producer", "url");
+
+    try graph.bindOutput("consumer", output);
+    try graph.bindOutput("consumer", output);
+
+    try std.testing.expectEqual(@as(usize, 1), graph.dependencies.items.len);
+    try std.testing.expectEqualStrings("consumer", graph.dependencies.items[0].from);
+    try std.testing.expectEqualStrings("producer", graph.dependencies.items[0].to);
+}

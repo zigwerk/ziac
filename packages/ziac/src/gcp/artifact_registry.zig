@@ -1,5 +1,6 @@
 const std = @import("std");
 const config_mod = @import("config.zig");
+const output = @import("../output.zig");
 const resource = @import("../resource.zig");
 const value = @import("../value.zig");
 const validation = @import("validation.zig");
@@ -12,8 +13,12 @@ pub const DockerRepositoryArgs = struct {
 };
 
 pub const DockerRepository = struct {
+    pub const Outputs = struct {
+        pub const RepositoryUrl = output.Descriptor("repository_url", []const u8, .public);
+    };
+
     node: resource.ResourceNode,
-    repository_url: []const u8,
+    repository_url: Outputs.RepositoryUrl.OutputType,
 
     pub fn build(
         allocator: std.mem.Allocator,
@@ -27,9 +32,6 @@ pub const DockerRepository = struct {
 
         const id = try std.fmt.allocPrint(allocator, "gcp.artifact.Repository.{s}.{s}", .{ location, args.name });
         defer allocator.free(id);
-        const repository_url = try std.fmt.allocPrint(allocator, "{s}-docker.pkg.dev/{s}/{s}", .{ location, provider.project_id, args.name });
-        errdefer allocator.free(repository_url);
-
         const label_fields = try allocator.alloc(value.Field, provider.labels.len);
         defer allocator.free(label_fields);
         for (provider.labels, 0..) |label, index| {
@@ -61,13 +63,12 @@ pub const DockerRepository = struct {
 
         return .{
             .node = node,
-            .repository_url = repository_url,
+            .repository_url = Outputs.RepositoryUrl.fromResource(node.id),
         };
     }
 
     pub fn deinit(self: *DockerRepository, allocator: std.mem.Allocator) void {
         self.node.deinit(allocator);
-        allocator.free(self.repository_url);
         self.* = undefined;
     }
 };

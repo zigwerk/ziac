@@ -218,7 +218,11 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     env.state.saveResources(args.stack, args.stage, &loaded.store) catch |err| {
         return handleStateError(env, err);
     };
-    env.state.saveOutputs(args.stack, args.stage, program.outputs.items) catch |err| {
+    const resolved_outputs = program.resolveOutputsAlloc(allocator, &loaded.store) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer stack_registry.StackProgram.freeResolvedOutputs(allocator, resolved_outputs);
+    env.state.saveOutputs(args.stack, args.stage, resolved_outputs) catch |err| {
         return handleStateError(env, err);
     };
 

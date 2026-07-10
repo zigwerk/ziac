@@ -111,10 +111,18 @@ pub const ResourceGraph = struct {
     pub fn addDependency(self: *ResourceGraph, from: []const u8, to: []const u8) ResourceGraphError!void {
         const from_index = self.indexOf(from) orelse return error.MissingResource;
         const to_index = self.indexOf(to) orelse return error.MissingResource;
+        for (self.dependencies.items) |edge| {
+            if (std.mem.eql(u8, edge.from, from) and std.mem.eql(u8, edge.to, to)) return;
+        }
         try self.dependencies.append(self.allocator, .{
             .from = self.resources.items[from_index].id,
             .to = self.resources.items[to_index].id,
         });
+    }
+
+    pub fn bindOutput(self: *ResourceGraph, consumer_id: []const u8, typed_output: anytype) ResourceGraphError!void {
+        const reference = typed_output.referenceOrNull() orelse return;
+        try self.addDependency(consumer_id, reference.resource_id);
     }
 
     pub fn validateAcyclic(self: *const ResourceGraph) ResourceGraphError!void {

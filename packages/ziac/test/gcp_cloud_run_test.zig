@@ -1,7 +1,7 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
-test "cloud run service builds stable resource url and default service account" {
+test "cloud run service builds stable resource and typed provider outputs" {
     const provider = ziac.gcp.config.ProviderConfig{
         .project_id = "ziac-dev",
         .primary_region = "europe-west1",
@@ -19,8 +19,8 @@ test "cloud run service builds stable resource url and default service account" 
     try std.testing.expectEqualStrings("gcp.run.Service", service.node.type_name);
     try std.testing.expectEqual(@as(u32, 1), service.node.schema_version);
     try std.testing.expectEqualStrings("api", service.node.logical_id);
-    try std.testing.expectEqualStrings("https://api-europe-west1-ziac-dev.run.app", service.service_url);
-    try std.testing.expectEqualStrings("runtime@ziac-dev.iam.gserviceaccount.com", service.service_account);
+    try std.testing.expectEqualStrings("service_url", service.service_url.resource_ref.field);
+    try std.testing.expectEqualStrings("service_account", service.service_account.resource_ref.field);
 
     const inputs = try service.node.inputs.canonicalJsonAlloc(std.testing.allocator);
     defer std.testing.allocator.free(inputs);
@@ -70,7 +70,7 @@ test "cloud run service can override region and service account" {
     defer service.deinit(std.testing.allocator);
 
     try std.testing.expectEqualStrings("gcp.run.Service.us-central1.api", service.node.id);
-    try std.testing.expectEqualStrings("api@ziac-dev.iam.gserviceaccount.com", service.service_account);
+    try std.testing.expectEqualStrings("service_account", service.service_account.resource_ref.field);
 }
 
 test "cloud run service rejects missing image invalid port and duplicate env" {

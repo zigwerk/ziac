@@ -56,3 +56,10 @@ digest, and an operation-integrity digest. The executor validates all four befor
 refresh, resume, or provider access. Resource and dependency insertion order do
 not affect the desired graph digest, while any mutation of saved operation data
 invalidates the operation digest.
+
+Provider output descriptors carry their field name, Zig value type, and secrecy
+at comptime. Resource builders expose typed references instead of predicting
+provider-assigned values. Binding a reference to a consumer derives one
+deduplicated graph edge. After mutation, references resolve from typed provider
+outputs in state; stack output files and CLI output therefore use observed values
+rather than builder-side URL conventions.

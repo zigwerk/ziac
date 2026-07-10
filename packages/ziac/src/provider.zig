@@ -515,14 +515,56 @@ pub const FakeProvider = struct {
     ) ProviderError!void {
         const resource_id = try self.allocator.dupe(u8, node.id);
         errdefer self.allocator.free(resource_id);
-        const output_source = [_]state.StateOutput{
-            .{ .name = "physical_id", .value = .{ .string = physical_id } },
-        };
+        var output_source: [3]state.StateOutput = undefined;
+        output_source[0] = .{ .name = "physical_id", .value = .{ .string = physical_id } };
+        var output_count: usize = 1;
+        var dynamic_output: ?[]const u8 = null;
+        defer if (dynamic_output) |value_string| self.allocator.free(value_string);
+
+        if (std.mem.eql(u8, node.type_name, "gcp.artifact.Repository")) {
+            const location = inputString(node, "location");
+            const project_id = inputString(node, "project_id");
+            const name = inputString(node, "name");
+            if (location != null and project_id != null and name != null) {
+                dynamic_output = try std.fmt.allocPrint(
+                    self.allocator,
+                    "{s}-docker.pkg.dev/{s}/{s}",
+                    .{ location.?, project_id.?, name.? },
+                );
+                output_source[output_count] = .{
+                    .name = "repository_url",
+                    .value = .{ .string = dynamic_output.? },
+                };
+                output_count += 1;
+            }
+        } else if (std.mem.eql(u8, node.type_name, "gcp.run.Service")) {
+            const name = inputString(node, "name");
+            const region = inputString(node, "region");
+            const project_id = inputString(node, "project_id");
+            const service_account = inputString(node, "service_account");
+            if (name != null and region != null and project_id != null and service_account != null) {
+                dynamic_output = try std.fmt.allocPrint(
+                    self.allocator,
+                    "https://{s}-{s}-{s}.run.app",
+                    .{ name.?, region.?, project_id.? },
+                );
+                output_source[output_count] = .{
+                    .name = "service_url",
+                    .value = .{ .string = dynamic_output.? },
+                };
+                output_count += 1;
+                output_source[output_count] = .{
+                    .name = "service_account",
+                    .value = .{ .string = service_account.? },
+                };
+                output_count += 1;
+            }
+        }
         var result = try ResourceResult.init(
             self.allocator,
             physical_id,
             node.inputs,
-            output_source[0..],
+            output_source[0..output_count],
             self.result_operation_handle,
         );
         result.completed = self.result_completed;
@@ -535,6 +577,19 @@ pub const FakeProvider = struct {
         try self.remotes.put(resource_id, remote);
     }
 };
+
+fn inputString(node: resource.ResourceNode, name: []const u8) ?[]const u8 {
+    return switch (node.inputs) {
+        .object => |fields| for (fields) |field| {
+            if (!std.mem.eql(u8, field.name, name)) continue;
+            break switch (field.value) {
+                .string => |string| string,
+                else => null,
+            };
+        } else null,
+        else => null,
+    };
+}
 
 fn cloneStrings(
     allocator: std.mem.Allocator,

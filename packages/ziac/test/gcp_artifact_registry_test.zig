@@ -1,7 +1,7 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
-test "artifact registry docker repository builds stable resource and url" {
+test "artifact registry docker repository builds stable resource and typed output" {
     const provider = ziac.gcp.config.ProviderConfig{
         .project_id = "ziac-dev",
         .primary_region = "europe-west1",
@@ -17,7 +17,9 @@ test "artifact registry docker repository builds stable resource and url" {
     try std.testing.expectEqualStrings("gcp.artifact.Repository", repo.node.type_name);
     try std.testing.expectEqual(@as(u32, 1), repo.node.schema_version);
     try std.testing.expectEqualStrings("hello-global", repo.node.logical_id);
-    try std.testing.expectEqualStrings("europe-west1-docker.pkg.dev/ziac-dev/hello-global", repo.repository_url);
+    try std.testing.expect(repo.repository_url == .resource_ref);
+    try std.testing.expectEqualStrings(repo.node.id, repo.repository_url.resource_ref.resource_id);
+    try std.testing.expectEqualStrings("repository_url", repo.repository_url.resource_ref.field);
 
     const inputs = try repo.node.inputs.canonicalJsonAlloc(std.testing.allocator);
     defer std.testing.allocator.free(inputs);
@@ -41,7 +43,7 @@ test "artifact registry docker repository can override location" {
     defer repo.deinit(std.testing.allocator);
 
     try std.testing.expectEqualStrings("gcp.artifact.Repository.us-central1.api-images", repo.node.id);
-    try std.testing.expectEqualStrings("us-central1-docker.pkg.dev/ziac-dev/api-images", repo.repository_url);
+    try std.testing.expectEqualStrings("repository_url", repo.repository_url.resource_ref.field);
 }
 
 test "artifact registry docker repository rejects missing name" {

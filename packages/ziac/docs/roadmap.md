@@ -51,8 +51,9 @@ interrupted-resume integration tests.
 
 ## M2: Comptime Contracts
 
-- Typed public and secret outputs.
-- Automatic dependency derivation from output references.
+- Typed public and secret outputs: implemented and tested.
+- Automatic dependency derivation from output references: implemented and
+  tested.
 - App `Env` and binding validation.
 - Provider-set validation.
 - Stable compile-fail diagnostics.

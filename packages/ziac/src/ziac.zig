@@ -23,6 +23,8 @@ pub const cli = @import("cli.zig");
 pub const gcp = @import("gcp/root.zig");
 
 pub const Output = output.Output;
+pub const PublicOutput = output.PublicOutput;
+pub const SecretOutput = output.SecretOutput;
 pub const OutputRef = output.OutputRef;
 pub const SecretRef = output.SecretRef;
 pub const ResourceGraph = resource.ResourceGraph;

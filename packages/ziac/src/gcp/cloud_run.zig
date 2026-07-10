@@ -1,5 +1,6 @@
 const std = @import("std");
 const config_mod = @import("config.zig");
+const output = @import("../output.zig");
 const resource = @import("../resource.zig");
 const value = @import("../value.zig");
 const validation = @import("validation.zig");
@@ -22,9 +23,14 @@ pub const ServiceArgs = struct {
 };
 
 pub const Service = struct {
+    pub const Outputs = struct {
+        pub const ServiceUrl = output.Descriptor("service_url", []const u8, .public);
+        pub const ServiceAccount = output.Descriptor("service_account", []const u8, .public);
+    };
+
     node: resource.ResourceNode,
-    service_url: []const u8,
-    service_account: []const u8,
+    service_url: Outputs.ServiceUrl.OutputType,
+    service_account: Outputs.ServiceAccount.OutputType,
 
     pub fn build(
         allocator: std.mem.Allocator,
@@ -43,11 +49,6 @@ pub const Service = struct {
         const selected_service_account = args.service_account orelse provider.service_account orelse "default";
         const id = try std.fmt.allocPrint(allocator, "gcp.run.Service.{s}.{s}", .{ region, args.name });
         defer allocator.free(id);
-        const service_url = try std.fmt.allocPrint(allocator, "https://{s}-{s}-{s}.run.app", .{ args.name, region, provider.project_id });
-        errdefer allocator.free(service_url);
-        const owned_service_account = try allocator.dupe(u8, selected_service_account);
-        errdefer allocator.free(owned_service_account);
-
         const label_fields = try allocator.alloc(value.Field, provider.labels.len);
         defer allocator.free(label_fields);
         for (provider.labels, 0..) |label, index| {
@@ -110,15 +111,13 @@ pub const Service = struct {
 
         return .{
             .node = node,
-            .service_url = service_url,
-            .service_account = owned_service_account,
+            .service_url = Outputs.ServiceUrl.fromResource(node.id),
+            .service_account = Outputs.ServiceAccount.fromResource(node.id),
         };
     }
 
     pub fn deinit(self: *Service, allocator: std.mem.Allocator) void {
         self.node.deinit(allocator);
-        allocator.free(self.service_url);
-        allocator.free(self.service_account);
         self.* = undefined;
     }
 };

@@ -56,8 +56,9 @@ lifecycle, persists versioned physical state, and executes stable dependency
 levels with bounded parallelism, retry, deadlines, cancellation, and redacted
 causal facts. Atomic checkpoint/resume, writer locking, refresh, import, unlock,
 stable JSON command receipts, and lineage/serial/graph plan preconditions are
-implemented. Engine V2 is complete; comptime resource and app contracts are the
-next milestone before authenticated Google and CockroachDB API operations.
+implemented. Engine V2 is complete. Typed public/secret provider outputs and
+dependency derivation are implemented; app environment and provider-set comptime
+contracts are next before authenticated Google and CockroachDB API operations.
 
 See `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under

@@ -28,6 +28,16 @@ test "fixture registry builds hello global stack graph and outputs" {
     try std.testing.expectEqualStrings("service_account", program.outputs.items[4].name);
     try std.testing.expectEqualStrings("database_url", program.outputs.items[5].name);
     try std.testing.expect(program.outputs.items[5].secret);
+    try std.testing.expect(program.outputs.items[0].source == .resource_ref);
+    try std.testing.expectEqualStrings(
+        "repository_url",
+        program.outputs.items[0].source.resource_ref.field,
+    );
+    try std.testing.expect(program.outputs.items[1].source == .resource_ref);
+    try std.testing.expectEqualStrings(
+        "service_url",
+        program.outputs.items[1].source.resource_ref.field,
+    );
 }
 
 test "fixture registry rejects unknown stack names" {
