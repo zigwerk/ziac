@@ -100,13 +100,18 @@ pub const StackProgram = struct {
 };
 
 pub const StackRegistry = struct {
-    pub fn build(_: StackRegistry, allocator: std.mem.Allocator, args: StackArgs) StackError!StackProgram {
+    project_id: []const u8 = "ziac-dev",
+    region: []const u8 = "europe-west1",
+    service_account: ?[]const u8 = "hello-global@ziac-dev.iam.gserviceaccount.com",
+    image: ?[]const u8 = null,
+
+    pub fn build(self: StackRegistry, allocator: std.mem.Allocator, args: StackArgs) StackError!StackProgram {
         if (!std.mem.eql(u8, args.stack, "hello-global")) return error.UnknownStack;
 
         const provider = gcp.config.ProviderConfig{
-            .project_id = "ziac-dev",
-            .primary_region = "europe-west1",
-            .service_account = "hello-global@ziac-dev.iam.gserviceaccount.com",
+            .project_id = self.project_id,
+            .primary_region = self.region,
+            .service_account = self.service_account,
         };
 
         var repo = try gcp.artifact_registry.DockerRepository.build(allocator, provider, .{
@@ -114,7 +119,16 @@ pub const StackRegistry = struct {
         });
         defer repo.deinit(allocator);
 
-        const image = "europe-west1-docker.pkg.dev/ziac-dev/hello-global/api:latest";
+        const generated_image = if (self.image == null)
+            try std.fmt.allocPrint(
+                allocator,
+                "{s}-docker.pkg.dev/{s}/hello-global/api:latest",
+                .{ self.region, self.project_id },
+            )
+        else
+            null;
+        defer if (generated_image) |owned| allocator.free(owned);
+        const image = self.image orelse generated_image.?;
 
         const env = [_]gcp.cloud_run.EnvVar{
             .{ .name = "DATABASE_URL", .value = "postgres://user:sentinel-secret-for-tests@localhost:26257/app", .secret = true },
@@ -158,7 +172,7 @@ pub const StackRegistry = struct {
         try appendReference(allocator, &outputs, "repository_url", repo.repository_url.resource_ref, false);
         try appendReference(allocator, &outputs, "service_url", service.service_url.resource_ref, false);
         try appendLiteral(allocator, &outputs, "service_name", "api", false);
-        try appendLiteral(allocator, &outputs, "service_region", "europe-west1", false);
+        try appendLiteral(allocator, &outputs, "service_region", self.region, false);
         try appendReference(allocator, &outputs, "service_account", service.service_account.resource_ref, false);
         try appendLiteral(allocator, &outputs, "database_url", "postgres://user:sentinel-secret-for-tests@localhost:26257/app", true);
 
@@ -226,4 +240,20 @@ fn resolveOutputValue(
 
 pub fn fixtureRegistry() StackRegistry {
     return .{};
+}
+
+pub const ConfiguredRegistryArgs = struct {
+    project_id: []const u8,
+    region: []const u8 = "europe-west1",
+    service_account: ?[]const u8 = null,
+    image: ?[]const u8 = null,
+};
+
+pub fn configuredRegistry(args: ConfiguredRegistryArgs) StackRegistry {
+    return .{
+        .project_id = args.project_id,
+        .region = args.region,
+        .service_account = args.service_account,
+        .image = args.image,
+    };
 }

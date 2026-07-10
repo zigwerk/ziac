@@ -30,6 +30,18 @@ zig-out/bin/ziac unlock --stack hello-global --stage dev \
 zig-out/bin/ziac destroy --stack hello-global --stage dev
 ```
 
+Select the native provider explicitly for authenticated calls:
+
+```sh
+export ZIAC_LIVE_PROJECT=my-project
+export ZIAC_LIVE_IMAGE=europe-west1-docker.pkg.dev/my-project/repository/api@sha256:digest
+zig-out/bin/ziac deploy --stack hello-global --stage dev \
+  --provider gcp --allow-live
+```
+
+Credential-gated smoke runs add `--live-test` and require a project ID ending
+in `-ziac-disposable`.
+
 Add `--json` to any command for the stable `ziac.command.v1` receipt. Commands
 that write resource state acquire an exclusive stack/stage lock; `unlock`
 requires the recorded lineage unless `--force` is supplied explicitly.
@@ -98,6 +110,7 @@ See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts. See
 `docs/secret-manager.md` for the secret payload boundary, and
 `docs/cloud-run.md` for the Cloud Run request and lifecycle contract. See
+`docs/live-gcp.md` for CLI selection and disposable-project safeguards, and
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

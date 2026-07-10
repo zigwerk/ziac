@@ -362,6 +362,34 @@ test "GCP token cache refreshes before expiry and owns returned tokens" {
     try std.testing.expectEqual(@as(usize, 2), counting.calls);
 }
 
+test "resolved ADC token source dispatches authorized user credentials" {
+    const responses = [_]zstd.Http.Response{.{
+        .status = 200,
+        .body = "{\"access_token\":\"dummy-adc-token\",\"expires_in\":3599,\"token_type\":\"Bearer\"}",
+    }};
+    var transport = @import("gcp_client_test.zig").RecordingTransport.init(std.testing.allocator, &responses);
+    defer transport.deinit();
+    var files = zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer files.deinit();
+    var resolved = auth.ResolvedAdc{
+        .location = .environment,
+        .credential = try auth.decodeCredentialAlloc(std.testing.allocator, authorized_user_json),
+    };
+    defer resolved.deinit(std.testing.allocator);
+    var source = auth.AdcTokenSource.init(
+        &resolved,
+        transport.client(),
+        auth.memoryFileReader(&files),
+    );
+
+    var token = try source.tokenSource().fetchAlloc(std.testing.allocator, 10_000);
+    defer token.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("dummy-adc-token", token.access_token);
+    try std.testing.expectEqual(@as(usize, 1), transport.requests.items.len);
+    try std.testing.expectEqualStrings(auth.google_token_endpoint, transport.requests.items[0].url);
+}
+
 test "GCP auth doctor identifies source without exposing credentials" {
     var files = zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
     defer files.deinit();

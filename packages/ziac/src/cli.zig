@@ -27,6 +27,8 @@ pub const Env = struct {
     state: local_state.Store,
     auth_env: ?*zstd.Env.EnvMap = null,
     auth_files: ?gcp_auth.FileReader = null,
+    live_providers: ?provider_mod.ProviderRegistry = null,
+    live_project_id: ?[]const u8 = null,
 };
 
 const Args = struct {
@@ -38,6 +40,9 @@ const Args = struct {
     lineage: ?[]const u8 = null,
     force: bool = false,
     json: bool = false,
+    provider_name: []const u8 = "fake",
+    allow_live: bool = false,
+    live_test: bool = false,
 };
 
 const command_options = [_]zstd.Cli.OptionSpec{
@@ -58,12 +63,30 @@ const command_options = [_]zstd.Cli.OptionSpec{
         .kind = .boolean,
         .help = "emit stable JSON",
     },
+    .{
+        .name = "provider",
+        .kind = .string,
+        .help = "provider runtime: fake or gcp",
+    },
+    .{
+        .name = "allow-live",
+        .kind = .boolean,
+        .help = "allow authenticated provider calls",
+    },
+    .{
+        .name = "live-test",
+        .kind = .boolean,
+        .help = "require a disposable live project",
+    },
 };
 
 const import_options = [_]zstd.Cli.OptionSpec{
     command_options[0],
     command_options[1],
     command_options[2],
+    command_options[3],
+    command_options[4],
+    command_options[5],
     .{ .name = "resource", .kind = .string, .required = true, .help = "logical resource ID" },
     .{ .name = "id", .kind = .string, .required = true, .help = "provider physical ID" },
 };
@@ -182,6 +205,9 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .lineage = parsed.optionValue("lineage"),
         .force = parsed.optionValue("force") != null,
         .json = parsed.optionValue("json") != null,
+        .provider_name = parsed.optionValue("provider") orelse "fake",
+        .allow_live = parsed.optionValue("allow-live") != null,
+        .live_test = parsed.optionValue("live-test") != null,
     };
 }
 
@@ -220,9 +246,19 @@ fn runPlan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     defer loaded.deinit();
 
-    var planned = plan_mod.buildPlan(allocator, &program.graph, &loaded.store) catch |err| {
-        return handlePlanError(env, err);
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = selectProviders(env, args, &program.graph, &fake_provider) catch |err| {
+        return handleProviderSelectionError(env, err);
     };
+    var planned = if (isLive(args))
+        plan_mod.buildRefreshedPlan(allocator, &program.graph, &loaded.store, providers) catch |err| {
+            return handlePlanError(env, err);
+        }
+    else
+        plan_mod.buildPlan(allocator, &program.graph, &loaded.store) catch |err| {
+            return handlePlanError(env, err);
+        };
     defer planned.deinit();
 
     try writePlan(env, args, planned, loaded.store.serialValue());
@@ -234,6 +270,12 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStackError(env, err);
     };
     defer program.deinit();
+
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = selectProviders(env, args, &program.graph, &fake_provider) catch |err| {
+        return handleProviderSelectionError(env, err);
+    };
 
     var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
         return handleStateError(env, err);
@@ -250,9 +292,6 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     defer planned.deinit();
 
-    var fake_provider = provider_mod.FakeProvider.init(allocator);
-    defer fake_provider.deinit();
-    const providers = fakeProviderRegistry(&fake_provider);
     var checkpoint = checkpoint_mod.LocalResources{
         .store = env.state,
         .stack = args.stack,
@@ -281,6 +320,15 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 }
 
 fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+        return handleStackError(env, err);
+    };
+    defer program.deinit();
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = selectProviders(env, args, &program.graph, &fake_provider) catch |err| {
+        return handleProviderSelectionError(env, err);
+    };
     var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
         return handleStateError(env, err);
     };
@@ -296,9 +344,6 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     defer planned.deinit();
 
-    var fake_provider = provider_mod.FakeProvider.init(allocator);
-    defer fake_provider.deinit();
-    const providers = fakeProviderRegistry(&fake_provider);
     var checkpoint = checkpoint_mod.LocalResources{
         .store = env.state,
         .stack = args.stack,
@@ -326,6 +371,60 @@ fn fakeProviderRegistry(fake: *provider_mod.FakeProvider) provider_mod.ProviderR
     providers.register(.gcp, provider);
     providers.register(.cockroach, provider);
     return providers;
+}
+
+const ProviderSelectionError = error{
+    UnknownProvider,
+    LiveMutationNotAllowed,
+    LiveProviderUnavailable,
+    LiveProjectUnavailable,
+    LiveProjectMismatch,
+    UnsafeLiveProject,
+};
+
+fn selectProviders(
+    env: *Env,
+    args: Args,
+    graph: *const @import("resource.zig").ResourceGraph,
+    fake: *provider_mod.FakeProvider,
+) ProviderSelectionError!provider_mod.ProviderRegistry {
+    if (!isLive(args)) {
+        if (!std.mem.eql(u8, args.provider_name, "fake") or args.live_test) return error.UnknownProvider;
+        return fakeProviderRegistry(fake);
+    }
+    if (!args.allow_live) return error.LiveMutationNotAllowed;
+    const providers = env.live_providers orelse return error.LiveProviderUnavailable;
+    const project_id = env.live_project_id orelse return error.LiveProjectUnavailable;
+    if (args.live_test and !isDisposableProjectId(project_id)) return error.UnsafeLiveProject;
+    for (graph.resources.items) |node| {
+        if (node.provider != .gcp) continue;
+        const desired_project = resourceProjectId(node) orelse return error.LiveProjectMismatch;
+        if (!std.mem.eql(u8, desired_project, project_id)) return error.LiveProjectMismatch;
+    }
+    return providers;
+}
+
+fn isLive(args: Args) bool {
+    return std.mem.eql(u8, args.provider_name, "gcp");
+}
+
+pub fn isDisposableProjectId(project_id: []const u8) bool {
+    return project_id.len > "-ziac-disposable".len and std.mem.endsWith(u8, project_id, "-ziac-disposable");
+}
+
+fn resourceProjectId(node: @import("resource.zig").ResourceNode) ?[]const u8 {
+    const fields = switch (node.inputs) {
+        .object => |fields| fields,
+        else => return null,
+    };
+    for (fields) |field| {
+        if (!std.mem.eql(u8, field.name, "project_id")) continue;
+        return switch (field.value) {
+            .string => |project_id| project_id,
+            else => null,
+        };
+    }
+    return null;
 }
 
 fn runOutputs(_: std.mem.Allocator, env: *Env, args: Args) !u8 {
@@ -378,6 +477,11 @@ fn runRefresh(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStackError(env, err);
     };
     defer program.deinit();
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = selectProviders(env, args, &program.graph, &fake_provider) catch |err| {
+        return handleProviderSelectionError(env, err);
+    };
     var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
         return handleStateError(env, err);
     };
@@ -386,9 +490,6 @@ fn runRefresh(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
     defer loaded.deinit();
-    var fake_provider = provider_mod.FakeProvider.init(allocator);
-    defer fake_provider.deinit();
-    const providers = fakeProviderRegistry(&fake_provider);
     var checkpoint = checkpoint_mod.LocalResources{
         .store = env.state,
         .stack = args.stack,
@@ -413,6 +514,11 @@ fn runImport(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         try writeError(env, "import", error.MissingResource);
         return Exit.invalid_graph;
     };
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = selectProviders(env, args, &program.graph, &fake_provider) catch |err| {
+        return handleProviderSelectionError(env, err);
+    };
     var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
         return handleStateError(env, err);
     };
@@ -421,9 +527,6 @@ fn runImport(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
     defer loaded.deinit();
-    var fake_provider = provider_mod.FakeProvider.init(allocator);
-    defer fake_provider.deinit();
-    const providers = fakeProviderRegistry(&fake_provider);
     var checkpoint = checkpoint_mod.LocalResources{
         .store = env.state,
         .stack = args.stack,
@@ -597,6 +700,11 @@ fn handlePlanError(env: *Env, err: anyerror) !u8 {
 fn handleApplyError(env: *Env, err: anyerror) !u8 {
     try writeError(env, "provider", err);
     return Exit.provider_error;
+}
+
+fn handleProviderSelectionError(env: *Env, err: ProviderSelectionError) !u8 {
+    try writeError(env, "auth", err);
+    return Exit.auth_error;
 }
 
 fn handleStateError(env: *Env, err: anyerror) !u8 {

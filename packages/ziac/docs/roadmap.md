@@ -91,7 +91,8 @@ credentials.
 - Secret Manager: scripted metadata, version, and IAM lifecycle complete; live
   gate pending.
 - Cloud Run v2: scripted full-runtime lifecycle complete; live gate pending.
-- Live provider selection and guarded disposable-project tests.
+- Live provider selection and disposable-project guard: complete; authenticated
+  smoke pending configured ADC and project.
 
 Gate: an existing image completes create/read/update/noop/destroy in one Cloud
 Run region with real physical state and outputs.

@@ -212,3 +212,92 @@ test "cli auth doctor reports ADC source without stack options or secrets" {
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "dummy-client-secret") == null);
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "dummy-refresh-token") == null);
 }
+
+test "cli selects an injected live GCP registry only when explicitly allowed" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+    env.registry = ziac.stack_registry.configuredRegistry(.{
+        .project_id = "test-ziac-disposable",
+        .image = "europe-west1-docker.pkg.dev/test-ziac-disposable/hello-global/api:v1",
+    });
+    var live = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer live.deinit();
+    var providers = ziac.provider.ProviderRegistry{};
+    providers.register(.gcp, live.provider());
+    env.live_providers = providers;
+    env.live_project_id = "test-ziac-disposable";
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy",
+        "--stack",
+        "hello-global",
+        "--stage",
+        "dev",
+        "--provider",
+        "gcp",
+        "--allow-live",
+        "--live-test",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expectEqual(@as(usize, 2), live.creates);
+}
+
+test "cli live GCP selection fails before state mutation when providers are unavailable" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+    env.live_project_id = "test-ziac-disposable";
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy",
+        "--stack",
+        "hello-global",
+        "--stage",
+        "dev",
+        "--provider",
+        "gcp",
+        "--allow-live",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.auth_error, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "LiveProviderUnavailable") != null);
+    try std.testing.expect(!fs.exists(".ziac/state/hello-global/dev/resources.json"));
+    try std.testing.expect(!try env.state.hasLock("hello-global", "dev"));
+}
+
+test "cli live test rejects a non-disposable GCP project before mutation" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+    var live = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer live.deinit();
+    var providers = ziac.provider.ProviderRegistry{};
+    providers.register(.gcp, live.provider());
+    env.live_providers = providers;
+    env.live_project_id = "production-project";
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy",
+        "--stack",
+        "hello-global",
+        "--stage",
+        "dev",
+        "--provider",
+        "gcp",
+        "--allow-live",
+        "--live-test",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.auth_error, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "UnsafeLiveProject") != null);
+    try std.testing.expectEqual(@as(usize, 0), live.creates);
+    try std.testing.expect(!try env.state.hasLock("hello-global", "dev"));
+}

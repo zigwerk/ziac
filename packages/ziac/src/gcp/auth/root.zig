@@ -936,6 +936,72 @@ pub const ExternalAccountTokenSource = struct {
     }
 };
 
+pub const AdcTokenSource = struct {
+    resolved: *const ResolvedAdc,
+    client: zstd.Http.Client,
+    files: FileReader,
+
+    pub fn init(resolved: *const ResolvedAdc, client: zstd.Http.Client, files: FileReader) AdcTokenSource {
+        return .{ .resolved = resolved, .client = client, .files = files };
+    }
+
+    pub fn tokenSource(self: *AdcTokenSource) TokenSource {
+        return .{ .ptr = self, .fetchFn = fetchErased };
+    }
+
+    pub fn fetchAlloc(self: *AdcTokenSource, allocator: std.mem.Allocator, now_seconds: u64) AuthError!AccessToken {
+        const credential = self.resolved.credential orelse {
+            var metadata = MetadataTokenSource.init(self.client);
+            return metadata.fetchAlloc(allocator, now_seconds);
+        };
+        return switch (credential) {
+            .authorized_user => |*authorized_user| {
+                var source = AuthorizedUserTokenSource{ .client = self.client, .credential = authorized_user };
+                return source.fetchAlloc(allocator, now_seconds);
+            },
+            .service_account => |*service_account| {
+                var signer = RsaSigner.init(service_account.private_key);
+                var source = ServiceAccountTokenSource{
+                    .client = self.client,
+                    .credential = service_account,
+                    .signer = signer.signer(),
+                };
+                return source.fetchAlloc(allocator, now_seconds);
+            },
+            .external_account => |*external_account| {
+                if (external_account.credential_source.file) |path| {
+                    var subject = FileSubjectTokenSource.init(
+                        self.files,
+                        path,
+                        external_account.credential_source.format,
+                    );
+                    var source = ExternalAccountTokenSource{
+                        .client = self.client,
+                        .credential = external_account,
+                        .subject_source = subject.subjectTokenSource(),
+                    };
+                    return source.fetchAlloc(allocator, now_seconds);
+                }
+                if (external_account.credential_source.url != null) {
+                    var subject = UrlSubjectTokenSource.init(self.client, &external_account.credential_source);
+                    var source = ExternalAccountTokenSource{
+                        .client = self.client,
+                        .credential = external_account,
+                        .subject_source = subject.subjectTokenSource(),
+                    };
+                    return source.fetchAlloc(allocator, now_seconds);
+                }
+                return error.InvalidCredential;
+            },
+        };
+    }
+
+    fn fetchErased(raw: *anyopaque, allocator: std.mem.Allocator, now_seconds: u64) AuthError!AccessToken {
+        const self: *AdcTokenSource = @ptrCast(@alignCast(raw));
+        return self.fetchAlloc(allocator, now_seconds);
+    }
+};
+
 const ImpersonationResponse = struct {
     accessToken: []const u8,
     expireTime: []const u8,
