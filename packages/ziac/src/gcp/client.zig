@@ -165,7 +165,7 @@ pub fn classifyGoogleError(status: u16, google_status: ?[]const u8, has_retry_af
     if (status == 401 or statusNameEquals(google_status, "UNAUTHENTICATED")) return error.AuthenticationFailed;
     if (status == 403 or statusNameEquals(google_status, "PERMISSION_DENIED")) return error.AuthorizationFailed;
     if (status == 404 or statusNameEquals(google_status, "NOT_FOUND")) return error.NotFound;
-    if (status == 409 or statusNameEquals(google_status, "ALREADY_EXISTS") or statusNameEquals(google_status, "ABORTED")) return error.Conflict;
+    if (status == 409 or status == 412 or statusNameEquals(google_status, "ALREADY_EXISTS") or statusNameEquals(google_status, "ABORTED")) return error.Conflict;
     if (status == 429) return if (has_retry_after) error.RateLimited else error.QuotaExceeded;
     if (statusNameEquals(google_status, "RESOURCE_EXHAUSTED")) return if (has_retry_after) error.RateLimited else error.QuotaExceeded;
     if (status == 408 or status == 504 or statusNameEquals(google_status, "DEADLINE_EXCEEDED")) return error.ProviderTimeout;

@@ -99,8 +99,9 @@ Run region with real physical state and outputs.
 
 ## M5: Global ContainerService
 
-- Global address, serverless NEGs, backend service, URL map, managed TLS,
-  forwarding rules, and optional Cloud DNS.
+- Global address, serverless NEGs, backend service, URL map, HTTPS proxy, and
+  forwarding rule scripted lifecycles: complete.
+- Managed TLS and optional Cloud DNS: pending.
 - `ziac.gcp.global.ContainerService`.
 - Premium-tier validation, restricted Cloud Run ingress, readiness, and regional
   failover policy.

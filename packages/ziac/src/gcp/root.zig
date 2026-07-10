@@ -10,6 +10,8 @@ pub const iam = @import("iam.zig");
 pub const live_provider = @import("live_provider.zig");
 pub const secret_manager = @import("secret_manager.zig");
 pub const run_provider = @import("run_provider.zig");
+pub const compute = @import("compute.zig");
+pub const compute_provider = @import("compute_provider.zig");
 
 pub const ValidationError = validation.ValidationError;
 pub const ProviderConfig = config.ProviderConfig;

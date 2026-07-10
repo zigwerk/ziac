@@ -1,5 +1,6 @@
 const std = @import("std");
 const client_mod = @import("client.zig");
+const compute_provider = @import("compute_provider.zig");
 const operation = @import("operation.zig");
 const run_provider = @import("run_provider.zig");
 const provider_mod = @import("../provider.zig");
@@ -65,6 +66,7 @@ pub const LiveProvider = struct {
     client: *client_mod.Client,
     operation_policy: operation.Policy = .{},
     iam_conflict_retries: usize = 3,
+    compute_conflict_retries: usize = 3,
     secret_source: ?SecretSource = null,
 
     pub fn init(client: *client_mod.Client) LiveProvider {
@@ -93,6 +95,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
         if (isType(node, secret_iam_member_type)) return self.readSecretIamMember(context, node);
         if (isType(node, cloud_run_service_type)) return self.runHandler().read(context, node, null);
+        if (compute_provider.supports(node)) return self.computeHandler().read(context, node, null);
         return error.InvalidConfiguration;
     }
 
@@ -105,6 +108,7 @@ pub const LiveProvider = struct {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
         if (isType(node, cloud_run_service_type)) return run_provider.Handler.diff(context, node, observed);
+        if (compute_provider.supports(node)) return compute_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else if (isType(node, artifact_repository_type))
@@ -131,6 +135,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
         if (isType(node, secret_iam_member_type)) return self.ensureSecretIamMember(context, node, true);
         if (isType(node, cloud_run_service_type)) return self.runHandler().create(context, node);
+        if (compute_provider.supports(node)) return self.computeHandler().create(context, node);
         return error.InvalidConfiguration;
     }
 
@@ -146,6 +151,7 @@ pub const LiveProvider = struct {
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed.physical_id);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed.physical_id);
+        if (compute_provider.supports(node)) return self.computeHandler().update(context, node, observed.physical_id);
         return error.InvalidConfiguration;
     }
 
@@ -162,6 +168,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.destroySecretVersion(context, physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().delete(context, physical_id);
+        if (compute_provider.supports(node)) return self.computeHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
             removed.deinit();
@@ -233,6 +240,13 @@ pub const LiveProvider = struct {
         }
         if (isType(node, cloud_run_service_type)) {
             const result = try self.runHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (compute_provider.supports(node)) {
+            const result = try self.computeHandler().read(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -833,6 +847,14 @@ pub const LiveProvider = struct {
     fn runHandler(self: *LiveProvider) run_provider.Handler {
         return .{ .client = self.client, .operation_policy = self.operation_policy };
     }
+
+    fn computeHandler(self: *LiveProvider) compute_provider.Handler {
+        return .{
+            .client = self.client,
+            .operation_policy = self.operation_policy,
+            .conflict_retries = self.compute_conflict_retries,
+        };
+    }
 };
 
 fn projectServiceResult(
@@ -1251,5 +1273,6 @@ fn isSupported(node: resource.ResourceNode) bool {
         isType(node, secret_type) or
         isType(node, secret_version_type) or
         isType(node, secret_iam_member_type) or
-        isType(node, cloud_run_service_type);
+        isType(node, cloud_run_service_type) or
+        compute_provider.supports(node);
 }

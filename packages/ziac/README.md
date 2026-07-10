@@ -62,8 +62,9 @@ with normalized labels and operation polling, create secret versions from
 ephemeral source references without retaining plaintext, and deploy
 drift-aware Cloud Run services from complete canonical runtime specifications.
 
-Global load balancers and CockroachDB resources remain on the acceptance-gated
-roadmap.
+Global load-balancer assembly, certificates/DNS, and CockroachDB resources
+remain on the acceptance-gated roadmap. The six raw Compute resources needed by
+the HTTPS load balancer are implemented.
 
 ## Delivery Status
 
@@ -105,12 +106,16 @@ IDs let refresh address Google-assigned version numbers safely.
 Cloud Run v2 create/read/update/delete/import is implemented with live URI and
 revision outputs. Create and update operation handles checkpoint before polling
 and can resume through normal provider reads after interruption.
+Compute global addresses, regional serverless NEGs, backend services, URL maps,
+HTTPS proxies, and global forwarding rules now pass scripted lifecycle and
+fingerprint-conflict tests.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts. See
 `docs/secret-manager.md` for the secret payload boundary, and
 `docs/cloud-run.md` for the Cloud Run request and lifecycle contract. See
 `docs/live-gcp.md` for CLI selection and disposable-project safeguards, and
+`docs/compute-load-balancer.md` for the raw load-balancer resources. See
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and
