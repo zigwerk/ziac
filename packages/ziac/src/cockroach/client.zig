@@ -73,6 +73,8 @@ pub const Cluster = struct {
     cloud_provider: ?[]const u8,
     plan: ?[]const u8,
     state: ?[]const u8,
+    sql_dns: ?[]const u8,
+    regions: []const Region,
 
     pub fn deinit(self: *Cluster, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
@@ -80,6 +82,28 @@ pub const Cluster = struct {
         if (self.cloud_provider) |value| allocator.free(value);
         if (self.plan) |value| allocator.free(value);
         if (self.state) |value| allocator.free(value);
+        if (self.sql_dns) |value| allocator.free(value);
+        for (self.regions) |*region| @constCast(region).deinit(allocator);
+        allocator.free(self.regions);
+        self.* = undefined;
+    }
+};
+
+pub const Region = struct {
+    name: []const u8,
+    sql_dns: []const u8,
+    internal_dns: []const u8,
+    private_endpoint_dns: []const u8,
+    ui_dns: []const u8,
+    node_count: i64,
+    primary: ?bool,
+
+    pub fn deinit(self: *Region, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        allocator.free(self.sql_dns);
+        allocator.free(self.internal_dns);
+        allocator.free(self.private_endpoint_dns);
+        allocator.free(self.ui_dns);
         self.* = undefined;
     }
 };
@@ -243,12 +267,26 @@ const ClusterDecoded = struct {
     cloud_provider: ?[]const u8,
     plan: ?[]const u8,
     state: ?[]const u8,
+    sql_dns: ?[]const u8,
+    regions: []const RegionDecoded,
+};
+
+const RegionDecoded = struct {
+    name: []const u8,
+    sql_dns: []const u8,
+    internal_dns: []const u8,
+    private_endpoint_dns: []const u8,
+    ui_dns: []const u8,
+    node_count: i64,
+    primary: ?bool,
 };
 
 fn decodeClusterAlloc(allocator: std.mem.Allocator, json: []const u8) ProviderError!Cluster {
     var decoded = zstd.Schema.decodeDetailedJsonAlloc(
         allocator,
-        zstd.Schema.derive(ClusterDecoded, .{}),
+        zstd.Schema.derive(ClusterDecoded, .{
+            .regions = zstd.Schema.array(allocator, zstd.Schema.derive(RegionDecoded, .{})),
+        }),
         json,
     ) catch return error.ProviderBug;
     defer decoded.deinit();
@@ -263,7 +301,43 @@ fn decodeClusterAlloc(allocator: std.mem.Allocator, json: []const u8) ProviderEr
     const plan = if (value.plan) |text| allocator.dupe(u8, text) catch return error.OutOfMemory else null;
     errdefer if (plan) |text| allocator.free(text);
     const state = if (value.state) |text| allocator.dupe(u8, text) catch return error.OutOfMemory else null;
-    return .{ .id = id, .name = name, .cloud_provider = cloud_provider, .plan = plan, .state = state };
+    errdefer if (state) |text| allocator.free(text);
+    const sql_dns = if (value.sql_dns) |text| allocator.dupe(u8, text) catch return error.OutOfMemory else null;
+    errdefer if (sql_dns) |text| allocator.free(text);
+    const regions = allocator.alloc(Region, value.regions.len) catch return error.OutOfMemory;
+    errdefer allocator.free(regions);
+    var initialized: usize = 0;
+    errdefer for (regions[0..initialized]) |*region| region.deinit(allocator);
+    for (value.regions, 0..) |region, index| {
+        const region_name = allocator.dupe(u8, region.name) catch return error.OutOfMemory;
+        errdefer allocator.free(region_name);
+        const region_sql_dns = allocator.dupe(u8, region.sql_dns) catch return error.OutOfMemory;
+        errdefer allocator.free(region_sql_dns);
+        const internal_dns = allocator.dupe(u8, region.internal_dns) catch return error.OutOfMemory;
+        errdefer allocator.free(internal_dns);
+        const private_endpoint_dns = allocator.dupe(u8, region.private_endpoint_dns) catch return error.OutOfMemory;
+        errdefer allocator.free(private_endpoint_dns);
+        const ui_dns = allocator.dupe(u8, region.ui_dns) catch return error.OutOfMemory;
+        regions[index] = .{
+            .name = region_name,
+            .sql_dns = region_sql_dns,
+            .internal_dns = internal_dns,
+            .private_endpoint_dns = private_endpoint_dns,
+            .ui_dns = ui_dns,
+            .node_count = region.node_count,
+            .primary = region.primary,
+        };
+        initialized += 1;
+    }
+    return .{
+        .id = id,
+        .name = name,
+        .cloud_provider = cloud_provider,
+        .plan = plan,
+        .state = state,
+        .sql_dns = sql_dns,
+        .regions = regions,
+    };
 }
 
 const SqlUserDecoded = struct { name: []const u8 };

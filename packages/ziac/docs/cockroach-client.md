@@ -36,7 +36,9 @@ context's clock, so cancellation and deadlines remain deterministic in tests.
 
 The initial typed response surface includes:
 
-- cluster identity, name, cloud provider, plan, and state;
+- cluster identity, name, cloud provider, plan, state, and cluster SQL DNS;
+- regional public SQL, internal, Private Service Connect, and Console DNS
+  endpoints, node count, and primary-region metadata;
 - SQL-user names and `pagination.next_page`.
 
 Unknown response fields are ignored to preserve forward compatibility within

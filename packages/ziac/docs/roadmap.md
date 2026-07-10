@@ -30,9 +30,10 @@ automated and live tests pass.
 - Native Google ADC, authenticated Google REST/LRO clients, and the
   version-pinned CockroachDB Cloud client: implemented and scripted-transport
   tested without credential leakage.
-- Live GCP provider calls and the raw global-routing resources are implemented
-  behind explicit safety gates. Authenticated live acceptance, the high-level
-  global component, CockroachDB resources, remote state, and source builds
+- Live GCP provider calls, raw global-routing resources, and the high-level
+  global component are implemented behind explicit safety gates. The
+  CockroachDB existing-cluster provider slice is implemented. Authenticated live
+  acceptance, mutable CockroachDB resources, remote state, and source builds
   remain pending.
 
 ## M0: Integration And Architecture
@@ -120,7 +121,9 @@ failure and destroys in reverse dependency order.
 
 ## M6: CockroachDB
 
-- Existing-cluster reference first.
+- Secret-reference provider config: complete.
+- Existing-cluster topology, endpoint outputs, retained ownership, and scripted
+  refresh/import lifecycle: complete.
 - SQL users and GCP Secret Manager connection bindings.
 - Direct VPC egress, static NAT addresses, and narrow public allowlists.
 - Database, grants, migrations, transaction retry handling, and native pooled

@@ -105,7 +105,9 @@ test "Cockroach retrying requests honor retry-after with bounded retries" {
 test "Cockroach client decodes typed cluster responses with unknown fields" {
     const responses = [_]zstd.Http.Response{.{
         .status = 200,
-        .body = "{\"id\":\"cluster-1\",\"name\":\"ziac-prod\",\"cloud_provider\":\"GCP\",\"plan\":\"STANDARD\",\"state\":\"CREATED\",\"future_field\":true}",
+        .body =
+        \\{"id":"cluster-1","name":"ziac-prod","cloud_provider":"GCP","plan":"STANDARD","state":"CREATED","sql_dns":"ziac-prod.cockroachlabs.cloud","regions":[{"name":"europe-west1","sql_dns":"ziac-prod.gcp-europe-west1.cockroachlabs.cloud","internal_dns":"internal-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","private_endpoint_dns":"private-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","ui_dns":"admin-ziac-prod.gcp-europe-west1.cockroachlabs.cloud","node_count":0,"primary":true},{"name":"us-central1","sql_dns":"ziac-prod.gcp-us-central1.cockroachlabs.cloud","internal_dns":"internal-ziac-prod.gcp-us-central1.cockroachlabs.cloud","private_endpoint_dns":"private-ziac-prod.gcp-us-central1.cockroachlabs.cloud","ui_dns":"admin-ziac-prod.gcp-us-central1.cockroachlabs.cloud","node_count":0}],"future_field":true}
+        ,
     }};
     var transport = RecordingTransport.init(std.testing.allocator, &responses);
     defer transport.deinit();
@@ -122,6 +124,17 @@ test "Cockroach client decodes typed cluster responses with unknown fields" {
     try std.testing.expectEqualStrings("GCP", cluster.cloud_provider.?);
     try std.testing.expectEqualStrings("STANDARD", cluster.plan.?);
     try std.testing.expectEqualStrings("CREATED", cluster.state.?);
+    try std.testing.expectEqualStrings("ziac-prod.cockroachlabs.cloud", cluster.sql_dns.?);
+    try std.testing.expectEqual(@as(usize, 2), cluster.regions.len);
+    try std.testing.expectEqualStrings("europe-west1", cluster.regions[0].name);
+    try std.testing.expectEqualStrings("ziac-prod.gcp-europe-west1.cockroachlabs.cloud", cluster.regions[0].sql_dns);
+    try std.testing.expectEqualStrings("internal-ziac-prod.gcp-europe-west1.cockroachlabs.cloud", cluster.regions[0].internal_dns);
+    try std.testing.expectEqualStrings("private-ziac-prod.gcp-europe-west1.cockroachlabs.cloud", cluster.regions[0].private_endpoint_dns);
+    try std.testing.expectEqualStrings("admin-ziac-prod.gcp-europe-west1.cockroachlabs.cloud", cluster.regions[0].ui_dns);
+    try std.testing.expectEqual(@as(i64, 0), cluster.regions[0].node_count);
+    try std.testing.expectEqual(true, cluster.regions[0].primary.?);
+    try std.testing.expectEqualStrings("us-central1", cluster.regions[1].name);
+    try std.testing.expectEqual(@as(?bool, null), cluster.regions[1].primary);
 }
 
 test "Cockroach SQL user pagination is stable and percent encodes next page" {
@@ -170,23 +183,23 @@ const ObservedRequest = struct {
     }
 };
 
-const RecordingTransport = struct {
+pub const RecordingTransport = struct {
     allocator: std.mem.Allocator,
     responses: []const zstd.Http.Response,
     cursor: usize = 0,
     requests: std.ArrayList(ObservedRequest) = .empty,
 
-    fn init(allocator: std.mem.Allocator, responses: []const zstd.Http.Response) RecordingTransport {
+    pub fn init(allocator: std.mem.Allocator, responses: []const zstd.Http.Response) RecordingTransport {
         return .{ .allocator = allocator, .responses = responses };
     }
 
-    fn deinit(self: *RecordingTransport) void {
+    pub fn deinit(self: *RecordingTransport) void {
         for (self.requests.items) |*request| request.deinit(self.allocator);
         self.requests.deinit(self.allocator);
         self.* = undefined;
     }
 
-    fn client(self: *RecordingTransport) zstd.Http.Client {
+    pub fn client(self: *RecordingTransport) zstd.Http.Client {
         return .{ .ptr = self, .sendFn = send };
     }
 

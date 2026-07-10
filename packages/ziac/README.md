@@ -71,8 +71,9 @@ certificates, explicit certificate readiness polling, an optional HTTP-to-HTTPS
 redirect, and Cloud DNS record sets in an existing zone. The high-level
 `gcp.global.ContainerService` now assembles those resources with regional Cloud
 Run services and typed allocated-IP wiring. The authenticated two-region
-acceptance gate and CockroachDB resources remain on the acceptance-gated
-roadmap.
+acceptance gate remains pending external configuration. CockroachDB provider
+config and retained existing-cluster references now decode exact GCP topology
+and regional connection endpoints through a scripted live-provider lifecycle.
 
 ## Delivery Status
 
@@ -97,9 +98,11 @@ client and generic/Compute operation poller are implemented with injectable API
 roots, provider error mapping, request-ID diagnostics, cancellation, deadlines,
 and `Retry-After` handling.
 The CockroachDB Cloud client pins `Cc-Version: 2024-09-16`, keeps API keys
-secret, decodes clusters and SQL users through typed schemas, and performs
-bounded `Retry-After`-aware pagination. Transport and Authentication M3 is
-complete.
+secret, decodes cluster and regional connection topology plus SQL users through
+typed schemas, and performs bounded `Retry-After`-aware pagination. Transport
+and Authentication M3 is complete. Existing CockroachDB clusters can now be
+adopted as retained, read-only resources with deterministic topology drift and
+missing-cluster refresh behavior.
 The first Live GCP Primitives slice is implemented behind the provider
 interface: typed project-service, service-account, and project-member resources
 pass full scripted read/diff/create/update/delete/import lifecycles. Service
@@ -126,7 +129,8 @@ with restricted direct ingress, optional DNS and HTTP redirect, and production
 warm-instance/probe validation.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
-`docs/cockroach-client.md` for the live client contracts. See
+`docs/cockroach-client.md` for the live client contracts and
+`docs/cockroach-existing-cluster.md` for retained cluster adoption. See
 `docs/secret-manager.md` for the secret payload boundary, and
 `docs/cloud-run.md` for the Cloud Run request and lifecycle contract. See
 `docs/live-gcp.md` for CLI selection and disposable-project safeguards, and
