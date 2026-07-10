@@ -66,9 +66,13 @@ is complete. The production HTTP contract and native Google ADC layer are also
 implemented: authorized-user refresh, native RS256 service-account assertions,
 file/URL Workload Identity Federation, optional service-account impersonation,
 metadata tokens, secure refresh caching, and `ziac auth doctor` all pass
-deterministic tests without invoking `gcloud`.
+deterministic tests without invoking `gcloud`. The authenticated Google JSON
+client and generic/Compute operation poller are implemented with injectable API
+roots, provider error mapping, request-ID diagnostics, cancellation, deadlines,
+and `Retry-After` handling.
 
-See `docs/authentication.md` for the authentication contract and
+See `docs/authentication.md` and `docs/google-client.md` for the live client
+contracts, and
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

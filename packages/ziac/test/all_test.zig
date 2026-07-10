@@ -21,4 +21,6 @@ comptime {
     _ = @import("gcp_artifact_registry_test.zig");
     _ = @import("gcp_cloud_run_test.zig");
     _ = @import("gcp_auth_test.zig");
+    _ = @import("gcp_client_test.zig");
+    _ = @import("gcp_operation_test.zig");
 }

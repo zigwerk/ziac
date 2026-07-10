@@ -1049,30 +1049,60 @@ pub const TokenCache = struct {
     source: TokenSource,
     refresh_skew_seconds: u64,
     cached: ?AccessToken = null,
+    mutex: zstd.fx.SpinLock = .{},
 
     pub fn init(source: TokenSource, refresh_skew_seconds: u64) TokenCache {
         return .{ .source = source, .refresh_skew_seconds = refresh_skew_seconds };
     }
 
     pub fn deinit(self: *TokenCache, allocator: std.mem.Allocator) void {
+        self.mutex.lock();
         if (self.cached) |*token| token.deinit(allocator);
+        self.mutex.unlock();
         self.* = undefined;
     }
 
     pub fn getAlloc(self: *TokenCache, allocator: std.mem.Allocator, now_seconds: u64) AuthError!AccessToken {
+        self.mutex.lock();
         if (self.cached) |cached| {
-            if (cached.expires_at_seconds > now_seconds and
-                cached.expires_at_seconds - now_seconds > self.refresh_skew_seconds)
-            {
-                return cached.clone(allocator);
+            if (isFresh(cached, now_seconds, self.refresh_skew_seconds)) {
+                const cloned = cached.clone(allocator) catch {
+                    self.mutex.unlock();
+                    return error.OutOfMemory;
+                };
+                self.mutex.unlock();
+                return cloned;
             }
         }
+        self.mutex.unlock();
 
         var fresh = try self.source.fetchAlloc(allocator, now_seconds);
-        errdefer fresh.deinit(allocator);
-        const returned = try fresh.clone(allocator);
+        self.mutex.lock();
+        if (self.cached) |cached| {
+            if (isFresh(cached, now_seconds, self.refresh_skew_seconds)) {
+                const cloned = cached.clone(allocator) catch {
+                    self.mutex.unlock();
+                    fresh.deinit(allocator);
+                    return error.OutOfMemory;
+                };
+                self.mutex.unlock();
+                fresh.deinit(allocator);
+                return cloned;
+            }
+        }
+        const returned = fresh.clone(allocator) catch {
+            self.mutex.unlock();
+            fresh.deinit(allocator);
+            return error.OutOfMemory;
+        };
         if (self.cached) |*cached| cached.deinit(allocator);
         self.cached = fresh;
+        self.mutex.unlock();
         return returned;
     }
 };
+
+fn isFresh(token: AccessToken, now_seconds: u64, refresh_skew_seconds: u64) bool {
+    return token.expires_at_seconds > now_seconds and
+        token.expires_at_seconds - now_seconds > refresh_skew_seconds;
+}
