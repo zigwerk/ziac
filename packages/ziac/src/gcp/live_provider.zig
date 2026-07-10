@@ -11,6 +11,7 @@ const ProviderError = provider_mod.ProviderError;
 const project_service_type = "gcp.project.Service";
 const service_account_type = "gcp.iam.ServiceAccount";
 const project_member_type = "gcp.iam.ProjectMember";
+const artifact_repository_type = "gcp.artifact.Repository";
 
 pub const LiveProvider = struct {
     client: *client_mod.Client,
@@ -38,6 +39,7 @@ pub const LiveProvider = struct {
         if (isType(node, project_service_type)) return self.readProjectService(context, node);
         if (isType(node, service_account_type)) return self.readServiceAccount(context, node, null);
         if (isType(node, project_member_type)) return self.readProjectMember(context, node);
+        if (isType(node, artifact_repository_type)) return self.readArtifactRepository(context, node, null);
         return error.InvalidConfiguration;
     }
 
@@ -51,6 +53,8 @@ pub const LiveProvider = struct {
         if (!isSupported(node)) return error.InvalidConfiguration;
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
+        else if (isType(node, artifact_repository_type))
+            artifactRepositoryDiff(node, observed.observed_inputs)
         else if (isType(node, project_service_type))
             .replace
         else
@@ -64,6 +68,7 @@ pub const LiveProvider = struct {
         if (isType(node, project_service_type)) return self.enableProjectService(context, node);
         if (isType(node, service_account_type)) return self.createServiceAccount(context, node);
         if (isType(node, project_member_type)) return self.ensureProjectMember(context, node, true);
+        if (isType(node, artifact_repository_type)) return self.createArtifactRepository(context, node);
         return error.InvalidConfiguration;
     }
 
@@ -76,6 +81,7 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, service_account_type)) return self.updateServiceAccount(context, node, observed.physical_id);
         if (isType(node, project_member_type)) return self.ensureProjectMember(context, node, true);
+        if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed.physical_id);
         return error.InvalidConfiguration;
     }
 
@@ -88,6 +94,7 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, project_service_type)) return self.disableProjectService(context, physical_id);
         if (isType(node, service_account_type)) return self.deleteServiceAccount(context, physical_id);
+        if (isType(node, artifact_repository_type)) return self.deleteArtifactRepository(context, physical_id);
         if (isType(node, project_member_type)) {
             var removed = try self.ensureProjectMember(context, node, false);
             removed.deinit();
@@ -119,6 +126,13 @@ pub const LiveProvider = struct {
         }
         if (isType(node, project_member_type)) {
             const result = try self.readProjectMember(context, node);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (isType(node, artifact_repository_type)) {
+            const result = try self.readArtifactRepository(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -295,6 +309,115 @@ pub const LiveProvider = struct {
         response.deinit(context.allocator);
     }
 
+    fn readArtifactRepository(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_override: ?[]const u8,
+    ) ProviderError!provider_mod.ReadResult {
+        const generated = if (physical_override == null) try artifactRepositoryNameAlloc(context.allocator, node) else null;
+        defer if (generated) |name| context.allocator.free(name);
+        const physical_id = physical_override orelse generated.?;
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}", .{physical_id});
+        defer context.allocator.free(path);
+        var response = self.request(context, .{ .api = .artifact_registry, .method = "GET", .path = path }) catch |err| {
+            if (err == error.NotFound) return .absent;
+            return err;
+        };
+        defer response.deinit(context.allocator);
+        return .{ .present = try artifactRepositoryResultFromJson(context.allocator, node, response.body) };
+    }
+
+    fn createArtifactRepository(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+    ) ProviderError!provider_mod.ResourceResult {
+        const project_id = try requiredInput(node, "project_id");
+        const location = try requiredInput(node, "location");
+        const name = try requiredInput(node, "name");
+        const labels_json = try inputJsonAlloc(context.allocator, node, "labels");
+        defer context.allocator.free(labels_json);
+        const path = try std.fmt.allocPrint(
+            context.allocator,
+            "/v1/projects/{s}/locations/{s}/repositories?repositoryId={s}",
+            .{ project_id, location, name },
+        );
+        defer context.allocator.free(path);
+        const body = try std.fmt.allocPrint(context.allocator, "{{\"format\":\"DOCKER\",\"labels\":{s}}}", .{labels_json});
+        defer context.allocator.free(body);
+        const operation_name = self.startOperation(context, .artifact_registry, path, "POST", body) catch |err| {
+            if (err != error.Conflict) return err;
+            const existing = try self.readArtifactRepository(context, node, null);
+            return switch (existing) {
+                .absent => error.Conflict,
+                .present => |present| if (std.mem.eql(u8, &node.inputs_hash, &present.observed_hash))
+                    present
+                else conflict: {
+                    var mutable = present;
+                    mutable.deinit();
+                    break :conflict error.Conflict;
+                },
+            };
+        };
+        defer context.allocator.free(operation_name);
+        try self.waitForArtifactOperation(context, operation_name);
+        return artifactRepositoryDesiredResult(context.allocator, node, operation_name);
+    }
+
+    fn updateArtifactRepository(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!provider_mod.ResourceResult {
+        const labels_json = try inputJsonAlloc(context.allocator, node, "labels");
+        defer context.allocator.free(labels_json);
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}?updateMask=labels", .{physical_id});
+        defer context.allocator.free(path);
+        const body = try std.fmt.allocPrint(
+            context.allocator,
+            "{{\"name\":\"{s}\",\"labels\":{s}}}",
+            .{ physical_id, labels_json },
+        );
+        defer context.allocator.free(body);
+        var response = try self.request(context, .{ .api = .artifact_registry, .method = "PATCH", .path = path, .body = body });
+        defer response.deinit(context.allocator);
+        return artifactRepositoryResultFromJson(context.allocator, node, response.body);
+    }
+
+    fn deleteArtifactRepository(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}", .{physical_id});
+        defer context.allocator.free(path);
+        const operation_name = self.startOperation(context, .artifact_registry, path, "DELETE", "") catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        defer context.allocator.free(operation_name);
+        try self.waitForArtifactOperation(context, operation_name);
+    }
+
+    fn waitForArtifactOperation(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        operation_name: []const u8,
+    ) ProviderError!void {
+        const base = try std.fmt.allocPrint(
+            context.allocator,
+            "{s}/v1",
+            .{std.mem.trimEnd(u8, self.client.endpoints.artifact_registry, "/")},
+        );
+        defer context.allocator.free(base);
+        var target = operation.Target.genericAlloc(context.allocator, base, operation_name) catch return error.OutOfMemory;
+        defer target.deinit(context.allocator);
+        var result = try operation.waitAlloc(self.client, context, target, self.operation_policy);
+        result.deinit(context.allocator);
+    }
+
     fn readProjectMember(
         self: *LiveProvider,
         context: *provider_mod.OperationContext,
@@ -418,6 +541,63 @@ fn serviceAccountResultFromJson(
     return provider_mod.ResourceResult.init(allocator, name, .{ .object = &fields }, &outputs, null);
 }
 
+fn artifactRepositoryResultFromJson(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    body: []const u8,
+) ProviderError!provider_mod.ResourceResult {
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.ProviderBug;
+    defer parsed.deinit();
+    const object = jsonObject(parsed.value) orelse return error.ProviderBug;
+    const physical_id = jsonString(object.get("name")) orelse return error.ProviderBug;
+    const format = jsonString(object.get("format")) orelse return error.ProviderBug;
+    const project_id = try requiredInput(node, "project_id");
+    const location = try requiredInput(node, "location");
+    const name = try requiredInput(node, "name");
+    const registry_uri = jsonString(object.get("registryUri")) orelse return error.ProviderBug;
+    const label_object = if (object.get("labels")) |labels_value|
+        jsonObject(labels_value) orelse return error.ProviderBug
+    else
+        std.json.ObjectMap.empty;
+    const label_fields = try allocator.alloc(value.Field, label_object.count());
+    defer allocator.free(label_fields);
+    var iterator = label_object.iterator();
+    var label_index: usize = 0;
+    while (iterator.next()) |entry| : (label_index += 1) {
+        const label_value = jsonString(entry.value_ptr.*) orelse return error.ProviderBug;
+        label_fields[label_index] = .{ .name = entry.key_ptr.*, .value = .{ .string = label_value } };
+    }
+    const fields = [_]value.Field{
+        .{ .name = "format", .value = .{ .string = format } },
+        .{ .name = "labels", .value = .{ .object = label_fields } },
+        .{ .name = "location", .value = .{ .string = location } },
+        .{ .name = "name", .value = .{ .string = name } },
+        .{ .name = "project_id", .value = .{ .string = project_id } },
+    };
+    const outputs = [_]state.StateOutput{
+        .{ .name = "repository_url", .value = .{ .string = registry_uri } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, .{ .object = &fields }, &outputs, null);
+}
+
+fn artifactRepositoryDesiredResult(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    operation_handle: ?[]const u8,
+) ProviderError!provider_mod.ResourceResult {
+    const project_id = try requiredInput(node, "project_id");
+    const location = try requiredInput(node, "location");
+    const name = try requiredInput(node, "name");
+    const physical_id = try artifactRepositoryNameAlloc(allocator, node);
+    defer allocator.free(physical_id);
+    const registry_uri = try std.fmt.allocPrint(allocator, "{s}-docker.pkg.dev/{s}/{s}", .{ location, project_id, name });
+    defer allocator.free(registry_uri);
+    const outputs = [_]state.StateOutput{
+        .{ .name = "repository_url", .value = .{ .string = registry_uri } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, operation_handle);
+}
+
 fn projectMemberResult(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError!provider_mod.ResourceResult {
     const project_id = try requiredInput(node, "project_id");
     const name = try requiredInput(node, "name");
@@ -532,19 +712,62 @@ fn serviceAccountNameAlloc(allocator: std.mem.Allocator, node: resource.Resource
     ) catch return error.OutOfMemory;
 }
 
-fn requiredInput(node: resource.ResourceNode, name: []const u8) ProviderError![]const u8 {
+fn artifactRepositoryNameAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError![]const u8 {
+    const project_id = try requiredInput(node, "project_id");
+    const location = try requiredInput(node, "location");
+    const name = try requiredInput(node, "name");
+    return std.fmt.allocPrint(
+        allocator,
+        "projects/{s}/locations/{s}/repositories/{s}",
+        .{ project_id, location, name },
+    ) catch return error.OutOfMemory;
+}
+
+fn artifactRepositoryDiff(node: resource.ResourceNode, observed: value.Value) provider_mod.DiffKind {
+    for ([_][]const u8{ "project_id", "location", "name", "format" }) |field| {
+        const desired_value = inputStringFromValue(node.inputs, field) orelse return .replace;
+        const observed_value = inputStringFromValue(observed, field) orelse return .replace;
+        if (!std.mem.eql(u8, desired_value, observed_value)) return .replace;
+    }
+    return .update;
+}
+
+fn inputJsonAlloc(
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    name: []const u8,
+) ProviderError![]const u8 {
     const fields = switch (node.inputs) {
         .object => |fields| fields,
         else => return error.InvalidConfiguration,
     };
     for (fields) |field| {
         if (!std.mem.eql(u8, field.name, name)) continue;
-        return switch (field.value) {
-            .string => |text| text,
-            else => error.InvalidConfiguration,
+        return field.value.canonicalJsonAlloc(allocator) catch |err| switch (err) {
+            error.DuplicateField => error.InvalidConfiguration,
+            error.OutOfMemory => error.OutOfMemory,
         };
     }
     return error.InvalidConfiguration;
+}
+
+fn requiredInput(node: resource.ResourceNode, name: []const u8) ProviderError![]const u8 {
+    return inputStringFromValue(node.inputs, name) orelse error.InvalidConfiguration;
+}
+
+fn inputStringFromValue(input: value.Value, name: []const u8) ?[]const u8 {
+    const fields = switch (input) {
+        .object => |fields| fields,
+        else => return null,
+    };
+    for (fields) |field| {
+        if (!std.mem.eql(u8, field.name, name)) continue;
+        return switch (field.value) {
+            .string => |text| text,
+            else => null,
+        };
+    }
+    return null;
 }
 
 fn jsonObject(json_value: std.json.Value) ?std.json.ObjectMap {
@@ -569,5 +792,6 @@ fn isType(node: resource.ResourceNode, expected: []const u8) bool {
 fn isSupported(node: resource.ResourceNode) bool {
     return isType(node, project_service_type) or
         isType(node, service_account_type) or
-        isType(node, project_member_type);
+        isType(node, project_member_type) or
+        isType(node, artifact_repository_type);
 }

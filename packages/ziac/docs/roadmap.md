@@ -87,7 +87,7 @@ credentials.
 - Project API enablement: scripted lifecycle complete; live gate pending.
 - IAM service accounts and bindings: scripted lifecycle complete; live gate
   pending.
-- Artifact Registry.
+- Artifact Registry: scripted lifecycle complete; live gate pending.
 - Secret Manager.
 - Cloud Run v2.
 - Live provider selection and guarded disposable-project tests.

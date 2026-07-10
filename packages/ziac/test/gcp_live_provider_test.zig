@@ -171,6 +171,117 @@ test "live GCP project member preserves IAM policy etags and retries conflicts" 
     try std.testing.expect(gone == .absent);
 }
 
+test "live GCP provider manages Artifact Registry repositories and classifies replacement" {
+    const old_repository = repositoryJson("dev");
+    const new_repository = repositoryJson("prod");
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 404, .body = "{\"error\":{\"code\":404,\"status\":\"NOT_FOUND\",\"message\":\"missing\"}}" },
+        .{ .status = 200, .body = "{\"name\":\"projects/ziac-dev/locations/europe-west1/operations/create-repo\"}" },
+        .{ .status = 200, .body = "{\"name\":\"projects/ziac-dev/locations/europe-west1/operations/create-repo\",\"done\":true}" },
+        .{ .status = 200, .body = old_repository },
+        .{ .status = 200, .body = new_repository },
+        .{ .status = 200, .body = "{\"name\":\"projects/ziac-dev/locations/europe-west1/operations/delete-repo\"}" },
+        .{ .status = 200, .body = "{\"name\":\"projects/ziac-dev/locations/europe-west1/operations/delete-repo\",\"done\":true}" },
+        .{ .status = 404, .body = "{\"error\":{\"code\":404,\"status\":\"NOT_FOUND\",\"message\":\"missing\"}}" },
+        .{ .status = 200, .body = new_repository },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    const old_labels = [_]ziac.gcp.config.Label{.{ .key = "env", .value = "dev" }};
+    const new_labels = [_]ziac.gcp.config.Label{.{ .key = "env", .value = "prod" }};
+    var repository = try ziac.gcp.artifact_registry.DockerRepository.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+        .labels = &old_labels,
+    }, .{ .name = "hello-global" });
+    defer repository.deinit(std.testing.allocator);
+    var changed = try ziac.gcp.artifact_registry.DockerRepository.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+        .labels = &new_labels,
+    }, .{ .name = "hello-global" });
+    defer changed.deinit(std.testing.allocator);
+    var moved = try ziac.gcp.artifact_registry.DockerRepository.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "us-central1",
+        .labels = &old_labels,
+    }, .{ .name = "hello-global" });
+    defer moved.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var before = try live.readWithContext(&context, repository.node);
+    defer before.deinit();
+    try std.testing.expect(before == .absent);
+    var created = try live.createWithContext(&context, repository.node);
+    defer created.deinit();
+    try std.testing.expectEqualStrings(
+        "europe-west1-docker.pkg.dev/ziac-dev/hello-global",
+        created.outputs[0].value.string,
+    );
+    try std.testing.expectEqualStrings(
+        "projects/ziac-dev/locations/europe-west1/operations/create-repo",
+        created.operation_handle.?,
+    );
+
+    var present = try live.readWithContext(&context, repository.node);
+    defer present.deinit();
+    var noop = try live.diffWithContext(&context, repository.node, &present.present);
+    defer noop.deinit();
+    try std.testing.expectEqual(ziac.provider.DiffKind.noop, noop.kind);
+    var update_diff = try live.diffWithContext(&context, changed.node, &present.present);
+    defer update_diff.deinit();
+    try std.testing.expectEqual(ziac.provider.DiffKind.update, update_diff.kind);
+    var replace_diff = try live.diffWithContext(&context, moved.node, &present.present);
+    defer replace_diff.deinit();
+    try std.testing.expectEqual(ziac.provider.DiffKind.replace, replace_diff.kind);
+
+    var updated = try live.updateWithContext(&context, changed.node, &present.present);
+    defer updated.deinit();
+    try std.testing.expectEqual(changed.node.inputs_hash, updated.observed_hash);
+    try live.deleteWithContext(&context, changed.node, updated.physical_id);
+    var gone = try live.readWithContext(&context, changed.node);
+    defer gone.deinit();
+    try std.testing.expect(gone == .absent);
+    var imported = try live.importWithContext(&context, changed.node, updated.physical_id);
+    defer imported.deinit();
+    try std.testing.expectEqualStrings(updated.physical_id, imported.physical_id);
+
+    try std.testing.expectEqualStrings(
+        "https://artifactregistry.example.test/v1/projects/ziac-dev/locations/europe-west1/repositories?repositoryId=hello-global",
+        harness.transport.requests.items[1].url,
+    );
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[1].body, "\"format\":\"DOCKER\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[4].url, "updateMask=labels") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[4].body, "\"env\":\"prod\"") != null);
+}
+
+test "live GCP Artifact Registry create adopts an identical existing repository" {
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 409, .body = "{\"error\":{\"code\":409,\"status\":\"ALREADY_EXISTS\",\"message\":\"exists\"}}" },
+        .{ .status = 200, .body = repositoryJson("dev") },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    const labels = [_]ziac.gcp.config.Label{.{ .key = "env", .value = "dev" }};
+    var repository = try ziac.gcp.artifact_registry.DockerRepository.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+        .labels = &labels,
+    }, .{ .name = "hello-global" });
+    defer repository.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var adopted = try live.createWithContext(&context, repository.node);
+    defer adopted.deinit();
+    try std.testing.expectEqual(repository.node.inputs_hash, adopted.observed_hash);
+    try std.testing.expect(adopted.operation_handle == null);
+    try std.testing.expectEqual(@as(usize, 2), harness.transport.requests.items.len);
+}
+
 const Harness = struct {
     token_source: FixedTokenSource,
     cache: auth.TokenCache,
@@ -187,6 +298,7 @@ const Harness = struct {
             .service_usage = "https://serviceusage.example.test",
             .iam = "https://iam.example.test",
             .resource_manager = "https://resourcemanager.example.test",
+            .artifact_registry = "https://artifactregistry.example.test",
         });
         self.live = ziac.gcp.live_provider.LiveProvider.init(&self.client);
         self.live.operation_policy = .{ .poll_interval_millis = 10 };
@@ -216,4 +328,8 @@ const FixedTokenSource = struct {
 
 fn serviceAccountJson(comptime display_name: []const u8, comptime description: []const u8) []const u8 {
     return "{\"name\":\"projects/ziac-dev/serviceAccounts/ziac-runtime@ziac-dev.iam.gserviceaccount.com\",\"projectId\":\"ziac-dev\",\"uniqueId\":\"123456789\",\"email\":\"ziac-runtime@ziac-dev.iam.gserviceaccount.com\",\"displayName\":\"" ++ display_name ++ "\",\"description\":\"" ++ description ++ "\"}";
+}
+
+fn repositoryJson(comptime environment: []const u8) []const u8 {
+    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/repositories/hello-global\",\"format\":\"DOCKER\",\"labels\":{\"env\":\"" ++ environment ++ "\"},\"registryUri\":\"europe-west1-docker.pkg.dev/ziac-dev/hello-global\"}";
 }

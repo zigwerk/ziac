@@ -42,13 +42,14 @@ outputs are persisted and printed as `[REDACTED]`.
 
 `hello-global` still defaults to the fake provider while the live CLI safety
 gate is under construction. The package now also includes a native live Google
-provider for Service Usage and IAM. It can enable and disable project APIs,
-manage service accounts with drift-aware updates and import, and mutate project
-IAM members while preserving policy etags, conditional bindings, and unrelated
-fields.
+provider for Service Usage, IAM, and Artifact Registry. It can enable and
+disable project APIs, manage service accounts with drift-aware updates and
+import, mutate project IAM members while preserving policy etags, conditional
+bindings, and unrelated fields, and manage Docker repositories with normalized
+labels and operation polling.
 
-Artifact Registry, Secret Manager, Cloud Run, load balancers, and CockroachDB
-resources remain on the acceptance-gated roadmap.
+Secret Manager, Cloud Run, load balancers, and CockroachDB resources remain on
+the acceptance-gated roadmap.
 
 ## Delivery Status
 
@@ -81,6 +82,9 @@ interface: typed project-service, service-account, and project-member resources
 pass full scripted read/diff/create/update/delete/import lifecycles. Service
 Usage long-running operations and IAM etag conflict retries are covered. The
 credential-gated disposable-project smoke test remains part of the M4 gate.
+Artifact Registry create/read/update/delete/import and exact-match conflict
+adoption are also implemented; repository location and format changes classify
+as replacement while labels update in place.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts, and

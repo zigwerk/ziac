@@ -62,6 +62,9 @@ is the convenience form when the caller only needs the terminal payload.
   observed inputs, supports in-place patching, deletion, and import;
 - `gcp.iam.ProjectMember` uses Cloud Resource Manager policy version 3 reads and
   etag-preserving set operations with bounded conflict refetches.
+- `gcp.artifact.Repository` waits for create/delete operations, observes labels
+  from the live repository, updates labels in place, and adopts an existing
+  repository only when immutable identity, format, and labels match exactly.
 
 Project-member mutations target only unconditional bindings for the requested
 role. Conditional bindings, audit configuration, policy version, etag, and
