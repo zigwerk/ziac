@@ -120,6 +120,7 @@ pub const Cancellation = struct {
 
 pub const OperationContext = struct {
     allocator: std.mem.Allocator,
+    state: ?*state.InMemoryStateStore = null,
     clock: ?*fx.Clock = null,
     cancellation: ?Cancellation = null,
     deadline_millis: ?u64 = null,
@@ -152,6 +153,22 @@ pub const OperationContext = struct {
         if (self.deadline_millis) |deadline| {
             if (self.nowMillis() >= deadline) return error.ProviderTimeout;
         }
+    }
+
+    pub fn resolveOutputString(
+        self: *const OperationContext,
+        reference: value.OutputReference,
+    ) ProviderError![]const u8 {
+        const store = self.state orelse return error.InvalidConfiguration;
+        const record = store.get(reference.resource_id) orelse return error.InvalidConfiguration;
+        for (record.outputs) |provider_output| {
+            if (!std.mem.eql(u8, provider_output.name, reference.field)) continue;
+            return switch (provider_output.value) {
+                .string => |string| string,
+                else => error.InvalidConfiguration,
+            };
+        }
+        return error.InvalidConfiguration;
     }
 };
 

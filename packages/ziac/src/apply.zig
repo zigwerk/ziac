@@ -36,6 +36,7 @@ pub fn applyOperationWithContext(
     provider: provider_mod.Provider,
     checkpoint: ?checkpoint_mod.Checkpoint,
 ) ApplyError!void {
+    context.state = store;
     switch (operation.kind) {
         .create => try applyCreate(context, store, provider, operation, checkpoint, .created),
         .update => try applyUpdate(context, store, provider, operation, checkpoint),

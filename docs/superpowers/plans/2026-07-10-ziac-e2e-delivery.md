@@ -777,6 +777,11 @@ Commit: `Add GCP certificate and DNS resources`
 
 ### Task 5.3: ContainerService Expansion
 
+Prerequisite completed on 2026-07-10: provider outputs are canonical desired
+input values, derive graph dependencies recursively, and resolve from dependency
+state during provider execution. Cloud DNS uses this path for the allocated
+global address without persisting a guessed IP.
+
 Files:
 
 - Add `packages/ziac/src/gcp/global/container_service.zig`.

@@ -122,3 +122,23 @@ test "canonical values parse their public secret and unknown JSON forms" {
         try std.testing.expectEqualStrings(input, encoded);
     }
 }
+
+test "provider output references are canonical resource input values" {
+    var reference = try ziac.value.Value.initOwned(std.testing.allocator, .{ .output_ref = .{
+        .resource_id = "gcp.compute.GlobalAddress.api-ip",
+        .field = "address",
+    } });
+    defer reference.deinit(std.testing.allocator);
+    const json = try reference.canonicalJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(json);
+    try std.testing.expectEqualStrings(
+        "{\"$output\":{\"field\":\"address\",\"resource\":\"gcp.compute.GlobalAddress.api-ip\"}}",
+        json,
+    );
+
+    var parsed = try ziac.value.Value.parseJsonAlloc(std.testing.allocator, json);
+    defer parsed.deinit(std.testing.allocator);
+    try std.testing.expect(parsed == .output_ref);
+    try std.testing.expectEqualStrings("gcp.compute.GlobalAddress.api-ip", parsed.output_ref.resource_id);
+    try std.testing.expectEqualStrings("address", parsed.output_ref.field);
+}

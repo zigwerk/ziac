@@ -37,5 +37,9 @@ fully qualified owner name. This exact-match rule prevents an import from
 silently adopting a record outside the declared zone.
 
 The resource emits `fqdn` and `record_type`. The load-balancer component can
-wire an A record to the reserved global address without taking ownership of
+wire the global address's typed `address` output directly into
+`rrdata_outputs`. Ziac stores the output identity in desired state, derives the
+dependency edge automatically, resolves the concrete IP only during provider
+execution, and normalizes a matching remote rrset back to the typed reference.
+The component therefore does not predict an allocated IP or take ownership of
 the parent zone.

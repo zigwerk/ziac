@@ -10,6 +10,11 @@ pub const SecretReference = struct {
     field: ?[]const u8 = null,
 };
 
+pub const OutputReference = struct {
+    resource_id: []const u8,
+    field: []const u8,
+};
+
 pub const Field = struct {
     name: []const u8,
     value: Value,
@@ -22,6 +27,7 @@ pub const Value = union(enum) {
     list: []const Value,
     object: []const Field,
     secret_ref: SecretReference,
+    output_ref: OutputReference,
     unknown_reason: []const u8,
 
     pub fn initOwned(allocator: std.mem.Allocator, source: Value) ValueError!Value {
@@ -32,6 +38,7 @@ pub const Value = union(enum) {
             .list => |inner| .{ .list = try cloneList(allocator, inner) },
             .object => |inner| .{ .object = try cloneObject(allocator, inner) },
             .secret_ref => |inner| .{ .secret_ref = try cloneSecretReference(allocator, inner) },
+            .output_ref => |inner| .{ .output_ref = try cloneOutputReference(allocator, inner) },
             .unknown_reason => |inner| .{ .unknown_reason = try allocator.dupe(u8, inner) },
         };
     }
@@ -47,6 +54,7 @@ pub const Value = union(enum) {
             .list => |inner| freeList(allocator, inner),
             .object => |inner| freeObject(allocator, inner),
             .secret_ref => |inner| freeSecretReference(allocator, inner),
+            .output_ref => |inner| freeOutputReference(allocator, inner),
             .unknown_reason => |inner| allocator.free(inner),
         }
         self.* = undefined;
@@ -172,6 +180,23 @@ fn freeSecretReference(allocator: std.mem.Allocator, reference: SecretReference)
     if (reference.field) |value| allocator.free(value);
 }
 
+fn cloneOutputReference(
+    allocator: std.mem.Allocator,
+    source: OutputReference,
+) std.mem.Allocator.Error!OutputReference {
+    const resource_id = try allocator.dupe(u8, source.resource_id);
+    errdefer allocator.free(resource_id);
+    return .{
+        .resource_id = resource_id,
+        .field = try allocator.dupe(u8, source.field),
+    };
+}
+
+fn freeOutputReference(allocator: std.mem.Allocator, reference: OutputReference) void {
+    allocator.free(reference.resource_id);
+    allocator.free(reference.field);
+}
+
 fn appendCanonicalJson(
     output: *std.ArrayList(u8),
     allocator: std.mem.Allocator,
@@ -216,6 +241,13 @@ fn appendCanonicalJson(
                 try output.appendSlice(allocator, ",\"version\":");
                 try appendJsonString(output, allocator, version);
             }
+            try output.appendSlice(allocator, "}}");
+        },
+        .output_ref => |inner| {
+            try output.appendSlice(allocator, "{\"$output\":{\"field\":");
+            try appendJsonString(output, allocator, inner.field);
+            try output.appendSlice(allocator, ",\"resource\":");
+            try appendJsonString(output, allocator, inner.resource_id);
             try output.appendSlice(allocator, "}}");
         },
         .unknown_reason => |inner| {
@@ -280,6 +312,16 @@ fn valueObjectFromJson(allocator: std.mem.Allocator, source: std.json.ObjectMap)
                 .resource = try objectString(object, "resource"),
                 .version = try optionalObjectString(object, "version"),
                 .field = try optionalObjectString(object, "field"),
+            } });
+        }
+        if (source.get("$output")) |output_reference| {
+            const object = switch (output_reference) {
+                .object => |inner| inner,
+                else => return error.InvalidJson,
+            };
+            return Value.initOwned(allocator, .{ .output_ref = .{
+                .resource_id = try objectString(object, "resource"),
+                .field = try objectString(object, "field"),
             } });
         }
     }

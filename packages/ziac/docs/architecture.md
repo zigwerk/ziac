@@ -26,8 +26,9 @@ Initial source domains:
 Provider implementations must sit behind the provider lifecycle interface so the
 engine can be tested without live cloud credentials. Every provider operation
 receives an `OperationContext` containing its allocator, clock, absolute
-deadline, and cooperative cancellation handle. Providers must not retain the
-context after returning.
+deadline, cooperative cancellation handle, and read-only access to dependency
+outputs in the current state snapshot. Providers must not retain the context or
+borrowed output values after returning.
 
 Plans own sorted dependency IDs for every operation. Apply phases execute
 dependencies before consumers; destroy phases reverse that relationship.
@@ -59,10 +60,14 @@ invalidates the operation digest.
 
 Provider output descriptors carry their field name, Zig value type, and secrecy
 at comptime. Resource builders expose typed references instead of predicting
-provider-assigned values. Binding a reference to a consumer derives one
-deduplicated graph edge. After mutation, references resolve from typed provider
-outputs in state; stack output files and CLI output therefore use observed values
-rather than builder-side URL conventions.
+provider-assigned values. Typed references are also canonical input values, so
+they survive hashing and structured serialization. Adding a consumer resource
+recursively discovers those input references and derives one deduplicated graph
+edge per producer. At provider execution, references resolve from typed outputs
+in dependency state. A matching remote value normalizes back to the reference,
+which keeps refresh and subsequent plans stable without replacing the desired
+reference with a transient concrete value. Stack output files and CLI output
+therefore use observed values rather than builder-side URL conventions.
 
 Application `Env` structs use `binding.Value(T)` and `binding.Secret(T)` field
 descriptors. `validateBindings` reflects over the environment and supplied output

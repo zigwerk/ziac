@@ -64,6 +64,8 @@ interrupted-resume integration tests.
 - Typed public and secret outputs: implemented and tested.
 - Automatic dependency derivation from output references: implemented and
   tested.
+- Canonical provider-output inputs and state-backed provider resolution:
+  implemented and exercised by Cloud DNS global-address wiring.
 - App `Env` and binding validation: implemented and compile-fail tested.
 - Provider-set validation: implemented and compile-fail tested.
 - Stable compile-fail diagnostics: all required fixtures enforced by

@@ -20,6 +20,7 @@ pub fn importResource(
     try validateProviderIdentifier(physical_id);
     const provider = try providers.get(node.provider);
     var context = provider_mod.OperationContext.init(allocator);
+    context.state = store;
     var imported = try provider.importWithContext(&context, node, physical_id);
     defer imported.deinit();
     try apply_mod.adoptObserved(

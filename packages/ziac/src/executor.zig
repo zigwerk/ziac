@@ -334,6 +334,7 @@ fn operationContext(
 ) provider_mod.OperationContext {
     return .{
         .allocator = environment.allocator,
+        .state = environment.store,
         .clock = environment.clock,
         .cancellation = .{
             .ptr = environment,

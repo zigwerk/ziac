@@ -550,7 +550,7 @@ fn plainValueToJson(arena: std.mem.Allocator, input: value.Value) ProviderError!
             for (fields) |field| try map.put(arena, field.name, try plainValueToJson(arena, field.value));
             break :object .{ .object = map };
         },
-        .secret_ref, .unknown_reason => error.InvalidConfiguration,
+        .secret_ref, .output_ref, .unknown_reason => error.InvalidConfiguration,
     };
 }
 

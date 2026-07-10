@@ -104,8 +104,18 @@ pub const ResourceGraph = struct {
     pub fn addResource(self: *ResourceGraph, node: ResourceNode) ResourceGraphError!void {
         if (self.indexOf(node.id) != null) return error.DuplicateResource;
         var owned = try ResourceNode.initOwned(self.allocator, node);
-        errdefer owned.deinit(self.allocator);
-        try self.resources.append(self.allocator, owned);
+        self.resources.append(self.allocator, owned) catch |err| {
+            owned.deinit(self.allocator);
+            return err;
+        };
+        const dependency_count = self.dependencies.items.len;
+        errdefer {
+            while (self.dependencies.items.len > dependency_count) _ = self.dependencies.pop();
+            var removed = self.resources.pop().?;
+            removed.deinit(self.allocator);
+        }
+        const stored = self.resources.items[self.resources.items.len - 1];
+        try self.bindInputReferences(stored.id, stored.inputs);
     }
 
     pub fn addDependency(self: *ResourceGraph, from: []const u8, to: []const u8) ResourceGraphError!void {
@@ -123,6 +133,19 @@ pub const ResourceGraph = struct {
     pub fn bindOutput(self: *ResourceGraph, consumer_id: []const u8, typed_output: anytype) ResourceGraphError!void {
         const reference = typed_output.referenceOrNull() orelse return;
         try self.addDependency(consumer_id, reference.resource_id);
+    }
+
+    fn bindInputReferences(
+        self: *ResourceGraph,
+        consumer_id: []const u8,
+        input: value_mod.Value,
+    ) ResourceGraphError!void {
+        switch (input) {
+            .list => |items| for (items) |item| try self.bindInputReferences(consumer_id, item),
+            .object => |fields| for (fields) |field| try self.bindInputReferences(consumer_id, field.value),
+            .output_ref => |reference| try self.addDependency(consumer_id, reference.resource_id),
+            .string, .integer, .boolean, .secret_ref, .unknown_reason => {},
+        }
     }
 
     pub fn validateAcyclic(self: *const ResourceGraph) ResourceGraphError!void {

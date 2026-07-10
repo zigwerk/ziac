@@ -29,7 +29,7 @@ pub const Handler = struct {
             return err;
         };
         defer response.deinit(context.allocator);
-        return .{ .present = try resultFromJson(context.allocator, node, response.body) };
+        return .{ .present = try resultFromJson(context, node, response.body) };
     }
 
     pub fn diff(
@@ -101,11 +101,11 @@ pub const Handler = struct {
         method: []const u8,
         path: []const u8,
     ) ProviderError!provider_mod.ResourceResult {
-        const body = try desiredBodyAlloc(context.allocator, node);
+        const body = try desiredBodyAlloc(context, node);
         defer context.allocator.free(body);
         var response = try self.request(context, .{ .api = .dns, .method = method, .path = path, .body = body });
         defer response.deinit(context.allocator);
-        return resultFromJson(context.allocator, node, response.body);
+        return resultFromJson(context, node, response.body);
     }
 
     fn request(
@@ -124,36 +124,33 @@ pub fn supports(node: resource.ResourceNode) bool {
 }
 
 fn resultFromJson(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     body: []const u8,
 ) ProviderError!provider_mod.ResourceResult {
+    const allocator = context.allocator;
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.ProviderBug;
     defer parsed.deinit();
     const remote = asObject(parsed.value) orelse return error.ProviderBug;
     const name = try requiredJsonString(remote, "name");
     const record_type = try requiredJsonString(remote, "type");
     const ttl = try requiredJsonInteger(remote, "ttl");
-    const rrdatas = remote.get("rrdatas") orelse return error.ProviderBug;
-    if (asArray(rrdatas) == null) return error.ProviderBug;
-
-    var arena_state = std.heap.ArenaAllocator.init(allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    var normalized: std.json.ObjectMap = .empty;
-    try normalized.put(arena, "name", .{ .string = name });
-    try normalized.put(arena, "project_id", .{ .string = try requiredString(node.inputs, "project_id") });
-    try normalized.put(arena, "rrdatas", try cloneJsonValue(arena, rrdatas));
-    try normalized.put(arena, "ttl", .{ .integer = ttl });
-    try normalized.put(arena, "type", .{ .string = record_type });
-    try normalized.put(arena, "zone", .{ .string = try requiredString(node.inputs, "zone") });
-    const normalized_json = std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = normalized }, .{}) catch return error.OutOfMemory;
-    defer allocator.free(normalized_json);
-    var observed = value.Value.parseJsonAlloc(allocator, normalized_json) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => return error.ProviderBug,
+    const remote_rrdatas = asArray(remote.get("rrdatas") orelse return error.ProviderBug) orelse return error.ProviderBug;
+    var remote_rrdatas_value = try jsonArrayValueAlloc(allocator, remote_rrdatas);
+    defer remote_rrdatas_value.deinit(allocator);
+    const desired_rrdatas = try requiredValue(node.inputs, "rrdatas");
+    const normalized_rrdatas = if (try recordDataMatches(context, desired_rrdatas, remote_rrdatas))
+        desired_rrdatas
+    else
+        remote_rrdatas_value;
+    const normalized_fields = [_]value.Field{
+        .{ .name = "name", .value = .{ .string = name } },
+        .{ .name = "project_id", .value = .{ .string = try requiredString(node.inputs, "project_id") } },
+        .{ .name = "rrdatas", .value = normalized_rrdatas },
+        .{ .name = "ttl", .value = .{ .integer = ttl } },
+        .{ .name = "type", .value = .{ .string = record_type } },
+        .{ .name = "zone", .value = .{ .string = try requiredString(node.inputs, "zone") } },
     };
-    defer observed.deinit(allocator);
     const physical_id = try physicalIdFromIdentityAlloc(
         allocator,
         try requiredString(node.inputs, "project_id"),
@@ -166,10 +163,11 @@ fn resultFromJson(
         .{ .name = "fqdn", .value = .{ .string = name } },
         .{ .name = "record_type", .value = .{ .string = record_type } },
     };
-    return provider_mod.ResourceResult.init(allocator, physical_id, observed, &outputs, null);
+    return provider_mod.ResourceResult.init(allocator, physical_id, .{ .object = &normalized_fields }, &outputs, null);
 }
 
-fn desiredBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) ProviderError![]const u8 {
+fn desiredBodyAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {
+    const allocator = context.allocator;
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -177,7 +175,7 @@ fn desiredBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) P
     try body.put(arena, "name", .{ .string = try requiredString(node.inputs, "name") });
     try body.put(arena, "type", .{ .string = try requiredString(node.inputs, "type") });
     try body.put(arena, "ttl", .{ .integer = try requiredInteger(node.inputs, "ttl") });
-    try body.put(arena, "rrdatas", try valueStringListJson(arena, try requiredValue(node.inputs, "rrdatas")));
+    try body.put(arena, "rrdatas", try valueStringListJson(context, arena, try requiredValue(node.inputs, "rrdatas")));
     return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = body }, .{}) catch return error.OutOfMemory;
 }
 
@@ -240,22 +238,78 @@ fn sameIdentity(desired: value.Value, observed: value.Value) bool {
     return true;
 }
 
-fn valueStringListJson(allocator: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {
+fn valueStringListJson(
+    context: *provider_mod.OperationContext,
+    allocator: std.mem.Allocator,
+    input: value.Value,
+) ProviderError!std.json.Value {
     const values = switch (input) {
         .list => |values| values,
         else => return error.InvalidConfiguration,
     };
     var array = std.json.Array.init(allocator);
-    for (values) |item| switch (item) {
-        .string => |string| try array.append(.{ .string = string }),
-        else => return error.InvalidConfiguration,
-    };
+    for (values) |item| {
+        const string = switch (item) {
+            .string => |string| string,
+            .output_ref => |reference| try context.resolveOutputString(reference),
+            else => return error.InvalidConfiguration,
+        };
+        for (array.items) |existing| {
+            const existing_string = switch (existing) {
+                .string => |value_string| value_string,
+                else => unreachable,
+            };
+            if (std.mem.eql(u8, string, existing_string)) return error.InvalidConfiguration;
+        }
+        try array.append(.{ .string = string });
+    }
     return .{ .array = array };
 }
 
-fn cloneJsonValue(allocator: std.mem.Allocator, input: std.json.Value) ProviderError!std.json.Value {
-    const json = std.json.Stringify.valueAlloc(allocator, input, .{}) catch return error.OutOfMemory;
-    return std.json.parseFromSliceLeaky(std.json.Value, allocator, json, .{}) catch return error.ProviderBug;
+fn recordDataMatches(
+    context: *provider_mod.OperationContext,
+    desired: value.Value,
+    remote: std.json.Array,
+) ProviderError!bool {
+    const desired_values = switch (desired) {
+        .list => |items| items,
+        else => return error.InvalidConfiguration,
+    };
+    if (desired_values.len != remote.items.len) return false;
+    const matched = try context.allocator.alloc(bool, remote.items.len);
+    defer context.allocator.free(matched);
+    @memset(matched, false);
+    for (desired_values) |item| {
+        const desired_string = switch (item) {
+            .string => |string| string,
+            .output_ref => |reference| try context.resolveOutputString(reference),
+            else => return error.InvalidConfiguration,
+        };
+        var found = false;
+        for (remote.items, 0..) |remote_item, index| {
+            if (matched[index]) continue;
+            const remote_string = switch (remote_item) {
+                .string => |string| string,
+                else => return error.ProviderBug,
+            };
+            if (std.mem.eql(u8, desired_string, remote_string)) {
+                matched[index] = true;
+                found = true;
+                break;
+            }
+        }
+        if (!found) return false;
+    }
+    return true;
+}
+
+fn jsonArrayValueAlloc(allocator: std.mem.Allocator, input: std.json.Array) ProviderError!value.Value {
+    const json = std.json.Stringify.valueAlloc(allocator, std.json.Value{ .array = input }, .{}) catch return error.OutOfMemory;
+    defer allocator.free(json);
+    return value.Value.parseJsonAlloc(allocator, json) catch |err| switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        else => error.ProviderBug,
+    };
 }
 
 fn requiredValue(input: value.Value, name: []const u8) ProviderError!value.Value {

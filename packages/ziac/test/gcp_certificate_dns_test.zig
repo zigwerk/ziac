@@ -89,6 +89,21 @@ test "Cloud DNS record set declaration retains existing zone identity" {
     );
 }
 
+test "Cloud DNS record data retains a typed provider output reference" {
+    const address = ziac.Output([]const u8, .public).fromResource("gcp.compute.GlobalAddress.api-ip", "address");
+    var record = try ziac.gcp.dns.RecordSet.build(std.testing.allocator, provider, .{
+        .zone = "example-com",
+        .name = "api.example.com.",
+        .record_type = .a,
+        .rrdata_outputs = &.{address},
+    });
+    defer record.deinit(std.testing.allocator);
+
+    const json = try record.node.inputs.canonicalJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(json);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"$output\":{\"field\":\"address\",\"resource\":\"gcp.compute.GlobalAddress.api-ip\"}") != null);
+}
+
 test "Cloud DNS record set validates FQDN and record cardinality" {
     try std.testing.expectError(
         error.InvalidRecordName,

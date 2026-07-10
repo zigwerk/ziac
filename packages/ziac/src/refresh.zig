@@ -25,6 +25,7 @@ pub fn refreshGraph(
         };
         const provider = try providers.get(node.provider);
         var context = provider_mod.OperationContext.init(allocator);
+        context.state = store;
         if (store.get(node.id)) |existing| {
             context.physical_id = existing.physical_id;
             context.operation_handle = existing.operation_handle;

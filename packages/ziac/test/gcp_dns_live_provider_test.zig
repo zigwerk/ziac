@@ -131,6 +131,40 @@ test "Cloud DNS delete refuses a physical identity outside the declaration" {
     try std.testing.expectEqual(@as(usize, 0), harness.transport.requests.items.len);
 }
 
+test "Cloud DNS resolves typed record data from dependency state" {
+    const address = ziac.Output([]const u8, .public).fromResource("gcp.compute.GlobalAddress.api-ip", "address");
+    var record = try ziac.gcp.dns.RecordSet.build(std.testing.allocator, config, .{
+        .zone = "example-com",
+        .name = "api.example.com.",
+        .record_type = .a,
+        .rrdata_outputs = &.{address},
+    });
+    defer record.deinit(std.testing.allocator);
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    try state.put(.{
+        .resource_id = "gcp.compute.GlobalAddress.api-ip",
+        .type_name = "gcp.compute.GlobalAddress",
+        .logical_id = "api-ip",
+        .desired_hash = "address-hash",
+        .outputs = &.{.{ .name = "address", .value = .{ .string = "203.0.113.10" } }},
+        .status = .created,
+    });
+    const responses = [_]zstd.Http.Response{recordResponse(300, "203.0.113.10")};
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    const provider = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    context.state = &state;
+
+    var created = try provider.createWithContext(&context, record.node);
+    defer created.deinit();
+    try std.testing.expectEqual(record.node.inputs_hash, created.observed_hash);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "203.0.113.10") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "$output") == null);
+}
+
 const Harness = struct {
     token_source: FixedTokenSource,
     cache: auth.TokenCache,

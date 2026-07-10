@@ -109,6 +109,7 @@ pub fn buildRefreshedPlan(
     for (graph.resources.items) |node| {
         const provider = try providers.get(node.provider);
         var context = provider_mod.OperationContext.init(allocator);
+        context.state = store;
         if (store.get(node.id)) |existing| {
             context.physical_id = existing.physical_id;
             context.operation_handle = existing.operation_handle;
@@ -125,7 +126,7 @@ pub fn buildRefreshedPlan(
                 &.{"remote resource is absent"},
             ),
             .present => |*observed| {
-                var diff = try provider.diff(allocator, node, observed);
+                var diff = try provider.diffWithContext(&context, node, observed);
                 defer diff.deinit();
                 const kind: OperationKind = switch (diff.kind) {
                     .noop => .noop,

@@ -50,7 +50,8 @@ pub const RecordSetArgs = struct {
     name: []const u8,
     record_type: RecordType,
     ttl: u32 = 300,
-    rrdatas: []const []const u8,
+    rrdatas: []const []const u8 = &.{},
+    rrdata_outputs: []const output.Output([]const u8, .public) = &.{},
 };
 
 pub const RecordSet = struct {
@@ -72,11 +73,24 @@ pub const RecordSet = struct {
         if (!isValidZone(args.zone)) return error.InvalidZone;
         if (!isValidFqdn(args.name)) return error.InvalidRecordName;
         if (args.ttl == 0 or args.ttl > std.math.maxInt(i32)) return error.InvalidTtl;
-        if (args.rrdatas.len == 0 or (args.record_type == .cname and args.rrdatas.len != 1)) return error.InvalidRecordData;
+        const record_data_count = args.rrdatas.len + args.rrdata_outputs.len;
+        if (record_data_count == 0 or (args.record_type == .cname and record_data_count != 1)) return error.InvalidRecordData;
         for (args.rrdatas, 0..) |data, index| {
             if (data.len == 0) return error.InvalidRecordData;
             for (args.rrdatas[index + 1 ..]) |other| {
                 if (std.mem.eql(u8, data, other)) return error.DuplicateRecordData;
+            }
+        }
+        for (args.rrdata_outputs, 0..) |record_output, index| {
+            const reference = record_output.referenceOrNull() orelse switch (record_output) {
+                .value => continue,
+                .unknown_reason => return error.InvalidRecordData,
+                .resource_ref => unreachable,
+            };
+            for (args.rrdata_outputs[index + 1 ..]) |other| {
+                const other_reference = other.referenceOrNull() orelse continue;
+                if (std.mem.eql(u8, reference.resource_id, other_reference.resource_id) and
+                    std.mem.eql(u8, reference.field, other_reference.field)) return error.DuplicateRecordData;
             }
         }
 
@@ -85,9 +99,19 @@ pub const RecordSet = struct {
         defer allocator.free(logical_id);
         const id = try std.fmt.allocPrint(allocator, "gcp.dns.RecordSet.{s}", .{logical_id});
         defer allocator.free(id);
-        const rrdatas = try allocator.alloc(value.Value, args.rrdatas.len);
+        const rrdatas = try allocator.alloc(value.Value, record_data_count);
         defer allocator.free(rrdatas);
         for (args.rrdatas, 0..) |data, index| rrdatas[index] = .{ .string = data };
+        for (args.rrdata_outputs, args.rrdatas.len..) |record_output, index| {
+            rrdatas[index] = switch (record_output) {
+                .value => |known| .{ .string = known },
+                .resource_ref => |reference| .{ .output_ref = .{
+                    .resource_id = reference.resource_id,
+                    .field = reference.field,
+                } },
+                .unknown_reason => return error.InvalidRecordData,
+            };
+        }
         const fields = [_]value.Field{
             .{ .name = "name", .value = .{ .string = args.name } },
             .{ .name = "project_id", .value = .{ .string = provider.project_id } },

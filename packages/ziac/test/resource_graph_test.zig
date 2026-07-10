@@ -124,3 +124,22 @@ test "binding a typed output derives one deduplicated dependency edge" {
     try std.testing.expectEqualStrings("consumer", graph.dependencies.items[0].from);
     try std.testing.expectEqualStrings("producer", graph.dependencies.items[0].to);
 }
+
+test "canonical output input references derive dependency edges automatically" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try graph.addResource(.{ .id = "producer", .type_name = "test.Producer", .logical_id = "producer" });
+    try graph.addResource(.{
+        .id = "consumer",
+        .type_name = "test.Consumer",
+        .logical_id = "consumer",
+        .inputs = .{ .object = &.{
+            .{ .name = "address", .value = .{ .output_ref = .{ .resource_id = "producer", .field = "address" } } },
+            .{ .name = "nested", .value = .{ .list = &.{.{ .output_ref = .{ .resource_id = "producer", .field = "address" } }} } },
+        } },
+    });
+
+    try std.testing.expectEqual(@as(usize, 1), graph.dependencies.items.len);
+    try std.testing.expectEqualStrings("consumer", graph.dependencies.items[0].from);
+    try std.testing.expectEqualStrings("producer", graph.dependencies.items[0].to);
+}
