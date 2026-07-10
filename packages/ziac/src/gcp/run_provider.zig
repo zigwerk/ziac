@@ -1,6 +1,7 @@
 const std = @import("std");
 const client_mod = @import("client.zig");
 const operation = @import("operation.zig");
+const rpc = @import("rpc.zig");
 const provider_mod = @import("../provider.zig");
 const resource = @import("../resource.zig");
 const state = @import("../state.zig");
@@ -24,9 +25,16 @@ pub const Handler = struct {
         const generated = if (physical_override == null) try serviceNameAlloc(context.allocator, node) else null;
         defer if (generated) |name| context.allocator.free(name);
         const physical_id = physical_override orelse generated.?;
-        const path = try std.fmt.allocPrint(context.allocator, "/v2/{s}", .{physical_id});
+        const path = try rpcPathAlloc(context, rpc.cloud_run_v2.get_service, &.{.{
+            .field = "name",
+            .value = physical_id,
+        }}, &.{});
         defer context.allocator.free(path);
-        var response = self.request(context, .{ .api = .run, .method = "GET", .path = path }) catch |err| {
+        var response = self.request(context, .{
+            .api = .run,
+            .method = rpc.cloud_run_v2.get_service.rest.?.method.text(),
+            .path = path,
+        }) catch |err| {
             if (err == error.NotFound) return .absent;
             return err;
         };
@@ -64,13 +72,22 @@ pub const Handler = struct {
         const name = try requiredString(node.inputs, "name");
         const body = try serviceBodyAlloc(context, node);
         defer context.allocator.free(body);
-        const path = try std.fmt.allocPrint(
-            context.allocator,
-            "/v2/projects/{s}/locations/{s}/services?serviceId={s}",
-            .{ project_id, region, name },
-        );
+        const parent = try std.fmt.allocPrint(context.allocator, "projects/{s}/locations/{s}", .{ project_id, region });
+        defer context.allocator.free(parent);
+        const path = try rpcPathAlloc(context, rpc.cloud_run_v2.create_service, &.{.{
+            .field = "parent",
+            .value = parent,
+        }}, &.{.{
+            .field = "service_id",
+            .value = name,
+        }});
         defer context.allocator.free(path);
-        const handle = try self.startOperation(context, path, "POST", body);
+        const handle = try self.startOperation(
+            context,
+            path,
+            rpc.cloud_run_v2.create_service.rest.?.method.text(),
+            body,
+        );
         defer context.allocator.free(handle);
         return pendingResult(context, node, handle, null);
     }
@@ -83,13 +100,20 @@ pub const Handler = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const body = try serviceBodyAlloc(context, node);
         defer context.allocator.free(body);
-        const path = try std.fmt.allocPrint(
-            context.allocator,
-            "/v2/{s}?updateMask=labels,ingress,invokerIamDisabled,template",
-            .{observed.physical_id},
-        );
+        const path = try rpcPathAlloc(context, rpc.cloud_run_v2.update_service, &.{.{
+            .field = "service.name",
+            .value = observed.physical_id,
+        }}, &.{.{
+            .field = "update_mask",
+            .value = "labels,ingress,invokerIamDisabled,template",
+        }});
         defer context.allocator.free(path);
-        const handle = try self.startOperation(context, path, "PATCH", body);
+        const handle = try self.startOperation(
+            context,
+            path,
+            rpc.cloud_run_v2.update_service.rest.?.method.text(),
+            body,
+        );
         defer context.allocator.free(handle);
         return pendingResult(context, node, handle, observed);
     }
@@ -99,9 +123,17 @@ pub const Handler = struct {
         context: *provider_mod.OperationContext,
         physical_id: []const u8,
     ) ProviderError!void {
-        const path = try std.fmt.allocPrint(context.allocator, "/v2/{s}", .{physical_id});
+        const path = try rpcPathAlloc(context, rpc.cloud_run_v2.delete_service, &.{.{
+            .field = "name",
+            .value = physical_id,
+        }}, &.{});
         defer context.allocator.free(path);
-        const handle = self.startOperation(context, path, "DELETE", "") catch |err| {
+        const handle = self.startOperation(
+            context,
+            path,
+            rpc.cloud_run_v2.delete_service.rest.?.method.text(),
+            "",
+        ) catch |err| {
             if (err == error.NotFound) return;
             return err;
         };
@@ -161,6 +193,23 @@ pub const Handler = struct {
         return self.client.requestJsonAlloc(context, request_value, &diagnostic);
     }
 };
+
+fn rpcPathAlloc(
+    context: *provider_mod.OperationContext,
+    method: rpc.Method,
+    path_parameters: []const rpc.Parameter,
+    query_parameters: []const rpc.Parameter,
+) ProviderError![]u8 {
+    return rpc.restPathAlloc(context.allocator, method, path_parameters, query_parameters) catch |err| switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.InvalidPathTemplate,
+        error.InvalidResourceName,
+        error.MissingPathParameter,
+        error.UnknownQueryParameter,
+        error.MissingRestBinding,
+        => error.ProviderBug,
+    };
+}
 
 fn pendingResult(
     context: *provider_mod.OperationContext,

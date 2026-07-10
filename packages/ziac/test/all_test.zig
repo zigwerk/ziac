@@ -33,6 +33,7 @@ comptime {
     _ = @import("gcp_cloud_run_test.zig");
     _ = @import("gcp_auth_test.zig");
     _ = @import("gcp_client_test.zig");
+    _ = @import("gcp_rpc_test.zig");
     _ = @import("gcp_storage_live_provider_test.zig");
     _ = @import("gcp_gcs_state_test.zig");
     _ = @import("gcp_cloud_build_live_provider_test.zig");

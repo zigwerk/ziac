@@ -158,6 +158,15 @@ binding/provider programs must compile. Invalid fixtures must both fail and emit
 their exact contract code: `ZIAC100` through `ZIAC104`, `ZIAC110`, `ZIAC111`, or
 `ZIAC120`. A syntax or import failure cannot satisfy the harness.
 
+## Google RPC Contract Layer
+
+`gcp.rpc` pins selected public Google protobuf contracts and exposes method,
+resource-path, HTTP binding, routing, LRO, transport, and AIP semantics. Cloud
+Run CRUD already uses this layer while retaining REST/JSON transcoding. Future
+generated descriptors will drive typed messages, field ownership, update masks,
+etag preconditions, validate-only preflight, and gRPC without changing the
+resource graph or state model. See `google-rpc.md`.
+
 ## Release Boundary
 
 `zig build release-gate` composes the package's formatting, compile-time,

@@ -4,6 +4,7 @@ pub const artifact_registry = @import("artifact_registry.zig");
 pub const cloud_run = @import("cloud_run.zig");
 pub const auth = @import("auth/root.zig");
 pub const client = @import("client.zig");
+pub const rpc = @import("rpc.zig");
 pub const operation = @import("operation.zig");
 pub const project_service = @import("project_service.zig");
 pub const iam = @import("iam.zig");

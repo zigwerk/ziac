@@ -16,6 +16,11 @@ production graph compiles, and local CockroachDB transport passes verified TLS.
 Authenticated GCP and Cockroach Cloud acceptance remains an explicit external
 gate until disposable account configuration is supplied.
 
+Google provider modernization has started: Cloud Run CRUD now derives method,
+resource-path, query, routing, LRO, and AIP semantics from a descriptor pinned
+to the public `googleapis/googleapis` protobuf contract. Production calls still
+use supported REST transcoding while audited gRPC transport is developed.
+
 ## Quickstart
 
 From this package directory:
@@ -150,6 +155,7 @@ policy.
 - `docs/private-service-connect.md`: private CockroachDB regional topology
 - `docs/cockroach-sql.md`: database, grants, migrations, and native TLS
 - `docs/authentication.md`: native ADC and Workload Identity Federation
+- `docs/google-rpc.md`: protobuf contracts, transport policy, and GCP specialization
 - `docs/remote-state.md`: GCS state, locking, migration, and recovery
 - `docs/saved-plans.md`: immutable plans and destructive approval
 - `docs/keyless-ci.md`: preview stages and GitHub Actions

@@ -1,8 +1,13 @@
-# Ziac Google REST Client
+# Ziac Google API Client
 
 Ziac provider resources use one authenticated JSON client rather than issuing
 raw HTTP requests. The client composes native ADC, the shared zigeffect-std HTTP
 transport, Ziac operation contexts, and the provider error taxonomy.
+
+Cloud Run is the first resource family to construct requests through the pinned
+`gcp.rpc` protobuf/AIP descriptor layer. REST/JSON remains the production wire
+transport; resource code no longer owns Cloud Run's HTTP templates or query
+field spelling. See `google-rpc.md` for transport policy and the proto roadmap.
 
 ## API Endpoints
 

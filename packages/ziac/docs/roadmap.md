@@ -187,3 +187,24 @@ this checkout.
 Gate: all automated suites and the configured live end-to-end workflow pass,
 including regional failover, database TLS, update, interruption recovery, import,
 protected data retention, and secret leak scanning.
+
+## M9: Google RPC And GCP Intelligence
+
+- Pinned Google protobuf/AIP method descriptor kernel: Cloud Run CRUD complete.
+- Validated resource-template expansion and conservative transport selection:
+  complete.
+- Cloud Run provider migration to descriptor-owned REST bindings: complete.
+- Deterministic proto lock, descriptor-set generator, and semantic upgrade diff:
+  next.
+- AIP-aware field ownership, update masks, etags, validate-only, request IDs,
+  LRO unpacking, and partial-read safety: planned.
+- Audited zigeffect HTTP/2 and protobuf gRPC transport with REST parity: planned.
+- Native Cloud Run global multi-region realization with automatic fallback to a
+  controlled fleet for PSC, regional bindings, or canary control: planned.
+- IAM, org policy, quota, billing, residency, latency, Cockroach locality,
+  service health, and SLO preflight/intelligence: planned.
+
+Gate: a pinned proto upgrade produces a reviewed semantic diff; Cloud Run REST
+and gRPC reach identical no-op state; automatic topology selection proves both
+native multi-region and controlled-fleet paths; live preflight catches an IAM,
+quota, and topology defect before mutation.
