@@ -8,6 +8,7 @@ pub const value = @import("value.zig");
 pub const output = @import("output.zig");
 pub const resource = @import("resource.zig");
 pub const state = @import("state.zig");
+pub const state_format = @import("state_format.zig");
 pub const plan = @import("plan.zig");
 pub const provider = @import("provider.zig");
 pub const apply = @import("apply.zig");

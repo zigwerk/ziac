@@ -35,7 +35,7 @@ test "planner noops resources with matching state" {
         .resource_id = "gcp.run.Service.api",
         .type_name = "gcp.run.Service",
         .logical_id = "api",
-        .inputs_hash = "v1",
+        .desired_hash = "v1",
         .status = .created,
     });
 
@@ -54,7 +54,7 @@ test "destroy planner deletes managed resources from state" {
         .resource_id = "gcp.run.Service.api",
         .type_name = "gcp.run.Service",
         .logical_id = "api",
-        .inputs_hash = "v1",
+        .desired_hash = "v1",
         .status = .created,
     });
 

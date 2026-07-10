@@ -106,3 +106,19 @@ test "canonical values clone owned trees independently" {
 
     try std.testing.expectEqualStrings(original_json, cloned_json);
 }
+
+test "canonical values parse their public secret and unknown JSON forms" {
+    const inputs = [_][]const u8{
+        "{\"enabled\":true,\"items\":[1,\"two\"]}",
+        "{\"$secret\":{\"provider\":\"gcp\",\"resource\":\"projects/p/secrets/s\",\"version\":\"1\"}}",
+        "{\"$unknown\":\"apply pending\"}",
+    };
+
+    for (inputs) |input| {
+        var value = try ziac.value.Value.parseJsonAlloc(std.testing.allocator, input);
+        defer value.deinit(std.testing.allocator);
+        const encoded = try value.canonicalJsonAlloc(std.testing.allocator);
+        defer std.testing.allocator.free(encoded);
+        try std.testing.expectEqualStrings(input, encoded);
+    }
+}

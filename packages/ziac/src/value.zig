@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const ValueError = std.mem.Allocator.Error || error{DuplicateField};
+pub const ParseError = ValueError || error{ InvalidJson, UnsupportedJsonValue };
 
 pub const SecretReference = struct {
     provider: []const u8,
@@ -68,6 +69,12 @@ pub const Value = union(enum) {
         var digest: [32]u8 = undefined;
         std.crypto.hash.sha2.Sha256.hash(json, &digest, .{});
         return digest;
+    }
+
+    pub fn parseJsonAlloc(allocator: std.mem.Allocator, input: []const u8) ParseError!Value {
+        var parsed = std.json.parseFromSlice(std.json.Value, allocator, input, .{}) catch return error.InvalidJson;
+        defer parsed.deinit();
+        return valueFromJson(allocator, parsed.value);
     }
 };
 
@@ -227,4 +234,91 @@ fn appendJsonString(
     const encoded = try std.json.Stringify.valueAlloc(allocator, value, .{});
     defer allocator.free(encoded);
     try output.appendSlice(allocator, encoded);
+}
+
+fn valueFromJson(allocator: std.mem.Allocator, source: std.json.Value) ParseError!Value {
+    return switch (source) {
+        .string => |inner| Value.initOwned(allocator, .{ .string = inner }),
+        .integer => |inner| .{ .integer = inner },
+        .bool => |inner| .{ .boolean = inner },
+        .array => |inner| valueListFromJson(allocator, inner.items),
+        .object => |inner| valueObjectFromJson(allocator, inner),
+        .null, .float, .number_string => error.UnsupportedJsonValue,
+    };
+}
+
+fn valueListFromJson(allocator: std.mem.Allocator, source: []const std.json.Value) ParseError!Value {
+    const items = try allocator.alloc(Value, source.len);
+    errdefer allocator.free(items);
+
+    var initialized: usize = 0;
+    errdefer {
+        for (items[0..initialized]) |*item| item.deinit(allocator);
+    }
+    for (source, 0..) |item, index| {
+        items[index] = try valueFromJson(allocator, item);
+        initialized += 1;
+    }
+    return .{ .list = items };
+}
+
+fn valueObjectFromJson(allocator: std.mem.Allocator, source: std.json.ObjectMap) ParseError!Value {
+    if (source.count() == 1) {
+        if (source.get("$unknown")) |unknown| {
+            return switch (unknown) {
+                .string => |inner| Value.initOwned(allocator, .{ .unknown_reason = inner }),
+                else => error.InvalidJson,
+            };
+        }
+        if (source.get("$secret")) |secret| {
+            const object = switch (secret) {
+                .object => |inner| inner,
+                else => return error.InvalidJson,
+            };
+            return Value.initOwned(allocator, .{ .secret_ref = .{
+                .provider = try objectString(object, "provider"),
+                .resource = try objectString(object, "resource"),
+                .version = try optionalObjectString(object, "version"),
+                .field = try optionalObjectString(object, "field"),
+            } });
+        }
+    }
+
+    const fields = try allocator.alloc(Field, source.count());
+    errdefer allocator.free(fields);
+    var initialized: usize = 0;
+    errdefer {
+        for (fields[0..initialized]) |*field| {
+            allocator.free(field.name);
+            field.value.deinit(allocator);
+        }
+    }
+
+    var iterator = source.iterator();
+    while (iterator.next()) |entry| {
+        const name = try allocator.dupe(u8, entry.key_ptr.*);
+        errdefer allocator.free(name);
+        var owned_value = try valueFromJson(allocator, entry.value_ptr.*);
+        errdefer owned_value.deinit(allocator);
+        fields[initialized] = .{ .name = name, .value = owned_value };
+        initialized += 1;
+    }
+    std.mem.sort(Field, fields, {}, lessThanFieldName);
+    return .{ .object = fields };
+}
+
+fn objectString(object: std.json.ObjectMap, name: []const u8) error{InvalidJson}![]const u8 {
+    const field = object.get(name) orelse return error.InvalidJson;
+    return switch (field) {
+        .string => |inner| inner,
+        else => error.InvalidJson,
+    };
+}
+
+fn optionalObjectString(object: std.json.ObjectMap, name: []const u8) error{InvalidJson}!?[]const u8 {
+    const field = object.get(name) orelse return null;
+    return switch (field) {
+        .string => |inner| inner,
+        else => error.InvalidJson,
+    };
 }
