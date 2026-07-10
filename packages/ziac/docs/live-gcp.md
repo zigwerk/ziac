@@ -53,6 +53,32 @@ zig-out/bin/ziac deploy --stack global-container --stage smoke \
 duplicate region, or a non-Premium graph before provider mutation. The existing
 zone is referenced only when `ZIAC_LIVE_DNS_ZONE` is set.
 
+## Global Live Gate
+
+`scripts/live-global-gate.sh` is the destructive, opt-in M5 harness. It requires
+all global stack variables above, a disposable project suffix, ADC, an image
+that returns a successful HTTP response, and a domain/managed zone safe for the
+test. It performs deploy, HTTPS readiness, direct `run.app` denial, one regional
+service deletion through the disposable-only `fail-region` command, global
+availability during failure, refresh/deploy restoration, a full noop plan,
+optional secret-sentinel scanning, and destroy.
+
+```sh
+ZIAC_LIVE_STAGE=global-smoke \
+  packages/ziac/scripts/live-global-gate.sh
+```
+
+Set `ZIAC_LIVE_REMOTE_PROBES` to comma-separated controlled-location probe URLs
+when external vantage points are available. Set `ZIAC_LIVE_FAIL_REGION` to
+choose the region deleted by the harness and
+`ZIAC_LIVE_READINESS_TIMEOUT_SECONDS` to change the certificate/HTTPS timeout.
+The script installs an exit trap that attempts destroy after any failure.
+
+`fail-region` never edits state. It requires `--provider gcp --allow-live
+--live-test`, an existing state record, and a project ending in
+`-ziac-disposable`. Recovery is intentionally the normal `refresh` then
+`deploy` path.
+
 ## Safety Order
 
 Before acquiring the writer lock or loading mutable state, the CLI verifies:
@@ -70,8 +96,7 @@ operator.
 
 ## Current Live Gate
 
-Scripted transports cover the complete M4 resource surface and the production
-binary compiles with native HTTP and ADC. The authenticated disposable-project
-gate remains environment-dependent and must not be reported as passed unless
-ADC, `ZIAC_LIVE_PROJECT`, and `ZIAC_LIVE_IMAGE` are configured and the full
-deploy/noop/update/refresh/destroy sequence succeeds.
+Scripted transports cover the complete M4/M5 resource surface and the
+production binary compiles with native HTTP and ADC. The authenticated
+disposable-project gates remain environment-dependent and must not be reported
+as passed unless their scripts complete against configured cloud resources.

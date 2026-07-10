@@ -40,6 +40,9 @@ test "global ContainerService builds regional services and singleton routing res
     try std.testing.expectEqual(@as(usize, 1), rrdatas.len);
     try std.testing.expect(rrdatas[0] == .output_ref);
     try std.testing.expectEqualStrings("gcp.compute.GlobalAddress.api-ip", rrdatas[0].output_ref.resource_id);
+    const backend = findType(&component.graph, "gcp.compute.BackendService");
+    const outlier = inputValue(backend, "outlier_detection").object;
+    try std.testing.expectEqual(@as(i64, 180), objectValue(outlier, "base_ejection_time_seconds").integer);
     for (component.graph.resources.items) |node| {
         if (!std.mem.eql(u8, node.type_name, "gcp.compute.GlobalForwardingRule")) continue;
         try std.testing.expect(inputValue(node, "address") == .output_ref);
@@ -167,7 +170,11 @@ fn findType(graph: *const ziac.ResourceGraph, type_name: []const u8) ziac.Resour
 }
 
 fn inputValue(node: ziac.ResourceNode, name: []const u8) ziac.value.Value {
-    for (node.inputs.object) |field| if (std.mem.eql(u8, field.name, name)) return field.value;
+    return objectValue(node.inputs.object, name);
+}
+
+fn objectValue(fields: []const ziac.value.Field, name: []const u8) ziac.value.Value {
+    for (fields) |field| if (std.mem.eql(u8, field.name, name)) return field.value;
     unreachable;
 }
 

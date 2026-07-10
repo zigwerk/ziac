@@ -30,6 +30,7 @@ pub const OutputDefinition = struct {
     secret: bool = false,
 
     fn deinit(self: *OutputDefinition, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
         switch (self.source) {
             .literal => |literal| allocator.free(literal),
             .resource_ref => |reference| {
@@ -195,6 +196,16 @@ pub const StackRegistry = struct {
         try appendLiteral(allocator, &outputs, "url", component.url.value, false);
         try appendReference(allocator, &outputs, "ip_address", component.ip_address.resource_ref, false);
         try appendReference(allocator, &outputs, "certificate_status", component.certificate_status.resource_ref, false);
+        for (self.regions) |region| {
+            const output_name = try std.fmt.allocPrint(allocator, "service_url_{s}", .{region});
+            defer allocator.free(output_name);
+            const resource_id = try std.fmt.allocPrint(allocator, "gcp.run.Service.{s}.api", .{region});
+            defer allocator.free(resource_id);
+            try appendReference(allocator, &outputs, output_name, .{
+                .resource_id = resource_id,
+                .field = "service_url",
+            }, false);
+        }
         return .{
             .allocator = allocator,
             .graph = component.takeGraph(),
@@ -210,9 +221,13 @@ fn appendLiteral(
     value: []const u8,
     secret: bool,
 ) std.mem.Allocator.Error!void {
+    const owned_name = try allocator.dupe(u8, name);
+    errdefer allocator.free(owned_name);
+    const owned_value = try allocator.dupe(u8, value);
+    errdefer allocator.free(owned_value);
     try outputs.append(allocator, .{
-        .name = name,
-        .source = .{ .literal = try allocator.dupe(u8, value) },
+        .name = owned_name,
+        .source = .{ .literal = owned_value },
         .secret = secret,
     });
 }
@@ -224,12 +239,14 @@ fn appendReference(
     reference: output.OutputRef,
     secret: bool,
 ) std.mem.Allocator.Error!void {
+    const owned_name = try allocator.dupe(u8, name);
+    errdefer allocator.free(owned_name);
     const resource_id = try allocator.dupe(u8, reference.resource_id);
     errdefer allocator.free(resource_id);
     const field = try allocator.dupe(u8, reference.field);
     errdefer allocator.free(field);
     try outputs.append(allocator, .{
-        .name = name,
+        .name = owned_name,
         .source = .{ .resource_ref = .{ .resource_id = resource_id, .field = field } },
         .secret = secret,
     });

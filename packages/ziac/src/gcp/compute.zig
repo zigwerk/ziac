@@ -11,6 +11,7 @@ pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || 
     DuplicateDomain,
     InvalidAddressInput,
     InvalidDomain,
+    InvalidOutlierDetection,
     MissingBackend,
     MissingCertificate,
     MissingDomain,
@@ -98,6 +99,17 @@ pub const ServerlessBackend = struct {
 pub const BackendServiceArgs = struct {
     name: []const u8,
     backends: []const ServerlessBackend,
+    outlier_detection: ?OutlierDetection = null,
+};
+
+pub const OutlierDetection = struct {
+    consecutive_errors: u32 = 5,
+    consecutive_gateway_failures: u32 = 3,
+    interval_seconds: u32 = 1,
+    base_ejection_time_seconds: u32 = 180,
+    max_ejection_percent: u8 = 100,
+    enforcing_consecutive_errors: u8 = 100,
+    enforcing_consecutive_gateway_failures: u8 = 100,
 };
 
 pub const BackendService = struct {
@@ -121,6 +133,7 @@ pub const BackendService = struct {
                 if (std.mem.eql(u8, backend.region, other.region)) return error.DuplicateBackendRegion;
             }
         }
+        if (args.outlier_detection) |policy| try validateOutlierDetection(policy);
         const backends = try allocator.alloc(value.Value, args.backends.len);
         errdefer allocator.free(backends);
         var initialized: usize = 0;
@@ -134,10 +147,13 @@ pub const BackendService = struct {
             initialized += 1;
         }
         defer deinitValues(allocator, backends);
+        var outlier_detection = try outlierDetectionValueOwned(allocator, args.outlier_detection);
+        defer outlier_detection.deinit(allocator);
         const fields = [_]value.Field{
             .{ .name = "backends", .value = .{ .list = backends } },
             .{ .name = "load_balancing_scheme", .value = .{ .string = "EXTERNAL_MANAGED" } },
             .{ .name = "name", .value = .{ .string = args.name } },
+            .{ .name = "outlier_detection", .value = outlier_detection },
             .{ .name = "project_id", .value = .{ .string = provider.project_id } },
             .{ .name = "protocol", .value = .{ .string = "HTTP" } },
         };
@@ -438,6 +454,33 @@ fn isValidCertificateDomain(domain: []const u8) bool {
         }
     }
     return true;
+}
+
+fn validateOutlierDetection(policy: OutlierDetection) BuildError!void {
+    if (policy.consecutive_errors == 0 or policy.consecutive_gateway_failures == 0 or
+        policy.interval_seconds == 0 or policy.base_ejection_time_seconds == 0 or
+        policy.max_ejection_percent == 0 or policy.max_ejection_percent > 100 or
+        policy.enforcing_consecutive_errors > 100 or policy.enforcing_consecutive_gateway_failures > 100)
+    {
+        return error.InvalidOutlierDetection;
+    }
+}
+
+fn outlierDetectionValueOwned(
+    allocator: std.mem.Allocator,
+    maybe_policy: ?OutlierDetection,
+) BuildError!value.Value {
+    const policy = maybe_policy orelse return ownedValue(allocator, .{ .object = &.{} });
+    const fields = [_]value.Field{
+        .{ .name = "base_ejection_time_seconds", .value = .{ .integer = policy.base_ejection_time_seconds } },
+        .{ .name = "consecutive_errors", .value = .{ .integer = policy.consecutive_errors } },
+        .{ .name = "consecutive_gateway_failures", .value = .{ .integer = policy.consecutive_gateway_failures } },
+        .{ .name = "enforcing_consecutive_errors", .value = .{ .integer = policy.enforcing_consecutive_errors } },
+        .{ .name = "enforcing_consecutive_gateway_failures", .value = .{ .integer = policy.enforcing_consecutive_gateway_failures } },
+        .{ .name = "interval_seconds", .value = .{ .integer = policy.interval_seconds } },
+        .{ .name = "max_ejection_percent", .value = .{ .integer = policy.max_ejection_percent } },
+    };
+    return ownedValue(allocator, .{ .object = &fields });
 }
 
 fn buildNode(

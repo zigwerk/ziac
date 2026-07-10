@@ -199,6 +199,37 @@ test "live Compute forwarding rules resolve and normalize allocated address outp
     try std.testing.expectEqual(forwarding.node.inputs_hash, observed.present.observed_hash);
 }
 
+test "live Compute provider encodes serverless outlier detection" {
+    const backends = [_]ziac.gcp.compute.ServerlessBackend{
+        .{ .region = "europe-west1", .group = "projects/ziac-dev/regions/europe-west1/networkEndpointGroups/api-eu" },
+        .{ .region = "us-central1", .group = "projects/ziac-dev/regions/us-central1/networkEndpointGroups/api-us" },
+    };
+    var backend = try ziac.gcp.compute.BackendService.build(std.testing.allocator, config, .{
+        .name = "api-backend",
+        .backends = &backends,
+        .outlier_detection = .{},
+    });
+    defer backend.deinit(std.testing.allocator);
+    const responses = [_]zstd.Http.Response{
+        operation("insert-backend"),
+        .{ .status = 200, .body = "{\"name\":\"api-backend\",\"selfLink\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/global/backendServices/api-backend\",\"protocol\":\"HTTP\",\"loadBalancingScheme\":\"EXTERNAL_MANAGED\",\"backends\":[{\"group\":\"projects/ziac-dev/regions/europe-west1/networkEndpointGroups/api-eu\"},{\"group\":\"projects/ziac-dev/regions/us-central1/networkEndpointGroups/api-us\"}],\"outlierDetection\":{\"consecutiveErrors\":5,\"consecutiveGatewayFailure\":3,\"interval\":{\"seconds\":\"1\",\"nanos\":0},\"baseEjectionTime\":{\"seconds\":\"180\",\"nanos\":0},\"maxEjectionPercent\":100,\"enforcingConsecutiveErrors\":100,\"enforcingConsecutiveGatewayFailure\":100}}" },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var creating = try harness.live.provider().createWithContext(&context, backend.node);
+    defer creating.deinit();
+
+    const body = harness.transport.requests.items[0].body;
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"consecutiveErrors\":5") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"baseEjectionTime\":{\"seconds\":\"180\",\"nanos\":0}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"enforcingConsecutiveErrors\":100") != null);
+    var observed = try harness.live.provider().readWithContext(&context, backend.node);
+    defer observed.deinit();
+    try std.testing.expectEqual(backend.node.inputs_hash, observed.present.observed_hash);
+}
+
 fn exerciseLifecycle(
     node: ziac.ResourceNode,
     resource_json: []const u8,

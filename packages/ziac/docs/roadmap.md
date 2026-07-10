@@ -110,8 +110,10 @@ Run region with real physical state and outputs.
 - `ziac.gcp.global.ContainerService`: deterministic graph and example complete.
 - Premium-tier, unique-region, restricted Cloud Run ingress, and production
   warm-instance/probe policy: implemented and tested.
+- Serverless NEG outlier detection for cross-region error reduction:
+  implemented, normalized, and enabled by the component.
 - Authenticated certificate readiness and regional failover/failback: live gate
-  pending.
+  harness implemented; configured live execution pending.
 
 Gate: a live two-region HTTPS service remains available during a tested regional
 failure and destroys in reverse dependency order.

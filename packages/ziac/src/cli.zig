@@ -43,6 +43,7 @@ const Args = struct {
     provider_name: []const u8 = "fake",
     allow_live: bool = false,
     live_test: bool = false,
+    region: ?[]const u8 = null,
 };
 
 const command_options = [_]zstd.Cli.OptionSpec{
@@ -99,6 +100,16 @@ const unlock_options = [_]zstd.Cli.OptionSpec{
     .{ .name = "force", .kind = .boolean, .help = "override lineage check" },
 };
 
+const fail_region_options = [_]zstd.Cli.OptionSpec{
+    command_options[0],
+    command_options[1],
+    command_options[2],
+    command_options[3],
+    command_options[4],
+    command_options[5],
+    .{ .name = "region", .kind = .string, .required = true, .help = "Cloud Run region to delete for failover testing" },
+};
+
 const auth_subcommands = [_]zstd.Cli.CommandSpec{
     .{
         .name = "doctor",
@@ -148,6 +159,11 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .options = unlock_options[0..],
     },
     .{
+        .name = "fail-region",
+        .description = "delete one regional service in a disposable live test",
+        .options = fail_region_options[0..],
+    },
+    .{
         .name = "auth",
         .description = "inspect authentication",
         .subcommands = auth_subcommands[0..],
@@ -176,6 +192,7 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
     if (std.mem.eql(u8, args.command, "refresh")) return runRefresh(allocator, env, args);
     if (std.mem.eql(u8, args.command, "import")) return runImport(allocator, env, args);
     if (std.mem.eql(u8, args.command, "unlock")) return runUnlock(env, args);
+    if (std.mem.eql(u8, args.command, "fail-region")) return runFailRegion(allocator, env, args);
     if (std.mem.eql(u8, args.command, "doctor")) return runAuthDoctor(allocator, env);
 
     try writeError(env, "usage", error.UnknownSubcommand);
@@ -208,6 +225,7 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .provider_name = parsed.optionValue("provider") orelse "fake",
         .allow_live = parsed.optionValue("allow-live") != null,
         .live_test = parsed.optionValue("live-test") != null,
+        .region = parsed.optionValue("region"),
     };
 }
 
@@ -556,9 +574,93 @@ fn runUnlock(env: *Env, args: Args) !u8 {
     return Exit.success;
 }
 
+fn runFailRegion(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    if (!args.live_test) {
+        try writeError(env, "auth", error.LiveTestRequired);
+        return Exit.auth_error;
+    }
+    if (!isLive(args)) {
+        try writeError(env, "auth", error.LiveProviderRequired);
+        return Exit.auth_error;
+    }
+    const region = args.region orelse {
+        try writeError(env, "usage", error.MissingRequiredOption);
+        return Exit.usage;
+    };
+    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+        return handleStackError(env, err);
+    };
+    defer program.deinit();
+    const service = findRegionalService(&program.graph, region) orelse {
+        try writeError(env, "stack", error.RegionServiceNotFound);
+        return Exit.invalid_graph;
+    };
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = selectProviders(env, args, &program.graph, &fake_provider) catch |err| {
+        return handleProviderSelectionError(env, err);
+    };
+    var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer command_lock.deinit();
+    var loaded = env.state.loadResources(args.stack, args.stage) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer loaded.deinit();
+    const record = loaded.store.get(service.id) orelse {
+        try writeError(env, "state", error.MissingRecord);
+        return Exit.state_error;
+    };
+    const physical_id = record.physical_id orelse {
+        try writeError(env, "state", error.MissingPhysicalId);
+        return Exit.state_error;
+    };
+    const provider = providers.get(service.provider) catch |err| return handleApplyError(env, err);
+    var context = provider_mod.OperationContext.init(allocator);
+    context.state = &loaded.store;
+    context.physical_id = physical_id;
+    provider.deleteWithContext(&context, service, physical_id) catch |err| return handleApplyError(env, err);
+
+    if (args.json) {
+        try writeCommandJson(env, args, loaded.store.serialValue(), .{ .delete = 1 });
+    } else {
+        try env.console.stdout.print(env.console.allocator, "Regional failure injected: {s}\n", .{region});
+    }
+    return Exit.success;
+}
+
 fn findResource(graph: *const @import("resource.zig").ResourceGraph, resource_id: []const u8) ?@import("resource.zig").ResourceNode {
     for (graph.resources.items) |node| {
         if (std.mem.eql(u8, node.id, resource_id)) return node;
+    }
+    return null;
+}
+
+fn findRegionalService(
+    graph: *const @import("resource.zig").ResourceGraph,
+    region: []const u8,
+) ?@import("resource.zig").ResourceNode {
+    for (graph.resources.items) |node| {
+        if (!std.mem.eql(u8, node.type_name, "gcp.run.Service")) continue;
+        if (resourceInputString(node, "region")) |node_region| {
+            if (std.mem.eql(u8, node_region, region)) return node;
+        }
+    }
+    return null;
+}
+
+fn resourceInputString(node: @import("resource.zig").ResourceNode, name: []const u8) ?[]const u8 {
+    const fields = switch (node.inputs) {
+        .object => |fields| fields,
+        else => return null,
+    };
+    for (fields) |field| {
+        if (!std.mem.eql(u8, field.name, name)) continue;
+        return switch (field.value) {
+            .string => |string| string,
+            else => null,
+        };
     }
     return null;
 }

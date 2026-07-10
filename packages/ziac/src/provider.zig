@@ -563,6 +563,23 @@ pub const FakeProvider = struct {
                 };
                 output_count += 1;
             }
+        } else if (std.mem.eql(u8, node.type_name, "gcp.compute.GlobalAddress")) {
+            output_source[output_count] = .{
+                .name = "address",
+                .value = .{ .string = "203.0.113.10" },
+            };
+            output_count += 1;
+        } else if (std.mem.eql(u8, node.type_name, "gcp.compute.ManagedSslCertificate")) {
+            output_source[output_count] = .{
+                .name = "status",
+                .value = .{ .string = "ACTIVE" },
+            };
+            output_count += 1;
+            output_source[output_count] = .{
+                .name = "domains_ready",
+                .value = .{ .boolean = true },
+            };
+            output_count += 1;
         } else if (std.mem.eql(u8, node.type_name, "gcp.run.Service")) {
             const name = inputString(node, "name");
             const region = inputString(node, "region");

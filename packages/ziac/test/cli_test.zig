@@ -298,6 +298,107 @@ test "cli plans the configured global ContainerService stack" {
     try std.testing.expectEqual(ziac.cli.Exit.success, code);
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Plan: 14 create") != null);
     try std.testing.expect(!fs.exists(".ziac/state/global-container/smoke/resources.json"));
+
+    console.stdout.clearRetainingCapacity();
+    const deploy_code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy",
+        "--stack",
+        "global-container",
+        "--stage",
+        "smoke",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, deploy_code);
+    const outputs = fs.readFile(".ziac/state/global-container/smoke/outputs.json").?;
+    try std.testing.expect(std.mem.indexOf(u8, outputs, "\"name\":\"ip_address\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, outputs, "\"name\":\"certificate_status\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, outputs, "\"name\":\"service_url_europe-west1\"") != null);
+}
+
+test "cli fail-region requires the explicit disposable live-test gate" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "fail-region",
+        "--stack",
+        "global-container",
+        "--stage",
+        "smoke",
+        "--region",
+        "europe-west1",
+        "--provider",
+        "gcp",
+        "--allow-live",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.auth_error, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "LiveTestRequired") != null);
+    try std.testing.expect(!fs.exists(".ziac/state/global-container/smoke/lock.json"));
+}
+
+test "cli fail-region deletes one remote service and preserves state for restoration" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+    const regions = [_][]const u8{ "europe-west1", "us-central1" };
+    env.registry = ziac.stack_registry.configuredRegistry(.{
+        .project_id = "test-ziac-disposable",
+        .region = regions[0],
+        .regions = &regions,
+        .image = "europe-west1-docker.pkg.dev/test-ziac-disposable/apps/api@sha256:abc",
+        .domain = "api.example.com",
+    });
+    var program = try env.registry.build(std.testing.allocator, .{ .stack = "global-container", .stage = "smoke" });
+    defer program.deinit();
+    const service = findResource(&program.graph, "gcp.run.Service.europe-west1.api");
+    var live = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer live.deinit();
+    var providers = ziac.provider.ProviderRegistry{};
+    providers.register(.gcp, live.provider());
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    try ziac.importer.importResource(
+        std.testing.allocator,
+        service,
+        "projects/test-ziac-disposable/locations/europe-west1/services/api",
+        &state,
+        providers,
+        null,
+    );
+    try env.state.saveResources("global-container", "smoke", &state);
+    env.live_providers = providers;
+    env.live_project_id = "test-ziac-disposable";
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "fail-region",
+        "--stack",
+        "global-container",
+        "--stage",
+        "smoke",
+        "--region",
+        "europe-west1",
+        "--provider",
+        "gcp",
+        "--allow-live",
+        "--live-test",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expectEqual(@as(usize, 1), live.deletes);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Regional failure injected: europe-west1") != null);
+    const persisted = fs.readFile(".ziac/state/global-container/smoke/resources.json").?;
+    try std.testing.expect(std.mem.indexOf(u8, persisted, "projects/test-ziac-disposable/locations/europe-west1/services/api") != null);
+    try std.testing.expect(!try env.state.hasLock("global-container", "smoke"));
+}
+
+fn findResource(graph: *const ziac.ResourceGraph, id: []const u8) ziac.ResourceNode {
+    for (graph.resources.items) |node| if (std.mem.eql(u8, node.id, id)) return node;
+    unreachable;
 }
 
 test "cli live test rejects a non-disposable GCP project before mutation" {

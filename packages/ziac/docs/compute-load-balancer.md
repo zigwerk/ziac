@@ -18,6 +18,13 @@ duplicate regions because a global backend service can attach at most one
 serverless NEG per region. A regional NEG retains both region and Cloud Run
 service identity so the provider can encode the `SERVERLESS` endpoint type.
 
+`BackendService` optionally carries typed outlier detection. Ziac supports the
+serverless-compatible consecutive-5xx and consecutive-gateway controls,
+analysis interval, base ejection duration, maximum ejection percentage, and
+enforcement percentages. Unsupported success-rate fields are intentionally not
+exposed for serverless NEGs. `ContainerService` enables an aggressive policy by
+default for cross-region failure reduction.
+
 ## Lifecycle
 
 The Compute handler selects the correct collection and global or regional

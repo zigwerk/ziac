@@ -811,11 +811,16 @@ Evidence:
   graph insertion derives their dependency edges automatically.
 - Premium tier, unique/two-region minimum, production warm instances, probes,
   domain, DNS, Cloud Run runtime validation, and restricted ingress are covered.
+- The component enables serverless-compatible consecutive-error outlier
+  detection with typed request/normalization tests.
 - The package builds and tests the `global-container-service` example.
 
 Commit: `Add global GCP ContainerService component`
 
 ### Task 5.4: Global Live Gate
+
+Status: automated harness implemented on 2026-07-10; authenticated execution is
+pending ADC, a disposable project, image, domain, and Cloud DNS zone.
 
 Actions:
 
@@ -833,6 +838,15 @@ M5 Gate:
 - The global URL remains available through the tested regional failure.
 - State refresh is noop after restoration.
 - Destroy follows reverse dependency order.
+
+Harness evidence:
+
+- The compiled `global-container` stack plans and fake-deploys all 14 resources.
+- `fail-region` is gated by live provider opt-in, `--live-test`, disposable
+  project suffix, stack lock, declared region, and existing physical state.
+- `scripts/live-global-gate.sh` automates HTTPS readiness, direct-ingress denial,
+  regional deletion, continued global availability, restore, noop, optional
+  remote probes/secret scan, and teardown.
 
 Commit: `Verify Ziac global Cloud Run deployments`
 

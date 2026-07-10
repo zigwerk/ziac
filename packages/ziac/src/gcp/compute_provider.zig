@@ -351,6 +351,7 @@ fn normalizedInputsAlloc(
                 try backends.append(.{ .object = normalized_backend });
             }
             try normalized.put(arena, "backends", .{ .array = backends });
+            try normalized.put(arena, "outlier_detection", try normalizedOutlierDetection(arena, remote.get("outlierDetection")));
         },
         .url_map => try normalized.put(arena, "default_service", .{ .string = try requiredJsonString(remote, "defaultService") }),
         .redirect_url_map => {
@@ -428,6 +429,7 @@ fn desiredBodyAlloc(
                 try backends.append(.{ .object = backend });
             }
             try body.put(arena, "backends", .{ .array = backends });
+            try body.put(arena, "outlierDetection", try outlierDetectionRequestJson(arena, try requiredValue(node.inputs, "outlier_detection")));
         },
         .url_map => try body.put(arena, "defaultService", .{ .string = try requiredString(node.inputs, "default_service") }),
         .redirect_url_map => {
@@ -484,7 +486,7 @@ fn mergeUpdateBodyAlloc(
     const desired_object = asObject(desired.value) orelse return error.ProviderBug;
     const arena = remote.arena.allocator();
     const managed_fields: []const []const u8 = switch (resource_kind) {
-        .backend_service => &.{ "name", "protocol", "loadBalancingScheme", "backends" },
+        .backend_service => &.{ "name", "protocol", "loadBalancingScheme", "backends", "outlierDetection" },
         .url_map => &.{ "name", "defaultService" },
         .redirect_url_map => &.{ "name", "defaultUrlRedirect" },
         .target_http_proxy => &.{ "name", "urlMap" },
@@ -641,6 +643,54 @@ fn valueToJson(allocator: std.mem.Allocator, input: value.Value) ProviderError!s
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, json, .{}) catch return error.ProviderBug;
 }
 
+fn outlierDetectionRequestJson(allocator: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {
+    const fields = switch (input) {
+        .object => |fields| fields,
+        else => return error.InvalidConfiguration,
+    };
+    if (fields.len == 0) return .{ .object = .empty };
+    var object: std.json.ObjectMap = .empty;
+    try object.put(allocator, "consecutiveErrors", .{ .integer = try requiredInteger(input, "consecutive_errors") });
+    try object.put(allocator, "consecutiveGatewayFailure", .{ .integer = try requiredInteger(input, "consecutive_gateway_failures") });
+    try object.put(allocator, "interval", try durationJson(allocator, try requiredInteger(input, "interval_seconds")));
+    try object.put(allocator, "baseEjectionTime", try durationJson(allocator, try requiredInteger(input, "base_ejection_time_seconds")));
+    try object.put(allocator, "maxEjectionPercent", .{ .integer = try requiredInteger(input, "max_ejection_percent") });
+    try object.put(allocator, "enforcingConsecutiveErrors", .{ .integer = try requiredInteger(input, "enforcing_consecutive_errors") });
+    try object.put(allocator, "enforcingConsecutiveGatewayFailure", .{ .integer = try requiredInteger(input, "enforcing_consecutive_gateway_failures") });
+    return .{ .object = object };
+}
+
+fn durationJson(allocator: std.mem.Allocator, seconds: i64) ProviderError!std.json.Value {
+    const seconds_string = std.fmt.allocPrint(allocator, "{d}", .{seconds}) catch return error.OutOfMemory;
+    var duration: std.json.ObjectMap = .empty;
+    try duration.put(allocator, "seconds", .{ .string = seconds_string });
+    try duration.put(allocator, "nanos", .{ .integer = 0 });
+    return .{ .object = duration };
+}
+
+fn normalizedOutlierDetection(
+    allocator: std.mem.Allocator,
+    maybe_input: ?std.json.Value,
+) ProviderError!std.json.Value {
+    const input_value = maybe_input orelse return .{ .object = .empty };
+    const input = asObject(input_value) orelse return error.ProviderBug;
+    var normalized: std.json.ObjectMap = .empty;
+    try normalized.put(allocator, "base_ejection_time_seconds", .{ .integer = try durationSeconds(input, "baseEjectionTime") });
+    try normalized.put(allocator, "consecutive_errors", .{ .integer = try requiredJsonInteger(input, "consecutiveErrors") });
+    try normalized.put(allocator, "consecutive_gateway_failures", .{ .integer = try requiredJsonInteger(input, "consecutiveGatewayFailure") });
+    try normalized.put(allocator, "enforcing_consecutive_errors", .{ .integer = try requiredJsonInteger(input, "enforcingConsecutiveErrors") });
+    try normalized.put(allocator, "enforcing_consecutive_gateway_failures", .{ .integer = try requiredJsonInteger(input, "enforcingConsecutiveGatewayFailure") });
+    try normalized.put(allocator, "interval_seconds", .{ .integer = try durationSeconds(input, "interval") });
+    try normalized.put(allocator, "max_ejection_percent", .{ .integer = try requiredJsonInteger(input, "maxEjectionPercent") });
+    return .{ .object = normalized };
+}
+
+fn durationSeconds(object: std.json.ObjectMap, name: []const u8) ProviderError!i64 {
+    const duration = try requiredObject(object, name);
+    const seconds = try requiredJsonString(duration, "seconds");
+    return std.fmt.parseInt(i64, seconds, 10) catch return error.ProviderBug;
+}
+
 fn requiredObject(object: std.json.ObjectMap, name: []const u8) ProviderError!std.json.ObjectMap {
     const found = object.get(name) orelse return error.ProviderBug;
     return asObject(found) orelse error.ProviderBug;
@@ -654,6 +704,14 @@ fn requiredJsonBool(object: std.json.ObjectMap, name: []const u8) ProviderError!
     const found = object.get(name) orelse return error.ProviderBug;
     return switch (found) {
         .bool => |boolean| boolean,
+        else => error.ProviderBug,
+    };
+}
+
+fn requiredJsonInteger(object: std.json.ObjectMap, name: []const u8) ProviderError!i64 {
+    const found = object.get(name) orelse return error.ProviderBug;
+    return switch (found) {
+        .integer => |integer| integer,
         else => error.ProviderBug,
     };
 }

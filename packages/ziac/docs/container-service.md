@@ -57,6 +57,14 @@ region plus startup and liveness probes. Cloud Run validates all probe, scaling,
 resource, environment, secret-volume, and Direct VPC settings before graph
 construction completes.
 
+The backend service enables consecutive-5xx and consecutive-gateway outlier
+detection with 100% enforcement, a one-second analysis interval, and a
+180-second base ejection time. This is the mechanism that lets global proxies
+reduce traffic to an unhealthy serverless NEG and send new requests to another
+region. Ejection decisions are proxy-local, so a failure transition can still
+return some errors; the live gate generates repeated probes and checks continued
+availability rather than assuming instantaneous perfect failover.
+
 ## TLS And DNS
 
 Managed certificate creation ends when the Compute operation completes, not

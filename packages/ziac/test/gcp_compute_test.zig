@@ -61,7 +61,7 @@ test "Compute load balancer resources build stable typed declarations" {
     const backend_json = try backend.node.inputs.canonicalJsonAlloc(std.testing.allocator);
     defer std.testing.allocator.free(backend_json);
     try std.testing.expectEqualStrings(
-        "{\"backends\":[{\"group\":\"projects/ziac-dev/regions/europe-west1/networkEndpointGroups/api-europe-west1\",\"region\":\"europe-west1\"},{\"group\":\"projects/ziac-dev/regions/us-central1/networkEndpointGroups/api-us-central1\",\"region\":\"us-central1\"}],\"load_balancing_scheme\":\"EXTERNAL_MANAGED\",\"name\":\"api-backend\",\"project_id\":\"ziac-dev\",\"protocol\":\"HTTP\"}",
+        "{\"backends\":[{\"group\":\"projects/ziac-dev/regions/europe-west1/networkEndpointGroups/api-europe-west1\",\"region\":\"europe-west1\"},{\"group\":\"projects/ziac-dev/regions/us-central1/networkEndpointGroups/api-us-central1\",\"region\":\"us-central1\"}],\"load_balancing_scheme\":\"EXTERNAL_MANAGED\",\"name\":\"api-backend\",\"outlier_detection\":{},\"project_id\":\"ziac-dev\",\"protocol\":\"HTTP\"}",
         backend_json,
     );
 }
@@ -99,4 +99,30 @@ test "global forwarding rules retain typed allocated address inputs" {
     const json = try forwarding.node.inputs.canonicalJsonAlloc(std.testing.allocator);
     defer std.testing.allocator.free(json);
     try std.testing.expect(std.mem.indexOf(u8, json, "\"address\":{\"$output\":{\"field\":\"address\",\"resource\":\"gcp.compute.GlobalAddress.api-ip\"}}") != null);
+}
+
+test "backend service retains serverless outlier detection policy" {
+    const backends = [_]ziac.gcp.compute.ServerlessBackend{
+        .{ .region = "europe-west1", .group = "projects/ziac-dev/regions/europe-west1/networkEndpointGroups/api-eu" },
+        .{ .region = "us-central1", .group = "projects/ziac-dev/regions/us-central1/networkEndpointGroups/api-us" },
+    };
+    var backend = try ziac.gcp.compute.BackendService.build(std.testing.allocator, provider, .{
+        .name = "api-backend",
+        .backends = &backends,
+        .outlier_detection = .{},
+    });
+    defer backend.deinit(std.testing.allocator);
+    const policy = inputValue(backend.node, "outlier_detection").object;
+    try std.testing.expectEqual(@as(i64, 5), objectValue(policy, "consecutive_errors").integer);
+    try std.testing.expectEqual(@as(i64, 180), objectValue(policy, "base_ejection_time_seconds").integer);
+    try std.testing.expectEqual(@as(i64, 100), objectValue(policy, "enforcing_consecutive_errors").integer);
+}
+
+fn inputValue(node: ziac.ResourceNode, name: []const u8) ziac.value.Value {
+    return objectValue(node.inputs.object, name);
+}
+
+fn objectValue(fields: []const ziac.value.Field, name: []const u8) ziac.value.Value {
+    for (fields) |field| if (std.mem.eql(u8, field.name, name)) return field.value;
+    unreachable;
 }

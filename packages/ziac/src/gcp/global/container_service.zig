@@ -134,7 +134,11 @@ pub const ContainerService = struct {
         const backends = try allocator.alloc(compute.ServerlessBackend, regions.len);
         defer allocator.free(backends);
         for (regions, backend_groups, 0..) |region, group, index| backends[index] = .{ .region = region, .group = group };
-        var backend = try compute.BackendService.build(allocator, provider, .{ .name = backend_name, .backends = backends });
+        var backend = try compute.BackendService.build(allocator, provider, .{
+            .name = backend_name,
+            .backends = backends,
+            .outlier_detection = .{},
+        });
         defer backend.deinit(allocator);
         try graph.addResource(backend.node);
         for (neg_resource_ids) |neg_id| {
