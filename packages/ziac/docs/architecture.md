@@ -20,6 +20,8 @@ Initial source domains:
   deadlines, cancellation, and causal operation facts.
 - `checkpoint.zig`: serialized state checkpoint interface and local-state
   adapter.
+- `refresh.zig`: read-only provider refresh into observed state.
+- `importer.zig`: validated adoption of existing provider resources.
 
 Provider implementations must sit behind the provider lifecycle interface so the
 engine can be tested without live cloud credentials. Every provider operation
@@ -41,3 +43,10 @@ the remote before applying: matching remote objects are adopted, absent objects
 with live handles remain pending, and absent operations without handles resume
 from the recovery plan. A refreshed noop with no local record is also re-read and
 adopted, covering remote success immediately before a local crash.
+
+Local writers coordinate through an exclusive `lock.json` per stack and stage.
+Lock metadata records lineage, owner, command, and acquisition time. Inspection
+is side-effect free, ordinary release checks owner identity, and forced unlock
+checks lineage unless an explicit override is supplied. The CLI exposes
+`refresh`, `import`, and `unlock`, and all commands can emit a versioned
+`ziac.command.v1` JSON receipt.

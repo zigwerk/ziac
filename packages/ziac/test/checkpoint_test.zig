@@ -41,6 +41,8 @@ const FaultFiles = struct {
             .readFileAllocFn = readFileAlloc,
             .writeFileFn = writeFile,
             .atomicWriteFileFn = atomicWriteFile,
+            .createExclusiveFileFn = createExclusiveFile,
+            .deleteFileFn = deleteFile,
             .existsFn = exists,
         };
     }
@@ -71,6 +73,18 @@ const FaultFiles = struct {
         self.atomic_writes += 1;
         if (self.fail_atomic) return error.InjectedWriteFailure;
         try self.memory.atomicWriteFile(path, content);
+    }
+
+    fn createExclusiveFile(raw: *anyopaque, path: []const u8, content: []const u8) anyerror!void {
+        const self: *FaultFiles = @ptrCast(@alignCast(raw));
+        if (self.memory.exists(path)) return error.PathAlreadyExists;
+        try self.memory.writeFile(path, content);
+    }
+
+    fn deleteFile(raw: *anyopaque, path: []const u8) anyerror!void {
+        const self: *FaultFiles = @ptrCast(@alignCast(raw));
+        if (!self.memory.exists(path)) return error.FileNotFound;
+        self.memory.deleteFile(path);
     }
 
     fn exists(raw: *anyopaque, path: []const u8) anyerror!bool {

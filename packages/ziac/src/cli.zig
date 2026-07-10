@@ -2,9 +2,11 @@ const std = @import("std");
 const zstd = @import("zigeffect_std");
 const checkpoint_mod = @import("checkpoint.zig");
 const executor = @import("executor.zig");
+const importer = @import("importer.zig");
 const local_state = @import("local_state.zig");
 const plan_mod = @import("plan.zig");
 const provider_mod = @import("provider.zig");
+const refresh = @import("refresh.zig");
 const stack_registry = @import("stack_registry.zig");
 const state_mod = @import("state.zig");
 
@@ -27,6 +29,11 @@ const Args = struct {
     command: []const u8,
     stack: []const u8,
     stage: []const u8,
+    resource_id: ?[]const u8 = null,
+    physical_id: ?[]const u8 = null,
+    lineage: ?[]const u8 = null,
+    force: bool = false,
+    json: bool = false,
 };
 
 const command_options = [_]zstd.Cli.OptionSpec{
@@ -42,6 +49,27 @@ const command_options = [_]zstd.Cli.OptionSpec{
         .required = true,
         .help = "deployment stage",
     },
+    .{
+        .name = "json",
+        .kind = .boolean,
+        .help = "emit stable JSON",
+    },
+};
+
+const import_options = [_]zstd.Cli.OptionSpec{
+    command_options[0],
+    command_options[1],
+    command_options[2],
+    .{ .name = "resource", .kind = .string, .required = true, .help = "logical resource ID" },
+    .{ .name = "id", .kind = .string, .required = true, .help = "provider physical ID" },
+};
+
+const unlock_options = [_]zstd.Cli.OptionSpec{
+    command_options[0],
+    command_options[1],
+    command_options[2],
+    .{ .name = "lineage", .kind = .string, .help = "expected state lineage" },
+    .{ .name = "force", .kind = .boolean, .help = "override lineage check" },
 };
 
 const subcommands = [_]zstd.Cli.CommandSpec{
@@ -70,6 +98,21 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .description = "print local state",
         .options = command_options[0..],
     },
+    .{
+        .name = "refresh",
+        .description = "refresh observed provider state",
+        .options = command_options[0..],
+    },
+    .{
+        .name = "import",
+        .description = "import an existing provider resource",
+        .options = import_options[0..],
+    },
+    .{
+        .name = "unlock",
+        .description = "remove a local state writer lock",
+        .options = unlock_options[0..],
+    },
 };
 
 pub fn commandSpec() zstd.Cli.CommandSpec {
@@ -91,6 +134,9 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
     if (std.mem.eql(u8, args.command, "destroy")) return runDestroy(allocator, env, args);
     if (std.mem.eql(u8, args.command, "outputs")) return runOutputs(allocator, env, args);
     if (std.mem.eql(u8, args.command, "state")) return runState(allocator, env, args);
+    if (std.mem.eql(u8, args.command, "refresh")) return runRefresh(allocator, env, args);
+    if (std.mem.eql(u8, args.command, "import")) return runImport(allocator, env, args);
+    if (std.mem.eql(u8, args.command, "unlock")) return runUnlock(env, args);
 
     try writeError(env, "usage", error.UnknownSubcommand);
     return Exit.usage;
@@ -106,6 +152,11 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .command = parsed.command,
         .stack = parsed.optionValue("stack") orelse return error.MissingRequiredOption,
         .stage = parsed.optionValue("stage") orelse return error.MissingRequiredOption,
+        .resource_id = parsed.optionValue("resource"),
+        .physical_id = parsed.optionValue("id"),
+        .lineage = parsed.optionValue("lineage"),
+        .force = parsed.optionValue("force") != null,
+        .json = parsed.optionValue("json") != null,
     };
 }
 
@@ -125,7 +176,7 @@ fn runPlan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     defer planned.deinit();
 
-    try writePlan(env, planned);
+    try writePlan(env, args, planned, loaded.store.serialValue());
     return Exit.success;
 }
 
@@ -134,6 +185,11 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStackError(env, err);
     };
     defer program.deinit();
+
+    var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer command_lock.deinit();
 
     var loaded = env.state.loadResourcesOrEmpty(args.stack, args.stage) catch |err| {
         return handleStateError(env, err);
@@ -166,12 +222,17 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
 
-    try writePlan(env, planned);
-    try env.console.writeOut("Deploy complete\n");
+    try writePlan(env, args, planned, loaded.store.serialValue());
+    if (!args.json) try env.console.writeOut("Deploy complete\n");
     return Exit.success;
 }
 
 fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer command_lock.deinit();
+
     var loaded = env.state.loadResourcesOrEmpty(args.stack, args.stage) catch |err| {
         return handleStateError(env, err);
     };
@@ -200,8 +261,8 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
 
-    try writePlan(env, planned);
-    try env.console.writeOut("Destroy complete\n");
+    try writePlan(env, args, planned, loaded.store.serialValue());
+    if (!args.json) try env.console.writeOut("Destroy complete\n");
     return Exit.success;
 }
 
@@ -219,6 +280,11 @@ fn runOutputs(_: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return handleStateError(env, err);
     };
     defer outputs.deinit();
+
+    if (args.json) {
+        try writeCommandJson(env, args, 0, .{});
+        return Exit.success;
+    }
 
     for (outputs.items) |entry| {
         try env.console.writeOut(entry.name);
@@ -240,6 +306,11 @@ fn runState(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     defer allocator.free(records);
 
+    if (args.json) {
+        try writeCommandJson(env, args, loaded.store.serialValue(), .{});
+        return Exit.success;
+    }
+
     for (records) |record| {
         try env.console.writeOut(record.resource_id);
         try env.console.writeOut(" ");
@@ -249,9 +320,96 @@ fn runState(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     return Exit.success;
 }
 
-fn writePlan(env: *Env, planned: plan_mod.Plan) !void {
-    var counts = OperationCounts{};
-    for (planned.operations) |operation| counts.add(operation.kind);
+fn runRefresh(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+        return handleStackError(env, err);
+    };
+    defer program.deinit();
+    var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer command_lock.deinit();
+    var loaded = env.state.loadResourcesOrEmpty(args.stack, args.stage) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer loaded.deinit();
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = fakeProviderRegistry(&fake_provider);
+    var checkpoint = checkpoint_mod.LocalResources{
+        .store = env.state,
+        .stack = args.stack,
+        .stage = args.stage,
+    };
+    refresh.refreshGraph(allocator, &program.graph, &loaded.store, providers, checkpoint.checkpoint()) catch |err| {
+        return handleApplyError(env, err);
+    };
+    env.state.saveResources(args.stack, args.stage, &loaded.store) catch |err| {
+        return handleStateError(env, err);
+    };
+    if (args.json) try writeCommandJson(env, args, loaded.store.serialValue(), .{}) else try env.console.writeOut("Refresh complete\n");
+    return Exit.success;
+}
+
+fn runImport(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+        return handleStackError(env, err);
+    };
+    defer program.deinit();
+    const node = findResource(&program.graph, args.resource_id.?) orelse {
+        try writeError(env, "import", error.MissingResource);
+        return Exit.invalid_graph;
+    };
+    var command_lock = acquireCommandLock(allocator, env, args) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer command_lock.deinit();
+    var loaded = env.state.loadResourcesOrEmpty(args.stack, args.stage) catch |err| {
+        return handleStateError(env, err);
+    };
+    defer loaded.deinit();
+    var fake_provider = provider_mod.FakeProvider.init(allocator);
+    defer fake_provider.deinit();
+    const providers = fakeProviderRegistry(&fake_provider);
+    var checkpoint = checkpoint_mod.LocalResources{
+        .store = env.state,
+        .stack = args.stack,
+        .stage = args.stage,
+    };
+    importer.importResource(
+        allocator,
+        node,
+        args.physical_id.?,
+        &loaded.store,
+        providers,
+        checkpoint.checkpoint(),
+    ) catch |err| return handleApplyError(env, err);
+    if (args.json) try writeCommandJson(env, args, loaded.store.serialValue(), .{}) else try env.console.writeOut("Import complete\n");
+    return Exit.success;
+}
+
+fn runUnlock(env: *Env, args: Args) !u8 {
+    if (!args.force and args.lineage == null) {
+        try writeError(env, "usage", error.MissingRequiredOption);
+        return Exit.usage;
+    }
+    env.state.forceUnlock(args.stack, args.stage, args.lineage orelse "", args.force) catch |err| {
+        return handleStateError(env, err);
+    };
+    if (args.json) try writeCommandJson(env, args, 0, .{}) else try env.console.writeOut("Unlock complete\n");
+    return Exit.success;
+}
+
+fn findResource(graph: *const @import("resource.zig").ResourceGraph, resource_id: []const u8) ?@import("resource.zig").ResourceNode {
+    for (graph.resources.items) |node| {
+        if (std.mem.eql(u8, node.id, resource_id)) return node;
+    }
+    return null;
+}
+
+fn writePlan(env: *Env, args: Args, planned: plan_mod.Plan, serial: u64) !void {
+    const counts = planCounts(planned);
+    if (args.json) return writeCommandJson(env, args, serial, counts);
 
     try env.console.stdout.print(env.console.allocator, "Plan: {d} create, {d} update, {d} delete, {d} noop\n", .{
         counts.create,
@@ -268,6 +426,81 @@ fn writePlan(env: *Env, planned: plan_mod.Plan) !void {
         try env.console.writeOut(operation.resource.logical_id);
         try env.console.writeOut("\n");
     }
+}
+
+fn planCounts(planned: plan_mod.Plan) OperationCounts {
+    var counts = OperationCounts{};
+    for (planned.operations) |operation| counts.add(operation.kind);
+    return counts;
+}
+
+const CommandReceipt = struct {
+    schema: []const u8 = "ziac.command.v1",
+    command: []const u8,
+    status: []const u8 = "success",
+    stack: []const u8,
+    stage: []const u8,
+    serial: u64,
+    create: usize,
+    update: usize,
+    delete: usize,
+    noop: usize,
+};
+
+fn writeCommandJson(env: *Env, args: Args, serial: u64, counts: OperationCounts) !void {
+    const json = try std.json.Stringify.valueAlloc(env.console.allocator, CommandReceipt{
+        .command = args.command,
+        .stack = args.stack,
+        .stage = args.stage,
+        .serial = serial,
+        .create = counts.create,
+        .update = counts.update,
+        .delete = counts.delete,
+        .noop = counts.noop,
+    }, .{});
+    defer env.console.allocator.free(json);
+    try env.console.writeOut(json);
+    try env.console.writeOut("\n");
+}
+
+const CommandLock = struct {
+    allocator: std.mem.Allocator,
+    store: local_state.Store,
+    stack: []const u8,
+    stage: []const u8,
+    owner_id: []const u8,
+
+    fn deinit(self: *CommandLock) void {
+        self.store.releaseLock(self.stack, self.stage, self.owner_id) catch {};
+        self.allocator.free(self.owner_id);
+        self.* = undefined;
+    }
+};
+
+fn acquireCommandLock(
+    allocator: std.mem.Allocator,
+    env: *Env,
+    args: Args,
+) !CommandLock {
+    var clock = ziacClock();
+    const owner_id = try std.fmt.allocPrint(allocator, "ziac/{s}/{d}", .{ args.command, clock.nowMs() });
+    errdefer allocator.free(owner_id);
+    try env.state.acquireLock(args.stack, args.stage, .{
+        .owner_id = owner_id,
+        .command = args.command,
+        .acquired_at_millis = clock.nowMs(),
+    });
+    return .{
+        .allocator = allocator,
+        .store = env.state,
+        .stack = args.stack,
+        .stage = args.stage,
+        .owner_id = owner_id,
+    };
+}
+
+fn ziacClock() @import("zigeffect_std").fx.Clock {
+    return @import("zigeffect_std").fx.Clock.system();
 }
 
 const OperationCounts = struct {

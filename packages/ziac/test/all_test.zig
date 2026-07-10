@@ -9,6 +9,8 @@ comptime {
     _ = @import("provider_apply_test.zig");
     _ = @import("executor_test.zig");
     _ = @import("checkpoint_test.zig");
+    _ = @import("lock_test.zig");
+    _ = @import("state_workflow_test.zig");
     _ = @import("stack_registry_test.zig");
     _ = @import("local_state_test.zig");
     _ = @import("cli_test.zig");

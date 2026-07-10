@@ -93,3 +93,100 @@ test "cli state prints persisted resource status" {
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "gcp.artifact.Repository.europe-west1.hello-global created") != null);
     try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "gcp.run.Service.europe-west1.api created") != null);
 }
+
+test "cli plan emits stable JSON command output" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+
+    const code = try ziac.cli.run(
+        std.testing.allocator,
+        &.{ "plan", "--stack", "hello-global", "--stage", "dev", "--json" },
+        &env,
+    );
+
+    try std.testing.expectEqual(@as(u8, 0), code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"schema\":\"ziac.command.v1\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"command\":\"plan\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"create\":2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "Plan:") == null);
+}
+
+test "cli writer reports lock conflict without removing another owner lock" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+    try env.state.acquireLock("hello-global", "dev", .{
+        .owner_id = "other-writer",
+        .command = "deploy",
+        .acquired_at_millis = 1,
+    });
+
+    const code = try ziac.cli.run(
+        std.testing.allocator,
+        &.{ "deploy", "--stack", "hello-global", "--stage", "dev" },
+        &env,
+    );
+
+    try std.testing.expectEqual(ziac.cli.Exit.state_error, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "LockConflict") != null);
+    try std.testing.expect(try env.state.hasLock("hello-global", "dev"));
+}
+
+test "cli import validates IDs and persists a valid imported resource" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+    const resource_id = "gcp.run.Service.europe-west1.api";
+
+    const invalid = try ziac.cli.run(
+        std.testing.allocator,
+        &.{ "import", "--stack", "hello-global", "--stage", "dev", "--resource", resource_id, "--id", "bad id" },
+        &env,
+    );
+    try std.testing.expectEqual(ziac.cli.Exit.provider_error, invalid);
+    console.stderr.clearRetainingCapacity();
+
+    const valid = try ziac.cli.run(
+        std.testing.allocator,
+        &.{ "import", "--stack", "hello-global", "--stage", "dev", "--resource", resource_id, "--id", "projects/ziac-dev/locations/europe-west1/services/api" },
+        &env,
+    );
+    try std.testing.expectEqual(@as(u8, 0), valid);
+    const resources = fs.readFile(".ziac/state/hello-global/dev/resources.json").?;
+    try std.testing.expect(std.mem.indexOf(u8, resources, "projects/ziac-dev/locations/europe-west1/services/api") != null);
+}
+
+test "cli refresh and lineage-checked unlock commands are available" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var env = testEnv(&fs, &console);
+
+    const refresh_code = try ziac.cli.run(
+        std.testing.allocator,
+        &.{ "refresh", "--stack", "hello-global", "--stage", "dev" },
+        &env,
+    );
+    try std.testing.expectEqual(@as(u8, 0), refresh_code);
+    try env.state.acquireLock("hello-global", "dev", .{
+        .owner_id = "stale-owner",
+        .command = "deploy",
+        .acquired_at_millis = 1,
+    });
+
+    const unlock_code = try ziac.cli.run(
+        std.testing.allocator,
+        &.{ "unlock", "--stack", "hello-global", "--stage", "dev", "--lineage", "hello-global/dev" },
+        &env,
+    );
+    try std.testing.expectEqual(@as(u8, 0), unlock_code);
+    try std.testing.expect(!try env.state.hasLock("hello-global", "dev"));
+}

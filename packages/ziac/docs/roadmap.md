@@ -18,8 +18,9 @@ automated and live tests pass.
 - Engine V2 canonical values, owned desired/state records, provider lifecycle,
   refresh planning, and dependency-ordered bounded execution: implemented and
   tested.
-- Engine V2 checkpoint/resume and atomic state persistence: implemented and
-  tested. Writer locking and saved-plan preconditions remain in progress.
+- Engine V2 checkpoint/resume, atomic state persistence, writer locking,
+  refresh/import/unlock, and JSON command receipts: implemented and tested.
+  Saved-plan preconditions remain in progress.
 - Live GCP calls, global routing, CockroachDB, comptime app bindings, remote
   state, and source builds: not yet implemented.
 

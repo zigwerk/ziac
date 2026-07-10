@@ -18,6 +18,8 @@ pub const FileStore = struct {
     readFileAllocFn: *const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]const u8,
     writeFileFn: *const fn (*anyopaque, []const u8, []const u8) anyerror!void,
     atomicWriteFileFn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8) anyerror!void,
+    createExclusiveFileFn: *const fn (*anyopaque, []const u8, []const u8) anyerror!void,
+    deleteFileFn: *const fn (*anyopaque, []const u8) anyerror!void,
     existsFn: *const fn (*anyopaque, []const u8) anyerror!bool,
 
     pub fn readFileAlloc(
@@ -41,6 +43,14 @@ pub const FileStore = struct {
         try self.atomicWriteFileFn(self.ptr, allocator, path, content);
     }
 
+    pub fn createExclusiveFile(self: FileStore, path: []const u8, content: []const u8) anyerror!void {
+        try self.createExclusiveFileFn(self.ptr, path, content);
+    }
+
+    pub fn deleteFile(self: FileStore, path: []const u8) anyerror!void {
+        try self.deleteFileFn(self.ptr, path);
+    }
+
     pub fn exists(self: FileStore, path: []const u8) anyerror!bool {
         return self.existsFn(self.ptr, path);
     }
@@ -52,6 +62,8 @@ pub fn memoryFiles(fs: *zstd.FileSystem.MemoryFileSystem) FileStore {
         .readFileAllocFn = memoryReadFileAlloc,
         .writeFileFn = memoryWriteFile,
         .atomicWriteFileFn = memoryAtomicWriteFile,
+        .createExclusiveFileFn = memoryCreateExclusiveFile,
+        .deleteFileFn = memoryDeleteFile,
         .existsFn = memoryExists,
     };
 }
@@ -81,6 +93,18 @@ fn memoryAtomicWriteFile(
     try fs.atomicWriteFile(path, content);
 }
 
+fn memoryCreateExclusiveFile(raw: *anyopaque, path: []const u8, content: []const u8) anyerror!void {
+    const fs: *zstd.FileSystem.MemoryFileSystem = @ptrCast(@alignCast(raw));
+    if (fs.exists(path)) return error.PathAlreadyExists;
+    try fs.writeFile(path, content);
+}
+
+fn memoryDeleteFile(raw: *anyopaque, path: []const u8) anyerror!void {
+    const fs: *zstd.FileSystem.MemoryFileSystem = @ptrCast(@alignCast(raw));
+    if (!fs.exists(path)) return error.FileNotFound;
+    fs.deleteFile(path);
+}
+
 fn memoryExists(raw: *anyopaque, path: []const u8) anyerror!bool {
     const fs: *zstd.FileSystem.MemoryFileSystem = @ptrCast(@alignCast(raw));
     return fs.exists(path);
@@ -93,6 +117,8 @@ pub const localFiles = struct {
             .readFileAllocFn = localReadFileAlloc,
             .writeFileFn = localWriteFile,
             .atomicWriteFileFn = localAtomicWriteFile,
+            .createExclusiveFileFn = localCreateExclusiveFile,
+            .deleteFileFn = localDeleteFile,
             .existsFn = localExists,
         };
     }
@@ -133,9 +159,53 @@ pub const localFiles = struct {
         };
     }
 
+    fn localCreateExclusiveFile(raw: *anyopaque, path: []const u8, content: []const u8) anyerror!void {
+        const fs: *zstd.FileSystem.LocalFileSystem = @ptrCast(@alignCast(raw));
+        if (std.mem.lastIndexOfScalar(u8, path, '/')) |slash| {
+            try fs.dir.createDirPath(fs.io, path[0..slash]);
+        }
+        try fs.dir.writeFile(fs.io, .{
+            .sub_path = path,
+            .data = content,
+            .flags = .{ .exclusive = true },
+        });
+    }
+
+    fn localDeleteFile(raw: *anyopaque, path: []const u8) anyerror!void {
+        const fs: *zstd.FileSystem.LocalFileSystem = @ptrCast(@alignCast(raw));
+        try fs.deleteFile(path);
+    }
+
     fn localExists(raw: *anyopaque, path: []const u8) anyerror!bool {
         const fs: *zstd.FileSystem.LocalFileSystem = @ptrCast(@alignCast(raw));
         return fs.exists(path);
+    }
+};
+
+pub const LockOptions = struct {
+    owner_id: []const u8,
+    command: []const u8,
+    acquired_at_millis: u64,
+};
+
+pub const LockMetadata = struct {
+    lineage_id: []const u8,
+    owner_id: []const u8,
+    command: []const u8,
+    acquired_at_millis: u64,
+
+    pub fn isStale(self: LockMetadata, now_millis: u64, stale_after_millis: u64) bool {
+        return now_millis -| self.acquired_at_millis >= stale_after_millis;
+    }
+};
+
+pub const LoadedLock = struct {
+    arena: std.heap.ArenaAllocator,
+    metadata: LockMetadata,
+
+    pub fn deinit(self: *LoadedLock) void {
+        self.arena.deinit();
+        self.* = undefined;
     }
 };
 
@@ -156,6 +226,73 @@ pub const Store = struct {
 
     pub fn outputsPathAlloc(self: Store, stack: []const u8, stage: []const u8) ![]const u8 {
         return std.fmt.allocPrint(self.allocator, ".ziac/state/{s}/{s}/outputs.json", .{ stack, stage });
+    }
+
+    pub fn lockPathAlloc(self: Store, stack: []const u8, stage: []const u8) ![]const u8 {
+        return std.fmt.allocPrint(self.allocator, ".ziac/state/{s}/{s}/lock.json", .{ stack, stage });
+    }
+
+    pub fn acquireLock(self: Store, stack: []const u8, stage: []const u8, options: LockOptions) !void {
+        const path = try self.lockPathAlloc(stack, stage);
+        defer self.allocator.free(path);
+        const lineage = try state_format.lineageAlloc(self.allocator, stack, stage);
+        defer self.allocator.free(lineage);
+        const content = try lockJsonAlloc(self.allocator, .{
+            .lineage_id = lineage,
+            .owner_id = options.owner_id,
+            .command = options.command,
+            .acquired_at_millis = options.acquired_at_millis,
+        });
+        defer self.allocator.free(content);
+        self.files.createExclusiveFile(path, content) catch |err| switch (err) {
+            error.PathAlreadyExists => return error.LockConflict,
+            else => return err,
+        };
+    }
+
+    pub fn inspectLock(self: Store, stack: []const u8, stage: []const u8) !LoadedLock {
+        const path = try self.lockPathAlloc(stack, stage);
+        defer self.allocator.free(path);
+        const content = self.files.readFileAlloc(self.allocator, path) catch |err| switch (err) {
+            error.FileNotFound => return error.MissingLock,
+            else => return err,
+        };
+        defer self.allocator.free(content);
+        return parseLock(self.allocator, content);
+    }
+
+    pub fn hasLock(self: Store, stack: []const u8, stage: []const u8) !bool {
+        const path = try self.lockPathAlloc(stack, stage);
+        defer self.allocator.free(path);
+        return self.files.exists(path);
+    }
+
+    pub fn releaseLock(self: Store, stack: []const u8, stage: []const u8, owner_id: []const u8) !void {
+        var lock = try self.inspectLock(stack, stage);
+        defer lock.deinit();
+        if (!std.mem.eql(u8, lock.metadata.owner_id, owner_id)) return error.LockOwnershipMismatch;
+        try self.deleteLockFile(stack, stage);
+    }
+
+    pub fn forceUnlock(
+        self: Store,
+        stack: []const u8,
+        stage: []const u8,
+        expected_lineage: []const u8,
+        override_lineage: bool,
+    ) !void {
+        var lock = try self.inspectLock(stack, stage);
+        defer lock.deinit();
+        if (!override_lineage and !std.mem.eql(u8, lock.metadata.lineage_id, expected_lineage)) {
+            return error.LockLineageMismatch;
+        }
+        try self.deleteLockFile(stack, stage);
+    }
+
+    fn deleteLockFile(self: Store, stack: []const u8, stage: []const u8) !void {
+        const path = try self.lockPathAlloc(stack, stage);
+        defer self.allocator.free(path);
+        try self.files.deleteFile(path);
     }
 
     pub fn saveResources(
@@ -221,6 +358,41 @@ pub const Store = struct {
         return parseOutputs(self.allocator, content);
     }
 };
+
+fn lockJsonAlloc(allocator: std.mem.Allocator, metadata: LockMetadata) ![]const u8 {
+    var output = std.ArrayList(u8).empty;
+    errdefer output.deinit(allocator);
+    try output.append(allocator, '{');
+    try appendIntField(&output, allocator, "format_version", 1, false);
+    try appendStringField(&output, allocator, "lineage_id", metadata.lineage_id, true);
+    try appendStringField(&output, allocator, "owner_id", metadata.owner_id, true);
+    try appendStringField(&output, allocator, "command", metadata.command, true);
+    try appendIntField(&output, allocator, "acquired_at_millis", metadata.acquired_at_millis, true);
+    try output.append(allocator, '}');
+    return output.toOwnedSlice(allocator);
+}
+
+fn parseLock(allocator: std.mem.Allocator, content: []const u8) !LoadedLock {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    errdefer arena.deinit();
+    const arena_allocator = arena.allocator();
+    const parsed = std.json.parseFromSlice(std.json.Value, arena_allocator, content, .{}) catch
+        return error.InvalidLockFile;
+    const root = switch (parsed.value) {
+        .object => |object| object,
+        else => return error.InvalidLockFile,
+    };
+    if (try jsonU32(root, "format_version") != 1) return error.InvalidLockFile;
+    return .{
+        .arena = arena,
+        .metadata = .{
+            .lineage_id = try arena_allocator.dupe(u8, try jsonString(root, "lineage_id")),
+            .owner_id = try arena_allocator.dupe(u8, try jsonString(root, "owner_id")),
+            .command = try arena_allocator.dupe(u8, try jsonString(root, "command")),
+            .acquired_at_millis = try jsonU64(root, "acquired_at_millis"),
+        },
+    };
+}
 
 pub const LoadedResources = struct {
     arena: std.heap.ArenaAllocator,
