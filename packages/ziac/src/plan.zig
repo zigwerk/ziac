@@ -72,7 +72,9 @@ pub fn buildDestroyPlan(
             .kind = .delete,
             .resource = .{
                 .id = record.resource_id,
+                .provider = record.provider,
                 .type_name = record.type_name,
+                .schema_version = record.schema_version,
                 .logical_id = record.logical_id,
             },
         });
