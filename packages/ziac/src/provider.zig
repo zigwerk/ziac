@@ -123,6 +123,7 @@ pub const OperationContext = struct {
     clock: ?*fx.Clock = null,
     cancellation: ?Cancellation = null,
     deadline_millis: ?u64 = null,
+    physical_id: ?[]const u8 = null,
 
     pub fn init(allocator: std.mem.Allocator) OperationContext {
         return .{ .allocator = allocator };
@@ -303,6 +304,7 @@ pub const FakeProvider = struct {
     updates: usize = 0,
     deletes: usize = 0,
     imports: usize = 0,
+    last_read_physical_id: ?[]const u8 = null,
     operation_delay_millis: u64 = 0,
     result_operation_handle: ?[]const u8 = null,
     result_completed: bool = true,
@@ -319,6 +321,7 @@ pub const FakeProvider = struct {
     }
 
     pub fn deinit(self: *FakeProvider) void {
+        if (self.last_read_physical_id) |physical_id| self.allocator.free(physical_id);
         var iterator = self.remotes.valueIterator();
         while (iterator.next()) |remote| remote.deinit();
         self.remotes.deinit();
@@ -398,6 +401,11 @@ pub const FakeProvider = struct {
         defer self.mutex.unlock();
         try self.takeFailureLocked();
         self.reads += 1;
+        if (self.last_read_physical_id) |physical_id| self.allocator.free(physical_id);
+        self.last_read_physical_id = if (context.physical_id) |physical_id|
+            try self.allocator.dupe(u8, physical_id)
+        else
+            null;
         const remote = self.remotes.get(node.id) orelse return .absent;
         return .{ .present = try remote.result.clone(context.allocator) };
     }

@@ -88,7 +88,8 @@ credentials.
 - IAM service accounts and bindings: scripted lifecycle complete; live gate
   pending.
 - Artifact Registry: scripted lifecycle complete; live gate pending.
-- Secret Manager.
+- Secret Manager: scripted metadata, version, and IAM lifecycle complete; live
+  gate pending.
 - Cloud Run v2.
 - Live provider selection and guarded disposable-project tests.
 

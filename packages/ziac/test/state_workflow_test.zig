@@ -49,6 +49,38 @@ test "refresh updates observed state without mutating desired infrastructure" {
     try std.testing.expectEqual(@as(usize, 1), fake.reads);
 }
 
+test "refresh passes a tracked physical identifier to provider reads" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try addNode(&graph, "example/service:v1");
+    const node = graph.resources.items[0];
+    var fake = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer fake.deinit();
+    var remote = try fake.provider().create(std.testing.allocator, node);
+    defer remote.deinit();
+    var providers = ziac.provider.ProviderRegistry{};
+    providers.register(.gcp, fake.provider());
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    const desired_hash = std.fmt.bytesToHex(node.inputs_hash, .lower);
+    try state.put(.{
+        .resource_id = node.id,
+        .provider = node.provider,
+        .type_name = node.type_name,
+        .logical_id = node.logical_id,
+        .physical_id = "projects/example/non-deterministic/versions/7",
+        .desired_hash = desired_hash[0..],
+        .status = .created,
+    });
+
+    try ziac.refresh.refreshGraph(std.testing.allocator, &graph, &state, providers, null);
+
+    try std.testing.expectEqualStrings(
+        "projects/example/non-deterministic/versions/7",
+        fake.last_read_physical_id.?,
+    );
+}
+
 test "import validates provider identifiers before provider mutation" {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     defer graph.deinit();

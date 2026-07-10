@@ -65,6 +65,8 @@ is the convenience form when the caller only needs the terminal payload.
 - `gcp.artifact.Repository` waits for create/delete operations, observes labels
   from the live repository, updates labels in place, and adopts an existing
   repository only when immutable identity, format, and labels match exactly.
+- `gcp.secret.Secret`, `SecretVersion`, and `SecretIamMember` manage secret
+  metadata, opaque version references, and resource-scoped accessor policy.
 
 Project-member mutations target only unconditional bindings for the requested
 role. Conditional bindings, audit configuration, policy version, etag, and

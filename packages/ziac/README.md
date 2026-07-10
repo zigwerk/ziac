@@ -42,14 +42,15 @@ outputs are persisted and printed as `[REDACTED]`.
 
 `hello-global` still defaults to the fake provider while the live CLI safety
 gate is under construction. The package now also includes a native live Google
-provider for Service Usage, IAM, and Artifact Registry. It can enable and
-disable project APIs, manage service accounts with drift-aware updates and
-import, mutate project IAM members while preserving policy etags, conditional
-bindings, and unrelated fields, and manage Docker repositories with normalized
-labels and operation polling.
+provider for Service Usage, IAM, Artifact Registry, and Secret Manager. It can
+enable and disable project APIs, manage service accounts with drift-aware
+updates and import, mutate IAM members while preserving policy etags,
+conditional bindings, and unrelated fields, manage Docker repositories with
+normalized labels and operation polling, and create secret versions from
+ephemeral source references without retaining plaintext.
 
-Secret Manager, Cloud Run, load balancers, and CockroachDB resources remain on
-the acceptance-gated roadmap.
+Cloud Run, load balancers, and CockroachDB resources remain on the
+acceptance-gated roadmap.
 
 ## Delivery Status
 
@@ -85,9 +86,13 @@ credential-gated disposable-project smoke test remains part of the M4 gate.
 Artifact Registry create/read/update/delete/import and exact-match conflict
 adoption are also implemented; repository location and format changes classify
 as replacement while labels update in place.
+Secret metadata, append-only versions, and accessor IAM lifecycles are
+implemented. State contains only typed secret references, and tracked physical
+IDs let refresh address Google-assigned version numbers safely.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
-`docs/cockroach-client.md` for the live client contracts, and
+`docs/cockroach-client.md` for the live client contracts. See
+`docs/secret-manager.md` for the secret payload boundary, and
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

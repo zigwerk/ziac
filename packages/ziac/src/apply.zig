@@ -80,6 +80,7 @@ fn applyUpdate(
 ) ApplyError!void {
     const node = operation.resource;
     try putPendingState(context.allocator, store, node, operation.dependencies, .updating);
+    if (store.get(node.id)) |existing| context.physical_id = existing.physical_id;
     var read = provider.readWithContext(context, node) catch |err| {
         try markFailedAndCheckpoint(store, node.id, checkpoint);
         return err;
@@ -114,6 +115,7 @@ fn applyReplace(
 ) ApplyError!void {
     const node = operation.resource;
     try putPendingState(context.allocator, store, node, operation.dependencies, .replacing);
+    if (store.get(node.id)) |existing| context.physical_id = existing.physical_id;
     var read = provider.readWithContext(context, node) catch |err| {
         try markFailedAndCheckpoint(store, node.id, checkpoint);
         return err;
