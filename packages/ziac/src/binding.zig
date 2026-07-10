@@ -1,5 +1,6 @@
 const std = @import("std");
 const output = @import("output.zig");
+const value = @import("value.zig");
 
 pub fn Value(comptime T: type) type {
     return Field(T, .public);
@@ -64,7 +65,11 @@ fn validatePair(
     if (!hasOutputMetadata(binding_type)) {
         @compileError("ZIAC102 binding is not a typed Ziac output: " ++ field_name);
     }
-    if (env_type.ValueType != binding_type.ValueType) {
+    const secret_reference_string = env_type.secrecy == .secret and
+        binding_type.secrecy == .secret and
+        env_type.ValueType == []const u8 and
+        binding_type.ValueType == value.SecretReference;
+    if (env_type.ValueType != binding_type.ValueType and !secret_reference_string) {
         @compileError("ZIAC102 binding value type mismatch: " ++ field_name);
     }
     if (env_type.secrecy != binding_type.secrecy) {

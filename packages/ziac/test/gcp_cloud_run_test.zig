@@ -146,6 +146,38 @@ test "cloud run service can override region and service account" {
     try std.testing.expectEqualStrings("service_account", service.service_account.resource_ref.field);
 }
 
+test "cloud run desired inputs retain typed image public env and secret env outputs" {
+    const provider = ziac.gcp.config.ProviderConfig{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    };
+    const image = ziac.PublicOutput([]const u8).fromResource("gcp.cloudbuild.ZigImage.api", "image_ref");
+    const mode = ziac.PublicOutput([]const u8).fromResource("local.Config.mode", "value");
+    const database = ziac.Output(ziac.value.SecretReference, .secret).fromResource(
+        "gcp.secret.SecretVersion.database.initial",
+        "version",
+    );
+    const env = [_]ziac.gcp.cloud_run.EnvVar{
+        .{ .name = "MODE", .value_output = mode },
+        .{ .name = "DATABASE_URL", .secret = true, .secret_output = database },
+    };
+
+    var service = try ziac.gcp.cloud_run.Service.build(std.testing.allocator, provider, .{
+        .name = "api",
+        .image_output = image,
+        .env = &env,
+    });
+    defer service.deinit(std.testing.allocator);
+
+    const inputs = try service.node.inputs.canonicalJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(inputs);
+    for ([_][]const u8{
+        "\"image\":{\"$output\":{\"field\":\"image_ref\",\"resource\":\"gcp.cloudbuild.ZigImage.api\"}}",
+        "\"resource\":\"local.Config.mode\"",
+        "\"resource\":\"gcp.secret.SecretVersion.database.initial\"",
+    }) |expected| try std.testing.expect(std.mem.indexOf(u8, inputs, expected) != null);
+}
+
 test "cloud run service rejects missing image invalid port and duplicate env" {
     const provider = ziac.gcp.config.ProviderConfig{
         .project_id = "ziac-dev",

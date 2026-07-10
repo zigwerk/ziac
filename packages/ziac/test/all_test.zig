@@ -18,6 +18,7 @@ comptime {
     _ = @import("local_state_test.zig");
     _ = @import("cli_test.zig");
     _ = @import("source_archive_test.zig");
+    _ = @import("zig_recipe_test.zig");
     _ = @import("gcp_config_test.zig");
     _ = @import("gcp_artifact_registry_test.zig");
     _ = @import("gcp_storage_test.zig");
@@ -63,5 +64,6 @@ comptime {
     _ = @import("gcp_certificate_live_provider_test.zig");
     _ = @import("gcp_dns_live_provider_test.zig");
     _ = @import("gcp_container_service_test.zig");
+    _ = @import("gcp_zig_service_test.zig");
     _ = @import("gcp_live_provider_test.zig");
 }

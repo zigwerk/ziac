@@ -271,6 +271,8 @@ fn buildBodyAlloc(context: *provider_mod.OperationContext, node: resource.Resour
     const timeout = try std.fmt.allocPrint(arena, "{d}s", .{try requiredInteger(node.inputs, "timeout_seconds")});
     try root.put(arena, "timeout", .{ .string = timeout });
     try root.put(arena, "queueTtl", .{ .string = "3600s" });
+    const service_account = try requiredString(node.inputs, "service_account");
+    if (service_account.len > 0) try root.put(arena, "serviceAccount", .{ .string = service_account });
     var options: std.json.ObjectMap = .empty;
     try options.put(arena, "logging", .{ .string = "CLOUD_LOGGING_ONLY" });
     try options.put(arena, "machineType", .{ .string = "E2_HIGHCPU_8" });
@@ -379,6 +381,9 @@ fn validateBuild(
     const source_tag = try sourceTagAlloc(context.allocator, node);
     defer context.allocator.free(source_tag);
     if (!hasTag(build, "ziac") or !hasTag(build, build_tag) or !hasTag(build, source_tag)) return error.InvalidConfiguration;
+    const desired_service_account = try requiredString(node.inputs, "service_account");
+    if (desired_service_account.len > 0 and
+        !std.mem.eql(u8, jsonString(build.get("serviceAccount")) orelse "", desired_service_account)) return error.InvalidConfiguration;
 }
 
 fn targetImageAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {

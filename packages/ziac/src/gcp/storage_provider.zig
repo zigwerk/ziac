@@ -34,6 +34,14 @@ pub const Payload = struct {
         };
     }
 
+    pub fn initTake(
+        allocator: std.mem.Allocator,
+        bytes: []u8,
+        observer: ?PayloadDeinitObserver,
+    ) Payload {
+        return .{ .allocator = allocator, .bytes = bytes, .observer = observer };
+    }
+
     pub fn deinit(self: *Payload) void {
         std.crypto.secureZero(u8, self.bytes);
         self.allocator.free(self.bytes);

@@ -1173,6 +1173,8 @@ Evidence:
 
 ### Task 7.3: ZigService Component
 
+Status: implemented on 2026-07-10.
+
 Files:
 
 - Add `packages/ziac/src/gcp/global/zig_service.zig`.
@@ -1192,6 +1194,25 @@ Acceptance:
 - Public API requires no hand-written Dockerfile or raw load balancer resources.
 
 Commit: `Add global ZigService component`
+
+Evidence:
+
+- `ZigService(App, Bindings, Providers)` validates `App.Env`, GCP provider
+  availability, binding names/types/secrecy, and supported runtime string
+  types at comptime.
+- A generated, pinned Zig 0.15.2 musl recipe builds to a distroless nonroot
+  runtime. The golden recipe and real sample are verified on linux/amd64 and
+  linux/arm64, including startup, liveness, root, and not-found responses.
+- Source, recipe, and builder identities feed a content-addressed GCS object and
+  Cloud Build. The immutable image output feeds every regional Cloud Run
+  service through typed references and remains canonical after refresh.
+- Separate build/runtime identities, least-privilege build roles, per-secret
+  accessor IAM, retained APIs/repository/bucket, and default health probes are
+  dependency complete. Foreign-provider and cross-project secret references
+  fail before cloud I/O.
+- The package suite contains 299 tests at this checkpoint: 298 pass and one
+  authenticated credential gate is skipped. All examples and both container
+  architectures pass.
 
 ### Task 7.4: Live Source Deployment Gate
 

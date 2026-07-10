@@ -50,3 +50,15 @@ test "regional output validates inside a regional service context" {
     const Normalized = ziac.binding.validateBindings(Env, Bindings, .regional);
     try std.testing.expect(Normalized == Bindings);
 }
+
+test "a Secret Manager reference safely satisfies a secret string app field" {
+    const Env = struct {
+        database_url: ziac.binding.Secret([]const u8),
+    };
+    const Bindings = struct {
+        database_url: ziac.Output(ziac.value.SecretReference, .secret),
+    };
+
+    const Normalized = ziac.binding.validateBindings(Env, Bindings, .global);
+    try std.testing.expect(Normalized == Bindings);
+}

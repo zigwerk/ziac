@@ -164,6 +164,22 @@ test "source archive rejects unsafe generated paths collisions and limits" {
     );
 }
 
+test "source archive can transfer payload ownership without retaining bytes" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try writeFile(tmp.dir, "main.zig", "pub fn main() void {}\n");
+    var archive = try source_archive.createAlloc(std.testing.allocator, std.testing.io, tmp.dir, .{});
+    const expected = archive.digest;
+    const bytes = archive.takeBytes();
+    defer std.testing.allocator.free(bytes);
+    archive.deinit();
+
+    var digest_bytes: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(bytes, &digest_bytes, .{});
+    const digest = std.fmt.bytesToHex(digest_bytes, .lower);
+    try std.testing.expectEqualStrings(&expected, &digest);
+}
+
 const ExpectedTarEntry = struct {
     path: []const u8,
     mode: u32,

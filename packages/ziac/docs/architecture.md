@@ -87,6 +87,24 @@ only when declared, with `ZIAC110` and `ZIAC111` diagnostics for missing cloud
 providers. The runtime provider registry is derived by iterating that same static
 set, so undeclared provider implementations cannot become available by accident.
 
+`gcp.global.ZigService(App, Bindings, Providers)` closes the application and
+infrastructure type boundary. Instantiating the component requires `App.Env`, a
+declared GCP provider, and a binding struct accepted by `validateBindings`.
+Public and secret bindings lower to typed Cloud Run output references, so the
+resource graph derives producer edges before any provider runs. Secret values
+must resolve through GCP Secret Manager; foreign-provider, cross-project, and
+untyped inline secret values are rejected before cloud mutation.
+
+The source pipeline is content addressed. A sorted, metadata-normalized gzip
+archive excludes state, VCS, caches, environment files, keys, and secret
+directories. Ziac injects a generated `Dockerfile.ziac`, hashes source plus the
+recipe and pinned Cloud Build builder, uploads with generation-zero semantics,
+and builds an immutable Artifact Registry digest. The build bucket, repository,
+and enabled APIs are retained. Build and runtime service accounts are separate,
+and regional Cloud Run services consume the image output rather than a
+builder-predicted URL. Provider reads restore the original output references
+when remote values match, keeping refresh and subsequent plans stable.
+
 `zig build test` runs isolated compiler fixtures in addition to unit tests. Valid
 binding/provider programs must compile. Invalid fixtures must both fail and emit
 their exact contract code: `ZIAC100` through `ZIAC104`, `ZIAC110`, `ZIAC111`, or

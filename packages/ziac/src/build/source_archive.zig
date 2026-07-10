@@ -33,15 +33,21 @@ pub const Entry = struct {
 
 pub const Archive = struct {
     allocator: std.mem.Allocator,
-    bytes: []const u8,
+    bytes: []u8,
     digest: [64]u8,
     entries: []const Entry,
 
     pub fn deinit(self: *Archive) void {
-        self.allocator.free(self.bytes);
+        if (self.bytes.len > 0) self.allocator.free(self.bytes);
         for (self.entries) |entry| self.allocator.free(entry.path);
         self.allocator.free(self.entries);
         self.* = undefined;
+    }
+
+    pub fn takeBytes(self: *Archive) []u8 {
+        const bytes = self.bytes;
+        self.bytes = bytes[0..0];
+        return bytes;
     }
 };
 

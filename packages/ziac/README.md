@@ -10,7 +10,13 @@ bindings.
 ```sh
 cd packages/ziac
 zig build test
+zig build examples
+zig build container-e2e-all
 ```
+
+`container-e2e-all` generates the same pinned container recipe used by
+`gcp.global.ZigService`, builds it for amd64 and arm64 with Zig 0.15.2, and
+probes the sample backend as a distroless nonroot container.
 
 ## Local CLI
 
@@ -81,6 +87,14 @@ or adopted GCP Cockroach Standard/Advanced cluster with a global-routing VPC,
 one PSC endpoint and accepted Cockroach connection per region, private DNS, and
 the regional Cloud Run bindings. Every cross-provider value remains a typed
 output reference and the graph contains no public Cockroach allowlist.
+
+`gcp.global.ZigService(App, Bindings, Providers)` adds deterministic Zig source
+archiving, a generated and digest-pinned nonroot container recipe, protected GCS
+build storage, regional Cloud Build, an immutable Artifact Registry image, and
+typed image and environment wiring into `ContainerService`. It creates separate
+least-privilege build and runtime service accounts and Secret Manager accessor
+IAM for each referenced secret. Applications provide source and typed bindings;
+they do not provide a Dockerfile or raw load-balancer resources.
 
 ## Delivery Status
 
@@ -176,6 +190,7 @@ See `docs/secret-manager.md` for the secret payload boundary, and
 `docs/compute-load-balancer.md` for the raw load-balancer resources. See
 `docs/cloud-dns.md` for existing-zone DNS ownership and import. See
 `docs/container-service.md` for the high-level global component. See
+`docs/zig-service.md` for source-to-image deployment and typed app bindings. See
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

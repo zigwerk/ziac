@@ -12,6 +12,7 @@ pub const BuildError = config_mod.ValidationError || std.mem.Allocator.Error || 
     InvalidName,
     InvalidRegion,
     InvalidRepository,
+    InvalidServiceAccount,
     InvalidSource,
     InvalidTimeout,
     OutputNotKnown,
@@ -29,6 +30,7 @@ pub const ZigImageArgs = struct {
     repository: output.Output([]const u8, .public),
     image_name: []const u8,
     docker_builder: []const u8,
+    service_account: ?[]const u8 = null,
     timeout_seconds: u32 = 1200,
 };
 
@@ -66,6 +68,9 @@ pub const ZigImage = struct {
         if (!isPinnedImage(args.docker_builder)) return error.UnpinnedBuilder;
         if (!isImageName(args.image_name)) return error.InvalidImageName;
         if (args.timeout_seconds < 60 or args.timeout_seconds > 7200) return error.InvalidTimeout;
+        if (args.service_account) |service_account| {
+            if (!isServiceAccount(service_account, provider.project_id)) return error.InvalidServiceAccount;
+        }
         const fields = [_]value.Field{
             .{ .name = "build_digest", .value = .{ .string = args.build_digest } },
             .{ .name = "docker_builder", .value = .{ .string = args.docker_builder } },
@@ -73,6 +78,7 @@ pub const ZigImage = struct {
             .{ .name = "location", .value = .{ .string = args.location } },
             .{ .name = "project_id", .value = .{ .string = provider.project_id } },
             .{ .name = "repository", .value = try outputValue(args.repository, validateRepository, error.InvalidRepository) },
+            .{ .name = "service_account", .value = .{ .string = args.service_account orelse "" } },
             .{ .name = "source_bucket", .value = try outputValue(args.source_bucket, validateSource, error.InvalidSource) },
             .{ .name = "source_digest", .value = .{ .string = args.source_digest } },
             .{ .name = "source_generation", .value = try outputValue(args.source_generation, validateGeneration, error.InvalidGeneration) },
@@ -163,4 +169,17 @@ fn validateRepository(repository: []const u8) bool {
 
 fn validateSource(source: []const u8) bool {
     return source.len > 0 and source[0] != '/' and std.mem.indexOf(u8, source, "..") == null;
+}
+
+fn isServiceAccount(name: []const u8, project_id: []const u8) bool {
+    const prefix = "projects/";
+    if (!std.mem.startsWith(u8, name, prefix)) return false;
+    const rest = name[prefix.len..];
+    const marker = "/serviceAccounts/";
+    const marker_index = std.mem.indexOf(u8, rest, marker) orelse return false;
+    if (!std.mem.eql(u8, rest[0..marker_index], project_id)) return false;
+    const email = rest[marker_index + marker.len ..];
+    return email.len > 0 and std.mem.indexOfScalar(u8, email, '/') == null and
+        std.mem.endsWith(u8, email, ".iam.gserviceaccount.com") and
+        std.mem.indexOfScalar(u8, email, '@') != null;
 }

@@ -23,6 +23,7 @@ test "Cloud Build Zig image carries typed source and immutable image outputs" {
         .repository = ziac.PublicOutput([]const u8).fromResource("gcp.artifact.Repository.api", "repository_url"),
         .image_name = "api",
         .docker_builder = pinned_builder,
+        .service_account = "projects/ziac-dev/serviceAccounts/ziac-build@ziac-dev.iam.gserviceaccount.com",
         .timeout_seconds = 1200,
     });
     defer image.deinit(std.testing.allocator);
@@ -32,6 +33,10 @@ test "Cloud Build Zig image carries typed source and immutable image outputs" {
     try std.testing.expectEqualStrings(source_digest, inputString(image.node, "source_digest"));
     try std.testing.expectEqualStrings(build_digest, inputString(image.node, "build_digest"));
     try std.testing.expectEqualStrings(pinned_builder, inputString(image.node, "docker_builder"));
+    try std.testing.expectEqualStrings(
+        "projects/ziac-dev/serviceAccounts/ziac-build@ziac-dev.iam.gserviceaccount.com",
+        inputString(image.node, "service_account"),
+    );
     try std.testing.expectEqual(@as(i64, 1200), inputInteger(image.node, "timeout_seconds"));
     try std.testing.expect(inputValue(image.node, "source_generation") == .output_ref);
     try std.testing.expectEqualStrings("image_ref", image.image_ref.resource_ref.field);
@@ -43,6 +48,19 @@ test "Cloud Build Zig image carries typed source and immutable image outputs" {
 test "Cloud Build Zig image rejects mutable builders and invalid digests" {
     try std.testing.expectError(error.UnpinnedBuilder, buildImage("gcr.io/cloud-builders/docker:latest", source_digest));
     try std.testing.expectError(error.InvalidDigest, buildImage(pinned_builder, "not-a-digest"));
+    try std.testing.expectError(error.InvalidServiceAccount, ziac.gcp.cloud_build.ZigImage.build(std.testing.allocator, config, .{
+        .name = "api",
+        .location = "europe-west1",
+        .source_bucket = .{ .value = "ziac-builds-ziac-dev" },
+        .source_object = .{ .value = "api/" ++ source_digest ++ ".tar.gz" },
+        .source_generation = .{ .value = "42" },
+        .source_digest = source_digest,
+        .build_digest = build_digest,
+        .repository = .{ .value = "europe-west1-docker.pkg.dev/ziac-dev/apps" },
+        .image_name = "api",
+        .docker_builder = pinned_builder,
+        .service_account = "projects/another/serviceAccounts/build@example.com",
+    }));
 }
 
 fn buildImage(builder: []const u8, digest: []const u8) !ziac.gcp.cloud_build.ZigImage {

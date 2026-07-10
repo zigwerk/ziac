@@ -29,7 +29,8 @@ pub const RegionalDirectVpc = struct {
 pub const ContainerServiceArgs = struct {
     base_graph: ?*const resource.ResourceGraph = null,
     name: []const u8,
-    image: []const u8,
+    image: []const u8 = "",
+    image_output: ?output.Output([]const u8, .public) = null,
     regions: []const []const u8 = &.{},
     domain: []const u8,
     dns_zone: ?[]const u8 = null,
@@ -90,6 +91,7 @@ pub const ContainerService = struct {
             var service = try cloud_run.Service.build(allocator, provider, .{
                 .name = args.name,
                 .image = args.image,
+                .image_output = args.image_output,
                 .region = region,
                 .port = args.port,
                 .command = args.command,

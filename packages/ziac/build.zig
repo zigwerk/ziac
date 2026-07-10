@@ -49,10 +49,22 @@ pub fn build(b: *std.Build) void {
     compile_contracts.addFileArg(b.path("test/compile_fail/run.sh"));
     test_step.dependOn(&compile_contracts.step);
 
+    const container_e2e_command = b.addSystemCommand(&.{"bash"});
+    container_e2e_command.addFileArg(b.path("test/run_zig_service_container.sh"));
+    const container_e2e_step = b.step("container-e2e", "Build and probe the native ZigService container");
+    container_e2e_step.dependOn(&container_e2e_command.step);
+
+    const container_e2e_all_command = b.addSystemCommand(&.{"bash"});
+    container_e2e_all_command.addFileArg(b.path("test/run_zig_service_container.sh"));
+    container_e2e_all_command.addArg("--all");
+    const container_e2e_all_step = b.step("container-e2e-all", "Build and probe amd64 and arm64 ZigService containers");
+    container_e2e_all_step.dependOn(&container_e2e_all_command.step);
+
     const examples_step = b.step("examples", "Build Ziac examples");
     examples_step.dependOn(test_step);
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "local-cli", "examples/local_cli.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "global-container-service", "examples/global_container_service.zig");
+    addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "zig-service", "examples/zig_service.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-application-database", "examples/cockroach_application_database.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-cluster", "examples/cockroach_cluster.zig");
     addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "cockroach-private-service-connect", "examples/cockroach_private_service_connect.zig");

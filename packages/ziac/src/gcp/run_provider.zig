@@ -227,10 +227,10 @@ fn serviceBodyAlloc(context: *provider_mod.OperationContext, node: resource.Reso
     try template.put(arena, "scaling", .{ .object = scaling });
 
     var container: std.json.ObjectMap = .empty;
-    try container.put(arena, "image", .{ .string = try requiredString(node.inputs, "image") });
+    try container.put(arena, "image", .{ .string = try resolveStringValue(context, try requiredValue(node.inputs, "image")) });
     try container.put(arena, "command", try stringListJson(arena, try requiredValue(node.inputs, "command")));
     try container.put(arena, "args", try stringListJson(arena, try requiredValue(node.inputs, "args")));
-    try container.put(arena, "env", try envRequestJson(arena, try requiredValue(node.inputs, "env")));
+    try container.put(arena, "env", try envRequestJson(context, arena, try requiredValue(node.inputs, "env")));
     var limits: std.json.ObjectMap = .empty;
     try limits.put(arena, "cpu", .{ .string = try requiredString(node.inputs, "cpu") });
     try limits.put(arena, "memory", .{ .string = try requiredString(node.inputs, "memory") });
@@ -287,8 +287,18 @@ fn normalizedInputsAlloc(
     try normalized.put(arena, "command", container.get("command") orelse emptyJsonArray(arena));
     try normalized.put(arena, "concurrency", .{ .integer = try requiredJsonInteger(template, "maxInstanceRequestConcurrency") });
     try normalized.put(arena, "cpu", .{ .string = try requiredJsonString(limits, "cpu") });
-    try normalized.put(arena, "env", try normalizedEnvJson(arena, container.get("env") orelse emptyJsonArray(arena)));
-    try normalized.put(arena, "image", .{ .string = try requiredJsonString(container, "image") });
+    try normalized.put(arena, "env", try normalizedEnvJson(
+        context,
+        arena,
+        container.get("env") orelse emptyJsonArray(arena),
+        try requiredValue(node.inputs, "env"),
+    ));
+    const desired_image = try requiredValue(node.inputs, "image");
+    const remote_image = try requiredJsonString(container, "image");
+    try normalized.put(arena, "image", if (std.mem.eql(u8, try resolveStringValue(context, desired_image), remote_image))
+        try canonicalValueToJson(arena, desired_image)
+    else
+        .{ .string = remote_image });
     try normalized.put(arena, "ingress", .{ .string = try requiredJsonString(remote, "ingress") });
     try normalized.put(arena, "labels", remote.get("labels") orelse emptyJsonObject());
     try normalized.put(arena, "liveness_probe", try normalizedProbeJson(arena, container.get("livenessProbe")));
@@ -323,7 +333,11 @@ fn normalizedInputsAlloc(
     };
 }
 
-fn envRequestJson(arena: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {
+fn envRequestJson(
+    context: *provider_mod.OperationContext,
+    arena: std.mem.Allocator,
+    input: value.Value,
+) ProviderError!std.json.Value {
     const items = switch (input) {
         .list => |items| items,
         else => return error.InvalidConfiguration,
@@ -333,7 +347,7 @@ fn envRequestJson(arena: std.mem.Allocator, input: value.Value) ProviderError!st
         var entry: std.json.ObjectMap = .empty;
         try entry.put(arena, "name", .{ .string = try requiredString(item, "name") });
         if (try requiredBool(item, "secret")) {
-            const reference = try requiredSecret(item, "value");
+            const reference = try resolveSecretValue(context, try requiredValue(item, "value"));
             var selector: std.json.ObjectMap = .empty;
             try selector.put(arena, "secret", .{ .string = reference.resource });
             try selector.put(arena, "version", .{ .string = reference.version orelse "latest" });
@@ -341,7 +355,7 @@ fn envRequestJson(arena: std.mem.Allocator, input: value.Value) ProviderError!st
             try source.put(arena, "secretKeyRef", .{ .object = selector });
             try entry.put(arena, "valueSource", .{ .object = source });
         } else {
-            try entry.put(arena, "value", .{ .string = try requiredString(item, "value") });
+            try entry.put(arena, "value", .{ .string = try resolveStringValue(context, try requiredValue(item, "value")) });
         }
         try env.append(.{ .object = entry });
     }
@@ -428,25 +442,52 @@ fn vpcRequestJson(
     return .{ .object = vpc };
 }
 
-fn normalizedEnvJson(arena: std.mem.Allocator, remote_value: std.json.Value) ProviderError!std.json.Value {
+fn normalizedEnvJson(
+    context: *provider_mod.OperationContext,
+    arena: std.mem.Allocator,
+    remote_value: std.json.Value,
+    desired_value: value.Value,
+) ProviderError!std.json.Value {
     const remote = asArray(remote_value) orelse return error.ProviderBug;
     var normalized = std.json.Array.init(arena);
     for (remote.items) |item| {
         const env = asObject(item) orelse return error.ProviderBug;
         var entry: std.json.ObjectMap = .empty;
-        try entry.put(arena, "name", .{ .string = try requiredJsonString(env, "name") });
+        const name = try requiredJsonString(env, "name");
+        try entry.put(arena, "name", .{ .string = name });
+        const desired = findEnvByName(desired_value, name);
         if (env.get("valueSource")) |source_value| {
             const source = asObject(source_value) orelse return error.ProviderBug;
             const selector = try requiredObject(source, "secretKeyRef");
             try entry.put(arena, "secret", .{ .bool = true });
-            try entry.put(arena, "value", try secretReferenceJson(
+            const remote_reference = value.SecretReference{
+                .provider = "gcp-secret-manager",
+                .resource = try requiredJsonString(selector, "secret"),
+                .version = try requiredJsonString(selector, "version"),
+            };
+            const normalized_value = if (desired) |desired_entry| preserve: {
+                if (!(requiredBool(desired_entry, "secret") catch false)) break :preserve null;
+                const desired_binding = requiredValue(desired_entry, "value") catch break :preserve null;
+                const resolved = resolveSecretValue(context, desired_binding) catch break :preserve null;
+                if (!secretReferencesEqual(resolved, remote_reference)) break :preserve null;
+                break :preserve try canonicalValueToJson(arena, desired_binding);
+            } else null;
+            try entry.put(arena, "value", normalized_value orelse try secretReferenceJson(
                 arena,
-                try requiredJsonString(selector, "secret"),
-                try requiredJsonString(selector, "version"),
+                remote_reference.resource,
+                remote_reference.version.?,
             ));
         } else {
             try entry.put(arena, "secret", .{ .bool = false });
-            try entry.put(arena, "value", .{ .string = try requiredJsonString(env, "value") });
+            const remote_text = try requiredJsonString(env, "value");
+            const normalized_value = if (desired) |desired_entry| preserve: {
+                if (requiredBool(desired_entry, "secret") catch true) break :preserve null;
+                const desired_binding = requiredValue(desired_entry, "value") catch break :preserve null;
+                const resolved = resolveStringValue(context, desired_binding) catch break :preserve null;
+                if (!std.mem.eql(u8, resolved, remote_text)) break :preserve null;
+                break :preserve try canonicalValueToJson(arena, desired_binding);
+            } else null;
+            try entry.put(arena, "value", normalized_value orelse .{ .string = remote_text });
         }
         try normalized.append(.{ .object = entry });
     }
@@ -595,8 +636,50 @@ fn resolveStringValue(
     return switch (input) {
         .string => |string| string,
         .output_ref => |reference| context.resolveOutputString(reference),
-        else => error.InvalidConfiguration,
+        else => return error.InvalidConfiguration,
     };
+}
+
+fn resolveSecretValue(
+    context: *provider_mod.OperationContext,
+    input: value.Value,
+) ProviderError!value.SecretReference {
+    const reference = switch (input) {
+        .secret_ref => |reference| reference,
+        .output_ref => |reference| try context.resolveOutputSecret(reference),
+        else => return error.InvalidConfiguration,
+    };
+    if (!std.mem.eql(u8, reference.provider, "gcp-secret-manager") or
+        reference.resource.len == 0 or
+        reference.field != null)
+    {
+        return error.InvalidConfiguration;
+    }
+    return reference;
+}
+
+fn findEnvByName(input: value.Value, name: []const u8) ?value.Value {
+    const items = switch (input) {
+        .list => |items| items,
+        else => return null,
+    };
+    for (items) |item| {
+        const candidate = requiredString(item, "name") catch continue;
+        if (std.mem.eql(u8, candidate, name)) return item;
+    }
+    return null;
+}
+
+fn secretReferencesEqual(left: value.SecretReference, right: value.SecretReference) bool {
+    return std.mem.eql(u8, left.provider, right.provider) and
+        std.mem.eql(u8, left.resource, right.resource) and
+        optionalStringEquals(left.field, right.field) and
+        optionalStringEquals(left.version, right.version);
+}
+
+fn optionalStringEquals(left: ?[]const u8, right: ?[]const u8) bool {
+    if ((left == null) != (right == null)) return false;
+    return if (left) |present| std.mem.eql(u8, present, right.?) else true;
 }
 
 fn canonicalValueToJson(arena: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {

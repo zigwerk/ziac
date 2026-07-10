@@ -17,7 +17,8 @@ const physical_id = "projects/ziac-dev/locations/europe-west1/builds/build-123";
 const operation_id = "operations/build/ziac-dev/europe-west1/build-123";
 
 test "live GCP provider starts a regional generation-pinned Zig image build" {
-    const queued = try buildJsonAlloc(std.testing.allocator, .{ .status = "QUEUED" });
+    const build_service_account = "projects/ziac-dev/serviceAccounts/ziac-build@ziac-dev.iam.gserviceaccount.com";
+    const queued = try buildJsonAlloc(std.testing.allocator, .{ .status = "QUEUED", .service_account = build_service_account });
     defer std.testing.allocator.free(queued);
     const operation_json = try operationJsonAlloc(std.testing.allocator, queued);
     defer std.testing.allocator.free(operation_json);
@@ -25,7 +26,7 @@ test "live GCP provider starts a regional generation-pinned Zig image build" {
     var harness: Harness = undefined;
     harness.init(&responses);
     defer harness.deinit();
-    var image = try buildImage(build_digest);
+    var image = try buildImageWithServiceAccount(build_digest, build_service_account);
     defer image.deinit(std.testing.allocator);
     const live = harness.live.provider();
     var context = ziac.provider.OperationContext.init(std.testing.allocator);
@@ -55,6 +56,7 @@ test "live GCP provider starts a regional generation-pinned Zig image build" {
     try expectContains(request.body, "\"logging\":\"CLOUD_LOGGING_ONLY\"");
     try expectContains(request.body, "\"machineType\":\"E2_HIGHCPU_8\"");
     try expectContains(request.body, "\"dynamicSubstitutions\":false");
+    try expectContains(request.body, "\"serviceAccount\":\"" ++ build_service_account ++ "\"");
     try expectContains(request.body, "\"ziac-build-" ++ build_digest ++ "\"");
     try expectContains(request.body, "\"ziac-source-" ++ source_digest ++ "\"");
 
@@ -307,6 +309,10 @@ const FixedTokenSource = struct {
 };
 
 fn buildImage(digest: []const u8) !ziac.gcp.cloud_build.ZigImage {
+    return buildImageWithServiceAccount(digest, null);
+}
+
+fn buildImageWithServiceAccount(digest: []const u8, service_account: ?[]const u8) !ziac.gcp.cloud_build.ZigImage {
     return ziac.gcp.cloud_build.ZigImage.build(std.testing.allocator, config(), .{
         .name = "api-image",
         .location = "europe-west1",
@@ -318,6 +324,7 @@ fn buildImage(digest: []const u8) !ziac.gcp.cloud_build.ZigImage {
         .repository = .{ .value = repository },
         .image_name = "api",
         .docker_builder = docker_builder,
+        .service_account = service_account,
     });
 }
 
@@ -326,6 +333,7 @@ const BuildFixture = struct {
     source_object: []const u8 = "sources/" ++ source_digest ++ ".tar.gz",
     include_result: bool = false,
     failure_detail: ?[]const u8 = null,
+    service_account: ?[]const u8 = null,
 };
 
 const StorageSource = struct {
@@ -361,6 +369,7 @@ const RemoteBuild = struct {
     logUrl: []const u8,
     tags: []const []const u8,
     failureInfo: ?FailureInfo,
+    serviceAccount: ?[]const u8,
 };
 
 fn buildJsonAlloc(allocator: std.mem.Allocator, fixture: BuildFixture) ![]const u8 {
@@ -397,6 +406,7 @@ fn buildJsonAlloc(allocator: std.mem.Allocator, fixture: BuildFixture) ![]const 
         .logUrl = "https://console.cloud.google.com/cloud-build/builds;region=europe-west1/build-123",
         .tags = &tags,
         .failureInfo = if (fixture.failure_detail) |detail| .{ .detail = detail } else null,
+        .serviceAccount = fixture.service_account,
     };
     return std.json.Stringify.valueAlloc(allocator, remote, .{});
 }

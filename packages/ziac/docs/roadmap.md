@@ -148,16 +148,22 @@ secret plaintext in state or artifacts.
 
 ## M7: ZigService
 
-- Deterministic source archives and build digests: implemented with native
+- Deterministic source archives and build digests: complete with native
   sorted tar/gzip output, normalized metadata, mandatory secret/state/cache
   exclusions, additive `.ziacignore` globs, no-follow reads, symlink rejection,
   generated-file collision checks, and bounded source/archive sizes.
-- Cloud Build to Artifact Registry immutable image pipeline.
-- `ziac.gcp.global.ZigService`.
-- Typed app environment wiring into the global service.
+- Cloud Build to Artifact Registry immutable image pipeline: complete.
+- `ziac.gcp.global.ZigService`: complete.
+- Typed app environment wiring into the global service: complete, including
+  provider/project validation for Secret Manager references.
+- Generated Zig 0.15.2 musl recipe: verified for amd64 and arm64 in pinned
+  distroless nonroot containers with startup and liveness probes.
 
-Gate: one command takes a clean Zig source checkout to an updated, globally
-routed service with a working CockroachDB binding.
+Remaining gate: authenticated source deployment must take a clean Zig source
+checkout to an updated, globally routed service with a working CockroachDB
+binding. The local source-to-container and complete graph gates pass; external
+GCP/Cockroach credentials, project, domain, and DNS zone are not configured in
+this checkout.
 
 ## M8: Production Operations
 

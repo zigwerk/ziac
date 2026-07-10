@@ -6,6 +6,7 @@ const value = @import("../value.zig");
 const validation = @import("validation.zig");
 
 pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || error{
+    ConflictingOutput,
     DuplicateField,
     InvalidScaling,
     InvalidResources,
@@ -14,6 +15,7 @@ pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || 
     InvalidProbe,
     InvalidVpcAccess,
     InvalidSecretVolume,
+    OutputNotKnown,
 };
 
 pub const Ingress = enum {
@@ -44,10 +46,12 @@ pub const VpcEgress = enum {
 
 pub const EnvVar = struct {
     name: []const u8,
-    value: []const u8,
+    value: []const u8 = "",
+    value_output: ?output.Output([]const u8, .public) = null,
     secret: bool = false,
     secret_name: ?[]const u8 = null,
     secret_version: []const u8 = "latest",
+    secret_output: ?output.Output(value.SecretReference, .secret) = null,
 };
 
 pub const HttpProbe = struct {
@@ -77,7 +81,8 @@ pub const DirectVpc = struct {
 
 pub const ServiceArgs = struct {
     name: []const u8,
-    image: []const u8,
+    image: []const u8 = "",
+    image_output: ?output.Output([]const u8, .public) = null,
     region: ?[]const u8 = null,
     port: u16 = 8080,
     command: []const []const u8 = &.{},
@@ -159,7 +164,7 @@ pub const Service = struct {
             .{ .name = "concurrency", .value = .{ .integer = args.concurrency } },
             .{ .name = "cpu", .value = .{ .string = args.cpu } },
             .{ .name = "env", .value = .{ .list = env } },
-            .{ .name = "image", .value = .{ .string = args.image } },
+            .{ .name = "image", .value = try publicOutputValue(args.image, args.image_output, false) },
             .{ .name = "ingress", .value = .{ .string = args.ingress.apiName() } },
             .{ .name = "labels", .value = .{ .object = label_fields } },
             .{ .name = "liveness_probe", .value = liveness_probe },
@@ -207,7 +212,9 @@ pub const Service = struct {
 fn validate(provider: config_mod.ProviderConfig, args: ServiceArgs) BuildError!void {
     try provider.validate();
     if (args.name.len == 0) return error.MissingName;
-    if (args.image.len == 0) return error.MissingImage;
+    if ((args.image.len == 0) == (args.image_output == null)) {
+        return if (args.image.len == 0) error.MissingImage else error.ConflictingOutput;
+    }
     if (args.port == 0) return error.InvalidPort;
     if ((args.region orelse provider.primary_region).len == 0) return error.MissingRegion;
     if (args.cpu.len == 0 or args.memory.len == 0) return error.InvalidResources;
@@ -237,6 +244,10 @@ fn validateEnv(env: []const EnvVar) BuildError!void {
     for (env, 0..) |left, left_index| {
         if (left.name.len == 0) return error.MissingName;
         if (left.secret and left.secret_version.len == 0) return error.InvalidSecretVolume;
+        if (!left.secret and left.secret_output != null) return error.ConflictingOutput;
+        if (left.secret and left.value_output != null) return error.ConflictingOutput;
+        if (left.secret_output != null and left.secret_name != null) return error.ConflictingOutput;
+        if (left.value_output != null and left.value.len != 0) return error.ConflictingOutput;
         for (env[left_index + 1 ..]) |right| {
             if (std.mem.eql(u8, left.name, right.name)) return error.DuplicateEnvVar;
         }
@@ -263,13 +274,9 @@ fn envValuesAlloc(allocator: std.mem.Allocator, env: []const EnvVar) BuildError!
     errdefer for (values[0..initialized]) |*item| item.deinit(allocator);
     for (env, 0..) |entry, index| {
         const env_value: value.Value = if (entry.secret)
-            .{ .secret_ref = .{
-                .provider = "gcp-secret-manager",
-                .resource = entry.secret_name orelse entry.name,
-                .version = entry.secret_version,
-            } }
+            try secretOutputValue(entry)
         else
-            .{ .string = entry.value };
+            try publicOutputValue(entry.value, entry.value_output, true);
         const fields = [_]value.Field{
             .{ .name = "name", .value = .{ .string = entry.name } },
             .{ .name = "secret", .value = .{ .boolean = entry.secret } },
@@ -279,6 +286,38 @@ fn envValuesAlloc(allocator: std.mem.Allocator, env: []const EnvVar) BuildError!
         initialized += 1;
     }
     return values;
+}
+
+fn publicOutputValue(
+    literal: []const u8,
+    maybe_output: ?output.Output([]const u8, .public),
+    allow_empty: bool,
+) BuildError!value.Value {
+    const selected = maybe_output orelse return .{ .string = literal };
+    return switch (selected) {
+        .value => |known| if (!allow_empty and known.len == 0) error.MissingImage else .{ .string = known },
+        .resource_ref => |reference| .{ .output_ref = .{
+            .resource_id = reference.resource_id,
+            .field = reference.field,
+        } },
+        .unknown_reason => error.OutputNotKnown,
+    };
+}
+
+fn secretOutputValue(entry: EnvVar) BuildError!value.Value {
+    const selected = entry.secret_output orelse return .{ .secret_ref = .{
+        .provider = "gcp-secret-manager",
+        .resource = entry.secret_name orelse entry.name,
+        .version = entry.secret_version,
+    } };
+    return switch (selected) {
+        .value => |known| .{ .secret_ref = known },
+        .resource_ref => |reference| .{ .output_ref = .{
+            .resource_id = reference.resource_id,
+            .field = reference.field,
+        } },
+        .unknown_reason => error.OutputNotKnown,
+    };
 }
 
 fn volumeValuesAlloc(allocator: std.mem.Allocator, volumes: []const SecretVolume) BuildError![]value.Value {

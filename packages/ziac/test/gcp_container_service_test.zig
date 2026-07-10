@@ -147,6 +147,46 @@ test "global ContainerService graph is deterministic" {
     }
 }
 
+test "global ContainerService wires a typed image output into every region" {
+    const digest = "1111111111111111111111111111111111111111111111111111111111111111";
+    var image = try ziac.gcp.cloud_build.ZigImage.build(std.testing.allocator, provider, .{
+        .name = "api-image",
+        .location = "europe-west1",
+        .source_bucket = .{ .value = "ziac-dev-builds" },
+        .source_object = .{ .value = "sources/" ++ digest ++ ".tar.gz" },
+        .source_generation = .{ .value = "1" },
+        .source_digest = digest,
+        .build_digest = digest,
+        .repository = .{ .value = "europe-west1-docker.pkg.dev/ziac-dev/services" },
+        .image_name = "api",
+        .docker_builder = "gcr.io/cloud-builders/docker@sha256:" ++ digest,
+    });
+    defer image.deinit(std.testing.allocator);
+    var base = ziac.ResourceGraph.init(std.testing.allocator);
+    defer base.deinit();
+    try base.addResource(image.node);
+
+    var component = try ziac.gcp.global.ContainerService.build(std.testing.allocator, provider, .{
+        .base_graph = &base,
+        .name = "api",
+        .image_output = image.image_ref,
+        .regions = &regions,
+        .domain = "api.example.com",
+    });
+    defer component.deinit();
+
+    var wired_regions: usize = 0;
+    for (component.graph.resources.items) |node| {
+        if (!std.mem.eql(u8, node.type_name, "gcp.run.Service")) continue;
+        const image_input = inputValue(node, "image");
+        try std.testing.expect(image_input == .output_ref);
+        try std.testing.expectEqualStrings(image.node.id, image_input.output_ref.resource_id);
+        wired_regions += 1;
+    }
+    try std.testing.expectEqual(regions.len, wired_regions);
+    try std.testing.expectEqual(regions.len, dependencyCount(&component.graph, image.node.id));
+}
+
 test "global ContainerService applies the matching Direct VPC subnet per region" {
     const regional_vpc = [_]ziac.gcp.global.container_service.RegionalDirectVpc{
         .{ .region = "europe-west1", .config = .{
@@ -199,6 +239,14 @@ fn countPort(graph: *const ziac.ResourceGraph, port: i64) usize {
         if (!std.mem.eql(u8, node.type_name, "gcp.compute.GlobalForwardingRule")) continue;
         if (inputValue(node, "port").integer == port) count += 1;
     }
+    return count;
+}
+
+fn dependencyCount(graph: *const ziac.ResourceGraph, dependency_id: []const u8) usize {
+    var count: usize = 0;
+    for (graph.dependencies.items) |edge| if (std.mem.eql(u8, edge.to, dependency_id)) {
+        count += 1;
+    };
     return count;
 }
 
