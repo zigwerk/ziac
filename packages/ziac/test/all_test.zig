@@ -29,6 +29,8 @@ comptime {
     _ = @import("cockroach_existing_cluster_test.zig");
     _ = @import("cockroach_live_provider_test.zig");
     _ = @import("cockroach_sql_user_test.zig");
+    _ = @import("cockroach_sql_resources_test.zig");
+    _ = @import("cockroach_sql_live_provider_test.zig");
     _ = @import("cockroach_connection_secret_test.zig");
     _ = @import("cockroach_sql_user_live_provider_test.zig");
     _ = @import("cockroach_authorized_network_test.zig");

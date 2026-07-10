@@ -4,6 +4,8 @@ const connection_secret = @import("connection_secret.zig");
 const provider_mod = @import("../provider.zig");
 const resource = @import("../resource.zig");
 const secret = @import("../secret.zig");
+const sql = @import("sql.zig");
+const sql_provider = @import("sql_provider.zig");
 const state = @import("../state.zig");
 const validation = @import("validation.zig");
 const value = @import("../value.zig");
@@ -16,6 +18,9 @@ const authorized_network_type = "cockroach.AuthorizedNetwork";
 pub const LiveProvider = struct {
     client: *client_mod.Client,
     secret_source: ?secret.SecretSource = null,
+    sql_executor: ?sql.Executor = null,
+    sql_retry_policy: sql_provider.RetryPolicy = .{},
+    migration_lock: @import("zigeffect_std").fx.SpinLock = .{},
 
     pub fn init(client: *client_mod.Client) LiveProvider {
         return .{ .client = client };
@@ -42,6 +47,7 @@ pub const LiveProvider = struct {
         if (!isSupported(node)) return error.InvalidConfiguration;
         if (isType(node, sql_user_type)) return self.readSqlUser(context, node);
         if (isType(node, authorized_network_type)) return self.readAuthorizedNetwork(context, node);
+        if (sql_provider.supports(node)) return (try self.sqlHandler()).read(context, node);
         var diagnostic = client_mod.Diagnostic.init(context.allocator);
         defer diagnostic.deinit();
         var cluster = self.client.getClusterAlloc(context, try inputString(node.inputs, "cluster_id"), &diagnostic) catch |err| {
@@ -53,7 +59,7 @@ pub const LiveProvider = struct {
     }
 
     fn diff(
-        _: *anyopaque,
+        ptr: *anyopaque,
         context: *provider_mod.OperationContext,
         node: resource.ResourceNode,
         observed: *const provider_mod.ResourceResult,
@@ -65,6 +71,10 @@ pub const LiveProvider = struct {
         }
         if (isType(node, sql_user_type)) return sqlUserDiff(context.allocator, node.inputs, observed.observed_inputs);
         if (isType(node, authorized_network_type)) return authorizedNetworkDiff(context.allocator, node.inputs, observed.observed_inputs);
+        if (sql_provider.supports(node)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return (try self.sqlHandler()).diff(context, node, observed);
+        }
         return topologyDiff(context.allocator, node.inputs, observed.observed_inputs);
     }
 
@@ -76,6 +86,7 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, sql_user_type)) return self.ensureSqlUser(context, node);
         if (isType(node, authorized_network_type)) return self.writeAuthorizedNetwork(context, node, false);
+        if (sql_provider.supports(node)) return (try self.sqlHandler()).create(context, node);
         return self.readExact(context, node);
     }
 
@@ -94,6 +105,10 @@ pub const LiveProvider = struct {
         if (isType(node, authorized_network_type)) {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return self.writeAuthorizedNetwork(context, node, true);
+        }
+        if (sql_provider.supports(node)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return (try self.sqlHandler()).update(context, node, observed);
         }
         var result_diff = try topologyDiff(context.allocator, node.inputs, observed.observed_inputs);
         defer result_diff.deinit();
@@ -116,6 +131,10 @@ pub const LiveProvider = struct {
         if (isType(node, authorized_network_type)) {
             const self: *LiveProvider = @ptrCast(@alignCast(ptr));
             return self.deleteAuthorizedNetwork(context, node, physical_id);
+        }
+        if (sql_provider.supports(node)) {
+            const self: *LiveProvider = @ptrCast(@alignCast(ptr));
+            return (try self.sqlHandler()).delete(context, node, physical_id);
         }
         if (!std.mem.eql(u8, try inputString(node.inputs, "cluster_id"), physical_id)) {
             return error.InvalidConfiguration;
@@ -148,6 +167,7 @@ pub const LiveProvider = struct {
                 .present => |present| present,
             };
         }
+        if (sql_provider.supports(node)) return (try self.sqlHandler()).importResource(context, node, physical_id);
         if (!std.mem.eql(u8, try inputString(node.inputs, "cluster_id"), physical_id)) {
             return error.InvalidConfiguration;
         }
@@ -312,6 +332,15 @@ pub const LiveProvider = struct {
             try inputU8(node.inputs, "cidr_mask"),
             &diagnostic,
         );
+    }
+
+    fn sqlHandler(self: *LiveProvider) ProviderError!sql_provider.Handler {
+        return .{
+            .executor = self.sql_executor orelse return error.InvalidConfiguration,
+            .secret_source = self.secret_source orelse return error.InvalidConfiguration,
+            .retry_policy = self.sql_retry_policy,
+            .migration_lock = &self.migration_lock,
+        };
     }
 };
 
@@ -622,7 +651,8 @@ fn primaryRegion(regions: []const client_mod.Region) client_mod.Region {
 }
 
 fn isSupported(node: resource.ResourceNode) bool {
-    return isType(node, existing_cluster_type) or isType(node, sql_user_type) or isType(node, authorized_network_type);
+    return isType(node, existing_cluster_type) or isType(node, sql_user_type) or
+        isType(node, authorized_network_type) or sql_provider.supports(node);
 }
 
 fn isType(node: resource.ResourceNode, type_name: []const u8) bool {
