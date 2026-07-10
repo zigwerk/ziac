@@ -28,9 +28,17 @@ pub const PlanOperation = struct {
     reasons: []const []const u8 = &.{},
 };
 
+pub const PlanPreconditions = struct {
+    lineage_hash: [32]u8,
+    state_serial: u64,
+    desired_graph_digest: [32]u8,
+    operations_digest: [32]u8,
+};
+
 pub const Plan = struct {
     allocator: std.mem.Allocator,
     operations: []PlanOperation,
+    preconditions: PlanPreconditions,
 
     pub fn deinit(self: *Plan) void {
         freeOperationMetadata(self.allocator, self.operations);
@@ -75,7 +83,7 @@ pub fn buildPlan(
         }
     }
     try appendRemovedResources(allocator, &operations, graph, store);
-    return finishPlan(allocator, &operations);
+    return finishPlan(allocator, &operations, store.metadata(), try desiredGraphDigestAlloc(allocator, graph));
 }
 
 fn recoveryKind(record: state.StateRecord) ?OperationKind {
@@ -125,7 +133,7 @@ pub fn buildRefreshedPlan(
         }
     }
     try appendRemovedResources(allocator, &operations, graph, store);
-    return finishPlan(allocator, &operations);
+    return finishPlan(allocator, &operations, store.metadata(), try desiredGraphDigestAlloc(allocator, graph));
 }
 
 pub fn buildDestroyPlan(
@@ -149,7 +157,7 @@ pub fn buildDestroyPlan(
             &.{"destroy requested"},
         );
     }
-    return finishPlan(allocator, &operations);
+    return finishPlan(allocator, &operations, store.metadata(), emptyDesiredGraphDigest());
 }
 
 fn validateGraph(graph: *const resource.ResourceGraph) PlanError!void {
@@ -243,11 +251,125 @@ fn appendGraphOperation(
 fn finishPlan(
     allocator: std.mem.Allocator,
     operations: *std.ArrayList(PlanOperation),
+    metadata: state.StateMetadata,
+    desired_graph_digest: [32]u8,
 ) std.mem.Allocator.Error!Plan {
+    const owned_operations = try operations.toOwnedSlice(allocator);
+    errdefer {
+        freeOperationMetadata(allocator, owned_operations);
+        allocator.free(owned_operations);
+    }
     return .{
         .allocator = allocator,
-        .operations = try operations.toOwnedSlice(allocator),
+        .operations = owned_operations,
+        .preconditions = .{
+            .lineage_hash = metadata.lineage_hash,
+            .state_serial = metadata.serial,
+            .desired_graph_digest = desired_graph_digest,
+            .operations_digest = try operationsDigestAlloc(allocator, owned_operations),
+        },
     };
+}
+
+pub fn operationsDigestAlloc(
+    allocator: std.mem.Allocator,
+    operations: []const PlanOperation,
+) std.mem.Allocator.Error![32]u8 {
+    var bytes = std.ArrayList(u8).empty;
+    defer bytes.deinit(allocator);
+    try appendFramed(&bytes, allocator, "ziac.plan.operations.v1");
+    for (operations) |operation| {
+        try appendFramed(&bytes, allocator, @tagName(operation.kind));
+        try appendNodeDigest(&bytes, allocator, operation.resource);
+        for (operation.dependencies) |dependency| try appendFramed(&bytes, allocator, dependency);
+        try bytes.append(allocator, 0xff);
+        for (operation.reasons) |reason| try appendFramed(&bytes, allocator, reason);
+        try bytes.append(allocator, 0xfe);
+    }
+    return hashBytes(bytes.items);
+}
+
+fn desiredGraphDigestAlloc(
+    allocator: std.mem.Allocator,
+    graph: *const resource.ResourceGraph,
+) std.mem.Allocator.Error![32]u8 {
+    var bytes = std.ArrayList(u8).empty;
+    defer bytes.deinit(allocator);
+    try appendFramed(&bytes, allocator, "ziac.desired.graph.v1");
+
+    const resource_indexes = try allocator.alloc(usize, graph.resources.items.len);
+    defer allocator.free(resource_indexes);
+    for (resource_indexes, 0..) |*slot, index| slot.* = index;
+    std.mem.sort(usize, resource_indexes, graph, lessThanResourceIndex);
+    for (resource_indexes) |index| {
+        try appendNodeDigest(&bytes, allocator, graph.resources.items[index]);
+    }
+
+    const edges = try allocator.dupe(resource.DependencyEdge, graph.dependencies.items);
+    defer allocator.free(edges);
+    std.mem.sort(resource.DependencyEdge, edges, {}, lessThanEdge);
+    for (edges) |edge| {
+        try appendFramed(&bytes, allocator, edge.from);
+        try appendFramed(&bytes, allocator, edge.to);
+    }
+    return hashBytes(bytes.items);
+}
+
+fn emptyDesiredGraphDigest() [32]u8 {
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash("21:ziac.desired.graph.v1", &digest, .{});
+    return digest;
+}
+
+fn appendNodeDigest(
+    bytes: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) std.mem.Allocator.Error!void {
+    try appendFramed(bytes, allocator, node.id);
+    try appendFramed(bytes, allocator, @tagName(node.provider));
+    try appendFramed(bytes, allocator, node.type_name);
+    try bytes.print(allocator, "{d}:", .{node.schema_version});
+    try appendFramed(bytes, allocator, node.logical_id);
+    try bytes.appendSlice(allocator, &node.inputs_hash);
+    try bytes.append(allocator, @intFromBool(node.lifecycle.protect));
+    try bytes.append(allocator, @intFromBool(node.lifecycle.retain_on_delete));
+    try bytes.append(allocator, @intFromBool(node.lifecycle.replace_before_delete));
+    try bytes.print(allocator, "{d}:", .{node.lifecycle.operation_timeout_millis});
+    const ignored = try allocator.dupe([]const u8, node.lifecycle.ignore_changes);
+    defer allocator.free(ignored);
+    std.mem.sort([]const u8, ignored, {}, lessThanString);
+    for (ignored) |field| try appendFramed(bytes, allocator, field);
+    try bytes.append(allocator, 0xfd);
+}
+
+fn appendFramed(
+    bytes: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    value: []const u8,
+) std.mem.Allocator.Error!void {
+    try bytes.print(allocator, "{d}:", .{value.len});
+    try bytes.appendSlice(allocator, value);
+}
+
+fn hashBytes(bytes: []const u8) [32]u8 {
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
+    return digest;
+}
+
+fn lessThanResourceIndex(
+    graph: *const resource.ResourceGraph,
+    left: usize,
+    right: usize,
+) bool {
+    return std.mem.lessThan(u8, graph.resources.items[left].id, graph.resources.items[right].id);
+}
+
+fn lessThanEdge(_: void, left: resource.DependencyEdge, right: resource.DependencyEdge) bool {
+    const from_order = std.mem.order(u8, left.from, right.from);
+    if (from_order != .eq) return from_order == .lt;
+    return std.mem.lessThan(u8, left.to, right.to);
 }
 
 fn deinitOperationList(

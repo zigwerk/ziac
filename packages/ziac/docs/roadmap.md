@@ -20,7 +20,8 @@ automated and live tests pass.
   tested.
 - Engine V2 checkpoint/resume, atomic state persistence, writer locking,
   refresh/import/unlock, and JSON command receipts: implemented and tested.
-  Saved-plan preconditions remain in progress.
+- Lineage, serial, canonical desired-graph, and operation-integrity plan
+  preconditions: implemented and tested before provider access.
 - Live GCP calls, global routing, CockroachDB, comptime app bindings, remote
   state, and source builds: not yet implemented.
 
@@ -34,7 +35,7 @@ automated and live tests pass.
 Gate: authoritative design and executable implementation plan are committed,
 and the integrated baseline passes all Ziac tests and builds.
 
-## M1: Engine V2
+## M1: Engine V2 (Complete)
 
 - Canonical resource values and input hashes.
 - Retained desired resource inputs.

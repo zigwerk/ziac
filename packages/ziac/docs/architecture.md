@@ -50,3 +50,9 @@ is side-effect free, ordinary release checks owner identity, and forced unlock
 checks lineage unless an explicit override is supplied. The CLI exposes
 `refresh`, `import`, and `unlock`, and all commands can emit a versioned
 `ziac.command.v1` JSON receipt.
+
+Every plan captures the state lineage hash, state serial, canonical desired graph
+digest, and an operation-integrity digest. The executor validates all four before
+refresh, resume, or provider access. Resource and dependency insertion order do
+not affect the desired graph digest, while any mutation of saved operation data
+invalidates the operation digest.

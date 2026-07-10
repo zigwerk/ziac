@@ -112,10 +112,16 @@ pub const StateSnapshot = struct {
     }
 };
 
+pub const StateMetadata = struct {
+    lineage_hash: [32]u8,
+    serial: u64,
+};
+
 pub const InMemoryStateStore = struct {
     allocator: std.mem.Allocator,
     records: std.StringHashMap(StateRecord),
     serial: u64 = 0,
+    lineage_hash: [32]u8 = [_]u8{0} ** 32,
     mutex: fx.SpinLock = .{},
 
     pub fn init(allocator: std.mem.Allocator) InMemoryStateStore {
@@ -173,6 +179,23 @@ pub const InMemoryStateStore = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         return self.serial;
+    }
+
+    pub fn setLineage(self: *InMemoryStateStore, lineage_id: []const u8) void {
+        var digest: [32]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(lineage_id, &digest, .{});
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        self.lineage_hash = digest;
+    }
+
+    pub fn metadata(self: *InMemoryStateStore) StateMetadata {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        return .{
+            .lineage_hash = self.lineage_hash,
+            .serial = self.serial,
+        };
     }
 
     pub fn snapshotAlloc(

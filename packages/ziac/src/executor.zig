@@ -13,7 +13,13 @@ pub const ScheduleError = error{
     OutOfMemory,
 };
 
-pub const ExecuteError = ScheduleError || apply_mod.ApplyError || fx.DependencyError;
+pub const PreconditionError = error{
+    StalePlan,
+    PlanLineageMismatch,
+    PlanIntegrityMismatch,
+};
+
+pub const ExecuteError = ScheduleError || PreconditionError || apply_mod.ApplyError || fx.DependencyError;
 
 pub const CancellationToken = struct {
     cancelled: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
@@ -84,6 +90,7 @@ pub fn executePlan(
     options: ExecuteOptions,
 ) ExecuteError!void {
     if (options.max_concurrency == 0) return error.InvalidConcurrency;
+    try validatePreconditions(allocator, planned, store);
     if (options.cancellation) |token| {
         if (token.isCancelled()) return error.ProviderCancelled;
     }
@@ -142,6 +149,22 @@ pub fn executePlan(
             allocator.free(results);
             batch_start = batch_end;
         }
+    }
+}
+
+fn validatePreconditions(
+    allocator: std.mem.Allocator,
+    planned: *const plan_mod.Plan,
+    store: *state_mod.InMemoryStateStore,
+) ExecuteError!void {
+    const metadata = store.metadata();
+    if (!std.mem.eql(u8, &metadata.lineage_hash, &planned.preconditions.lineage_hash)) {
+        return error.PlanLineageMismatch;
+    }
+    if (metadata.serial != planned.preconditions.state_serial) return error.StalePlan;
+    const operations_digest = try plan_mod.operationsDigestAlloc(allocator, planned.operations);
+    if (!std.mem.eql(u8, &operations_digest, &planned.preconditions.operations_digest)) {
+        return error.PlanIntegrityMismatch;
     }
 }
 

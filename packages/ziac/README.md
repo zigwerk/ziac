@@ -55,8 +55,9 @@ It retains canonical desired inputs, refreshes through an explicit provider
 lifecycle, persists versioned physical state, and executes stable dependency
 levels with bounded parallelism, retry, deadlines, cancellation, and redacted
 causal facts. Atomic checkpoint/resume, writer locking, refresh, import, unlock,
-and stable JSON command receipts are implemented. Saved-plan preconditions are
-the remaining M1 work before authenticated Google and CockroachDB API operations.
+stable JSON command receipts, and lineage/serial/graph plan preconditions are
+implemented. Engine V2 is complete; comptime resource and app contracts are the
+next milestone before authenticated Google and CockroachDB API operations.
 
 See `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under

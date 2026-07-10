@@ -325,7 +325,7 @@ pub const Store = struct {
 
     pub fn loadResourcesOrEmpty(self: Store, stack: []const u8, stage: []const u8) !LoadedResources {
         return self.loadResources(stack, stage) catch |err| switch (err) {
-            error.MissingStateFile => emptyResources(self.allocator),
+            error.MissingStateFile => emptyResources(self.allocator, stack, stage),
             else => return err,
         };
     }
@@ -420,13 +420,21 @@ pub const LoadedOutputs = struct {
     }
 };
 
-fn emptyResources(allocator: std.mem.Allocator) !LoadedResources {
+fn emptyResources(
+    allocator: std.mem.Allocator,
+    stack: []const u8,
+    stage: []const u8,
+) !LoadedResources {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
+    var store = state_mod.InMemoryStateStore.init(allocator);
+    const lineage = try state_format.lineageAlloc(allocator, stack, stage);
+    defer allocator.free(lineage);
+    store.setLineage(lineage);
 
     return .{
         .arena = arena,
-        .store = state_mod.InMemoryStateStore.init(allocator),
+        .store = store,
         .source_format_version = state_format.current_version,
     };
 }
@@ -639,10 +647,14 @@ fn parseResources(
     errdefer store.deinit();
 
     if (source_version == 1) {
+        const lineage = try state_format.lineageAlloc(allocator, expected_stack, expected_stage);
+        defer allocator.free(lineage);
+        store.setLineage(lineage);
         try parseVersionOneResources(&store, root);
         store.serial = 0;
     } else {
-        try validateEnvelope(root, expected_stack, expected_stage);
+        try validateEnvelope(allocator, root, expected_stack, expected_stage);
+        store.setLineage(try jsonString(root, "lineage_id"));
         const serial = try jsonU64(root, "serial");
         try parseVersionTwoResources(allocator, &store, root);
         store.serial = serial;
@@ -656,11 +668,14 @@ fn parseResources(
 }
 
 fn validateEnvelope(
+    allocator: std.mem.Allocator,
     root: std.json.ObjectMap,
     expected_stack: []const u8,
     expected_stage: []const u8,
 ) !void {
-    _ = try jsonString(root, "lineage_id");
+    const expected_lineage = try state_format.lineageAlloc(allocator, expected_stack, expected_stage);
+    defer allocator.free(expected_lineage);
+    if (!std.mem.eql(u8, expected_lineage, try jsonString(root, "lineage_id"))) return error.InvalidStateFile;
     if (!std.mem.eql(u8, expected_stack, try jsonString(root, "stack"))) return error.InvalidStateFile;
     if (!std.mem.eql(u8, expected_stage, try jsonString(root, "stage"))) return error.InvalidStateFile;
 }
