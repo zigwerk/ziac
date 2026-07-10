@@ -62,9 +62,11 @@ with normalized labels and operation polling, create secret versions from
 ephemeral source references without retaining plaintext, and deploy
 drift-aware Cloud Run services from complete canonical runtime specifications.
 
-Global load-balancer assembly, certificates/DNS, and CockroachDB resources
-remain on the acceptance-gated roadmap. The six raw Compute resources needed by
-the HTTPS load balancer are implemented.
+The raw global load-balancer surface is implemented, including managed
+certificates, explicit certificate readiness polling, an optional HTTP-to-HTTPS
+redirect, and Cloud DNS record sets in an existing zone. The high-level
+`ContainerService`, authenticated two-region acceptance gate, and CockroachDB
+resources remain on the acceptance-gated roadmap.
 
 ## Delivery Status
 
@@ -109,6 +111,10 @@ and can resume through normal provider reads after interruption.
 Compute global addresses, regional serverless NEGs, backend services, URL maps,
 HTTPS proxies, and global forwarding rules now pass scripted lifecycle and
 fingerprint-conflict tests.
+Managed SSL certificates expose provisioning readiness without holding create
+operations open. Redirect URL maps and HTTP proxies pass the same lifecycle
+contract. Cloud DNS record sets pass create/read/update/delete/import tests with
+stable project/zone/name/type identity.
 
 See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cockroach-client.md` for the live client contracts. See
@@ -116,6 +122,7 @@ See `docs/authentication.md`, `docs/google-client.md`, and
 `docs/cloud-run.md` for the Cloud Run request and lifecycle contract. See
 `docs/live-gcp.md` for CLI selection and disposable-project safeguards, and
 `docs/compute-load-balancer.md` for the raw load-balancer resources. See
+`docs/cloud-dns.md` for existing-zone DNS ownership and import. See
 `docs/roadmap.md` for the acceptance-gated milestones. The authoritative
 design and task-level plan live at the repository root under
 `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md` and

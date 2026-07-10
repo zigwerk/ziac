@@ -13,8 +13,16 @@ const Kind = enum {
     regional_neg,
     backend_service,
     url_map,
+    redirect_url_map,
+    managed_ssl_certificate,
+    target_http_proxy,
     target_https_proxy,
     global_forwarding_rule,
+};
+
+pub const CertificateReadinessPolicy = struct {
+    poll_interval_millis: u64 = 5_000,
+    max_transient_failures: usize = 4,
 };
 
 pub const Handler = struct {
@@ -53,8 +61,8 @@ pub const Handler = struct {
         const diff_kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else switch (resource_kind) {
-            .backend_service, .url_map, .target_https_proxy => if (sameIdentity(node.inputs, observed.observed_inputs)) .update else .replace,
-            .global_address, .regional_neg, .global_forwarding_rule => .replace,
+            .backend_service, .url_map, .redirect_url_map, .target_http_proxy, .target_https_proxy => if (sameIdentity(node.inputs, observed.observed_inputs)) .update else .replace,
+            .global_address, .regional_neg, .managed_ssl_certificate, .global_forwarding_rule => .replace,
         };
         const reasons: []const []const u8 = if (diff_kind == .noop) &.{} else &.{"Compute desired state differs from observed resource"};
         return provider_mod.DiffResult.init(context.allocator, diff_kind, reasons);
@@ -83,7 +91,7 @@ pub const Handler = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const resource_kind = kind(node) orelse return error.InvalidConfiguration;
         switch (resource_kind) {
-            .backend_service, .url_map, .target_https_proxy => {},
+            .backend_service, .url_map, .redirect_url_map, .target_http_proxy, .target_https_proxy => {},
             else => return error.InvalidConfiguration,
         }
         const path = try restResourcePathAlloc(context.allocator, physical_id);
@@ -184,12 +192,55 @@ pub fn supports(node: resource.ResourceNode) bool {
     return kind(node) != null;
 }
 
+pub fn waitManagedSslCertificateReady(
+    client: *client_mod.Client,
+    context: *provider_mod.OperationContext,
+    physical_id: []const u8,
+    policy: CertificateReadinessPolicy,
+) ProviderError!void {
+    if (!std.mem.startsWith(u8, physical_id, "projects/") or
+        std.mem.indexOf(u8, physical_id, "/global/sslCertificates/") == null)
+    {
+        return error.InvalidConfiguration;
+    }
+    const path = try restResourcePathAlloc(context.allocator, physical_id);
+    defer context.allocator.free(path);
+    var diagnostic = client_mod.Diagnostic.init(context.allocator);
+    defer diagnostic.deinit();
+    var transient_failures: usize = 0;
+    while (true) {
+        try context.checkActive();
+        var response = client.requestJsonAlloc(context, .{ .api = .compute, .method = "GET", .path = path }, &diagnostic) catch |err| {
+            if ((err == error.TransientFailure or err == error.RateLimited) and
+                transient_failures < policy.max_transient_failures)
+            {
+                transient_failures += 1;
+                context.sleep(diagnostic.retry_after_millis orelse policy.poll_interval_millis);
+                continue;
+            }
+            return err;
+        };
+        defer response.deinit(context.allocator);
+        transient_failures = 0;
+        var parsed = std.json.parseFromSlice(std.json.Value, context.allocator, response.body, .{}) catch return error.ProviderBug;
+        defer parsed.deinit();
+        const remote = asObject(parsed.value) orelse return error.ProviderBug;
+        const managed = try requiredObject(remote, "managed");
+        if (managedCertificateReady(managed)) return;
+        if (managedCertificateFailed(managed)) return error.InvalidConfiguration;
+        context.sleep(policy.poll_interval_millis);
+    }
+}
+
 fn kind(node: resource.ResourceNode) ?Kind {
     const names = .{
         .{ "gcp.compute.GlobalAddress", Kind.global_address },
         .{ "gcp.compute.RegionServerlessNeg", Kind.regional_neg },
         .{ "gcp.compute.BackendService", Kind.backend_service },
         .{ "gcp.compute.UrlMap", Kind.url_map },
+        .{ "gcp.compute.HttpRedirectUrlMap", Kind.redirect_url_map },
+        .{ "gcp.compute.ManagedSslCertificate", Kind.managed_ssl_certificate },
+        .{ "gcp.compute.TargetHttpProxy", Kind.target_http_proxy },
         .{ "gcp.compute.TargetHttpsProxy", Kind.target_https_proxy },
         .{ "gcp.compute.GlobalForwardingRule", Kind.global_forwarding_rule },
     };
@@ -205,10 +256,16 @@ fn pendingResult(
 ) ProviderError!provider_mod.ResourceResult {
     const physical_id = try physicalIdAlloc(allocator, node, resource_kind);
     defer allocator.free(physical_id);
-    const outputs = [_]state.StateOutput{
+    const standard_outputs = [_]state.StateOutput{
         .{ .name = "self_link", .value = .{ .unknown_reason = "Compute operation pending" } },
     };
-    var result = try provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, handle);
+    const certificate_outputs = [_]state.StateOutput{
+        .{ .name = "self_link", .value = .{ .unknown_reason = "Compute operation pending" } },
+        .{ .name = "status", .value = .{ .unknown_reason = "Certificate provisioning not observed" } },
+        .{ .name = "domains_ready", .value = .{ .unknown_reason = "Certificate provisioning not observed" } },
+    };
+    const outputs = if (resource_kind == .managed_ssl_certificate) certificate_outputs[0..] else standard_outputs[0..];
+    var result = try provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, outputs, handle);
     result.completed = false;
     return result;
 }
@@ -228,7 +285,7 @@ fn resultFromJson(
     defer allocator.free(physical_id);
     var observed = try normalizedInputsAlloc(allocator, node, resource_kind, remote);
     defer observed.deinit(allocator);
-    var outputs: [3]state.StateOutput = undefined;
+    var outputs: [4]state.StateOutput = undefined;
     var count: usize = 0;
     switch (resource_kind) {
         .global_address => {
@@ -237,6 +294,13 @@ fn resultFromJson(
         },
         .global_forwarding_rule => {
             outputs[count] = .{ .name = "ip_address", .value = .{ .string = try requiredJsonString(remote, "IPAddress") } };
+            count += 1;
+        },
+        .managed_ssl_certificate => {
+            const managed = try requiredObject(remote, "managed");
+            outputs[count] = .{ .name = "status", .value = .{ .string = try requiredJsonString(managed, "status") } };
+            count += 1;
+            outputs[count] = .{ .name = "domains_ready", .value = .{ .boolean = managedCertificateReady(managed) } };
             count += 1;
         },
         else => {},
@@ -287,6 +351,17 @@ fn normalizedInputsAlloc(
             try normalized.put(arena, "backends", .{ .array = backends });
         },
         .url_map => try normalized.put(arena, "default_service", .{ .string = try requiredJsonString(remote, "defaultService") }),
+        .redirect_url_map => {
+            const redirect = try requiredObject(remote, "defaultUrlRedirect");
+            try normalized.put(arena, "https_redirect", .{ .bool = try requiredJsonBool(redirect, "httpsRedirect") });
+            try normalized.put(arena, "redirect_response_code", .{ .string = try requiredJsonString(redirect, "redirectResponseCode") });
+            try normalized.put(arena, "strip_query", .{ .bool = try requiredJsonBool(redirect, "stripQuery") });
+        },
+        .managed_ssl_certificate => {
+            const managed = try requiredObject(remote, "managed");
+            try normalized.put(arena, "domains", managed.get("domains") orelse return error.ProviderBug);
+        },
+        .target_http_proxy => try normalized.put(arena, "url_map", .{ .string = try requiredJsonString(remote, "urlMap") }),
         .target_https_proxy => {
             try normalized.put(arena, "url_map", .{ .string = try requiredJsonString(remote, "urlMap") });
             try normalized.put(arena, "ssl_certificates", remote.get("sslCertificates") orelse return error.ProviderBug);
@@ -338,6 +413,20 @@ fn desiredBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, r
             try body.put(arena, "backends", .{ .array = backends });
         },
         .url_map => try body.put(arena, "defaultService", .{ .string = try requiredString(node.inputs, "default_service") }),
+        .redirect_url_map => {
+            var redirect: std.json.ObjectMap = .empty;
+            try redirect.put(arena, "httpsRedirect", .{ .bool = try requiredBoolean(node.inputs, "https_redirect") });
+            try redirect.put(arena, "redirectResponseCode", .{ .string = try requiredString(node.inputs, "redirect_response_code") });
+            try redirect.put(arena, "stripQuery", .{ .bool = try requiredBoolean(node.inputs, "strip_query") });
+            try body.put(arena, "defaultUrlRedirect", .{ .object = redirect });
+        },
+        .managed_ssl_certificate => {
+            try body.put(arena, "type", .{ .string = "MANAGED" });
+            var managed: std.json.ObjectMap = .empty;
+            try managed.put(arena, "domains", try stringListJson(arena, try requiredValue(node.inputs, "domains")));
+            try body.put(arena, "managed", .{ .object = managed });
+        },
+        .target_http_proxy => try body.put(arena, "urlMap", .{ .string = try requiredString(node.inputs, "url_map") }),
         .target_https_proxy => {
             try body.put(arena, "urlMap", .{ .string = try requiredString(node.inputs, "url_map") });
             try body.put(arena, "sslCertificates", try stringListJson(arena, try requiredValue(node.inputs, "ssl_certificates")));
@@ -379,6 +468,8 @@ fn mergeUpdateBodyAlloc(
     const managed_fields: []const []const u8 = switch (resource_kind) {
         .backend_service => &.{ "name", "protocol", "loadBalancingScheme", "backends" },
         .url_map => &.{ "name", "defaultService" },
+        .redirect_url_map => &.{ "name", "defaultUrlRedirect" },
+        .target_http_proxy => &.{ "name", "urlMap" },
         .target_https_proxy => &.{ "name", "urlMap", "sslCertificates" },
         else => return error.InvalidConfiguration,
     };
@@ -408,6 +499,9 @@ fn collectionPathAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode
         }),
         .backend_service => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/backendServices", .{project_id}),
         .url_map => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/urlMaps", .{project_id}),
+        .redirect_url_map => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/urlMaps", .{project_id}),
+        .managed_ssl_certificate => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/sslCertificates", .{project_id}),
+        .target_http_proxy => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/targetHttpProxies", .{project_id}),
         .target_https_proxy => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/targetHttpsProxies", .{project_id}),
         .global_forwarding_rule => std.fmt.allocPrint(allocator, "/compute/v1/projects/{s}/global/forwardingRules", .{project_id}),
     } catch return error.OutOfMemory;
@@ -433,6 +527,9 @@ fn physicalIdFromNameAlloc(
         }),
         .backend_service => std.fmt.allocPrint(allocator, "projects/{s}/global/backendServices/{s}", .{ project_id, name }),
         .url_map => std.fmt.allocPrint(allocator, "projects/{s}/global/urlMaps/{s}", .{ project_id, name }),
+        .redirect_url_map => std.fmt.allocPrint(allocator, "projects/{s}/global/urlMaps/{s}", .{ project_id, name }),
+        .managed_ssl_certificate => std.fmt.allocPrint(allocator, "projects/{s}/global/sslCertificates/{s}", .{ project_id, name }),
+        .target_http_proxy => std.fmt.allocPrint(allocator, "projects/{s}/global/targetHttpProxies/{s}", .{ project_id, name }),
         .target_https_proxy => std.fmt.allocPrint(allocator, "projects/{s}/global/targetHttpsProxies/{s}", .{ project_id, name }),
         .global_forwarding_rule => std.fmt.allocPrint(allocator, "projects/{s}/global/forwardingRules/{s}", .{ project_id, name }),
     } catch return error.OutOfMemory;
@@ -502,6 +599,14 @@ fn requiredInteger(input: value.Value, name: []const u8) ProviderError!i64 {
     };
 }
 
+fn requiredBoolean(input: value.Value, name: []const u8) ProviderError!bool {
+    const found = try requiredValue(input, name);
+    return switch (found) {
+        .boolean => |boolean| boolean,
+        else => error.InvalidConfiguration,
+    };
+}
+
 fn requiredObject(object: std.json.ObjectMap, name: []const u8) ProviderError!std.json.ObjectMap {
     const found = object.get(name) orelse return error.ProviderBug;
     return asObject(found) orelse error.ProviderBug;
@@ -509,6 +614,42 @@ fn requiredObject(object: std.json.ObjectMap, name: []const u8) ProviderError!st
 
 fn requiredJsonString(object: std.json.ObjectMap, name: []const u8) ProviderError![]const u8 {
     return asString(object.get(name)) orelse error.ProviderBug;
+}
+
+fn requiredJsonBool(object: std.json.ObjectMap, name: []const u8) ProviderError!bool {
+    const found = object.get(name) orelse return error.ProviderBug;
+    return switch (found) {
+        .bool => |boolean| boolean,
+        else => error.ProviderBug,
+    };
+}
+
+fn managedCertificateReady(managed: std.json.ObjectMap) bool {
+    const status = asString(managed.get("status")) orelse return false;
+    if (!std.mem.eql(u8, status, "ACTIVE")) return false;
+    const domain_status_value = managed.get("domainStatus") orelse return false;
+    const domain_status = asObject(domain_status_value) orelse return false;
+    if (domain_status.count() == 0) return false;
+    var iterator = domain_status.iterator();
+    while (iterator.next()) |entry| {
+        const value_string = asString(entry.value_ptr.*) orelse return false;
+        if (!std.mem.eql(u8, value_string, "ACTIVE")) return false;
+    }
+    return true;
+}
+
+fn managedCertificateFailed(managed: std.json.ObjectMap) bool {
+    if (asString(managed.get("status"))) |status| {
+        if (std.mem.startsWith(u8, status, "FAILED")) return true;
+    }
+    const domain_status_value = managed.get("domainStatus") orelse return false;
+    const domain_status = asObject(domain_status_value) orelse return false;
+    var iterator = domain_status.iterator();
+    while (iterator.next()) |entry| {
+        const status = asString(entry.value_ptr.*) orelse continue;
+        if (std.mem.startsWith(u8, status, "FAILED")) return true;
+    }
+    return false;
 }
 
 fn asObject(input: std.json.Value) ?std.json.ObjectMap {

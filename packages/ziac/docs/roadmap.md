@@ -30,8 +30,10 @@ automated and live tests pass.
 - Native Google ADC, authenticated Google REST/LRO clients, and the
   version-pinned CockroachDB Cloud client: implemented and scripted-transport
   tested without credential leakage.
-- Live GCP calls, global routing, CockroachDB, remote state, and source builds:
-  not yet implemented.
+- Live GCP provider calls and the raw global-routing resources are implemented
+  behind explicit safety gates. Authenticated live acceptance, the high-level
+  global component, CockroachDB resources, remote state, and source builds
+  remain pending.
 
 ## M0: Integration And Architecture
 
@@ -101,7 +103,8 @@ Run region with real physical state and outputs.
 
 - Global address, serverless NEGs, backend service, URL map, HTTPS proxy, and
   forwarding rule scripted lifecycles: complete.
-- Managed TLS and optional Cloud DNS: pending.
+- Managed TLS, explicit certificate readiness, optional HTTP-to-HTTPS redirect,
+  and existing-zone Cloud DNS record sets: scripted lifecycles complete.
 - `ziac.gcp.global.ContainerService`.
 - Premium-tier validation, restricted Cloud Run ingress, readiness, and regional
   failover policy.

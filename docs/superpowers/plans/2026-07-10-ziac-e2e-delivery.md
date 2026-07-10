@@ -747,6 +747,9 @@ Commit: `Add GCP global load balancer resources`
 
 ### Task 5.2: Certificate And DNS Resources
 
+Status: completed on 2026-07-10, with authenticated M5 live verification still
+owned by Task 5.4.
+
 Resources:
 
 - Google-managed SSL certificate
@@ -759,6 +762,16 @@ Tests:
 - DNS read/update/delete with rrset identity.
 - Existing-zone reference and import.
 - Certificate readiness polling is separate from resource creation.
+
+Evidence:
+
+- Managed certificate create/read/delete/import uses checkpointable global
+  Compute operations and exposes provisioning status.
+- Readiness polling terminates on `ACTIVE` or typed terminal failure and remains
+  separate from engine create.
+- Redirect URL map and target HTTP proxy pass full scripted lifecycle tests.
+- Cloud DNS record sets pass create/read/update/delete/import and identity-change
+  tests against the current rrset REST paths.
 
 Commit: `Add GCP certificate and DNS resources`
 

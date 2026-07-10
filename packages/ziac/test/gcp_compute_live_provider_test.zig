@@ -61,6 +61,30 @@ test "live Compute provider manages all global load balancer primitives" {
         false,
     );
 
+    var redirect_url_map = try ziac.gcp.compute.HttpRedirectUrlMap.build(std.testing.allocator, config, .{
+        .name = "api-http-redirect",
+        .strip_query = true,
+    });
+    defer redirect_url_map.deinit(std.testing.allocator);
+    try exerciseLifecycle(
+        redirect_url_map.node,
+        "{\"name\":\"api-http-redirect\",\"selfLink\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/global/urlMaps/api-http-redirect\",\"defaultUrlRedirect\":{\"httpsRedirect\":true,\"stripQuery\":true,\"redirectResponseCode\":\"MOVED_PERMANENTLY_DEFAULT\"},\"fingerprint\":\"redirect-map-fingerprint\"}",
+        "/global/urlMaps",
+        false,
+    );
+
+    var http_proxy = try ziac.gcp.compute.TargetHttpProxy.build(std.testing.allocator, config, .{
+        .name = "api-http",
+        .url_map = "projects/ziac-dev/global/urlMaps/api-http-redirect",
+    });
+    defer http_proxy.deinit(std.testing.allocator);
+    try exerciseLifecycle(
+        http_proxy.node,
+        "{\"name\":\"api-http\",\"selfLink\":\"https://compute.googleapis.com/compute/v1/projects/ziac-dev/global/targetHttpProxies/api-http\",\"urlMap\":\"projects/ziac-dev/global/urlMaps/api-http-redirect\",\"fingerprint\":\"http-proxy-fingerprint\"}",
+        "/global/targetHttpProxies",
+        false,
+    );
+
     var proxy = try ziac.gcp.compute.TargetHttpsProxy.build(std.testing.allocator, config, .{
         .name = "api-https",
         .url_map = "projects/ziac-dev/global/urlMaps/api-map",

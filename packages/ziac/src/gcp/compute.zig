@@ -8,8 +8,11 @@ const value = @import("../value.zig");
 pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || error{
     DuplicateField,
     DuplicateBackendRegion,
+    DuplicateDomain,
+    InvalidDomain,
     MissingBackend,
     MissingCertificate,
+    MissingDomain,
 };
 
 pub const GlobalAddressArgs = struct { name: []const u8 };
@@ -215,6 +218,148 @@ pub const TargetHttpsProxy = struct {
     }
 };
 
+pub const ManagedSslCertificateArgs = struct {
+    name: []const u8,
+    domains: []const []const u8,
+};
+
+pub const ManagedSslCertificate = struct {
+    pub const Outputs = struct {
+        pub const SelfLink = output.Descriptor("self_link", []const u8, .public);
+        pub const Status = output.Descriptor("status", []const u8, .public);
+        pub const DomainsReady = output.Descriptor("domains_ready", bool, .public);
+    };
+
+    node: resource.ResourceNode,
+    self_link: Outputs.SelfLink.OutputType,
+    status: Outputs.Status.OutputType,
+    domains_ready: Outputs.DomainsReady.OutputType,
+
+    pub fn build(
+        allocator: std.mem.Allocator,
+        provider: config_mod.ProviderConfig,
+        args: ManagedSslCertificateArgs,
+    ) BuildError!ManagedSslCertificate {
+        try validateGlobal(provider, args.name);
+        if (args.domains.len == 0) return error.MissingDomain;
+        for (args.domains, 0..) |domain, index| {
+            if (!isValidCertificateDomain(domain)) return error.InvalidDomain;
+            for (args.domains[index + 1 ..]) |other| {
+                if (std.mem.eql(u8, domain, other)) return error.DuplicateDomain;
+            }
+        }
+        const domains = try stringValuesAlloc(allocator, args.domains);
+        defer allocator.free(domains);
+        const fields = [_]value.Field{
+            .{ .name = "domains", .value = .{ .list = domains } },
+            .{ .name = "name", .value = .{ .string = args.name } },
+            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
+        };
+        const node = try buildNode(allocator, "gcp.compute.ManagedSslCertificate", args.name, args.name, &fields);
+        return .{
+            .node = node,
+            .self_link = Outputs.SelfLink.fromResource(node.id),
+            .status = Outputs.Status.fromResource(node.id),
+            .domains_ready = Outputs.DomainsReady.fromResource(node.id),
+        };
+    }
+
+    pub fn deinit(self: *ManagedSslCertificate, allocator: std.mem.Allocator) void {
+        self.node.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+pub const RedirectResponseCode = enum {
+    moved_permanently,
+    found,
+    see_other,
+    temporary_redirect,
+    permanent_redirect,
+
+    pub fn apiName(self: RedirectResponseCode) []const u8 {
+        return switch (self) {
+            .moved_permanently => "MOVED_PERMANENTLY_DEFAULT",
+            .found => "FOUND",
+            .see_other => "SEE_OTHER",
+            .temporary_redirect => "TEMPORARY_REDIRECT",
+            .permanent_redirect => "PERMANENT_REDIRECT",
+        };
+    }
+};
+
+pub const HttpRedirectUrlMapArgs = struct {
+    name: []const u8,
+    strip_query: bool = false,
+    response_code: RedirectResponseCode = .moved_permanently,
+};
+
+pub const HttpRedirectUrlMap = struct {
+    pub const Outputs = struct {
+        pub const SelfLink = output.Descriptor("self_link", []const u8, .public);
+    };
+
+    node: resource.ResourceNode,
+    self_link: Outputs.SelfLink.OutputType,
+
+    pub fn build(
+        allocator: std.mem.Allocator,
+        provider: config_mod.ProviderConfig,
+        args: HttpRedirectUrlMapArgs,
+    ) BuildError!HttpRedirectUrlMap {
+        try validateGlobal(provider, args.name);
+        const fields = [_]value.Field{
+            .{ .name = "https_redirect", .value = .{ .boolean = true } },
+            .{ .name = "name", .value = .{ .string = args.name } },
+            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
+            .{ .name = "redirect_response_code", .value = .{ .string = args.response_code.apiName() } },
+            .{ .name = "strip_query", .value = .{ .boolean = args.strip_query } },
+        };
+        const node = try buildNode(allocator, "gcp.compute.HttpRedirectUrlMap", args.name, args.name, &fields);
+        return .{ .node = node, .self_link = Outputs.SelfLink.fromResource(node.id) };
+    }
+
+    pub fn deinit(self: *HttpRedirectUrlMap, allocator: std.mem.Allocator) void {
+        self.node.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+pub const TargetHttpProxyArgs = struct {
+    name: []const u8,
+    url_map: []const u8,
+};
+
+pub const TargetHttpProxy = struct {
+    pub const Outputs = struct {
+        pub const SelfLink = output.Descriptor("self_link", []const u8, .public);
+    };
+
+    node: resource.ResourceNode,
+    self_link: Outputs.SelfLink.OutputType,
+
+    pub fn build(
+        allocator: std.mem.Allocator,
+        provider: config_mod.ProviderConfig,
+        args: TargetHttpProxyArgs,
+    ) BuildError!TargetHttpProxy {
+        try validateGlobal(provider, args.name);
+        if (args.url_map.len == 0) return error.MissingBackend;
+        const fields = [_]value.Field{
+            .{ .name = "name", .value = .{ .string = args.name } },
+            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
+            .{ .name = "url_map", .value = .{ .string = args.url_map } },
+        };
+        const node = try buildNode(allocator, "gcp.compute.TargetHttpProxy", args.name, args.name, &fields);
+        return .{ .node = node, .self_link = Outputs.SelfLink.fromResource(node.id) };
+    }
+
+    pub fn deinit(self: *TargetHttpProxy, allocator: std.mem.Allocator) void {
+        self.node.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
 pub const GlobalForwardingRuleArgs = struct {
     name: []const u8,
     address: []const u8,
@@ -267,6 +412,21 @@ fn validateGlobal(provider: config_mod.ProviderConfig, name: []const u8) BuildEr
     try provider.validate();
     if (name.len == 0) return error.MissingName;
     if (provider.network_tier != .premium) return error.PremiumTierRequired;
+}
+
+fn isValidCertificateDomain(domain: []const u8) bool {
+    if (domain.len == 0 or domain.len > 253 or domain[domain.len - 1] == '.') return false;
+    const host = if (std.mem.startsWith(u8, domain, "*.")) domain[2..] else domain;
+    if (host.len == 0 or std.mem.indexOfScalar(u8, host, '.') == null) return false;
+    var labels = std.mem.splitScalar(u8, host, '.');
+    while (labels.next()) |label| {
+        if (label.len == 0 or label.len > 63) return false;
+        if (!std.ascii.isAlphanumeric(label[0]) or !std.ascii.isAlphanumeric(label[label.len - 1])) return false;
+        for (label) |character| {
+            if (!(std.ascii.isLower(character) or std.ascii.isDigit(character) or character == '-')) return false;
+        }
+    }
+    return true;
 }
 
 fn buildNode(

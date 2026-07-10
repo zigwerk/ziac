@@ -108,6 +108,7 @@ const FixedTokenSource = struct {
 };
 
 pub const ObservedRequest = struct {
+    method: []const u8,
     url: []const u8,
     body: []const u8,
     authorization: ?[]const u8,
@@ -116,6 +117,7 @@ pub const ObservedRequest = struct {
     user_agent: ?[]const u8,
 
     fn deinit(self: *ObservedRequest, allocator: std.mem.Allocator) void {
+        allocator.free(self.method);
         allocator.free(self.url);
         allocator.free(self.body);
         if (self.authorization) |value| allocator.free(value);
@@ -156,6 +158,7 @@ pub const RecordingTransport = struct {
         try options.checkActive();
         if (self.cursor >= self.responses.len) return error.ScriptExhausted;
         const observed = ObservedRequest{
+            .method = try self.allocator.dupe(u8, request.method),
             .url = try self.allocator.dupe(u8, request.url),
             .body = try self.allocator.dupe(u8, request.body),
             .authorization = try cloneHeader(self.allocator, request.headers, "authorization"),
