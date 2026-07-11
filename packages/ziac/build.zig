@@ -1,10 +1,18 @@
 const std = @import("std");
 
+fn addV2Test(b: *std.Build, runner: std.Build.LazyPath, options: std.Build.TestOptions) *std.Build.Step.Compile {
+    var configured = options;
+    configured.test_runner = .{ .path = runner, .mode = .server };
+    return b.addTest(configured);
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const zigeffect_std = b.dependency("zigeffect_std", .{}).module("zigeffect_std");
+    const zigeffect_std_dependency = b.dependency("zigeffect_std", .{});
+    const zigeffect_std = zigeffect_std_dependency.module("zigeffect_std");
+    const testing_runner = zigeffect_std_dependency.module("zigeffect_test_runner").root_source_file.?;
 
     const ziac = b.addModule("ziac", .{
         .root_source_file = b.path("src/ziac.zig"),
@@ -21,7 +29,7 @@ pub fn build(b: *std.Build) void {
     tests.addImport("ziac", ziac);
     tests.addImport("zigeffect_std", zigeffect_std);
 
-    const unit_tests = b.addTest(.{
+    const unit_tests = addV2Test(b, testing_runner, .{
         .name = "ziac-tests",
         .root_module = tests,
     });
@@ -46,7 +54,7 @@ pub fn build(b: *std.Build) void {
 
     const examples_step = b.step("examples", "Build Ziac examples");
     examples_step.dependOn(test_step);
-    addExample(b, examples_step, target, optimize, ziac, zigeffect_std, "local-cli", "examples/local_cli.zig");
+    addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "local-cli", "examples/local_cli.zig");
 }
 
 fn addExample(
@@ -54,6 +62,7 @@ fn addExample(
     examples_step: *std.Build.Step,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    testing_runner: std.Build.LazyPath,
     ziac: *std.Build.Module,
     zigeffect_std: *std.Build.Module,
     name: []const u8,
@@ -71,7 +80,7 @@ fn addExample(
         .name = b.fmt("ziac-{s}", .{name}),
         .root_module = module,
     });
-    const tests = b.addTest(.{
+    const tests = addV2Test(b, testing_runner, .{
         .name = b.fmt("ziac-{s}-tests", .{name}),
         .root_module = module,
     });
