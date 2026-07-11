@@ -16,6 +16,7 @@ pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || 
     InvalidVpcAccess,
     InvalidSecretVolume,
     OutputNotKnown,
+    DuplicateRegion,
 };
 
 pub const Ingress = enum {
@@ -84,6 +85,7 @@ pub const ServiceArgs = struct {
     image: []const u8 = "",
     image_output: ?output.Output([]const u8, .public) = null,
     region: ?[]const u8 = null,
+    multi_regions: []const []const u8 = &.{},
     port: u16 = 8080,
     command: []const []const u8 = &.{},
     args: []const []const u8 = &.{},
@@ -113,6 +115,7 @@ pub const Service = struct {
         pub const ImageRef = output.Descriptor("image_ref", []const u8, .public);
         pub const PreviousImageRef = output.Descriptor("previous_image_ref", []const u8, .public);
         pub const Ready = output.Descriptor("ready", bool, .public);
+        pub const Etag = output.Descriptor("etag", []const u8, .public);
 
         pub fn field(comptime name: []const u8) type {
             if (std.mem.eql(u8, name, "service_url")) return ServiceUrl;
@@ -122,6 +125,7 @@ pub const Service = struct {
             if (std.mem.eql(u8, name, "image_ref")) return ImageRef;
             if (std.mem.eql(u8, name, "previous_image_ref")) return PreviousImageRef;
             if (std.mem.eql(u8, name, "ready")) return Ready;
+            if (std.mem.eql(u8, name, "etag")) return Etag;
             @compileError("ZIAC120 unknown gcp.run.Service output field: " ++ name);
         }
     };
@@ -134,6 +138,7 @@ pub const Service = struct {
     image_ref: Outputs.ImageRef.OutputType,
     previous_image_ref: Outputs.PreviousImageRef.OutputType,
     ready: Outputs.Ready.OutputType,
+    etag: Outputs.Etag.OutputType,
 
     pub fn build(
         allocator: std.mem.Allocator,
@@ -168,6 +173,8 @@ pub const Service = struct {
         defer readiness_probe.deinit(allocator);
         var vpc_access = try vpcValueOwned(allocator, args.direct_vpc);
         defer vpc_access.deinit(allocator);
+        const multi_regions = try stringValuesAlloc(allocator, args.multi_regions);
+        defer allocator.free(multi_regions);
 
         const input_fields = [_]value.Field{
             .{ .name = "allow_unauthenticated", .value = .{ .boolean = args.allow_unauthenticated } },
@@ -183,6 +190,7 @@ pub const Service = struct {
             .{ .name = "max_instances", .value = .{ .integer = args.max_instances } },
             .{ .name = "memory", .value = .{ .string = args.memory } },
             .{ .name = "min_instances", .value = .{ .integer = args.min_instances } },
+            .{ .name = "multi_region_settings", .value = .{ .list = multi_regions } },
             .{ .name = "name", .value = .{ .string = args.name } },
             .{ .name = "port", .value = .{ .integer = args.port } },
             .{ .name = "project_id", .value = .{ .string = provider.project_id } },
@@ -198,7 +206,7 @@ pub const Service = struct {
             .id = id,
             .provider = .gcp,
             .type_name = "gcp.run.Service",
-            .schema_version = 3,
+            .schema_version = 4,
             .logical_id = args.name,
             .inputs = .{ .object = &input_fields },
         }) catch |err| switch (err) {
@@ -216,6 +224,7 @@ pub const Service = struct {
             .image_ref = Outputs.ImageRef.fromResource(node.id),
             .previous_image_ref = Outputs.PreviousImageRef.fromResource(node.id),
             .ready = Outputs.Ready.fromResource(node.id),
+            .etag = Outputs.Etag.fromResource(node.id),
         };
     }
 
@@ -233,6 +242,17 @@ fn validate(provider: config_mod.ProviderConfig, args: ServiceArgs) BuildError!v
     }
     if (args.port == 0) return error.InvalidPort;
     if ((args.region orelse provider.primary_region).len == 0) return error.MissingRegion;
+    if (args.multi_regions.len > 0) {
+        if (!std.mem.eql(u8, args.region orelse provider.primary_region, "global") or args.multi_regions.len < 2 or args.direct_vpc != null) {
+            return error.InvalidVpcAccess;
+        }
+        for (args.multi_regions, 0..) |region, index| {
+            if (region.len == 0) return error.MissingRegion;
+            for (args.multi_regions[index + 1 ..]) |other| {
+                if (std.mem.eql(u8, region, other)) return error.DuplicateRegion;
+            }
+        }
+    }
     if (args.cpu.len == 0 or args.memory.len == 0) return error.InvalidResources;
     if (args.concurrency == 0) return error.InvalidConcurrency;
     if (args.timeout_seconds == 0) return error.InvalidTimeout;

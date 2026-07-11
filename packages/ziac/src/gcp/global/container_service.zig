@@ -16,6 +16,13 @@ pub const BuildError = cloud_run.BuildError || compute.BuildError || dns.BuildEr
     RegionalVpcMismatch,
     MissingCanaryRegion,
     CanaryRegionNotFound,
+    NativeMultiRegionIncompatible,
+};
+
+pub const Realization = enum {
+    automatic,
+    native_multi_region,
+    controlled_regional_fleet,
 };
 
 pub const HealthMode = enum {
@@ -68,6 +75,7 @@ pub const ContainerServiceArgs = struct {
     direct_vpc: ?cloud_run.DirectVpc = null,
     regional_direct_vpc: []const RegionalDirectVpc = &.{},
     rollout: RolloutPolicy = .{},
+    realization: Realization = .automatic,
 };
 
 pub const ContainerService = struct {
@@ -76,6 +84,8 @@ pub const ContainerService = struct {
     url: output.Output([]const u8, .public),
     ip_address: compute.GlobalAddress.Outputs.Address.OutputType,
     certificate_status: compute.ManagedSslCertificate.Outputs.Status.OutputType,
+    realization: Realization,
+    realization_reason: []const u8,
     owned_url: []const u8,
     address_resource_id: []const u8,
     certificate_resource_id: []const u8,
@@ -87,6 +97,7 @@ pub const ContainerService = struct {
     ) BuildError!ContainerService {
         const regions = if (args.regions.len == 0) provider.service_regions else args.regions;
         try validate(provider, args, regions);
+        const selection = try selectRealization(args);
 
         var graph = resource.ResourceGraph.init(allocator);
         errdefer graph.deinit();
@@ -100,12 +111,15 @@ pub const ContainerService = struct {
         var initialized_neg_ids: usize = 0;
         defer for (neg_resource_ids[0..initialized_neg_ids]) |id| allocator.free(id);
 
-        for (regions, 0..) |region, index| {
-            var service = try cloud_run.Service.build(allocator, provider, .{
+        var native_service: ?cloud_run.Service = null;
+        defer if (native_service) |*service| service.deinit(allocator);
+        if (selection.realization == .native_multi_region) {
+            native_service = try cloud_run.Service.build(allocator, provider, .{
                 .name = args.name,
                 .image = args.image,
                 .image_output = args.image_output,
-                .region = region,
+                .region = "global",
+                .multi_regions = regions,
                 .port = args.port,
                 .command = args.command,
                 .args = args.args,
@@ -123,10 +137,41 @@ pub const ContainerService = struct {
                 .service_account = args.service_account,
                 .env = args.env,
                 .secret_volumes = args.secret_volumes,
-                .direct_vpc = directVpcForRegion(args, region),
+                .direct_vpc = null,
             });
-            defer service.deinit(allocator);
-            try graph.addResource(service.node);
+            try graph.addResource(native_service.?.node);
+        }
+
+        for (regions, 0..) |region, index| {
+            var regional_service: ?cloud_run.Service = null;
+            defer if (regional_service) |*service| service.deinit(allocator);
+            if (selection.realization == .controlled_regional_fleet) {
+                regional_service = try cloud_run.Service.build(allocator, provider, .{
+                    .name = args.name,
+                    .image = args.image,
+                    .image_output = args.image_output,
+                    .region = region,
+                    .port = args.port,
+                    .command = args.command,
+                    .args = args.args,
+                    .cpu = args.cpu,
+                    .memory = args.memory,
+                    .concurrency = args.concurrency,
+                    .timeout_seconds = args.timeout_seconds,
+                    .min_instances = args.min_instances,
+                    .max_instances = args.max_instances,
+                    .startup_probe = args.startup_probe,
+                    .liveness_probe = args.liveness_probe,
+                    .readiness_probe = args.readiness_probe,
+                    .ingress = .internal_and_cloud_load_balancing,
+                    .allow_unauthenticated = true,
+                    .service_account = args.service_account,
+                    .env = args.env,
+                    .secret_volumes = args.secret_volumes,
+                    .direct_vpc = directVpcForRegion(args, region),
+                });
+                try graph.addResource(regional_service.?.node);
+            }
 
             const neg_name = try std.fmt.allocPrint(allocator, "{s}-{s}", .{ args.name, region });
             defer allocator.free(neg_name);
@@ -137,7 +182,11 @@ pub const ContainerService = struct {
             });
             defer neg.deinit(allocator);
             try graph.addResource(neg.node);
-            try graph.bindOutput(neg.node.id, service.latest_revision);
+            const latest_revision = if (regional_service) |service|
+                service.latest_revision
+            else
+                native_service.?.latest_revision;
+            try graph.bindOutput(neg.node.id, latest_revision);
 
             backend_groups[index] = try std.fmt.allocPrint(
                 allocator,
@@ -148,7 +197,9 @@ pub const ContainerService = struct {
             neg_resource_ids[index] = try allocator.dupe(u8, neg.node.id);
             initialized_neg_ids += 1;
         }
-        try addRolloutDependencies(allocator, &graph, args, regions);
+        if (selection.realization == .controlled_regional_fleet) {
+            try addRolloutDependencies(allocator, &graph, args, regions);
+        }
 
         const address_name = try resourceNameAlloc(allocator, args.name, "ip");
         defer allocator.free(address_name);
@@ -281,6 +332,8 @@ pub const ContainerService = struct {
             .url = output.Output([]const u8, .public).known(owned_url),
             .ip_address = compute.GlobalAddress.Outputs.Address.fromResource(address_resource_id),
             .certificate_status = compute.ManagedSslCertificate.Outputs.Status.fromResource(certificate_resource_id),
+            .realization = selection.realization,
+            .realization_reason = selection.reason,
             .owned_url = owned_url,
             .address_resource_id = address_resource_id,
             .certificate_resource_id = certificate_resource_id,
@@ -301,6 +354,35 @@ pub const ContainerService = struct {
         return graph;
     }
 };
+
+const RealizationSelection = struct {
+    realization: Realization,
+    reason: []const u8,
+};
+
+fn selectRealization(args: ContainerServiceArgs) error{NativeMultiRegionIncompatible}!RealizationSelection {
+    const regional_vpc = args.direct_vpc != null or args.regional_direct_vpc.len > 0;
+    const controlled_rollout = args.rollout.strategy == .canary_then_fleet;
+    if (args.realization == .native_multi_region and (regional_vpc or controlled_rollout)) {
+        return error.NativeMultiRegionIncompatible;
+    }
+    if (args.realization == .controlled_regional_fleet) return .{
+        .realization = .controlled_regional_fleet,
+        .reason = "controlled regional fleet explicitly requested",
+    };
+    if (regional_vpc) return .{
+        .realization = .controlled_regional_fleet,
+        .reason = "regional Direct VPC or private connectivity requires independently mutable services",
+    };
+    if (controlled_rollout) return .{
+        .realization = .controlled_regional_fleet,
+        .reason = "independent regional canary rollout requires a controlled fleet",
+    };
+    return .{
+        .realization = .native_multi_region,
+        .reason = "uniform stateless service supports native Cloud Run multi-region",
+    };
+}
 
 fn validate(
     provider: config_mod.ProviderConfig,

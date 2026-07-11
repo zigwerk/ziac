@@ -38,6 +38,10 @@ automated and live tests pass.
   Service Connect slices are implemented. GCS state, saved plans, source builds,
   canary rollback, and the credential-free release gate are implemented;
   authenticated cloud acceptance remains pending external configuration.
+- Google RPC specialization M9 is implemented: pinned descriptor ingestion,
+  semantic contract snapshots and upgrade diffs, AIP-aware Cloud Run updates,
+  native multi-region architecture selection, graph-derived IAM/preflight,
+  topology and rollout intelligence, and fail-closed gRPC qualification.
 
 ## M0: Integration And Architecture
 
@@ -190,21 +194,224 @@ protected data retention, and secret leak scanning.
 
 ## M9: Google RPC And GCP Intelligence
 
-- Pinned Google protobuf/AIP method descriptor kernel: Cloud Run CRUD complete.
+- Pinned Google protobuf/AIP method descriptor kernel: complete for Cloud Run.
 - Validated resource-template expansion and conservative transport selection:
   complete.
 - Cloud Run provider migration to descriptor-owned REST bindings: complete.
 - Deterministic proto lock, descriptor-set generator, and semantic upgrade diff:
-  next.
+  complete with a 25-file descriptor closure and generated snapshot.
 - AIP-aware field ownership, update masks, etags, validate-only, request IDs,
-  LRO unpacking, and partial-read safety: planned.
-- Audited zigeffect HTTP/2 and protobuf gRPC transport with REST parity: planned.
+  LRO/readiness state, typed status causes, and partial-read safety: complete as
+  reusable kernels; Cloud Run consumes masks, etags, and readiness directly.
+- Bounded unary gRPC framing, trailers, deadlines, capability audit, and REST
+  parity contract: complete. No HTTP/2 adapter is enabled until it passes the
+  complete audit; REST transcoding remains the production transport.
 - Native Cloud Run global multi-region realization with automatic fallback to a
-  controlled fleet for PSC, regional bindings, or canary control: planned.
+  controlled fleet for PSC, regional bindings, or canary control: complete.
 - IAM, org policy, quota, billing, residency, latency, Cockroach locality,
-  service health, and SLO preflight/intelligence: planned.
+  asset drift, service health, and SLO preflight/intelligence: deterministic
+  graph-derived kernels complete.
 
-Gate: a pinned proto upgrade produces a reviewed semantic diff; Cloud Run REST
-and gRPC reach identical no-op state; automatic topology selection proves both
-native multi-region and controlled-fleet paths; live preflight catches an IAM,
-quota, and topology defect before mutation.
+Deterministic gate: complete. A pinned proto reproduces its lock and semantic
+snapshot; upgrade facts produce a breaking/non-breaking diff; automatic
+topology proves native and fleet paths; preflight catches IAM, API, region,
+quota, org-policy, and topology defects before mutation; incomplete gRPC
+adapters fail closed.
+
+External acceptance: a future qualified HTTP/2 adapter must prove REST/gRPC
+parity in a disposable project. Authenticated org-policy, quota, Cloud Asset,
+Monitoring, regional failover, and Cockroach data-path evidence still requires
+the live environment declared by `release/live-tests.json`.
+
+## M10: Visual Infrastructure Workbench (Complete)
+
+- Deterministic, redacted `ziac.visual.v1` exporter for desired graphs and
+  plans: complete.
+- Generated three-region Cloud Run, global load balancer, DNS, and CockroachDB
+  fixture: complete.
+- Strict browser parser, graph identity, malformed-reference rejection, region
+  catalogue, truth modes, and shared filters: complete.
+- Cloudcraft-style orthographic Three.js topology with a square grid, raised
+  global/regional/VPC/data planes, beveled resource blocks, semantic routes,
+  synchronized selection, architecture/network/VPC/dependency modes, and
+  accessible resource navigation: complete.
+- Planar contour-following topology traces with deterministic edge ports,
+  right-angle channels, translucent pastel semantics, neutral dashed
+  dependencies, flat arrowheads, and canvas-aligned IAM badges: complete.
+- Intrinsic resource-face identity (type, name, canonical ID), region/VPC slab
+  decals, exact object grounding, and resource/scope hover intelligence with
+  health, uptime, connection counts, and explicitly estimated expense:
+  complete.
+- Capacity-aware plane sizing, multi-row region placement, deterministic node
+  packing, dynamic grid/camera bounds, and non-overlap contracts through 12
+  regions and 48-resource expanded fixtures: complete.
+- Official Google Cloud product/category icon catalogue and top-face resource
+  artwork with provider-safe fallbacks: complete.
+- Product-family zones inside every slab, including deterministic Cloud Run,
+  Storage, networking, security, serverless, database, and provider grouping:
+  complete.
+- Backward-compatible visual access metadata plus same-slab read/write/invoke/
+  admin routes and permission badges: complete in the artifact parser, scene
+  model, renderer, and representative permission fixture.
+- Cloud-estate ownership hierarchy with a GCP account moat, nested global VPC
+  around regional slabs, peer third-party account placement, and hoverable
+  account/network intelligence: complete.
+- Model-owned account/network label footprints with reserved front gutters and
+  checked non-overlap against every contained slab and locality: complete.
+- Cockroach Cloud account block with exact declared-region locality tiles,
+  primary/replica roles, and one canonical cluster resource: complete.
+- Projection-aware isometric/top-down camera fitting and context-first narrow
+  overview zoom for complete account-boundary framing: complete.
+- Compact GCP-console-style command shell, tabbed resource investigation, and
+  deployment/live-log/agent dock: complete.
+- Annotated density refinement with 40px/34px command chrome, a 38px tool rail,
+  unified agent command strip, dense causal event table, and polished 108px
+  rollout dock: complete and desktop/mobile browser verified.
+- Monochrome MapLibre and deck.gl world map with Cloud Run/Cockroach locality,
+  anycast front-door overlay, inferred route arcs, semantic-only accents,
+  provenance, and accessible region controls: complete.
+- Responsive desktop/mobile behavior and causal Workbench compatibility:
+  automated and browser verified.
+
+Gate: the generated Ziac artifact passes Zig and TypeScript contract tests;
+Topology and Global Map render nonblank at desktop and mobile viewports;
+selection and filters remain synchronized; the existing causal Workbench suite
+and production build pass.
+
+## M11: Agent Contract And Authority
+
+Status: Complete. Deterministic package tests cover the contract, authority,
+durable session statechart, redacted artifacts and JSON-first CLI.
+
+- Strict `ziac.project.v1` requirements, acceptance, environment and adaptation
+  contract.
+- Capability envelopes with project/stage/provider/action/expiry boundaries.
+- Create, update, delete, region, cost, deadline and approval autonomy budgets.
+- Durable agent session state machine and versioned status/next/query/explain/
+  handoff artifacts.
+- `ziac agent` CLI backed by the same public kernel used by MCP and Workbench.
+
+Gate: an agent can orient, identify the next accepted action, query the graph
+and hand off with complete redacted evidence and no terminal parsing.
+
+## M12: Hybrid Hot-Reload Development
+
+Status: Complete. Manifest-owned build/process commands, deterministic source
+digests, the native watcher, supervised generations, readiness probes, stable
+reverse proxy, structured CLI events and failed-generation preservation are
+implemented and covered by a real child-process/proxy E2E.
+
+- `.dev` phase and explicit local/cloud/mock/proxy/skip/remote-only resource
+  adaptation.
+- Local Zig build/watch, supervised generations, stable reverse proxy, health
+  promotion, draining and failed-reload rollback.
+- Typed local public/secret bindings and local verified-TLS Cockroach strategy.
+- Incremental change classification, affected-subgraph planning, cancellation
+  and newest-save convergence.
+- `ziac dev` with structured events and automatic smoke verification.
+
+Gate: a local service hot swaps behind one stable URL; failed builds and failed
+readiness preserve the prior healthy generation; unchanged infrastructure makes
+zero provider calls.
+
+## M13: Unified Causal Logs
+
+Status: Complete. The bounded redacted store, durable JSONL session format,
+identity filters, causal explanations, authenticated Cloud Logging adapter,
+owned polling cursor, live CLI ingestion and reactive Workbench feed are
+implemented.
+
+- Bounded redacted `ziac.log.v1` events for compiler, process, proxy, provider,
+  Cloud Run, load balancer, Cockroach, checks, agents and repairs.
+- Stable event/parent/session/trace/resource/revision identities.
+- Local multiplexing, Cloud Logging cursor ingestion, suppression/drop evidence,
+  `tail`, `logs` and `explain`.
+- Live Workbench session, timeline, filters and investigation panels.
+
+Gate: local reload and scripted cloud failures share one ordered causal stream,
+redact sentinels, and remain queryable from CLI and Workbench.
+
+## M14: Fast Immutable Watch Deploy
+
+Status: Complete. Deterministic OCI planning, missing-blob-only registry
+pushes, content-addressed caching, pinned base locks, newest-save convergence,
+capability guardrails, no-traffic readiness promotion, CLI event streaming and
+measured timing/SLO receipts are implemented.
+
+- Deterministic Zig binary OCI layer/config/manifest planning against pinned
+  cached base images.
+- Registry blob negotiation and missing-blob-only upload contract.
+- Code-only `deploy --watch` path with coalescing, cancellation, tagged/no-
+  traffic verification and development traffic promotion.
+- Timed SLO receipts and strict production/capability guardrails.
+
+Gate: rapid saves deploy only the newest immutable digest, unchanged blobs are
+not uploaded, and production cannot use the watch path without exact authority.
+
+## M15: Governed Agent Tools And Infrastructure Testing
+
+Status: Complete. The deterministic scenario catalog, replay receipts,
+immutable repair proposals, MCP authority registry, response contracts,
+generated agent guidance and shared CLI/MCP simulation, proposal and declared
+verification kernel are implemented. Exact-plan apply remains in the existing
+digest/capability/approval executor and cannot be expanded by an agent tool.
+
+- Deterministic region, quota, IAM, stale-etag, interrupted-apply, LRO,
+  Cockroach-locality, secret-rotation, reload and rollback scenarios.
+- Saved evidence-backed repair proposals and requirement verification.
+- Read-only-first MCP adapter, then proposal, verification, exact-plan apply and
+  handoff tools over the same kernel.
+- Generated Codex and Claude skills with no implicit authority.
+
+Gate: CLI and MCP artifacts agree, scenarios replay exactly, proposals cannot
+mutate, and apply remains digest/capability/approval gated.
+
+## M16: Ephemeral Environments And Closed-Loop Operations
+
+Status: In progress. Repository-bound leases, WIF/state/budget projection,
+expiry, idempotent cleanup, correlated Cloud Run/Cockroach diagnosis, repair
+proposal and closed verification are complete; live provider wiring,
+Workbench presentation and final qualification remain open.
+
+- TTL-bound repository stages, WIF identity, isolated GCS state, cost/resource
+  budgets, heartbeat, expiry and automatic production-proof cleanup.
+- Correlated application Env, binding, secret, identity, IAM, Cloud Run,
+  load-balancer, PSC and Cockroach evidence.
+- Cloud Run-to-Cockroach missing-IAM diagnosis, saved repair, simulation,
+  verification and portable handoff acceptance.
+
+Gate: an expired environment cannot mutate, cleanup converges idempotently, the
+broken binding is repaired entirely through structured causal evidence, and all
+deterministic release gates pass. Authenticated latency, log-tail, regional
+failover and data-path qualification remains separately declared.
+
+## M17: Existing GCP Estate Visualization
+
+Status: In progress. The read-only Workbench vertical slice, S256 PKCE contract,
+independent control-plane identity/Pro/connection resolution, authenticated
+Cloud Asset Inventory adapter, bounded scanner, CLI command, fixed-argv desktop
+host launch and artifact refetch are implemented. A deployed subscription and
+Google callback service plus authenticated disposable-project qualification
+remain open.
+
+- Backward-compatible `managed`, `observed`, and `referenced` ownership in the
+  redacted visual artifact: complete.
+- Graph-safe `Ziac`, `Existing`, and `Combined` filtering across canvas, map,
+  selection, routes, regions, navigator, and inspector: complete.
+- Observed Three.js resource identity, neutral ownership accents, discovery
+  provenance, and read-only inspector treatment: complete.
+- Fail-closed Google identity, Pro entitlement, and GCP connection projection:
+  complete at the Workbench/host contract boundary.
+- Connected estate fixture covering managed global services plus existing Cloud
+  Run, Cloud SQL, Storage, VPC, load balancing, and Compute resources: complete.
+- Control-plane identity/subscription/connection client, installed-app PKCE,
+  paginated Cloud Asset Inventory scanning, provider mapping and read-only
+  artifact generation: complete.
+- Deploying the callback/subscription service and qualifying a paid user against
+  a disposable customer project: pending external environment configuration.
+- Scheduled scans, asset feeds, cost attribution, code generation, and
+  zero-change adoption: deferred to subsequent milestones.
+
+Gate: a paid authenticated user scans a disposable project through the Zig
+host, receives a redacted observation artifact with no credentials, and sees
+existing and managed resources remain graph-correct and mutation-isolated.

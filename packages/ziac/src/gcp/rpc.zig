@@ -1,4 +1,6 @@
 const std = @import("std");
+const grpc_mod = @import("grpc.zig");
+const proto_contract = @import("proto_contract.zig");
 
 pub const googleapis_revision = "95de37fafded89761dd958268242904a6d893eae";
 
@@ -26,6 +28,57 @@ pub const TransportPolicy = struct {
     prefer_grpc: bool = true,
     allow_experimental_fallback: bool = false,
 };
+
+pub fn capabilitiesFromAudit(grpc_capabilities: grpc_mod.Capabilities, rest_json: bool) TransportCapabilities {
+    grpc_mod.requireQualified(grpc_capabilities) catch return .{ .rest_json = rest_json };
+    return .{ .grpc_http2 = true, .rest_json = rest_json };
+}
+
+pub const ContractError = proto_contract.Error || error{RpcContractMismatch};
+
+pub fn verifyPinnedContract(allocator: std.mem.Allocator) ContractError!void {
+    try proto_contract.verifyEmbeddedLock();
+    var contract = try proto_contract.inspectCloudRunV2(allocator, proto_contract.embedded_descriptor);
+    defer contract.deinit(allocator);
+    if (!std.mem.eql(u8, contract.default_host, cloud_run_v2.create_service.default_host)) {
+        return error.RpcContractMismatch;
+    }
+    for ([_]Method{
+        cloud_run_v2.create_service,
+        cloud_run_v2.get_service,
+        cloud_run_v2.update_service,
+        cloud_run_v2.delete_service,
+    }) |method| try verifyMethod(contract, method);
+}
+
+fn verifyMethod(contract: proto_contract.Contract, method: Method) error{RpcContractMismatch}!void {
+    const generated = contract.method(method.method) orelse return error.RpcContractMismatch;
+    const rest = method.rest orelse return error.RpcContractMismatch;
+    if (!std.mem.eql(u8, generated.http_method, rest.method.text()) or
+        !std.mem.eql(u8, generated.path_template, rest.path_template) or
+        !std.mem.eql(u8, generated.body, rest.body orelse "") or
+        !std.mem.eql(u8, generated.routing_field, method.routing_field orelse "") or
+        !typeNameMatches(generated.input_type, method.request_type) or
+        !typeNameMatches(generated.output_type, method.response_type))
+    {
+        return error.RpcContractMismatch;
+    }
+    if (generated.lro_response_type.len > 0) {
+        const lro = method.long_running orelse return error.RpcContractMismatch;
+        if (!typeNameMatches(generated.lro_response_type, lro.response_type) or
+            !typeNameMatches(generated.lro_metadata_type, lro.metadata_type))
+        {
+            return error.RpcContractMismatch;
+        }
+    } else if (method.long_running != null) return error.RpcContractMismatch;
+}
+
+fn typeNameMatches(generated: []const u8, declared: []const u8) bool {
+    const normalized = std.mem.trimStart(u8, generated, ".");
+    return std.mem.eql(u8, normalized, declared) or
+        (std.mem.endsWith(u8, declared, normalized) and declared.len > normalized.len and
+            declared[declared.len - normalized.len - 1] == '.');
+}
 
 pub const HttpMethod = enum {
     get,
@@ -194,8 +247,19 @@ const cloud_run_transport = TransportSupport{
     .grpc = true,
     .rest_transcoding = true,
 };
-const create_query = [_]QueryField{.{ .request_field = "service_id", .wire_name = "serviceId" }};
-const update_query = [_]QueryField{.{ .request_field = "update_mask", .wire_name = "updateMask" }};
+const create_query = [_]QueryField{
+    .{ .request_field = "service_id", .wire_name = "serviceId" },
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+};
+const update_query = [_]QueryField{
+    .{ .request_field = "update_mask", .wire_name = "updateMask" },
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+    .{ .request_field = "allow_missing", .wire_name = "allowMissing" },
+};
+const delete_query = [_]QueryField{
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+    .{ .request_field = "etag", .wire_name = "etag" },
+};
 const service_lro = LongRunning{
     .response_type = "google.cloud.run.v2.Service",
     .metadata_type = "google.cloud.run.v2.Service",
@@ -260,7 +324,11 @@ pub const cloud_run_v2 = struct {
         .default_host = "run.googleapis.com",
         .request_type = "google.cloud.run.v2.DeleteServiceRequest",
         .response_type = "google.longrunning.Operation",
-        .rest = .{ .method = .delete, .path_template = "/v2/{name=projects/*/locations/*/services/*}" },
+        .rest = .{
+            .method = .delete,
+            .path_template = "/v2/{name=projects/*/locations/*/services/*}",
+            .query_fields = &delete_query,
+        },
         .routing_field = "name",
         .long_running = service_lro,
         .transports = cloud_run_transport,

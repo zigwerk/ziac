@@ -16,10 +16,25 @@ production graph compiles, and local CockroachDB transport passes verified TLS.
 Authenticated GCP and Cockroach Cloud acceptance remains an explicit external
 gate until disposable account configuration is supplied.
 
-Google provider modernization has started: Cloud Run CRUD now derives method,
-resource-path, query, routing, LRO, and AIP semantics from a descriptor pinned
-to the public `googleapis/googleapis` protobuf contract. Production calls still
-use supported REST transcoding while audited gRPC transport is developed.
+Google provider modernization is implemented for Cloud Run: a locked Google
+descriptor set drives semantic snapshots and upgrade diffs; AIP behavior drives
+field masks, etags, drift, and readiness; automatic topology selects native
+multi-region Cloud Run or a controlled regional fleet; graph-derived RPC/IAM
+requirements drive preflight. Production calls use supported REST transcoding,
+and gRPC remains fail-closed until an HTTP/2 adapter passes every qualification
+and parity gate.
+
+The visual infrastructure Workbench is implemented. A versioned Ziac artifact
+drives a synchronized topology canvas and world map for global Cloud Run,
+load-balancer routing, plan operations, and CockroachDB locality.
+
+The agent-first kernel now includes a strict project contract, capability and
+budget envelopes, durable sessions, hybrid development planning, supervised
+reload decisions, bounded causal logs, deterministic OCI/watch deployment,
+replayable infrastructure scenarios, governed MCP tools, ephemeral leases and
+Cloud Run-to-Cockroach diagnosis. The Workbench Operations view presents the
+same session and evidence model. Native long-running dev/proxy wiring and live
+cloud adapters remain explicitly tracked in `docs/roadmap.md`.
 
 ## Quickstart
 
@@ -40,6 +55,15 @@ For a faster edit loop:
 zig build test
 zig build examples
 zig build
+zig build proto-snapshot > proto/cloud-run-v2.contract.json
+```
+
+Generate and open the representative visual topology:
+
+```sh
+zig build visual-sample > /tmp/ziac-global.visual.json
+cd ../zigeffect
+zig build causal-workbench -- /tmp/ziac-global.visual.json
 ```
 
 The complete source, CockroachDB, PSC, Secret Manager, Direct VPC, Cloud Run,
@@ -156,6 +180,9 @@ policy.
 - `docs/cockroach-sql.md`: database, grants, migrations, and native TLS
 - `docs/authentication.md`: native ADC and Workload Identity Federation
 - `docs/google-rpc.md`: protobuf contracts, transport policy, and GCP specialization
+- `docs/gcp-specialization.md`: architecture compiler, AIP planning, IAM/preflight, and qualification
+- `docs/visual-workbench.md`: topology canvas, global map, artifact contract, and safety
+- `docs/agent-development.md`: agent sessions, hybrid dev, logs, MCP, watch deploy, and leases
 - `docs/remote-state.md`: GCS state, locking, migration, and recovery
 - `docs/saved-plans.md`: immutable plans and destructive approval
 - `docs/keyless-ci.md`: preview stages and GitHub Actions

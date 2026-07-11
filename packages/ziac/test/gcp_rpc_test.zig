@@ -4,6 +4,7 @@ const ziac = @import("ziac");
 const rpc = ziac.gcp.rpc;
 
 test "Cloud Run RPC descriptors retain the pinned Google API contract" {
+    try rpc.verifyPinnedContract(std.testing.allocator);
     try std.testing.expectEqualStrings(
         "95de37fafded89761dd958268242904a6d893eae",
         rpc.googleapis_revision,
@@ -87,5 +88,26 @@ test "RPC transport selection never chooses experimental fallback implicitly" {
         method,
         .{ .experimental_protobuf_http = true },
         .{ .allow_experimental_fallback = true },
+    ));
+}
+
+test "RPC transport advertises gRPC only after the complete capability audit" {
+    const incomplete = rpc.capabilitiesFromAudit(.{
+        .http2 = true,
+        .tls = true,
+        .trailers = true,
+        .deadlines = true,
+        .cancellation = true,
+        .multiplexing = true,
+        .connection_reuse = true,
+        .flow_control = false,
+        .bounded_messages = true,
+        .redacted_diagnostics = true,
+    }, true);
+    try std.testing.expect(!incomplete.grpc_http2);
+    try std.testing.expectEqual(rpc.Transport.rest_transcoding, try rpc.selectTransport(
+        rpc.cloud_run_v2.get_service,
+        incomplete,
+        .{},
     ));
 }

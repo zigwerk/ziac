@@ -17,6 +17,7 @@ test "global ContainerService builds regional services and singleton routing res
         .regions = &regions,
         .domain = "api.example.com",
         .dns_zone = "example-com",
+        .realization = .controlled_regional_fleet,
     });
     defer component.deinit();
 
@@ -51,6 +52,62 @@ test "global ContainerService builds regional services and singleton routing res
     try component.graph.validateAcyclic();
 }
 
+test "global ContainerService automatically selects native multi-region Cloud Run" {
+    var component = try ziac.gcp.global.ContainerService.build(std.testing.allocator, provider, .{
+        .name = "native-api",
+        .image = "example/api@sha256:abc",
+        .regions = &regions,
+        .domain = "native.example.com",
+        .realization = .automatic,
+    });
+    defer component.deinit();
+
+    try std.testing.expectEqual(ziac.gcp.global.Realization.native_multi_region, component.realization);
+    try std.testing.expectEqualStrings("uniform stateless service supports native Cloud Run multi-region", component.realization_reason);
+    try std.testing.expectEqual(@as(usize, 1), countType(&component.graph, "gcp.run.Service"));
+    const service = findType(&component.graph, "gcp.run.Service");
+    try std.testing.expectEqualStrings("global", inputString(service, "region"));
+    try std.testing.expectEqual(@as(usize, 2), inputValue(service, "multi_region_settings").list.len);
+    try std.testing.expectEqual(@as(usize, 2), countType(&component.graph, "gcp.compute.RegionServerlessNeg"));
+}
+
+test "global ContainerService selects fleet for regional constraints and rejects forced native mode" {
+    const regional_vpc = [_]ziac.gcp.global.container_service.RegionalDirectVpc{
+        .{ .region = "europe-west1", .config = .{
+            .network = "projects/ziac-dev/global/networks/app",
+            .subnetwork = "projects/ziac-dev/regions/europe-west1/subnetworks/app",
+        } },
+        .{ .region = "us-central1", .config = .{
+            .network = "projects/ziac-dev/global/networks/app",
+            .subnetwork = "projects/ziac-dev/regions/us-central1/subnetworks/app",
+        } },
+    };
+    var automatic = try ziac.gcp.global.ContainerService.build(std.testing.allocator, provider, .{
+        .name = "private-api",
+        .image = "example/api@sha256:abc",
+        .regions = &regions,
+        .domain = "private.example.com",
+        .regional_direct_vpc = &regional_vpc,
+        .realization = .automatic,
+    });
+    defer automatic.deinit();
+    try std.testing.expectEqual(ziac.gcp.global.Realization.controlled_regional_fleet, automatic.realization);
+    try std.testing.expect(std.mem.indexOf(u8, automatic.realization_reason, "regional Direct VPC") != null);
+
+    try std.testing.expectError(error.NativeMultiRegionIncompatible, ziac.gcp.global.ContainerService.build(
+        std.testing.allocator,
+        provider,
+        .{
+            .name = "invalid-native",
+            .image = "example/api@sha256:abc",
+            .regions = &regions,
+            .domain = "invalid.example.com",
+            .regional_direct_vpc = &regional_vpc,
+            .realization = .native_multi_region,
+        },
+    ));
+}
+
 test "global ContainerService omits optional DNS and HTTP redirect resources" {
     var component = try ziac.gcp.global.ContainerService.build(std.testing.allocator, provider, .{
         .name = "api",
@@ -58,6 +115,7 @@ test "global ContainerService omits optional DNS and HTTP redirect resources" {
         .regions = &regions,
         .domain = "api.example.com",
         .http_redirect = false,
+        .realization = .controlled_regional_fleet,
     });
     defer component.deinit();
 
@@ -129,6 +187,7 @@ test "global ContainerService graph is deterministic" {
         .regions = &regions,
         .domain = "api.example.com",
         .dns_zone = "example-com",
+        .realization = .controlled_regional_fleet,
     };
     var first = try ziac.gcp.global.ContainerService.build(std.testing.allocator, provider, args);
     defer first.deinit();
@@ -154,6 +213,7 @@ test "global ContainerService gates the fleet on one regional canary" {
         .image = "example/api@sha256:abc",
         .regions = &rollout_regions,
         .domain = "api.example.com",
+        .realization = .controlled_regional_fleet,
         .rollout = .{
             .strategy = .canary_then_fleet,
             .canary_region = "europe-west1",
@@ -232,6 +292,7 @@ test "global ContainerService wires a typed image output into every region" {
         .image_output = image.image_ref,
         .regions = &regions,
         .domain = "api.example.com",
+        .realization = .controlled_regional_fleet,
     });
     defer component.deinit();
 
@@ -263,6 +324,7 @@ test "global ContainerService applies the matching Direct VPC subnet per region"
         .image = "example/api@sha256:abc",
         .regions = &regions,
         .domain = "api.example.com",
+        .realization = .controlled_regional_fleet,
         .regional_direct_vpc = &regional_vpc,
     });
     defer component.deinit();

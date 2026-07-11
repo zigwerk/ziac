@@ -1,4 +1,5 @@
 const std = @import("std");
+const aip = @import("aip.zig");
 const client_mod = @import("client.zig");
 const operation = @import("operation.zig");
 const rpc = @import("rpc.zig");
@@ -70,7 +71,7 @@ pub const Handler = struct {
         const project_id = try requiredString(node.inputs, "project_id");
         const region = try requiredString(node.inputs, "region");
         const name = try requiredString(node.inputs, "name");
-        const body = try serviceBodyAlloc(context, node);
+        const body = try serviceBodyAlloc(context, node, null);
         defer context.allocator.free(body);
         const parent = try std.fmt.allocPrint(context.allocator, "projects/{s}/locations/{s}", .{ project_id, region });
         defer context.allocator.free(parent);
@@ -98,14 +99,17 @@ pub const Handler = struct {
         node: resource.ResourceNode,
         observed: *const provider_mod.ResourceResult,
     ) ProviderError!provider_mod.ResourceResult {
-        const body = try serviceBodyAlloc(context, node);
+        const etag = stateOutputString(observed.outputs, "etag");
+        const body = try serviceBodyAlloc(context, node, etag);
         defer context.allocator.free(body);
+        const update_mask = try serviceUpdateMaskAlloc(context, node, observed);
+        defer context.allocator.free(update_mask);
         const path = try rpcPathAlloc(context, rpc.cloud_run_v2.update_service, &.{.{
             .field = "service.name",
             .value = observed.physical_id,
         }}, &.{.{
             .field = "update_mask",
-            .value = "labels,ingress,invokerIamDisabled,template",
+            .value = update_mask,
         }});
         defer context.allocator.free(path);
         const handle = try self.startOperation(
@@ -239,6 +243,7 @@ fn pendingResult(
         .{ .name = "image_ref", .value = current_image },
         .{ .name = "previous_image_ref", .value = previous_image },
         .{ .name = "ready", .value = .{ .boolean = false } },
+        .{ .name = "etag", .value = .{ .unknown_reason = "Cloud Run operation pending" } },
     };
     var result = try provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, handle);
     result.completed = false;
@@ -279,6 +284,7 @@ fn resultFromServiceJson(
     if (containers.items.len == 0) return error.ProviderBug;
     const container = asObject(containers.items[0]) orelse return error.ProviderBug;
     const image_ref = try requiredJsonString(container, "image");
+    const etag = asString(root.get("etag"));
     const previous_image = try previousImageValueAlloc(context, node.id, image_ref);
     defer if (previous_image == .string) allocator.free(previous_image.string);
     var observed = try normalizedInputsAlloc(context, node, root);
@@ -291,20 +297,28 @@ fn resultFromServiceJson(
         .{ .name = "image_ref", .value = .{ .string = image_ref } },
         .{ .name = "previous_image_ref", .value = previous_image },
         .{ .name = "ready", .value = .{ .boolean = true } },
+        .{ .name = "etag", .value = if (etag) |present| .{ .string = present } else .{ .unknown_reason = "Cloud Run response omitted etag" } },
     };
     return provider_mod.ResourceResult.init(allocator, physical_id, observed, &outputs, null);
 }
 
 fn validateServiceReady(root: std.json.ObjectMap) ProviderError!void {
     const reconciling = jsonBool(root.get("reconciling")) orelse return error.ProviderBug;
-    if (reconciling) return error.TransientFailure;
     const terminal = try requiredObject(root, "terminalCondition");
     const condition = try requiredJsonString(terminal, "state");
-    if (std.mem.eql(u8, condition, "CONDITION_FAILED")) return error.RemoteOperationFailed;
-    if (!std.mem.eql(u8, condition, "CONDITION_SUCCEEDED")) return error.TransientFailure;
     const created = try requiredJsonString(root, "latestCreatedRevision");
     const ready = try requiredJsonString(root, "latestReadyRevision");
-    if (!std.mem.eql(u8, created, ready)) return error.TransientFailure;
+    const generation = jsonI64(root.get("generation")) orelse 0;
+    const observed_generation = jsonI64(root.get("observedGeneration")) orelse generation;
+    const readiness = aip.serviceReadiness(.{
+        .generation = generation,
+        .observed_generation = observed_generation,
+        .reconciling = reconciling,
+        .terminal_state = condition,
+        .latest_created_revision = created,
+        .latest_ready_revision = ready,
+    }) catch return error.RemoteOperationFailed;
+    if (readiness == .reconciling) return error.TransientFailure;
 }
 
 fn previousImageValueAlloc(
@@ -341,7 +355,76 @@ fn stateOutputString(outputs: []const state.StateOutput, name: []const u8) ?[]co
     return null;
 }
 
-fn serviceBodyAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {
+fn serviceUpdateMaskAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    observed: *const provider_mod.ResourceResult,
+) ProviderError![]const u8 {
+    const template_fields = [_][]const u8{
+        "args",
+        "command",
+        "concurrency",
+        "cpu",
+        "env",
+        "image",
+        "liveness_probe",
+        "max_instances",
+        "memory",
+        "min_instances",
+        "port",
+        "readiness_probe",
+        "secret_volumes",
+        "service_account",
+        "startup_probe",
+        "timeout_seconds",
+        "vpc_access",
+    };
+    var template_changed = false;
+    for (template_fields) |field| {
+        if (try inputChanged(context, node.inputs, observed.observed_inputs, field)) {
+            template_changed = true;
+            break;
+        }
+    }
+    const changes = [_]aip.FieldChange{
+        .{ .path = "labels", .behavior = .optional, .changed = try inputChanged(context, node.inputs, observed.observed_inputs, "labels") },
+        .{ .path = "ingress", .behavior = .optional, .changed = try inputChanged(context, node.inputs, observed.observed_inputs, "ingress") },
+        .{ .path = "invokerIamDisabled", .behavior = .optional, .changed = try inputChanged(context, node.inputs, observed.observed_inputs, "allow_unauthenticated") },
+        .{ .path = "multiRegionSettings", .behavior = .optional, .changed = try inputChanged(context, node.inputs, observed.observed_inputs, "multi_region_settings") },
+        .{ .path = "template", .behavior = .optional, .changed = template_changed },
+    };
+    var plan = try aip.planChanges(context.allocator, &changes);
+    defer plan.deinit(context.allocator);
+    if (plan.kind != .update or plan.update_mask.len == 0) return error.ProviderBug;
+    return context.allocator.dupe(u8, plan.update_mask) catch return error.OutOfMemory;
+}
+
+fn inputChanged(
+    context: *provider_mod.OperationContext,
+    desired: value.Value,
+    observed: value.Value,
+    name: []const u8,
+) ProviderError!bool {
+    const desired_value = try requiredValue(desired, name);
+    const observed_value = try requiredValue(observed, name);
+    const desired_json = desired_value.canonicalJsonAlloc(context.allocator) catch |err| return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.DuplicateField => error.ProviderBug,
+    };
+    defer context.allocator.free(desired_json);
+    const observed_json = observed_value.canonicalJsonAlloc(context.allocator) catch |err| return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.DuplicateField => error.ProviderBug,
+    };
+    defer context.allocator.free(observed_json);
+    return !std.mem.eql(u8, desired_json, observed_json);
+}
+
+fn serviceBodyAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    etag: ?[]const u8,
+) ProviderError![]const u8 {
     const allocator = context.allocator;
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
@@ -352,6 +435,17 @@ fn serviceBodyAlloc(context: *provider_mod.OperationContext, node: resource.Reso
     try root.put(arena, "labels", try plainValueToJson(arena, try requiredValue(node.inputs, "labels")));
     try root.put(arena, "ingress", .{ .string = try requiredString(node.inputs, "ingress") });
     try root.put(arena, "invokerIamDisabled", .{ .bool = try requiredBool(node.inputs, "allow_unauthenticated") });
+    if (etag) |present| try root.put(arena, "etag", .{ .string = present });
+    const multi_regions = try requiredValue(node.inputs, "multi_region_settings");
+    const region_values = switch (multi_regions) {
+        .list => |items| items,
+        else => return error.InvalidConfiguration,
+    };
+    if (region_values.len > 0) {
+        var multi_region_settings: std.json.ObjectMap = .empty;
+        try multi_region_settings.put(arena, "regions", try stringListJson(arena, multi_regions));
+        try root.put(arena, "multiRegionSettings", .{ .object = multi_region_settings });
+    }
 
     var template: std.json.ObjectMap = .empty;
     try template.put(arena, "serviceAccount", .{ .string = try requiredString(node.inputs, "service_account") });
@@ -442,6 +536,11 @@ fn normalizedInputsAlloc(
     try normalized.put(arena, "max_instances", .{ .integer = try requiredJsonInteger(scaling, "maxInstanceCount") });
     try normalized.put(arena, "memory", .{ .string = try requiredJsonString(limits, "memory") });
     try normalized.put(arena, "min_instances", .{ .integer = try requiredJsonInteger(scaling, "minInstanceCount") });
+    const multi_region_settings = if (remote.get("multiRegionSettings")) |settings_value| settings: {
+        const settings = asObject(settings_value) orelse return error.ProviderBug;
+        break :settings settings.get("regions") orelse emptyJsonArray(arena);
+    } else emptyJsonArray(arena);
+    try normalized.put(arena, "multi_region_settings", multi_region_settings);
     try normalized.put(arena, "name", .{ .string = try requiredString(node.inputs, "name") });
     try normalized.put(arena, "port", .{ .integer = try requiredJsonInteger(port, "containerPort") });
     try normalized.put(arena, "project_id", .{ .string = try requiredString(node.inputs, "project_id") });
@@ -929,6 +1028,15 @@ fn jsonInteger(maybe_input: ?std.json.Value) ?i64 {
     const input = maybe_input orelse return null;
     return switch (input) {
         .integer => |integer| integer,
+        else => null,
+    };
+}
+
+fn jsonI64(maybe_input: ?std.json.Value) ?i64 {
+    const input = maybe_input orelse return null;
+    return switch (input) {
+        .integer => |integer| integer,
+        .string => |string| std.fmt.parseInt(i64, string, 10) catch null,
         else => null,
     };
 }

@@ -1,0 +1,60 @@
+{
+  "schema": "ziac.project.v1",
+  "project": "agent-api",
+  "source_roots": ["src", "test"],
+  "components": [
+    {
+      "id": "api",
+      "resources": ["gcp.run.Service.global.api", "gcp.secret.Secret.database-url"]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "global-api-healthy",
+      "summary": "Global API reaches CockroachDB through a secret binding",
+      "component": "api",
+      "required": true
+    }
+  ],
+  "acceptance_checks": [
+    {
+      "id": "check-global-api",
+      "requirement": "global-api-healthy",
+      "command": "verify-global-api"
+    }
+  ],
+  "environments": [
+    {
+      "id": "dev",
+      "stage_patterns": ["dev_*", "pr-*"],
+      "providers": ["gcp", "cockroach"],
+      "projects": ["agent-api-ziac-disposable"],
+      "regions": ["europe-west1", "us-central1"],
+      "max_monthly_cost_minor": 8000
+    }
+  ],
+  "adaptations": [
+    { "resource_type": "gcp.artifact.Repository", "strategy": "skip" },
+    { "resource_type": "gcp.run.Service", "strategy": "local_process" },
+    { "resource_type": "gcp.compute.BackendService", "strategy": "local_proxy" },
+    { "resource_type": "cockroach.Cluster", "strategy": "local_service" },
+    { "resource_type": "gcp.psc.Endpoint", "strategy": "remote_only" }
+  ],
+  "scenarios": [
+    {
+      "id": "missing-secret-access",
+      "requirement": "global-api-healthy",
+      "acceptance_check": "check-global-api",
+      "seed": 42,
+      "required": true
+    }
+  ],
+  "authority": {
+    "read": true,
+    "plan": true,
+    "apply": false,
+    "delete": false,
+    "secret_read": false,
+    "live_network": false
+  }
+}

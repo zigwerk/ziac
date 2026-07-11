@@ -1,0 +1,81 @@
+{
+  "schema": "ziac.project.v1",
+  "project": "ziac",
+  "source_roots": ["src", "test", "examples", "docs"],
+  "components": [
+    {
+      "id": "engine",
+      "resources": [
+        "gcp.artifact.Repository.europe-west1.hello-global",
+        "gcp.run.Service.europe-west1.api"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "agent-control-loop",
+      "summary": "Agent infrastructure operations remain deterministic, bounded and capability gated",
+      "component": "engine",
+      "required": true
+    },
+    {
+      "id": "existing-estate-visualization",
+      "summary": "Existing GCP resources are visualized read-only and remain separate from Ziac ownership",
+      "component": "engine",
+      "required": true
+    }
+  ],
+  "acceptance_checks": [
+    {
+      "id": "check-agent-control-loop",
+      "requirement": "agent-control-loop",
+      "command": "zig build test"
+    },
+    {
+      "id": "check-existing-estate-visualization",
+      "requirement": "existing-estate-visualization",
+      "command": "zig build test"
+    }
+  ],
+  "environments": [
+    {
+      "id": "development",
+      "stage_patterns": ["dev", "dev_*", "pr-*"],
+      "providers": ["gcp", "cockroach"],
+      "projects": ["*-ziac-disposable"],
+      "regions": ["europe-west1", "us-central1", "asia-northeast1"],
+      "max_monthly_cost_minor": 10000
+    }
+  ],
+  "adaptations": [
+    { "resource_type": "gcp.artifact.Repository", "strategy": "skip" },
+    { "resource_type": "gcp.run.Service", "strategy": "local_process" },
+    { "resource_type": "gcp.compute.BackendService", "strategy": "local_proxy" },
+    { "resource_type": "cockroach.Cluster", "strategy": "local_service" },
+    { "resource_type": "gcp.psc.Endpoint", "strategy": "remote_only" }
+  ],
+  "scenarios": [
+    {
+      "id": "agent-authority-boundary",
+      "requirement": "agent-control-loop",
+      "acceptance_check": "check-agent-control-loop",
+      "seed": 42,
+      "required": true
+    },
+    {
+      "id": "existing-estate-read-only",
+      "requirement": "existing-estate-visualization",
+      "acceptance_check": "check-existing-estate-visualization",
+      "seed": 73,
+      "required": true
+    }
+  ],
+  "authority": {
+    "read": true,
+    "plan": true,
+    "apply": false,
+    "delete": false,
+    "secret_read": false,
+    "live_network": false
+  }
+}

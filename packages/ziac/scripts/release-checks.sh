@@ -14,6 +14,9 @@ required=(
   "docs/rollouts-recovery.md"
   "examples/production_global_service.zig"
   "release/live-tests.json"
+  "proto/googleapis.lock.json"
+  "proto/cloud-run-v2.contract.json"
+  "src/gcp/generated/cloud-run-v2.pb"
   "scripts/live-global-gate.sh"
 )
 for path in "${required[@]}"; do
@@ -22,6 +25,17 @@ for path in "${required[@]}"; do
     exit 1
   fi
 done
+
+descriptor_hash="$(shasum -a 256 "${package_dir}/src/gcp/generated/cloud-run-v2.pb" | awk '{print $1}')"
+if [[ "${descriptor_hash}" != "b782942487e0e305651bf83c5f211f132e4b29e3bedcdf15a83b478df6a8b722" ]]; then
+  printf 'release gate found a Google descriptor lock mismatch\n' >&2
+  exit 1
+fi
+snapshot_hash="$(shasum -a 256 "${package_dir}/proto/cloud-run-v2.contract.json" | awk '{print $1}')"
+if [[ "${snapshot_hash}" != "f4f0ca51afa49e9412d484cf3d10281519c21fdbf7e332dbe8aaf5f930d0baff" ]]; then
+  printf 'release gate found a generated Google semantic snapshot mismatch\n' >&2
+  exit 1
+fi
 
 if find "${package_dir}" -type f -name 'gha-creds-*.json' -print -quit | grep -q .; then
   printf 'release gate found a generated GitHub credential file\n' >&2

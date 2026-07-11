@@ -7,6 +7,12 @@ application-facing standard library facade that Ziac imports as its substrate.
 Ziac provides the IaC product layer: stacks, resources, outputs, providers,
 state, plans, applies, and component libraries.
 
+The agent-first control loop, hybrid development runtime, causal log plane,
+immutable OCI watch path, MCP authority boundary and ephemeral lease model are
+documented in `agent-development.md`. They reuse the resource graph, provider
+contracts, saved plans and causal evidence below; there is no parallel
+agent-only infrastructure engine.
+
 Initial source domains:
 
 - `core.zig`: names, IDs, physical names, diagnostics.
@@ -15,6 +21,8 @@ Initial source domains:
 - `state.zig`: resource state records and in-memory store.
 - `plan.zig`: deterministic plan operations.
 - `plan_format.zig`: immutable saved-plan encoding, loading, and integrity.
+- `visual_artifact.zig`: deterministic redacted infrastructure projection for
+  the shared visual Workbench.
 - `provider.zig`: provider lifecycle vtable and fake provider.
 - `apply.zig`: one-operation lifecycle and state transitions.
 - `executor.zig`: stable dependency levels, bounded zigeffect execution, retry,
@@ -158,14 +166,42 @@ binding/provider programs must compile. Invalid fixtures must both fail and emit
 their exact contract code: `ZIAC100` through `ZIAC104`, `ZIAC110`, `ZIAC111`, or
 `ZIAC120`. A syntax or import failure cannot satisfy the harness.
 
+## Visual Projection
+
+`ziac.visual.v1` is derived from the desired ResourceGraph and optional Plan.
+It does not become a second state format and it cannot be applied. Resources,
+edges, regions, operations, and routes are sorted; the desired graph digest and
+state serial preserve their engine meanings. Secret references and
+secret-shaped fields are redacted before the artifact crosses the Workbench
+bridge.
+
+The SolidJS Workbench routes this schema to a dedicated Ziac workspace. G6
+renders the dependency topology and MapLibre plus deck.gl render geographic
+placement and routes. Both consume one parsed model and share filters and
+selection. The browser performs no provider calls and receives no credentials.
+See `visual-workbench.md`.
+
 ## Google RPC Contract Layer
 
 `gcp.rpc` pins selected public Google protobuf contracts and exposes method,
 resource-path, HTTP binding, routing, LRO, transport, and AIP semantics. Cloud
-Run CRUD already uses this layer while retaining REST/JSON transcoding. Future
-generated descriptors will drive typed messages, field ownership, update masks,
-etag preconditions, validate-only preflight, and gRPC without changing the
-resource graph or state model. See `google-rpc.md`.
+Run CRUD uses this layer while retaining REST/JSON transcoding.
+`gcp.proto_contract` ingests the locked descriptor set and produces semantic
+snapshots and upgrade diffs. `gcp.aip` drives field masks, replacement/output
+classification, etag preconditions, list completeness, typed Google status,
+and readiness. `gcp.grpc` fails closed unless an adapter proves the complete
+HTTP/2 capability contract. See `google-rpc.md` and `gcp-specialization.md`.
+
+`gcp.global.ContainerService` is an architecture compiler. Automatic mode emits
+one global Cloud Run service with provider-managed regional replicas when all
+configuration is uniform. Direct VPC, PSC locality, regional bindings, or an
+independent canary select separately mutable regional services. Regional NEGs
+and the global load-balancing graph remain explicit in both realizations.
+
+`gcp.intelligence` derives API, RPC, and IAM requirements from that compiled
+graph. Preflight evaluates Service Usage, permissions, billing, regions, quota,
+Organization Policy, and VPC Service Controls without mutating the declaration.
+Topology, Cloud Asset drift, and SLO gates never silently rewrite policy.
 
 ## Release Boundary
 

@@ -67,6 +67,7 @@ pub fn ZigService(
             readiness_probe: ?cloud_run.HttpProbe = null,
             direct_vpc: ?cloud_run.DirectVpc = null,
             regional_direct_vpc: []const container_service.RegionalDirectVpc = &.{},
+            realization: container_service.Realization = .automatic,
             http_redirect: bool = true,
             redirect_strip_query: bool = false,
         };
@@ -82,6 +83,8 @@ pub fn ZigService(
         runtime_service_account: iam.ServiceAccount.Outputs.Email.OutputType,
         ip_address: @import("../compute.zig").GlobalAddress.Outputs.Address.OutputType,
         certificate_status: @import("../compute.zig").ManagedSslCertificate.Outputs.Status.OutputType,
+        realization: container_service.Realization,
+        realization_reason: []const u8,
         source_digest: [64]u8,
         build_digest: [64]u8,
         source_path: []const u8,
@@ -294,6 +297,7 @@ pub fn ZigService(
                 .env = env.values,
                 .direct_vpc = args.direct_vpc,
                 .regional_direct_vpc = args.regional_direct_vpc,
+                .realization = args.realization,
             });
             defer routed.deinit();
             var final_graph = routed.takeGraph();
@@ -330,6 +334,8 @@ pub fn ZigService(
                 .runtime_service_account = iam.ServiceAccount.Outputs.Email.fromResource(runtime_account_resource_id),
                 .ip_address = @import("../compute.zig").GlobalAddress.Outputs.Address.fromResource(address_resource_id),
                 .certificate_status = @import("../compute.zig").ManagedSslCertificate.Outputs.Status.fromResource(certificate_resource_id),
+                .realization = routed.realization,
+                .realization_reason = routed.realization_reason,
                 .source_digest = integrity.sha256,
                 .build_digest = build_digest,
                 .source_path = archive_source.source_path,

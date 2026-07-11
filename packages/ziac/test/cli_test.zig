@@ -1,6 +1,8 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
+const agent_project_fixture = @embedFile("fixtures/agent/ziac.project.json");
+
 fn testEnv(
     local: *ziac.state_backend.Local,
     fs: *ziac.zstd.FileSystem.MemoryFileSystem,
@@ -15,7 +17,267 @@ fn testEnv(
         .registry = ziac.stack_registry.fixtureRegistry(),
         .state = local.store(),
         .plan_files = ziac.local_state.memoryFiles(fs),
+        .agent_files = ziac.local_state.memoryFiles(fs),
+        .log_files = ziac.local_state.memoryFiles(fs),
     };
+}
+
+const CliEstateResolver = struct {
+    fn resolver(self: *CliEstateResolver) ziac.estate_access.Resolver {
+        return .{
+            .ptr = self,
+            .verify_identity = verifyIdentity,
+            .lookup_entitlement = lookupEntitlement,
+            .resolve_connection = resolveConnection,
+        };
+    }
+
+    fn verifyIdentity(_: *anyopaque, _: []const u8, _: u64) anyerror!ziac.estate.Identity {
+        return .{ .provider = .google, .verified = true, .subject = "google-subject-42" };
+    }
+
+    fn lookupEntitlement(_: *anyopaque, _: []const u8, _: u64) anyerror!ziac.estate_access.EntitlementRecord {
+        return .{ .tier = .pro, .active = true, .expires_at_millis = 1_800_000_000_000 };
+    }
+
+    fn resolveConnection(_: *anyopaque, _: []const u8, _: []const u8, _: u64) anyerror!ziac.estate.Connection {
+        return .{ .status = .connected, .project_id = "acme-prod" };
+    }
+};
+
+test "cli agent commands orient persist query and hand off through JSON artifacts" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    try fs.writeFile("ziac.project.json", agent_project_fixture);
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const orient_code = try ziac.cli.run(std.testing.allocator, &.{
+        "agent", "orient", "--stack", "hello-global", "--stage", "dev", "--objective", "repair global API",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, orient_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.agent-status.v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "planning") != null);
+    try std.testing.expect(fs.exists(".ziac/agent/hello-global/dev/session.json"));
+
+    console.stdout.clearRetainingCapacity();
+    const next_code = try ziac.cli.run(std.testing.allocator, &.{
+        "agent", "next", "--stack", "hello-global", "--stage", "dev",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, next_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac plan --json") != null);
+
+    console.stdout.clearRetainingCapacity();
+    const query_code = try ziac.cli.run(std.testing.allocator, &.{
+        "agent",      "query",                            "--stack", "hello-global", "--stage", "dev",
+        "--resource", "gcp.run.Service.europe-west1.api",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, query_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "gcp.artifact.Repository.europe-west1.hello-global") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "sentinel-secret-for-tests") == null);
+
+    console.stdout.clearRetainingCapacity();
+    const handoff_code = try ziac.cli.run(std.testing.allocator, &.{
+        "agent", "handoff", "--stack", "hello-global", "--stage", "dev", "--root-cause", "awaiting provider preflight",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, handoff_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.handoff.v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "awaiting provider preflight") != null);
+}
+
+test "cli agent simulate and verify use the shared governed tool kernel" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    try fs.writeFile("ziac.project.json", agent_project_fixture);
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    var verification = ziac.agent_tools.ScriptedVerificationRunner.init("checks passed");
+    env.verification_runner = verification.runner();
+
+    const simulate_code = try ziac.cli.run(std.testing.allocator, &.{
+        "agent",                                                                                                                                                                                                                           "simulate", "--stack", "hello-global", "--stage", "dev", "--arguments",
+        "{\"scenario_id\":\"missing-iam\",\"kind\":\"iam_denied\",\"seed\":42,\"max_steps\":8,\"target_resource\":\"gcp.run.Service.europe-west1.api\",\"requirement\":\"global-api-healthy\",\"acceptance_check\":\"check-global-api\"}",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, simulate_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.scenario-receipt.v1") != null);
+
+    console.stdout.clearRetainingCapacity();
+    const verify_code = try ziac.cli.run(std.testing.allocator, &.{
+        "agent", "verify", "--stack", "hello-global", "--stage", "dev", "--arguments", "{\"acceptance_check\":\"check-global-api\"}",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, verify_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.verification-receipt.v1") != null);
+    try std.testing.expectEqual(@as(usize, 1), verification.call_count);
+}
+
+test "cli dev compiles explicit hybrid adaptations without provider mutations" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    try fs.writeFile("ziac.project.json", agent_project_fixture);
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "dev", "--stack", "hello-global", "--stage", "dev",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.dev-plan.v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "local_process") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"provider_mutations\": 0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "sentinel-secret-for-tests") == null);
+}
+
+test "cli dev watch fails closed when the native host is unavailable" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    try fs.writeFile("ziac.project.json", agent_project_fixture);
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "dev", "--watch", "--stack", "hello-global", "--stage", "dev",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.agent_error, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "NativeDevHostUnavailable") != null);
+}
+
+test "cli estate scan resolves paid access and writes an observed artifact atomically" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    var access = CliEstateResolver{};
+    var assets = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer assets.deinit();
+    try assets.addPage(
+        \\{"results":[{"name":"//run.googleapis.com/projects/acme-prod/locations/europe-west1/services/api","assetType":"run.googleapis.com/Service","location":"europe-west1","displayName":"api"}]}
+    );
+    env.estate_scan = .{
+        .resolver = access.resolver(),
+        .client = assets.client(),
+        .session_assertion = "opaque-session-assertion",
+        .now_millis = 1_783_764_000_000,
+    };
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "estate", "scan", "--connection", "gcp-connection-17", "--out", "estate.json", "--json",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(fs.exists("estate.json"));
+    const artifact = fs.readFile("estate.json").?;
+    try std.testing.expect(std.mem.indexOf(u8, artifact, "\"ownership\":\"observed\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact, "opaque-session-assertion") == null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.estate-scan-receipt.v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"resources\":1") != null);
+}
+
+test "cli deploy watch streams timed immutable deployment events through the shared kernel" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    var runtime = ziac.watch_deploy.ScriptedRuntime.init();
+    runtime.now_millis = 1_000;
+    runtime.push_millis = 10;
+    runtime.revision_millis = 20;
+    runtime.readiness_millis = 30;
+    runtime.traffic_millis = 10;
+    env.watch_deploy = .{
+        .runtime = runtime.runtime(),
+        .envelope = .{
+            .id = "cli-watch",
+            .stages = &.{"dev"},
+            .projects = &.{"project-dev"},
+            .providers = &.{.gcp},
+            .permissions = .{ .apply = true },
+            .budget = .{ .max_updates = 1, .max_regions = 1 },
+            .expires_at_millis = 20_000,
+            .approved_plan_digest = "watch-plan",
+        },
+        .project = "project-dev",
+        .now_millis = 1_000,
+    };
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "deploy",  "--watch",                                                                      "--stack",       "hello-global", "--stage", "dev",
+        "--image", "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--plan-digest", "watch-plan",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.watch-deploy-event.v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "\"total_millis\":70") != null);
+    try std.testing.expectEqual(@as(usize, 1), runtime.traffic_count);
+}
+
+test "cli logs tail and explain read the durable causal stream" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var logs = ziac.log.Store.init(std.testing.allocator, .{});
+    defer logs.deinit();
+    try logs.append(.{ .event_id = "deploy", .timestamp_millis = 1, .source = .provider, .stream = .system, .severity = .info, .message = "deploy started", .resource_id = "service-api" });
+    try logs.append(.{ .event_id = "failed", .parent_event_id = "deploy", .timestamp_millis = 2, .source = .cloud_run, .stream = .system, .severity = .err, .message = "revision unhealthy", .resource_id = "service-api" });
+    const sessions = ziac.log.SessionStore.init(std.testing.allocator, ziac.local_state.memoryFiles(&fs), .{});
+    try sessions.save("hello-global", "dev", &logs);
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const logs_code = try ziac.cli.run(std.testing.allocator, &.{
+        "logs", "--stack", "hello-global", "--stage", "dev", "--resource", "service-api", "--severity", "error",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, logs_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "revision unhealthy") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "deploy started") == null);
+
+    console.stdout.clearRetainingCapacity();
+    const explain_code = try ziac.cli.run(std.testing.allocator, &.{
+        "log-explain", "--stack", "hello-global", "--stage", "dev", "--event", "failed",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, explain_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "deploy started") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "revision unhealthy") != null);
+}
+
+test "cli live tail ingests Cloud Logging through the shared durable stream" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+    var cloud = ziac.log.ScriptedCloudLoggingClient.init(
+        "{\"entries\":[{\"insertId\":\"cloud-live-1\",\"severity\":\"ERROR\",\"textPayload\":\"revision failed live\",\"resource\":{\"labels\":{\"location\":\"europe-west1\",\"service_name\":\"api\"}}}]}",
+    );
+    env.cloud_logging = .{
+        .client = cloud.client(),
+        .project_id = "acme-prod",
+        .filter = "resource.type=\"cloud_run_revision\"",
+        .session_id = "hello-global-dev",
+    };
+
+    const code = try ziac.cli.run(std.testing.allocator, &.{
+        "tail", "--stack", "hello-global", "--stage", "dev", "--provider", "gcp", "--allow-live",
+    }, &env);
+
+    try std.testing.expectEqual(ziac.cli.Exit.success, code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "revision failed live") != null);
+    try std.testing.expect(fs.exists(".ziac/logs/hello-global/dev/events.jsonl"));
+    try std.testing.expectEqual(@as(usize, 1), cloud.call_count);
 }
 
 test "cli plan prints deterministic create summary without writing state" {

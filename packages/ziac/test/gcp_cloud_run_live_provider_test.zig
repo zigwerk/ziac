@@ -107,10 +107,39 @@ test "live GCP Cloud Run lifecycle checkpoints and resumes operations" {
         harness.transport.requests.items[1].url,
     );
     try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[3].url, "updateMask=") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[3].url, "updateMask=template") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[3].body, "\"etag\":\"etag-1\"") != null);
     try std.testing.expectEqualStrings(
         "https://run.example.test/v2/projects/ziac-dev/locations/europe-west1/operations/create-api",
         harness.transport.requests.items[2].url,
     );
+}
+
+test "live GCP Cloud Run creates native multi-region service at the global location" {
+    const responses = [_]zstd.Http.Response{operationStarted("create-global-api")};
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var service = try ziac.gcp.cloud_run.Service.build(std.testing.allocator, providerConfig(), .{
+        .name = "api",
+        .image = "api@sha256:abc",
+        .region = "global",
+        .multi_regions = &.{ "europe-west1", "us-central1" },
+    });
+    defer service.deinit(std.testing.allocator);
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var creating = try harness.live.provider().createWithContext(&context, service.node);
+    defer creating.deinit();
+    try std.testing.expectEqualStrings(
+        "https://run.example.test/v2/projects/ziac-dev/locations/global/services?serviceId=api",
+        harness.transport.requests.items[0].url,
+    );
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        harness.transport.requests.items[0].body,
+        "\"multiRegionSettings\":{\"regions\":[\"europe-west1\",\"us-central1\"]}",
+    ) != null);
 }
 
 test "live GCP Cloud Run waits for reconciliation and rejects failed terminal readiness" {
@@ -287,6 +316,13 @@ test "live GCP Cloud Run resolves and preserves typed image and env outputs" {
         .env = &env,
     });
     defer service.deinit(std.testing.allocator);
+    var changed_service = try ziac.gcp.cloud_run.Service.build(std.testing.allocator, providerConfig(), .{
+        .name = "api",
+        .image_output = ziac.PublicOutput([]const u8).fromResource(image_id, "image_ref"),
+        .env = &env,
+        .max_instances = 101,
+    });
+    defer changed_service.deinit(std.testing.allocator);
     var context = ziac.provider.OperationContext.init(std.testing.allocator);
     context.state = &store;
 
@@ -320,7 +356,7 @@ test "live GCP Cloud Run resolves and preserves typed image and env outputs" {
         .outputs = &service_outputs,
         .status = .created,
     });
-    var updating = try harness.live.provider().updateWithContext(&context, service.node, &present.present);
+    var updating = try harness.live.provider().updateWithContext(&context, changed_service.node, &present.present);
     defer updating.deinit();
     try std.testing.expectEqualStrings(image_ref, updating.outputs[4].value.string);
     try std.testing.expectEqualStrings(previous_image_ref, updating.outputs[5].value.string);
@@ -457,7 +493,7 @@ fn serviceStatusJson(
     comptime reconciling: bool,
     comptime condition: []const u8,
 ) []const u8 {
-    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"reconciling\":" ++ (if (reconciling) "true" else "false") ++ ",\"terminalCondition\":{\"state\":\"" ++ condition ++ "\"},\"latestCreatedRevision\":\"" ++ created_revision ++ "\",\"latestReadyRevision\":\"" ++ ready_revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[]}}";
+    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/services/api\",\"etag\":\"etag-1\",\"generation\":\"1\",\"observedGeneration\":\"1\",\"labels\":{},\"ingress\":\"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER\",\"invokerIamDisabled\":false,\"uri\":\"https://api-europe-west1.example.run.app\",\"reconciling\":" ++ (if (reconciling) "true" else "false") ++ ",\"terminalCondition\":{\"state\":\"" ++ condition ++ "\"},\"latestCreatedRevision\":\"" ++ created_revision ++ "\",\"latestReadyRevision\":\"" ++ ready_revision ++ "\",\"template\":{\"serviceAccount\":\"runtime@ziac-dev.iam.gserviceaccount.com\",\"timeout\":\"300s\",\"maxInstanceRequestConcurrency\":80,\"scaling\":{\"minInstanceCount\":0,\"maxInstanceCount\":100},\"containers\":[{\"image\":\"" ++ image ++ "\",\"command\":[],\"args\":[],\"env\":[],\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"}},\"ports\":[{\"containerPort\":8080}],\"volumeMounts\":[]}],\"volumes\":[]}}";
 }
 
 fn serviceJsonWithVpc(

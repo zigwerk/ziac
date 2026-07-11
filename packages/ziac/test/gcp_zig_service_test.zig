@@ -54,7 +54,8 @@ test "global ZigService composes source build bindings identities and global rou
     try std.testing.expectEqual(@as(usize, 1), countType(&component.graph, "gcp.storage.BuildBucket"));
     try std.testing.expectEqual(@as(usize, 1), countType(&component.graph, "gcp.storage.SourceObject"));
     try std.testing.expectEqual(@as(usize, 1), countType(&component.graph, "gcp.cloudbuild.ZigImage"));
-    try std.testing.expectEqual(@as(usize, 2), countType(&component.graph, "gcp.run.Service"));
+    try std.testing.expectEqual(ziac.gcp.global.Realization.native_multi_region, component.realization);
+    try std.testing.expectEqual(@as(usize, 1), countType(&component.graph, "gcp.run.Service"));
     try std.testing.expectEqual(@as(usize, 2), countType(&component.graph, "gcp.iam.ServiceAccount"));
     try std.testing.expectEqual(@as(usize, 3), countType(&component.graph, "gcp.iam.ProjectMember"));
     try std.testing.expectEqual(@as(usize, 1), countType(&component.graph, "gcp.secret.SecretIamMember"));

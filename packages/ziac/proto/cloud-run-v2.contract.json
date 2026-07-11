@@ -1,0 +1,288 @@
+{
+  "schema": "ziac.google.proto.v1",
+  "revision": "95de37fafded89761dd958268242904a6d893eae",
+  "descriptor_sha256": "b782942487e0e305651bf83c5f211f132e4b29e3bedcdf15a83b478df6a8b722",
+  "file_count": 25,
+  "package": "google.cloud.run.v2",
+  "service": "Services",
+  "default_host": "run.googleapis.com",
+  "oauth_scope": "https://www.googleapis.com/auth/cloud-platform",
+  "resource_type": "run.googleapis.com/Service",
+  "resource_pattern": "projects/{project}/locations/{location}/services/{service}",
+  "methods": [
+    {
+      "name": "CreateService",
+      "input_type": ".google.cloud.run.v2.CreateServiceRequest",
+      "output_type": ".google.longrunning.Operation",
+      "http_method": "POST",
+      "path_template": "/v2/{parent=projects/*/locations/*}/services",
+      "body": "service",
+      "routing_field": "parent",
+      "lro_response_type": "Service",
+      "lro_metadata_type": "Service"
+    },
+    {
+      "name": "GetService",
+      "input_type": ".google.cloud.run.v2.GetServiceRequest",
+      "output_type": ".google.cloud.run.v2.Service",
+      "http_method": "GET",
+      "path_template": "/v2/{name=projects/*/locations/*/services/*}",
+      "body": "",
+      "routing_field": "name",
+      "lro_response_type": "",
+      "lro_metadata_type": ""
+    },
+    {
+      "name": "ListServices",
+      "input_type": ".google.cloud.run.v2.ListServicesRequest",
+      "output_type": ".google.cloud.run.v2.ListServicesResponse",
+      "http_method": "GET",
+      "path_template": "/v2/{parent=projects/*/locations/*}/services",
+      "body": "",
+      "routing_field": "parent",
+      "lro_response_type": "",
+      "lro_metadata_type": ""
+    },
+    {
+      "name": "UpdateService",
+      "input_type": ".google.cloud.run.v2.UpdateServiceRequest",
+      "output_type": ".google.longrunning.Operation",
+      "http_method": "PATCH",
+      "path_template": "/v2/{service.name=projects/*/locations/*/services/*}",
+      "body": "service",
+      "routing_field": "service.name",
+      "lro_response_type": "Service",
+      "lro_metadata_type": "Service"
+    },
+    {
+      "name": "DeleteService",
+      "input_type": ".google.cloud.run.v2.DeleteServiceRequest",
+      "output_type": ".google.longrunning.Operation",
+      "http_method": "DELETE",
+      "path_template": "/v2/{name=projects/*/locations/*/services/*}",
+      "body": "",
+      "routing_field": "name",
+      "lro_response_type": "Service",
+      "lro_metadata_type": "Service"
+    },
+    {
+      "name": "GetIamPolicy",
+      "input_type": ".google.iam.v1.GetIamPolicyRequest",
+      "output_type": ".google.iam.v1.Policy",
+      "http_method": "GET",
+      "path_template": "/v2/{resource=projects/*/locations/*/services/*}:getIamPolicy",
+      "body": "",
+      "routing_field": "",
+      "lro_response_type": "",
+      "lro_metadata_type": ""
+    },
+    {
+      "name": "SetIamPolicy",
+      "input_type": ".google.iam.v1.SetIamPolicyRequest",
+      "output_type": ".google.iam.v1.Policy",
+      "http_method": "POST",
+      "path_template": "/v2/{resource=projects/*/locations/*/services/*}:setIamPolicy",
+      "body": "*",
+      "routing_field": "",
+      "lro_response_type": "",
+      "lro_metadata_type": ""
+    },
+    {
+      "name": "TestIamPermissions",
+      "input_type": ".google.iam.v1.TestIamPermissionsRequest",
+      "output_type": ".google.iam.v1.TestIamPermissionsResponse",
+      "http_method": "POST",
+      "path_template": "/v2/{resource=projects/*/locations/*/services/*}:testIamPermissions",
+      "body": "*",
+      "routing_field": "",
+      "lro_response_type": "",
+      "lro_metadata_type": ""
+    }
+  ],
+  "fields": [
+    {
+      "path": "CreateServiceRequest.parent",
+      "behavior": "required"
+    },
+    {
+      "path": "CreateServiceRequest.service",
+      "behavior": "required"
+    },
+    {
+      "path": "CreateServiceRequest.service_id",
+      "behavior": "required"
+    },
+    {
+      "path": "UpdateServiceRequest.update_mask",
+      "behavior": "optional"
+    },
+    {
+      "path": "UpdateServiceRequest.service",
+      "behavior": "required"
+    },
+    {
+      "path": "UpdateServiceRequest.allow_missing",
+      "behavior": "optional"
+    },
+    {
+      "path": "ListServicesRequest.parent",
+      "behavior": "required"
+    },
+    {
+      "path": "ListServicesResponse.unreachable",
+      "behavior": "output_only"
+    },
+    {
+      "path": "GetServiceRequest.name",
+      "behavior": "required"
+    },
+    {
+      "path": "DeleteServiceRequest.name",
+      "behavior": "required"
+    },
+    {
+      "path": "Service.name",
+      "behavior": "identifier"
+    },
+    {
+      "path": "Service.uid",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.generation",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.labels",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.annotations",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.create_time",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.update_time",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.delete_time",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.expire_time",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.creator",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.last_modifier",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.ingress",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.launch_stage",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.binary_authorization",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.template",
+      "behavior": "required"
+    },
+    {
+      "path": "Service.traffic",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.scaling",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.invoker_iam_disabled",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.default_uri_disabled",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.urls",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.iap_enabled",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.multi_region_settings",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.observed_generation",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.terminal_condition",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.conditions",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.latest_ready_revision",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.latest_created_revision",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.traffic_statuses",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.uri",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.satisfies_pzs",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.threat_detection_enabled",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.build_config",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.reconciling",
+      "behavior": "output_only"
+    },
+    {
+      "path": "Service.etag",
+      "behavior": "optional"
+    },
+    {
+      "path": "Service.MultiRegionSettings.regions",
+      "behavior": "required"
+    },
+    {
+      "path": "Service.MultiRegionSettings.multi_region_id",
+      "behavior": "optional"
+    }
+  ]
+}

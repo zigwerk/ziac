@@ -1,0 +1,22 @@
+{
+  "schema": "ziac.googleapis.lock.v1",
+  "repository": "https://github.com/googleapis/googleapis",
+  "revision": "95de37fafded89761dd958268242904a6d893eae",
+  "protoc": "30.2",
+  "descriptor": {
+    "path": "../src/gcp/generated/cloud-run-v2.pb",
+    "sha256": "b782942487e0e305651bf83c5f211f132e4b29e3bedcdf15a83b478df6a8b722",
+    "include_imports": true,
+    "include_source_info": true
+  },
+  "semantic_snapshot": {
+    "path": "cloud-run-v2.contract.json",
+    "sha256": "f4f0ca51afa49e9412d484cf3d10281519c21fdbf7e332dbe8aaf5f930d0baff"
+  },
+  "sources": [
+    { "path": "google/cloud/run/v2/service.proto", "sha256": "ed5eb497eb4194b06eb83febadee62699fd82bbaf9f0997bca78fb5b487a0d84" },
+    { "path": "google/api/annotations.proto", "sha256": "e79ea741cb605a65e78ca322174764a4af9fde1962c1631e12b84c4934ba9a6c" },
+    { "path": "google/api/field_behavior.proto", "sha256": "bb7ed77725c95f751ec2c47cd92359d0137c39383b8a62aef41bab7aa7478da5" },
+    { "path": "google/api/resource.proto", "sha256": "815d51eada4341bf01672b474b5ec0abbea190e8df9f4aa26a0c96dbdad2993b" }
+  ]
+}

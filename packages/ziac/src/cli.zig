@@ -1,11 +1,19 @@
 const std = @import("std");
 const zstd = @import("zigeffect_std");
+const agent_mod = @import("agent.zig");
+const agent_contract = @import("agent_contract.zig");
+const agent_tools = @import("agent_tools.zig");
 const checkpoint_mod = @import("checkpoint.zig");
 const ci_mod = @import("ci.zig");
+const dev_mod = @import("dev.zig");
+const dev_native = @import("dev_native.zig");
+const estate_mod = @import("estate.zig");
+const estate_access = @import("estate_access.zig");
 const executor = @import("executor.zig");
 const gcp_auth = @import("gcp/auth/root.zig");
 const importer = @import("importer.zig");
 const local_state = @import("local_state.zig");
+const log_mod = @import("log.zig");
 const plan_mod = @import("plan.zig");
 const plan_format = @import("plan_format.zig");
 const provider_mod = @import("provider.zig");
@@ -15,6 +23,7 @@ const rollout_mod = @import("rollout.zig");
 const stack_registry = @import("stack_registry.zig");
 const state_mod = @import("state.zig");
 const state_backend = @import("state_backend.zig");
+const watch_deploy_mod = @import("watch_deploy.zig");
 
 pub const Exit = struct {
     pub const success: u8 = 0;
@@ -24,6 +33,34 @@ pub const Exit = struct {
     pub const state_error: u8 = 5;
     pub const provider_error: u8 = 6;
     pub const auth_error: u8 = 7;
+    pub const agent_error: u8 = 8;
+};
+
+pub const WatchDeployConfig = struct {
+    runtime: watch_deploy_mod.Runtime,
+    envelope: agent_contract.CapabilityEnvelope,
+    project: []const u8,
+    now_millis: u64,
+};
+
+pub const EstateScanConfig = struct {
+    resolver: estate_access.Resolver,
+    client: estate_mod.Client,
+    session_assertion: []const u8,
+    now_millis: u64,
+};
+
+pub const NativeDevHost = struct {
+    io: std.Io,
+    root: std.Io.Dir,
+    max_polls: ?usize = null,
+};
+
+pub const CloudLoggingConfig = struct {
+    client: log_mod.CloudLoggingClient,
+    project_id: []const u8,
+    filter: []const u8,
+    session_id: []const u8,
 };
 
 pub const Env = struct {
@@ -32,10 +69,17 @@ pub const Env = struct {
     state: state_backend.Store,
     migration_source: ?local_state.Store = null,
     plan_files: ?local_state.FileStore = null,
+    agent_files: ?local_state.FileStore = null,
+    log_files: ?local_state.FileStore = null,
     auth_env: ?*zstd.Env.EnvMap = null,
     auth_files: ?gcp_auth.FileReader = null,
     live_providers: ?provider_mod.ProviderRegistry = null,
     live_project_id: ?[]const u8 = null,
+    watch_deploy: ?WatchDeployConfig = null,
+    estate_scan: ?EstateScanConfig = null,
+    dev_host: ?NativeDevHost = null,
+    cloud_logging: ?CloudLoggingConfig = null,
+    verification_runner: ?agent_tools.VerificationRunner = null,
 };
 
 const Args = struct {
@@ -58,6 +102,17 @@ const Args = struct {
     repository: ?[]const u8 = null,
     change_number: ?u64 = null,
     preview_cleanup: bool = false,
+    project_path: []const u8 = "ziac.project.json",
+    objective: ?[]const u8 = null,
+    event_id: ?[]const u8 = null,
+    root_cause: ?[]const u8 = null,
+    trace_id: ?[]const u8 = null,
+    minimum_severity: ?log_mod.Severity = null,
+    watch: bool = false,
+    image_ref: ?[]const u8 = null,
+    plan_digest: ?[]const u8 = null,
+    connection_id: ?[]const u8 = null,
+    tool_arguments: ?[]const u8 = null,
 };
 
 const command_options = [_]zstd.Cli.OptionSpec{
@@ -126,6 +181,9 @@ const deploy_options = [_]zstd.Cli.OptionSpec{
     .{ .name = "plan", .kind = .string, .help = "apply an immutable saved plan" },
     .{ .name = "approve", .kind = .string, .help = "approve the exact destructive plan digest" },
     .{ .name = "confirm", .kind = .boolean, .help = "confirm direct destructive operations" },
+    .{ .name = "watch", .kind = .boolean, .help = "watch and deploy immutable development revisions" },
+    .{ .name = "image", .kind = .string, .help = "immutable image reference for watch deploy" },
+    .{ .name = "plan-digest", .kind = .string, .help = "exact capability-approved watch plan digest" },
 };
 
 const destroy_options = [_]zstd.Cli.OptionSpec{
@@ -180,7 +238,77 @@ const auth_subcommands = [_]zstd.Cli.CommandSpec{
     },
 };
 
+const estate_options = [_]zstd.Cli.OptionSpec{
+    .{ .name = "connection", .kind = .string, .required = true, .help = "saved customer GCP connection ID" },
+    .{ .name = "out", .kind = .string, .required = true, .help = "observed visual artifact path" },
+    .{ .name = "json", .kind = .boolean, .help = "emit stable JSON" },
+};
+
+const estate_subcommands = [_]zstd.Cli.CommandSpec{
+    .{ .name = "scan", .description = "scan an authorized GCP project read-only", .options = estate_options[0..] },
+};
+
+const agent_options = [_]zstd.Cli.OptionSpec{
+    .{ .name = "stack", .kind = .string, .required = true, .help = "stack name" },
+    .{ .name = "stage", .kind = .string, .required = true, .help = "deployment stage" },
+    .{ .name = "project", .kind = .string, .help = "agent project contract path" },
+    .{ .name = "objective", .kind = .string, .help = "bounded agent objective" },
+    .{ .name = "resource", .kind = .string, .help = "resource ID to query" },
+    .{ .name = "event", .kind = .string, .help = "causal event ID to explain" },
+    .{ .name = "root-cause", .kind = .string, .help = "redacted handoff root cause" },
+    .{ .name = "json", .kind = .boolean, .help = "emit stable JSON" },
+};
+
+const agent_tool_options = [_]zstd.Cli.OptionSpec{
+    .{ .name = "stack", .kind = .string, .required = true, .help = "stack name" },
+    .{ .name = "stage", .kind = .string, .required = true, .help = "deployment stage" },
+    .{ .name = "project", .kind = .string, .help = "agent project contract path" },
+    .{ .name = "arguments", .kind = .string, .required = true, .help = "typed JSON tool arguments" },
+    .{ .name = "json", .kind = .boolean, .help = "emit stable JSON" },
+};
+
+const dev_options = [_]zstd.Cli.OptionSpec{
+    .{ .name = "stack", .kind = .string, .required = true, .help = "stack name" },
+    .{ .name = "stage", .kind = .string, .required = true, .help = "personal development stage" },
+    .{ .name = "project", .kind = .string, .help = "agent project contract path" },
+    .{ .name = "json", .kind = .boolean, .help = "emit stable JSON" },
+    .{ .name = "watch", .kind = .boolean, .help = "run the manifest-owned native hot-reload loop" },
+};
+
+const log_options = [_]zstd.Cli.OptionSpec{
+    .{ .name = "stack", .kind = .string, .required = true, .help = "stack name" },
+    .{ .name = "stage", .kind = .string, .required = true, .help = "deployment stage" },
+    .{ .name = "resource", .kind = .string, .help = "resource ID filter" },
+    .{ .name = "region", .kind = .string, .help = "region filter" },
+    .{ .name = "trace", .kind = .string, .help = "trace ID filter" },
+    .{ .name = "severity", .kind = .string, .help = "minimum severity" },
+    .{ .name = "event", .kind = .string, .help = "event ID to explain" },
+    .{ .name = "json", .kind = .boolean, .help = "emit stable JSON" },
+    .{ .name = "provider", .kind = .string, .help = "live log provider: gcp" },
+    .{ .name = "allow-live", .kind = .boolean, .help = "allow authenticated log ingestion" },
+};
+
+const agent_subcommands = [_]zstd.Cli.CommandSpec{
+    .{ .name = "orient", .description = "validate intent and open an agent session", .options = agent_options[0..] },
+    .{ .name = "status", .description = "inspect durable agent session status", .options = agent_options[0..] },
+    .{ .name = "next", .description = "return one bounded next action", .options = agent_options[0..] },
+    .{ .name = "query", .description = "query one resource and its graph neighborhood", .options = agent_options[0..] },
+    .{ .name = "explain", .description = "explain a causal event chain", .options = agent_options[0..] },
+    .{ .name = "handoff", .description = "emit a redacted structured handoff", .options = agent_options[0..] },
+    .{ .name = "simulate", .description = "run a deterministic infrastructure scenario", .options = agent_tool_options[0..] },
+    .{ .name = "propose", .description = "create an immutable evidence-backed repair proposal", .options = agent_tool_options[0..] },
+    .{ .name = "verify", .description = "run one declared acceptance check", .options = agent_tool_options[0..] },
+};
+
 const subcommands = [_]zstd.Cli.CommandSpec{
+    .{
+        .name = "dev",
+        .description = "compile the hybrid local development runtime",
+        .options = dev_options[0..],
+    },
+    .{ .name = "logs", .description = "query durable causal logs", .options = log_options[0..] },
+    .{ .name = "tail", .description = "read the latest durable causal log snapshot", .options = log_options[0..] },
+    .{ .name = "log-explain", .description = "explain a causal log event", .options = log_options[0..] },
     .{
         .name = "preview-stage",
         .description = "derive a repository-bound preview stage",
@@ -246,6 +374,16 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .description = "inspect authentication",
         .subcommands = auth_subcommands[0..],
     },
+    .{
+        .name = "estate",
+        .description = "inspect paid existing-infrastructure visualization",
+        .subcommands = estate_subcommands[0..],
+    },
+    .{
+        .name = "agent",
+        .description = "operate through structured agent artifacts",
+        .subcommands = agent_subcommands[0..],
+    },
 };
 
 pub fn commandSpec() zstd.Cli.CommandSpec {
@@ -263,6 +401,9 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
     };
 
     if (std.mem.eql(u8, args.command, "plan")) return runPlan(allocator, env, args);
+    if (std.mem.eql(u8, args.command, "dev")) return runDev(allocator, env, args);
+    if (std.mem.eql(u8, args.command, "logs") or std.mem.eql(u8, args.command, "tail") or
+        std.mem.eql(u8, args.command, "log-explain")) return runLogs(allocator, env, args);
     if (std.mem.eql(u8, args.command, "preview-stage")) return runPreviewStage(allocator, env, args);
     if (std.mem.eql(u8, args.command, "deploy")) return runDeploy(allocator, env, args);
     if (std.mem.eql(u8, args.command, "destroy")) return runDestroy(allocator, env, args);
@@ -275,6 +416,8 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
     if (std.mem.eql(u8, args.command, "unlock")) return runUnlock(env, args);
     if (std.mem.eql(u8, args.command, "fail-region")) return runFailRegion(allocator, env, args);
     if (std.mem.eql(u8, args.command, "doctor")) return runAuthDoctor(allocator, env);
+    if (std.mem.eql(u8, args.command, "scan")) return runEstateScan(allocator, env, args);
+    if (isAgentCommand(args.command)) return runAgent(allocator, env, args);
 
     try writeError(env, "usage", error.UnknownSubcommand);
     return Exit.usage;
@@ -291,6 +434,57 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
             .command = parsed.command,
             .stack = "",
             .stage = "",
+        };
+    }
+    if (std.mem.eql(u8, parsed.command, "scan")) {
+        return .{
+            .command = parsed.command,
+            .stack = "",
+            .stage = "",
+            .json = true,
+            .connection_id = parsed.optionValue("connection") orelse return error.MissingRequiredOption,
+            .out_path = parsed.optionValue("out") orelse return error.MissingRequiredOption,
+        };
+    }
+    if (isAgentCommand(parsed.command)) {
+        return .{
+            .command = parsed.command,
+            .stack = parsed.optionValue("stack") orelse return error.MissingRequiredOption,
+            .stage = parsed.optionValue("stage") orelse return error.MissingRequiredOption,
+            .json = true,
+            .project_path = parsed.optionValue("project") orelse "ziac.project.json",
+            .objective = parsed.optionValue("objective"),
+            .resource_id = parsed.optionValue("resource"),
+            .event_id = parsed.optionValue("event"),
+            .root_cause = parsed.optionValue("root-cause"),
+            .tool_arguments = parsed.optionValue("arguments"),
+        };
+    }
+    if (std.mem.eql(u8, parsed.command, "dev")) {
+        return .{
+            .command = parsed.command,
+            .stack = parsed.optionValue("stack") orelse return error.MissingRequiredOption,
+            .stage = parsed.optionValue("stage") orelse return error.MissingRequiredOption,
+            .json = true,
+            .project_path = parsed.optionValue("project") orelse "ziac.project.json",
+            .watch = parsed.optionValue("watch") != null,
+        };
+    }
+    if (std.mem.eql(u8, parsed.command, "logs") or std.mem.eql(u8, parsed.command, "tail") or
+        std.mem.eql(u8, parsed.command, "log-explain"))
+    {
+        return .{
+            .command = parsed.command,
+            .stack = parsed.optionValue("stack") orelse return error.MissingRequiredOption,
+            .stage = parsed.optionValue("stage") orelse return error.MissingRequiredOption,
+            .json = true,
+            .resource_id = parsed.optionValue("resource"),
+            .region = parsed.optionValue("region"),
+            .trace_id = parsed.optionValue("trace"),
+            .event_id = parsed.optionValue("event"),
+            .minimum_severity = if (parsed.optionValue("severity")) |severity| try parseLogSeverity(severity) else null,
+            .provider_name = parsed.optionValue("provider") orelse "local",
+            .allow_live = parsed.optionValue("allow-live") != null,
         };
     }
     if (std.mem.eql(u8, parsed.command, "preview-stage")) {
@@ -325,7 +519,362 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .plan_path = parsed.optionValue("plan"),
         .approval = parsed.optionValue("approve"),
         .preview_cleanup = parsed.optionValue("preview-cleanup") != null,
+        .watch = parsed.optionValue("watch") != null,
+        .image_ref = parsed.optionValue("image"),
+        .plan_digest = parsed.optionValue("plan-digest"),
     };
+}
+
+fn isAgentCommand(command: []const u8) bool {
+    return std.mem.eql(u8, command, "orient") or
+        std.mem.eql(u8, command, "status") or
+        std.mem.eql(u8, command, "next") or
+        std.mem.eql(u8, command, "query") or
+        std.mem.eql(u8, command, "explain") or
+        std.mem.eql(u8, command, "handoff") or
+        std.mem.eql(u8, command, "simulate") or
+        std.mem.eql(u8, command, "propose") or
+        std.mem.eql(u8, command, "verify");
+}
+
+fn isGovernedToolCommand(command: []const u8) bool {
+    return std.mem.eql(u8, command, "simulate") or std.mem.eql(u8, command, "propose") or std.mem.eql(u8, command, "verify");
+}
+
+fn runAgent(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    const files = env.agent_files orelse {
+        try writeError(env, "agent", error.AgentFileSystemUnavailable);
+        return Exit.agent_error;
+    };
+    const project_bytes = files.readFileAllocBounded(allocator, args.project_path, 4 * 1024 * 1024) catch |err| {
+        try writeError(env, "agent", err);
+        return Exit.agent_error;
+    };
+    defer allocator.free(project_bytes);
+    var project = agent_contract.Project.parseAlloc(allocator, project_bytes) catch |err| {
+        try writeError(env, "agent", err);
+        return Exit.agent_error;
+    };
+    defer project.deinit();
+    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+        try writeError(env, "agent", err);
+        return Exit.agent_error;
+    };
+    defer program.deinit();
+
+    if (isGovernedToolCommand(args.command)) {
+        var unavailable = agent_tools.UnavailableVerificationRunner{};
+        const verification_runner = env.verification_runner orelse unavailable.runner();
+        var kernel = agent_tools.Kernel.init(allocator, project, verification_runner);
+        defer kernel.deinit();
+        const tool = if (std.mem.eql(u8, args.command, "simulate"))
+            "ziac_simulate"
+        else if (std.mem.eql(u8, args.command, "propose"))
+            "ziac_propose"
+        else
+            "ziac_verify";
+        const artifact = kernel.invoke(tool, args.tool_arguments orelse {
+            try writeError(env, "agent", error.MissingToolArguments);
+            return Exit.usage;
+        }) catch |err| {
+            try writeError(env, "agent", err);
+            return Exit.agent_error;
+        };
+        try writeAgentArtifact(env, artifact);
+        return Exit.success;
+    }
+
+    const sessions = agent_mod.SessionStore.init(allocator, files);
+    if (std.mem.eql(u8, args.command, "orient")) {
+        var session = sessions.load(args.stack, args.stage) catch |err| switch (err) {
+            error.MissingAgentSession => createAgentSession(allocator, args) catch |create_err| {
+                try writeError(env, "agent", create_err);
+                return Exit.agent_error;
+            },
+            else => {
+                try writeError(env, "agent", err);
+                return Exit.agent_error;
+            },
+        };
+        defer session.deinit();
+        sessions.save(session) catch |err| {
+            try writeError(env, "agent", err);
+            return Exit.agent_error;
+        };
+        const artifact = agent_mod.statusJsonAlloc(allocator, project, session, &program.graph) catch |err| {
+            try writeError(env, "agent", err);
+            return Exit.agent_error;
+        };
+        defer allocator.free(artifact);
+        try writeAgentArtifact(env, artifact);
+        return Exit.success;
+    }
+
+    if (std.mem.eql(u8, args.command, "query")) {
+        const resource_id = args.resource_id orelse {
+            try writeError(env, "agent", error.MissingResourceId);
+            return Exit.usage;
+        };
+        const artifact = agent_mod.queryResourceJsonAlloc(allocator, &program.graph, resource_id) catch |err| {
+            try writeError(env, "agent", err);
+            return Exit.agent_error;
+        };
+        defer allocator.free(artifact);
+        try writeAgentArtifact(env, artifact);
+        return Exit.success;
+    }
+
+    var session = sessions.load(args.stack, args.stage) catch |err| {
+        try writeError(env, "agent", err);
+        return Exit.agent_error;
+    };
+    defer session.deinit();
+    const artifact = if (std.mem.eql(u8, args.command, "status"))
+        agent_mod.statusJsonAlloc(allocator, project, session, &program.graph)
+    else if (std.mem.eql(u8, args.command, "next"))
+        agent_mod.nextJsonAlloc(allocator, project, session)
+    else if (std.mem.eql(u8, args.command, "explain"))
+        agent_mod.explainJsonAlloc(allocator, session, args.event_id orelse {
+            try writeError(env, "agent", error.MissingEventId);
+            return Exit.usage;
+        })
+    else
+        agent_mod.handoffJsonAlloc(allocator, project, session, .{
+            .root_cause = args.root_cause orelse "No unresolved root cause recorded",
+        });
+    const owned = artifact catch |err| {
+        try writeError(env, "agent", err);
+        return Exit.agent_error;
+    };
+    defer allocator.free(owned);
+    try writeAgentArtifact(env, owned);
+    return Exit.success;
+}
+
+fn createAgentSession(allocator: std.mem.Allocator, args: Args) !agent_mod.Session {
+    const id = try std.fmt.allocPrint(allocator, "{s}-{s}", .{ args.stack, args.stage });
+    defer allocator.free(id);
+    const generated_objective = if (args.objective == null)
+        try std.fmt.allocPrint(allocator, "Manage {s} infrastructure", .{args.stack})
+    else
+        null;
+    defer if (generated_objective) |owned| allocator.free(owned);
+    var session = try agent_mod.Session.init(allocator, .{
+        .id = id,
+        .objective = args.objective orelse generated_objective.?,
+        .stack = args.stack,
+        .stage = args.stage,
+    });
+    errdefer session.deinit();
+    try session.transition(.planning, .{
+        .event_id = "orientation-complete",
+        .summary = "project contract and resource graph validated",
+    });
+    return session;
+}
+
+fn writeAgentArtifact(env: *Env, artifact: []const u8) !void {
+    try env.console.stdout.print(env.console.allocator, "{s}\n", .{artifact});
+}
+
+fn runDev(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    const files = env.agent_files orelse {
+        try writeError(env, "dev", error.AgentFileSystemUnavailable);
+        return Exit.agent_error;
+    };
+    const project_bytes = files.readFileAllocBounded(allocator, args.project_path, 4 * 1024 * 1024) catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    defer allocator.free(project_bytes);
+    var project = agent_contract.Project.parseAlloc(allocator, project_bytes) catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    defer project.deinit();
+    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    defer program.deinit();
+    const adaptations = dev_mod.planAdaptationsAlloc(allocator, project, &program.graph) catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    defer allocator.free(adaptations);
+    const receipt = dev_mod.receiptJsonAlloc(allocator, args.stack, args.stage, adaptations) catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    defer allocator.free(receipt);
+    try writeAgentArtifact(env, receipt);
+    if (args.watch) return runNativeDev(allocator, env, project);
+    return Exit.success;
+}
+
+fn runNativeDev(allocator: std.mem.Allocator, env: *Env, project: agent_contract.Project) !u8 {
+    const host = env.dev_host orelse {
+        try writeError(env, "dev", error.NativeDevHostUnavailable);
+        return Exit.agent_error;
+    };
+    const development = project.development orelse {
+        try writeError(env, "dev", error.NativeDevelopmentMissing);
+        return Exit.agent_error;
+    };
+    var source_dir = host.root.openDir(host.io, development.source_root, .{ .iterate = true }) catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    defer source_dir.close(host.io);
+    var proxy = dev_native.StableProxy.init(allocator, host.io, development.proxy_port);
+    proxy.start() catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    defer proxy.deinit();
+    var runtime = dev_native.NativeRuntime.init(allocator, host.io, &proxy, .{
+        .cwd = development.source_root,
+        .build_argv = development.build_argv,
+        .process_argv = development.process_argv,
+        .health_path = development.health_path,
+    });
+    defer runtime.deinit();
+    var supervisor = dev_mod.Supervisor.init(allocator);
+    defer supervisor.deinit();
+    var digest_source = dev_native.DirectoryDigestSource.init(host.io, source_dir);
+    var watcher = dev_native.WatchSession.init(
+        allocator,
+        &supervisor,
+        runtime.runtime(),
+        digest_source.source(),
+        development.generation_base_port,
+    );
+    defer watcher.deinit();
+    const stable_url = proxy.urlAlloc(allocator, "/") catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    defer allocator.free(stable_url);
+    const first = watcher.start() catch |err| {
+        try writeError(env, "dev", err);
+        return Exit.agent_error;
+    };
+    try writeDevReload(env, allocator, first, stable_url);
+    if (first.status != .promoted) return Exit.agent_error;
+
+    var polls: usize = 0;
+    while (host.max_polls == null or polls < host.max_polls.?) : (polls += 1) {
+        const delay = std.math.cast(i64, development.poll_millis) orelse return error.InvalidDevelopment;
+        host.io.sleep(.fromMilliseconds(delay), .awake) catch |err| {
+            try writeError(env, "dev", err);
+            return Exit.agent_error;
+        };
+        const maybe_receipt = watcher.pollOnce() catch |err| {
+            try writeError(env, "dev", err);
+            return Exit.agent_error;
+        };
+        if (maybe_receipt) |reload_receipt| try writeDevReload(env, allocator, reload_receipt, stable_url);
+    }
+    return Exit.success;
+}
+
+fn writeDevReload(env: *Env, allocator: std.mem.Allocator, receipt: dev_mod.ReloadReceipt, stable_url: []const u8) !void {
+    const artifact = try std.json.Stringify.valueAlloc(allocator, .{
+        .schema = "ziac.dev-watch-event.v1",
+        .stable_url = stable_url,
+        .reload = receipt,
+    }, .{});
+    defer allocator.free(artifact);
+    try writeAgentArtifact(env, artifact);
+}
+
+fn runLogs(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    const files = env.log_files orelse {
+        try writeError(env, "logs", error.LogFileSystemUnavailable);
+        return Exit.agent_error;
+    };
+    const sessions = log_mod.SessionStore.init(allocator, files, .{});
+    var events = if (std.mem.eql(u8, args.command, "tail") and std.mem.eql(u8, args.provider_name, "gcp"))
+        ingestCloudLogs(allocator, env, sessions, args) catch |err| {
+            try writeError(env, "logs", err);
+            return if (err == error.LiveLogsNotAllowed or err == error.CloudLoggingUnavailable) Exit.auth_error else Exit.agent_error;
+        }
+    else
+        sessions.load(args.stack, args.stage) catch |err| {
+            try writeError(env, "logs", err);
+            return Exit.agent_error;
+        };
+    defer events.deinit();
+    const artifact = if (std.mem.eql(u8, args.command, "log-explain"))
+        events.explainJsonAlloc(allocator, args.event_id orelse {
+            try writeError(env, "logs", error.MissingEventId);
+            return Exit.usage;
+        })
+    else
+        events.jsonLinesAlloc(allocator, .{
+            .resource_id = args.resource_id,
+            .region = args.region,
+            .trace_id = args.trace_id,
+            .minimum_severity = args.minimum_severity,
+        });
+    const owned = artifact catch |err| {
+        try writeError(env, "logs", err);
+        return Exit.agent_error;
+    };
+    defer allocator.free(owned);
+    try env.console.stdout.print(env.console.allocator, "{s}", .{owned});
+    if (owned.len == 0 or owned[owned.len - 1] != '\n') try env.console.stdout.print(env.console.allocator, "\n", .{});
+    return Exit.success;
+}
+
+fn ingestCloudLogs(
+    allocator: std.mem.Allocator,
+    env: *Env,
+    sessions: log_mod.SessionStore,
+    args: Args,
+) !log_mod.Store {
+    if (!args.allow_live) return error.LiveLogsNotAllowed;
+    const config = env.cloud_logging orelse return error.CloudLoggingUnavailable;
+    var events = sessions.load(args.stack, args.stage) catch |err| switch (err) {
+        error.MissingLogSession => log_mod.Store.init(allocator, .{}),
+        else => return err,
+    };
+    errdefer events.deinit();
+    var poller = log_mod.CloudLoggingPoller.init(allocator, config.client, .{
+        .project_id = config.project_id,
+        .filter = config.filter,
+        .session_id = config.session_id,
+    });
+    defer poller.deinit();
+    var batch = try poller.pollAlloc();
+    defer batch.deinit();
+    for (batch.events) |event| try events.append(.{
+        .event_id = event.event_id,
+        .parent_event_id = event.parent_event_id,
+        .timestamp_millis = event.timestamp_millis,
+        .source = event.source,
+        .stream = event.stream,
+        .severity = event.severity,
+        .message = event.message,
+        .session_id = event.session_id,
+        .stack = args.stack,
+        .stage = args.stage,
+        .resource_id = event.resource_id,
+        .region = event.region,
+        .revision = event.revision,
+        .trace_id = event.trace_id,
+        .span_id = event.span_id,
+        .request_id = event.request_id,
+        .operation_id = event.operation_id,
+        .fields = event.fields,
+    });
+    try sessions.save(args.stack, args.stage, &events);
+    return events;
+}
+
+fn parseLogSeverity(value: []const u8) !log_mod.Severity {
+    if (std.ascii.eqlIgnoreCase(value, "error")) return .err;
+    return std.meta.stringToEnum(log_mod.Severity, value) orelse error.InvalidSeverity;
 }
 
 fn runPreviewStage(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
@@ -384,6 +933,50 @@ fn runAuthDoctor(allocator: std.mem.Allocator, env: *Env) !u8 {
     return Exit.success;
 }
 
+fn runEstateScan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    const config = env.estate_scan orelse {
+        try writeError(env, "estate", error.EstateScanUnavailable);
+        return Exit.auth_error;
+    };
+    const files = env.plan_files orelse {
+        try writeError(env, "estate", error.EstateArtifactFileSystemUnavailable);
+        return Exit.state_error;
+    };
+    const access = estate_access.resolve(config.resolver, .{
+        .session_assertion = config.session_assertion,
+        .connection_id = args.connection_id orelse return Exit.usage,
+        .now_millis = config.now_millis,
+    }) catch |err| {
+        try writeError(env, "estate-access", err);
+        return Exit.auth_error;
+    };
+    var scan = estate_mod.scanAlloc(allocator, config.client, access.scan_input) catch |err| {
+        try writeError(env, "estate-scan", err);
+        return Exit.provider_error;
+    };
+    defer scan.deinit();
+    const out_path = args.out_path orelse return Exit.usage;
+    files.atomicWriteFile(allocator, out_path, scan.artifact) catch |err| {
+        try writeError(env, "estate-artifact", err);
+        return Exit.state_error;
+    };
+    const receipt = std.json.Stringify.valueAlloc(allocator, .{
+        .schema = "ziac.estate-scan-receipt.v1",
+        .project_id = access.scan_input.connection.project_id,
+        .artifact_path = out_path,
+        .resources = scan.resource_count,
+        .edges = scan.edge_count,
+        .pages = scan.page_count,
+        .ownership = "observed",
+        .mutation_authorized = false,
+        .observed_at_millis = access.scan_input.observed_at_millis,
+    }, .{}) catch return error.OutOfMemory;
+    defer allocator.free(receipt);
+    try env.console.writeOut(receipt);
+    try env.console.writeOut("\n");
+    return Exit.success;
+}
+
 fn runPlan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
         return handleStackError(env, err);
@@ -432,6 +1025,7 @@ fn runPlan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 }
 
 fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    if (args.watch) return runWatchDeploy(allocator, env, args);
     var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
         return handleStackError(env, err);
     };
@@ -526,6 +1120,37 @@ fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     try writePlan(env, args, planned, loaded.store.serialValue(), plan_metadata);
     if (!args.json) try env.console.writeOut("Deploy complete\n");
     return Exit.success;
+}
+
+fn runWatchDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    const configured = env.watch_deploy orelse {
+        try writeError(env, "watch-deploy", error.WatchDeployRuntimeUnavailable);
+        return Exit.provider_error;
+    };
+    const receipt = watch_deploy_mod.execute(configured.runtime, configured.envelope, .{
+        .now_millis = configured.now_millis,
+        .stage = args.stage,
+        .project = configured.project,
+        .plan_digest = args.plan_digest orelse {
+            try writeError(env, "watch-deploy", error.MissingPlanDigest);
+            return Exit.usage;
+        },
+        .image_ref = args.image_ref orelse {
+            try writeError(env, "watch-deploy", error.MissingImageReference);
+            return Exit.usage;
+        },
+        .regions = 1,
+    }) catch |err| {
+        try writeError(env, "watch-deploy", err);
+        return Exit.provider_error;
+    };
+    const events = watch_deploy_mod.eventStreamJsonAlloc(allocator, receipt) catch |err| {
+        try writeError(env, "watch-deploy", err);
+        return Exit.provider_error;
+    };
+    defer allocator.free(events);
+    try env.console.writeOut(events);
+    return if (receipt.status == .complete) Exit.success else Exit.provider_error;
 }
 
 fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {

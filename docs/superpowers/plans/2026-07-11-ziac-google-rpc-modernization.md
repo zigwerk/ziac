@@ -31,6 +31,8 @@ Evidence:
 
 ## M9.2: Proto Lock And Generator
 
+Status: implemented on 2026-07-11.
+
 - Vendor a small lock manifest containing upstream commit and selected proto
   file hashes, not the complete googleapis repository.
 - Build a deterministic `protoc` descriptor-set ingestion step.
@@ -40,6 +42,9 @@ Evidence:
 
 ## M9.3: AIP-Aware Planning
 
+Status: implemented for Cloud Run and exported as a provider kernel on
+2026-07-11.
+
 - Generate update masks from changed client-owned fields.
 - Classify immutable changes and suppress output-only/default drift.
 - Carry etags and request IDs through state and mutation requests.
@@ -47,6 +52,10 @@ Evidence:
 - Map `google.rpc.Status` details into typed zigeffect causes.
 
 ## M9.4: Audited gRPC Transport
+
+Status: qualification boundary implemented on 2026-07-11; production gRPC
+remains deliberately disabled until a network adapter passes every capability
+and REST-parity gate. REST transcoding remains the qualified production path.
 
 - Add bounded HTTP/2, unary framing, trailers, cancellation, deadlines,
   multiplexing, connection reuse, and flow control to zigeffect-std.
@@ -57,6 +66,8 @@ Evidence:
 
 ## M9.5: Native Multi-Region Cloud Run
 
+Status: implemented on 2026-07-11.
+
 - Add the global Cloud Run v2 service shape and multi-region settings.
 - Add `automatic`, `native_multi_region`, and `controlled_regional_fleet`
   realization policies to `ContainerService` and `ZigService`.
@@ -66,6 +77,9 @@ Evidence:
   failover, and migration from existing fleet state.
 
 ## M9.6: GCP Intelligence
+
+Status: deterministic graph synthesis, preflight evaluation, topology advice,
+asset drift classification, and SLO rollout gates implemented on 2026-07-11.
 
 - Synthesize least-privilege deploy/build/runtime IAM from the graph's RPCs.
 - Add org-policy, VPC Service Controls, quota, API enablement, billing, and
@@ -80,3 +94,21 @@ Evidence:
   Postgres, tool hygiene, and clean-checkout verification remain mandatory.
 - Live parity uses a disposable project to compare REST and gRPC observations,
   operation handles, final state, request diagnostics, and no-op plans.
+
+## Completion Evidence
+
+- The pinned 294 KiB descriptor set contains 25 transitive files and is locked
+  by SHA-256 together with four critical source hashes.
+- `zig build proto-snapshot` deterministically reproduces
+  `proto/cloud-run-v2.contract.json`; the package tests verify both hashes.
+- Cloud Run updates derive field masks from semantic input changes, preserve
+  etags, ignore output-only fields, and use generation/reconciliation readiness.
+- Automatic topology emits one `locations/global` service for a uniform
+  workload. Direct VPC or independent canaries select a regional fleet; forcing
+  an incompatible native topology fails before provider access.
+- Unary gRPC framing, message bounds, trailer status, transport capability
+  audit, and REST/gRPC parity contracts are implemented. An incomplete adapter
+  cannot advertise `grpc_http2`, and the experimental `$rpc` protocol remains
+  impossible to select implicitly.
+- `zig build examples --summary all` passes 370/371 checks; the sole skip is the
+  existing credentialed Cockroach Cloud acceptance test.
