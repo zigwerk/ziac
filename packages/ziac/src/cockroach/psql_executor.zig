@@ -100,8 +100,26 @@ fn valueTextAlloc(allocator: std.mem.Allocator, input: zstd.Sql.Value) std.mem.A
         .null_value => null,
         .text => |text| try allocator.dupe(u8, text),
         .integer => |integer| try std.fmt.allocPrint(allocator, "{d}", .{integer}),
+        .float => |float| try std.fmt.allocPrint(allocator, "{d}", .{float}),
         .boolean => |boolean| try allocator.dupe(u8, if (boolean) "true" else "false"),
+        .bytes => |bytes| try std.fmt.allocPrint(allocator, "{x}", .{bytes}),
+        .timestamp, .decimal => |text| try allocator.dupe(u8, text),
+        .text_array => |items| try textArrayJsonAlloc(allocator, items),
     };
+}
+
+fn textArrayJsonAlloc(allocator: std.mem.Allocator, items: []const []const u8) std.mem.Allocator.Error![]const u8 {
+    var output = std.ArrayList(u8).empty;
+    errdefer output.deinit(allocator);
+    try output.append(allocator, '[');
+    for (items, 0..) |item, index| {
+        if (index != 0) try output.append(allocator, ',');
+        const escaped = try zstd.Json.escapeStringAlloc(allocator, item);
+        defer allocator.free(escaped);
+        try output.print(allocator, "\"{s}\"", .{escaped});
+    }
+    try output.append(allocator, ']');
+    return output.toOwnedSlice(allocator);
 }
 
 fn freeTemporaryCells(allocator: std.mem.Allocator, cells: []const sql.Cell) void {
