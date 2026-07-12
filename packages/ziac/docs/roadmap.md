@@ -480,6 +480,14 @@ OAuth exchange, Cloud Run ADC, Cloud KMS vault and bounded HTTP server. It
 refuses startup when any production dependency is missing. A paid identity scan
 against a disposable project remains an M24 authenticated qualification item.
 
+M23 cost intelligence is in active implementation. The shared cost contract now
+distinguishes configuration estimates, projected month-end cost and actual
+billed cost at the type level. Estimates require explicit SKU, region, unit and
+usage assumptions; actuals include exported credits; projections can derive only
+from actual billing data; and missing usage returns unavailable rather than a
+fabricated range. Catalog pagination, BigQuery ingestion, visual-artifact
+projection and replacement of dashboard fixture guesses remain open.
+
 No milestone is described as externally qualified until its authenticated live
 gate has produced a complete redacted evidence bundle. Credential-free code
 completion and external qualification remain separate roadmap states.
