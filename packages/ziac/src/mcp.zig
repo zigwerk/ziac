@@ -2,24 +2,19 @@ const std = @import("std");
 const contract = @import("agent_contract.zig");
 const resource = @import("resource.zig");
 
-pub const Authority = enum { read, plan, proposal, verification, apply };
+pub const Authority = enum { read, plan, process };
 
 pub const ToolSpec = struct {
     name: []const u8,
     description: []const u8,
     authority: Authority,
+    input_schema: []const u8,
 };
 
 const registry = [_]ToolSpec{
-    .{ .name = "ziac_status", .description = "Read durable agent session status", .authority = .read },
-    .{ .name = "ziac_graph_query", .description = "Read one resource and its graph neighborhood", .authority = .read },
-    .{ .name = "ziac_evidence_query", .description = "Read bounded causal evidence", .authority = .read },
-    .{ .name = "ziac_plan", .description = "Create a non-mutating infrastructure plan", .authority = .plan },
-    .{ .name = "ziac_simulate", .description = "Run a deterministic infrastructure scenario", .authority = .read },
-    .{ .name = "ziac_propose", .description = "Save an evidence-backed repair proposal", .authority = .proposal },
-    .{ .name = "ziac_verify", .description = "Run declared requirement verification", .authority = .verification },
-    .{ .name = "ziac_apply_saved_plan", .description = "Apply only an exact saved plan", .authority = .apply },
-    .{ .name = "ziac_handoff", .description = "Create a redacted portable handoff", .authority = .read },
+    .{ .name = "ziac_simulate", .description = "Run a deterministic infrastructure scenario without mutation", .authority = .read, .input_schema = "{\"type\":\"object\",\"properties\":{\"scenario_id\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\"},\"seed\":{\"type\":\"integer\"},\"max_steps\":{\"type\":\"integer\"},\"target_resource\":{\"type\":\"string\"},\"requirement\":{\"type\":\"string\"},\"acceptance_check\":{\"type\":\"string\"}},\"required\":[\"scenario_id\",\"kind\",\"seed\",\"max_steps\",\"target_resource\",\"requirement\",\"acceptance_check\"],\"additionalProperties\":false}" },
+    .{ .name = "ziac_propose", .description = "Create an immutable evidence-backed repair proposal", .authority = .plan, .input_schema = "{\"type\":\"object\",\"properties\":{\"scenario_id\":{\"type\":\"string\"},\"requirement\":{\"type\":\"string\"},\"resource_id\":{\"type\":\"string\"},\"finding_id\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\"},\"verification\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"scenario_id\",\"requirement\",\"resource_id\",\"finding_id\",\"operation\",\"verification\"],\"additionalProperties\":false}" },
+    .{ .name = "ziac_verify", .description = "Run one manifest-declared fixed-argv acceptance check", .authority = .process, .input_schema = "{\"type\":\"object\",\"properties\":{\"acceptance_check\":{\"type\":\"string\"}},\"required\":[\"acceptance_check\"],\"additionalProperties\":false}" },
 };
 
 pub fn tools() []const ToolSpec {
@@ -44,9 +39,9 @@ pub const Call = struct {
 pub fn authorize(envelope: contract.CapabilityEnvelope, call: Call) !void {
     const tool = findTool(call.tool) orelse return error.UnknownMcpTool;
     const action: contract.Action = switch (tool.authority) {
-        .read, .verification => .read,
-        .plan, .proposal => .plan,
-        .apply => .apply,
+        .read => .read,
+        .plan => .plan,
+        .process => .process,
     };
     try envelope.require(.{
         .now_millis = call.now_millis,
@@ -62,6 +57,98 @@ pub fn authorize(envelope: contract.CapabilityEnvelope, call: Call) !void {
         .monthly_cost_minor = call.monthly_cost_minor,
         .plan_digest = call.plan_digest,
     });
+}
+
+pub const protocol_version = "2025-11-25";
+
+pub fn handleProtocolRequestAlloc(
+    allocator: std.mem.Allocator,
+    request_json: []const u8,
+    envelope: contract.CapabilityEnvelope,
+    context: AuthorizationContext,
+    kernel: Kernel,
+) !?[]u8 {
+    if (request_json.len == 0 or request_json.len > 1024 * 1024 or std.mem.indexOfScalar(u8, request_json, '\n') != null) return error.InvalidMcpRequest;
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, request_json, .{}) catch return error.InvalidMcpRequest;
+    defer parsed.deinit();
+    const root = switch (parsed.value) {
+        .object => |value| value,
+        else => return error.InvalidMcpRequest,
+    };
+    const jsonrpc = switch (root.get("jsonrpc") orelse return error.InvalidMcpRequest) {
+        .string => |value| value,
+        else => return error.InvalidMcpRequest,
+    };
+    if (!std.mem.eql(u8, jsonrpc, "2.0")) return error.InvalidMcpRequest;
+    const method = switch (root.get("method") orelse return error.InvalidMcpRequest) {
+        .string => |value| value,
+        else => return error.InvalidMcpRequest,
+    };
+    if (std.mem.eql(u8, method, "notifications/initialized")) {
+        if (root.get("id") != null) return error.InvalidMcpRequest;
+        return null;
+    }
+    const request_id = switch (root.get("id") orelse return error.InvalidMcpRequest) {
+        .integer => |value| std.math.cast(u64, value) orelse return error.InvalidMcpRequest,
+        else => return error.InvalidMcpRequest,
+    };
+    if (std.mem.eql(u8, method, "initialize")) return try initializeResponseAlloc(allocator, request_id);
+    if (std.mem.eql(u8, method, "tools/list")) return try toolsListResponseAlloc(allocator, request_id);
+    if (std.mem.eql(u8, method, "tools/call")) {
+        return handleRequestAlloc(allocator, request_json, envelope, context, kernel) catch |err|
+            return try toolErrorResponseAlloc(allocator, request_id, @errorName(err));
+    }
+    return try protocolErrorResponseAlloc(allocator, request_id, -32601, "Method not found");
+}
+
+fn initializeResponseAlloc(allocator: std.mem.Allocator, request_id: u64) ![]u8 {
+    return std.json.Stringify.valueAlloc(allocator, .{
+        .jsonrpc = "2.0",
+        .id = request_id,
+        .result = .{
+            .protocolVersion = protocol_version,
+            .capabilities = .{ .tools = .{ .listChanged = false } },
+            .serverInfo = .{ .name = "ziac", .version = "0.1.0" },
+            .instructions = "Use deterministic simulation and proposal tools first. Verification requires explicit process authority.",
+        },
+    }, .{});
+}
+
+fn toolsListResponseAlloc(allocator: std.mem.Allocator, request_id: u64) ![]u8 {
+    var output = std.ArrayList(u8).empty;
+    errdefer output.deinit(allocator);
+    try output.print(allocator, "{{\"jsonrpc\":\"2.0\",\"id\":{d},\"result\":{{\"tools\":[", .{request_id});
+    for (registry, 0..) |tool, index| {
+        if (index != 0) try output.append(allocator, ',');
+        const name = try std.json.Stringify.valueAlloc(allocator, tool.name, .{});
+        defer allocator.free(name);
+        const description = try std.json.Stringify.valueAlloc(allocator, tool.description, .{});
+        defer allocator.free(description);
+        try output.print(allocator, "{{\"name\":{s},\"description\":{s},\"inputSchema\":{s},\"annotations\":{{\"readOnlyHint\":{},\"destructiveHint\":false}}}}", .{
+            name,
+            description,
+            tool.input_schema,
+            tool.authority == .read,
+        });
+    }
+    try output.appendSlice(allocator, "]}}}");
+    return output.toOwnedSlice(allocator);
+}
+
+fn toolErrorResponseAlloc(allocator: std.mem.Allocator, request_id: u64, message: []const u8) ![]u8 {
+    return std.json.Stringify.valueAlloc(allocator, .{
+        .jsonrpc = "2.0",
+        .id = request_id,
+        .result = .{ .content = &.{.{ .type = "text", .text = message }}, .isError = true },
+    }, .{});
+}
+
+fn protocolErrorResponseAlloc(allocator: std.mem.Allocator, request_id: u64, code: i64, message: []const u8) ![]u8 {
+    return std.json.Stringify.valueAlloc(allocator, .{
+        .jsonrpc = "2.0",
+        .id = request_id,
+        .@"error" = .{ .code = code, .message = message },
+    }, .{});
 }
 
 pub fn responseJsonAlloc(allocator: std.mem.Allocator, request_id: u64, kernel_artifact: []const u8) std.mem.Allocator.Error![]u8 {
@@ -171,7 +258,7 @@ pub fn skillMarkdownAlloc(allocator: std.mem.Allocator, agent_name: []const u8) 
     for (registry) |tool| {
         output.writer.print("- `{s}`: {s} ({s})\n", .{ tool.name, tool.description, @tagName(tool.authority) }) catch return error.OutOfMemory;
     }
-    output.writer.writeAll("\nMutation requires an explicit capability. Apply accepts only an exact saved plan and matching digest.\n") catch return error.OutOfMemory;
+    output.writer.writeAll("\nVerification requires explicit process authority and runs only manifest-declared fixed-argv checks. No shell command strings are accepted.\n") catch return error.OutOfMemory;
     return output.toOwnedSlice();
 }
 

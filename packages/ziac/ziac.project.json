@@ -29,12 +29,12 @@
     {
       "id": "check-agent-control-loop",
       "requirement": "agent-control-loop",
-      "command": "zig build test"
+      "argv": ["zig", "build", "test"]
     },
     {
       "id": "check-existing-estate-visualization",
       "requirement": "existing-estate-visualization",
-      "command": "zig build test"
+      "argv": ["zig", "build", "test"]
     }
   ],
   "environments": [
@@ -76,6 +76,7 @@
     "apply": false,
     "delete": false,
     "secret_read": false,
-    "live_network": false
+    "live_network": false,
+    "process": true
   }
 }

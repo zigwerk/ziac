@@ -17,6 +17,9 @@ test "scaffold renders a complete agent-first global Zig project" {
     try std.testing.expect(rendered.file(".agents/skills/ziac/SKILL.md") != null);
     try std.testing.expect(rendered.file(".claude/skills/ziac/SKILL.md") != null);
     try std.testing.expect(rendered.file("GEMINI.md") != null);
+    try std.testing.expect(rendered.file(".mcp.json") != null);
+    try std.testing.expect(rendered.file(".codex/config.toml") != null);
+    try std.testing.expect(rendered.file(".gemini/settings.json") != null);
 
     const manifest = rendered.file("ziac.project.json").?;
     var project = try ziac.agent_contract.Project.parseAlloc(std.testing.allocator, manifest);

@@ -14,6 +14,18 @@ test "agent project contract validates requirements acceptance and adaptations" 
     try std.testing.expectEqual(ziac.agent_contract.AdaptationStrategy.remote_only, project.adaptationFor("gcp.psc.Endpoint").?);
     try std.testing.expect(project.requirement("global-api-healthy") != null);
     try std.testing.expect(project.acceptanceCheck("check-global-api") != null);
+    try std.testing.expectEqualStrings("zig", project.acceptanceCheck("check-global-api").?.argv[0]);
+    try std.testing.expect(project.authority.process);
+}
+
+test "legacy shell acceptance checks parse for migration but cannot be executed" {
+    const legacy =
+        \\{"schema":"ziac.project.v1","project":"legacy","source_roots":["src"],"components":[{"id":"api","resources":[]}],"requirements":[{"id":"r","summary":"x","component":"api","required":true}],"acceptance_checks":[{"id":"check","requirement":"r","command":"zig build test"}],"environments":[],"adaptations":[],"scenarios":[{"id":"s","requirement":"r","acceptance_check":"check","seed":1,"required":true}],"authority":{"read":true,"plan":true,"apply":false,"delete":false,"secret_read":false,"live_network":false,"process":true}}
+    ;
+    var project = try ziac.agent_contract.Project.parseAlloc(std.testing.allocator, legacy);
+    defer project.deinit();
+    try std.testing.expectEqual(@as(usize, 0), project.acceptanceCheck("check").?.argv.len);
+    try std.testing.expect(project.acceptanceCheck("check").?.legacy_command != null);
 }
 
 test "agent project contract rejects dangling and unsafe declarations" {

@@ -308,6 +308,10 @@ const agent_subcommands = [_]zstd.Cli.CommandSpec{
 
 const subcommands = [_]zstd.Cli.CommandSpec{
     .{
+        .name = "mcp",
+        .description = "serve capability-gated Ziac tools over MCP stdio",
+    },
+    .{
         .name = "init",
         .description = "scaffold an agent-first global Zig backend",
     },

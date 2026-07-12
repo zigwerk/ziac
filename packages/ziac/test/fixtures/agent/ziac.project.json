@@ -20,7 +20,7 @@
     {
       "id": "check-global-api",
       "requirement": "global-api-healthy",
-      "command": "verify-global-api"
+      "argv": ["zig", "build", "test"]
     }
   ],
   "environments": [
@@ -55,6 +55,7 @@
     "apply": false,
     "delete": false,
     "secret_read": false,
-    "live_network": false
+    "live_network": false,
+    "process": true
   }
 }

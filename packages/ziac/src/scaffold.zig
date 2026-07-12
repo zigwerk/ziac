@@ -60,6 +60,9 @@ pub fn renderAlloc(allocator: std.mem.Allocator, options: Options) Error!Rendere
     try appendStatic(allocator, &files, ".agents/skills/ziac/SKILL.md", agent_skill);
     try appendStatic(allocator, &files, ".claude/skills/ziac/SKILL.md", agent_skill);
     try appendStatic(allocator, &files, "GEMINI.md", gemini_md);
+    try appendStatic(allocator, &files, ".mcp.json", mcp_json);
+    try appendStatic(allocator, &files, ".codex/config.toml", codex_config);
+    try appendStatic(allocator, &files, ".gemini/settings.json", gemini_settings);
     return .{ .allocator = allocator, .files = try files.toOwnedSlice(allocator) };
 }
 
@@ -162,12 +165,12 @@ const project_json =
     \\  "program": {{ "argv": ["zig", "build", "ziac-program", "--"], "max_output_bytes": 8388608 }},
     \\  "components": [{{ "id": "api", "resources": [] }}],
     \\  "requirements": [{{ "id": "global-api-healthy", "summary": "The global API compiles and remains healthy", "component": "api", "required": true }}],
-    \\  "acceptance_checks": [{{ "id": "check-global-api", "requirement": "global-api-healthy", "command": "zig build test" }}],
+    \\  "acceptance_checks": [{{ "id": "check-global-api", "requirement": "global-api-healthy", "argv": ["zig", "build", "test"] }}],
     \\  "environments": [{{ "id": "development", "stage_patterns": ["dev", "dev_*"], "providers": ["gcp", "cockroach"], "projects": ["*-ziac-disposable"], "regions": ["europe-west1", "us-central1", "asia-northeast1"], "max_monthly_cost_minor": 10000 }}],
     \\  "adaptations": [{{ "resource_type": "gcp.run.Service", "strategy": "local_process" }}, {{ "resource_type": "gcp.compute.BackendService", "strategy": "local_proxy" }}],
     \\  "development": {{ "source_root": ".", "build_argv": ["zig", "build"], "process_argv": ["./zig-out/bin/app"], "health_path": "/health/live", "proxy_port": 4318, "generation_base_port": 45000, "poll_millis": 75 }},
     \\  "scenarios": [{{ "id": "global-api-starts", "requirement": "global-api-healthy", "acceptance_check": "check-global-api", "seed": 42, "required": true }}],
-    \\  "authority": {{ "read": true, "plan": true, "apply": false, "delete": false, "secret_read": false, "live_network": false }}
+    \\  "authority": {{ "read": true, "plan": true, "apply": false, "delete": false, "secret_read": false, "live_network": false, "process": true }}
     \\}}
 ;
 
@@ -297,4 +300,18 @@ const gemini_md =
     \\
     \\This project uses the same Ziac project contract and safety boundaries across Gemini, Codex, and Claude Code.
     \\Read `.agents/skills/ziac/SKILL.md` before infrastructure work.
+;
+
+const mcp_json =
+    \\{"mcpServers":{"ziac":{"command":"ziac","args":["mcp","serve","--project","ziac.project.json","--stack","global-api","--stage","dev"]}}}
+;
+
+const codex_config =
+    \\[mcp_servers.ziac]
+    \\command = "ziac"
+    \\args = ["mcp", "serve", "--project", "ziac.project.json", "--stack", "global-api", "--stage", "dev"]
+;
+
+const gemini_settings =
+    \\{"mcpServers":{"ziac":{"command":"ziac","args":["mcp","serve","--project","ziac.project.json","--stack","global-api","--stage","dev"]}}}
 ;

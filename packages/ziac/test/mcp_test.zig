@@ -3,12 +3,33 @@ const ziac = @import("ziac");
 
 test "MCP registry is read only first and contains no arbitrary shell" {
     const tools = ziac.mcp.tools();
-    try std.testing.expectEqualStrings("ziac_status", tools[0].name);
+    try std.testing.expectEqualStrings("ziac_simulate", tools[0].name);
     try std.testing.expectEqual(ziac.mcp.Authority.read, tools[0].authority);
     for (tools) |tool| {
         try std.testing.expect(std.mem.indexOf(u8, tool.name, "shell") == null);
         try std.testing.expect(std.mem.indexOf(u8, tool.name, "exec") == null);
     }
+}
+
+test "MCP protocol initializes and lists only production-backed tools" {
+    var kernel = ziac.mcp.ScriptedKernel.init("{}");
+    const envelope = ziac.agent_contract.CapabilityEnvelope{
+        .id = "mcp-read",
+        .stages = &.{"dev"},
+        .projects = &.{"project-dev"},
+        .providers = &.{.gcp},
+        .permissions = .{ .read = true, .plan = true, .process = true },
+        .budget = .{},
+        .expires_at_millis = 20_000,
+    };
+    const initialized = (try ziac.mcp.handleProtocolRequestAlloc(std.testing.allocator, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"}}}", envelope, .{ .now_millis = 10_000, .stage = "dev", .project = "project-dev", .provider = .gcp }, kernel.kernel())).?;
+    defer std.testing.allocator.free(initialized);
+    try std.testing.expect(std.mem.indexOf(u8, initialized, "ziac") != null);
+    const listed = (try ziac.mcp.handleProtocolRequestAlloc(std.testing.allocator, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}", envelope, .{ .now_millis = 10_000, .stage = "dev", .project = "project-dev", .provider = .gcp }, kernel.kernel())).?;
+    defer std.testing.allocator.free(listed);
+    try std.testing.expect(std.mem.indexOf(u8, listed, "ziac_verify") != null);
+    try std.testing.expect(std.mem.indexOf(u8, listed, "ziac_apply_saved_plan") == null);
+    try std.testing.expect((try ziac.mcp.handleProtocolRequestAlloc(std.testing.allocator, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", envelope, .{ .now_millis = 10_000, .stage = "dev", .project = "project-dev", .provider = .gcp }, kernel.kernel())) == null);
 }
 
 test "MCP cannot expand capability authority and exact plan apply remains gated" {
@@ -23,7 +44,7 @@ test "MCP cannot expand capability authority and exact plan apply remains gated"
         .approved_plan_digest = "approved-plan",
     };
     try ziac.mcp.authorize(envelope, .{
-        .tool = "ziac_status",
+        .tool = "ziac_simulate",
         .now_millis = 10_000,
         .stage = "dev",
         .project = "project-dev",
@@ -36,7 +57,14 @@ test "MCP cannot expand capability authority and exact plan apply remains gated"
         .project = "project-dev",
         .provider = .gcp,
     });
-    try std.testing.expectError(error.PlanDigestMismatch, ziac.mcp.authorize(envelope, .{
+    try std.testing.expectError(error.ActionDenied, ziac.mcp.authorize(envelope, .{
+        .tool = "ziac_verify",
+        .now_millis = 10_000,
+        .stage = "dev",
+        .project = "project-dev",
+        .provider = .gcp,
+    }));
+    try std.testing.expectError(error.UnknownMcpTool, ziac.mcp.authorize(envelope, .{
         .tool = "ziac_apply_saved_plan",
         .now_millis = 10_000,
         .stage = "dev",
@@ -64,8 +92,8 @@ test "MCP responses preserve kernel artifacts and generated skills grant no auth
 
     const skill = try ziac.mcp.skillMarkdownAlloc(std.testing.allocator, "Codex");
     defer std.testing.allocator.free(skill);
-    try std.testing.expect(std.mem.indexOf(u8, skill, "ziac_status") != null);
-    try std.testing.expect(std.mem.indexOf(u8, skill, "exact saved plan") != null);
+    try std.testing.expect(std.mem.indexOf(u8, skill, "ziac_simulate") != null);
+    try std.testing.expect(std.mem.indexOf(u8, skill, "fixed-argv") != null);
     try std.testing.expect(std.mem.indexOf(u8, skill, "ambient credentials grant authority") == null);
 }
 
@@ -82,14 +110,14 @@ test "MCP tools call the same injected kernel and return its artifact unchanged"
     var kernel = ziac.mcp.ScriptedKernel.init("{\"schema\":\"ziac.agent-status.v1\",\"state\":\"planning\"}");
     const response = try ziac.mcp.handleRequestAlloc(
         std.testing.allocator,
-        "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"ziac_status\",\"arguments\":{}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"ziac_simulate\",\"arguments\":{}}}",
         envelope,
         .{ .now_millis = 10_000, .stage = "dev", .project = "project-dev", .provider = .gcp },
         kernel.kernel(),
     );
     defer std.testing.allocator.free(response);
     try std.testing.expectEqual(@as(usize, 1), kernel.call_count);
-    try std.testing.expectEqualStrings("ziac_status", kernel.last_tool.?);
+    try std.testing.expectEqualStrings("ziac_simulate", kernel.last_tool.?);
     try std.testing.expect(std.mem.indexOf(u8, response, "ziac.agent-status.v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, response, "planning") != null);
     try std.testing.expect(std.mem.indexOf(u8, response, "\"id\":7") != null);

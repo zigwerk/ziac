@@ -13,8 +13,8 @@ connection do not grant infrastructure authority.
 
 ## Project Contract
 
-`ziac.project.json` declares source roots, components, requirements, acceptance
-checks, environment allowlists, resource adaptations, deterministic scenarios
+`ziac.project.json` declares source roots, components, requirements, fixed-argv
+acceptance checks, environment allowlists, resource adaptations, deterministic scenarios
 and conservative default permissions. Parsing rejects path escape, duplicate or
 dangling IDs, missing required scenario coverage, invalid budgets and default
 delete authority.
@@ -89,10 +89,17 @@ when permission, binding, network and database checks all pass.
 
 ## MCP
 
-The MCP registry is read-only first and contains no arbitrary shell tool.
-Planning, simulation, proposals, verification, exact saved-plan apply and
-handoff call the same injected kernel used by the CLI. Every call is intersected
-with a capability envelope; apply requires the exact approved plan digest.
+Run `ziac mcp serve --project ziac.project.json --stack global-api --stage dev`
+to start the newline-delimited stdio server. Scaffolded projects include
+`.mcp.json`, `.codex/config.toml`, and `.gemini/settings.json` launch contracts.
+
+The MCP registry advertises only production-backed simulation, proposal and
+verification tools. Simulation is read authority, proposal is plan authority,
+and verification has its own process authority. Verification executes the exact
+manifest argv without a shell and rejects absolute executables, shell
+interpreters, parent traversal, oversized arguments and legacy command strings.
+Receipts include command and manifest digests. Adding plan/apply tools requires
+connecting their saved-plan kernel first; they are not advertised speculatively.
 
 ## Ephemeral Environments
 

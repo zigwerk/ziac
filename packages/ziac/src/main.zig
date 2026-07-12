@@ -32,6 +32,28 @@ pub fn main(init: std.process.Init) !void {
             return;
         });
     }
+    if (args.items.len >= 2 and std.mem.eql(u8, args.items[0], "mcp") and std.mem.eql(u8, args.items[1], "serve")) {
+        const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
+        defer allocator.free(executable_dir);
+        const server_path = try std.fs.path.join(allocator, &.{ executable_dir, "ziac-mcp" });
+        defer allocator.free(server_path);
+        var server_args = try std.ArrayList([]const u8).initCapacity(allocator, args.items.len - 1);
+        defer server_args.deinit(allocator);
+        try server_args.append(allocator, server_path);
+        try server_args.appendSlice(allocator, args.items[2..]);
+        var child = try std.process.spawn(io, .{
+            .argv = server_args.items,
+            .stdin = .inherit,
+            .stdout = .inherit,
+            .stderr = .inherit,
+        });
+        const term = try child.wait(io);
+        const code: u8 = switch (term) {
+            .exited => |exit_code| @intCast(exit_code),
+            else => ziac.cli.Exit.agent_error,
+        };
+        std.process.exit(code);
+    }
     var local_fs = ziac.zstd.FileSystem.LocalFileSystem.init(&cwd, io);
     var auth_files = ziac.gcp.auth.localFileReader(&local_fs);
     var auth_env = ziac.zstd.Env.EnvMap.init(allocator);

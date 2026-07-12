@@ -55,7 +55,7 @@ and MapLibre/deck.gl are isolated from the 106 kB initial application chunk.
 
 ## Milestone 3: Agent Protocol and Safety
 
-Status: pending
+Status: complete
 
 - Change acceptance checks from command strings to validated argv arrays, with a
   compatibility migration that fails closed for agent execution.
@@ -66,6 +66,17 @@ Status: pending
   advertised registry until implemented.
 - Generate installation snippets for Codex, Claude Code, and Gemini CLI.
 - Gate: protocol conformance and hostile-command tests pass with no shell path.
+
+Evidence: acceptance checks now use fixed argv and retain legacy command strings
+only as non-executable migration data. Verification requires `process` authority,
+rejects shell interpreters, absolute executables and parent traversal, and emits
+command plus manifest digests. `ziac mcp serve` launches the installed sibling
+stdio server with newline-delimited JSON-RPC, MCP `2025-11-25` initialization,
+deterministic `tools/list`, bounded messages and tool-result errors. The registry
+advertises only simulate, propose and verify because those are the production
+kernel implementations. The generated project includes Codex, Claude-compatible
+`.mcp.json`, and Gemini configuration, and the E2E gate performs a real MCP
+verification through Testing v2.
 
 ## Milestone 4: Rapid Development and Deployment
 

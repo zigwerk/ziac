@@ -14,7 +14,7 @@ test "shared agent tool kernel executes declared verification through MCP" {
         .stages = &.{"dev"},
         .projects = &.{"project-dev"},
         .providers = &.{.gcp},
-        .permissions = .{ .read = true },
+        .permissions = .{ .read = true, .process = true },
         .budget = .{},
         .expires_at_millis = 20_000,
     };
@@ -30,6 +30,26 @@ test "shared agent tool kernel executes declared verification through MCP" {
     try std.testing.expectEqual(@as(usize, 1), runner.call_count);
     try std.testing.expect(std.mem.indexOf(u8, response, "ziac.verification-receipt.v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, response, "all checks passed") != null);
+}
+
+test "native verification accepts fixed argv and rejects shell or traversal executables" {
+    try ziac.agent_tools.validateVerificationArgv(&.{ "zig", "build", "test" });
+    try std.testing.expectError(error.ShellVerificationDenied, ziac.agent_tools.validateVerificationArgv(&.{ "/bin/sh", "-c", "echo unsafe" }));
+    try std.testing.expectError(error.ShellVerificationDenied, ziac.agent_tools.validateVerificationArgv(&.{ "bash", "script.sh" }));
+    try std.testing.expectError(error.VerificationTraversalDenied, ziac.agent_tools.validateVerificationArgv(&.{"../outside/check"}));
+}
+
+test "legacy acceptance command is never passed to a verification runner" {
+    const legacy =
+        \\{"schema":"ziac.project.v1","project":"legacy","source_roots":["src"],"components":[{"id":"api","resources":[]}],"requirements":[{"id":"r","summary":"x","component":"api","required":true}],"acceptance_checks":[{"id":"check","requirement":"r","command":"touch /tmp/unsafe"}],"environments":[],"adaptations":[],"scenarios":[{"id":"s","requirement":"r","acceptance_check":"check","seed":1,"required":true}],"authority":{"read":true,"plan":true,"apply":false,"delete":false,"secret_read":false,"live_network":false,"process":true}}
+    ;
+    var project = try ziac.agent_contract.Project.parseAlloc(std.testing.allocator, legacy);
+    defer project.deinit();
+    var runner = ziac.agent_tools.ScriptedVerificationRunner.init("must not run");
+    var kernel = ziac.agent_tools.Kernel.init(std.testing.allocator, project, runner.runner());
+    defer kernel.deinit();
+    try std.testing.expectError(error.LegacyAcceptanceCommandDenied, kernel.invoke("ziac_verify", "{\"acceptance_check\":\"check\"}"));
+    try std.testing.expectEqual(@as(usize, 0), runner.call_count);
 }
 
 test "shared agent tool kernel simulates deterministic scenarios without mutation" {

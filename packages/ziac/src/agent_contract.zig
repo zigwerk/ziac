@@ -29,7 +29,25 @@ pub const Requirement = struct {
 pub const AcceptanceCheck = struct {
     id: []const u8,
     requirement: []const u8,
-    command: []const u8,
+    argv: []const []const u8,
+    legacy_command: ?[]const u8 = null,
+
+    pub fn digest(self: AcceptanceCheck) [32]u8 {
+        var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+        for (self.argv) |arg| {
+            var length: [8]u8 = undefined;
+            std.mem.writeInt(u64, &length, arg.len, .little);
+            hasher.update(&length);
+            hasher.update(arg);
+        }
+        if (self.legacy_command) |command| {
+            hasher.update("legacy-shell-command-disabled:");
+            hasher.update(command);
+        }
+        var result: [32]u8 = undefined;
+        hasher.final(&result);
+        return result;
+    }
 };
 
 pub const Environment = struct {
@@ -61,6 +79,7 @@ pub const Permissions = struct {
     delete: bool = false,
     secret_read: bool = false,
     live_network: bool = false,
+    process: bool = false,
 };
 
 pub const Development = struct {
@@ -110,6 +129,7 @@ pub const Project = struct {
     authority: Permissions,
     development: ?Development,
     program: ?ProgramCompiler,
+    manifest_digest: [32]u8,
 
     pub fn parseAlloc(allocator: std.mem.Allocator, bytes: []const u8) ParseError!Project {
         const arena = try allocator.create(std.heap.ArenaAllocator);
@@ -133,6 +153,8 @@ pub const Project = struct {
         const authority = try parsePermissions(root.get("authority") orelse return error.InvalidProjectJson);
         const development = if (root.get("development")) |value| try parseDevelopment(a, value) else null;
         const program = if (root.get("program")) |value| try parseProgramCompiler(a, value) else null;
+        var manifest_digest: [32]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(bytes, &manifest_digest, .{});
 
         var project = Project{
             .allocator = allocator,
@@ -148,6 +170,7 @@ pub const Project = struct {
             .authority = authority,
             .development = development,
             .program = program,
+            .manifest_digest = manifest_digest,
         };
         try project.validate();
         return project;
@@ -197,6 +220,11 @@ pub const Project = struct {
         }
         for (self.requirements) |item| if (self.component(item.component) == null) return error.DanglingComponent;
         for (self.acceptance_checks) |item| if (self.requirement(item.requirement) == null) return error.DanglingRequirement;
+        for (self.acceptance_checks) |item| {
+            if (item.argv.len == 0 and item.legacy_command == null) return error.InvalidProjectJson;
+            if (item.argv.len != 0 and item.legacy_command != null) return error.InvalidProjectJson;
+            for (item.argv) |arg| if (arg.len == 0 or std.mem.indexOfScalar(u8, arg, 0) != null) return error.InvalidProjectJson;
+        }
         for (self.scenarios) |item| {
             if (item.seed == 0) return error.InvalidScenario;
             if (self.requirement(item.requirement) == null) return error.DanglingRequirement;
@@ -240,7 +268,7 @@ pub const Project = struct {
     }
 };
 
-pub const Action = enum { read, plan, apply, delete, secret_read, live_network };
+pub const Action = enum { read, plan, apply, delete, secret_read, live_network, process };
 
 pub const AutonomyBudget = struct {
     max_creates: usize = 0,
@@ -337,10 +365,16 @@ fn parseAcceptanceChecks(allocator: std.mem.Allocator, value: std.json.Value) Pa
     const result = try allocator.alloc(AcceptanceCheck, items.len);
     for (items, 0..) |item, index| {
         const source = object(item) orelse return error.InvalidProjectJson;
+        const argv = if (source.get("argv")) |argv_value| try parseStringArray(allocator, argv_value) else &.{};
+        const legacy_command = if (source.get("command")) |command_value|
+            try dupeNonEmpty(allocator, string(command_value) orelse return error.InvalidProjectJson)
+        else
+            null;
         result[index] = .{
             .id = try dupeNonEmpty(allocator, try requiredString(source, "id")),
             .requirement = try dupeNonEmpty(allocator, try requiredString(source, "requirement")),
-            .command = try dupeNonEmpty(allocator, try requiredString(source, "command")),
+            .argv = argv,
+            .legacy_command = legacy_command,
         };
     }
     return result;
@@ -401,6 +435,7 @@ fn parsePermissions(value: std.json.Value) ParseError!Permissions {
         .delete = try requiredBool(source, "delete"),
         .secret_read = try requiredBool(source, "secret_read"),
         .live_network = try requiredBool(source, "live_network"),
+        .process = try optionalBool(source, "process", false),
     };
 }
 
@@ -474,6 +509,14 @@ fn requiredBool(source: std.json.ObjectMap, name: []const u8) ParseError!bool {
     };
 }
 
+fn optionalBool(source: std.json.ObjectMap, name: []const u8, default: bool) ParseError!bool {
+    const value = source.get(name) orelse return default;
+    return switch (value) {
+        .bool => |result| result,
+        else => error.InvalidProjectJson,
+    };
+}
+
 fn requiredU64(source: std.json.ObjectMap, name: []const u8) ParseError!u64 {
     const value = source.get(name) orelse return error.InvalidProjectJson;
     return switch (value) {
@@ -534,5 +577,6 @@ fn permission(permissions: Permissions, action: Action) bool {
         .delete => permissions.delete,
         .secret_read => permissions.secret_read,
         .live_network => permissions.live_network,
+        .process => permissions.process,
     };
 }

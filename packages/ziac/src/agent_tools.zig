@@ -6,10 +6,10 @@ const scenario = @import("scenario.zig");
 
 pub const VerificationRunner = struct {
     ptr: *anyopaque,
-    run_alloc: *const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]u8,
+    run_alloc: *const fn (*anyopaque, std.mem.Allocator, []const []const u8) anyerror![]u8,
 
-    pub fn runAlloc(self: VerificationRunner, allocator: std.mem.Allocator, command: []const u8) ![]u8 {
-        return self.run_alloc(self.ptr, allocator, command);
+    pub fn runAlloc(self: VerificationRunner, allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
+        return self.run_alloc(self.ptr, allocator, argv);
     }
 };
 
@@ -105,15 +105,21 @@ pub const Kernel = struct {
         var parsed = std.json.parseFromSlice(Args, self.allocator, arguments_json, .{}) catch return error.InvalidAgentToolArguments;
         defer parsed.deinit();
         const check = self.project.acceptanceCheck(parsed.value.acceptance_check) orelse return error.UnknownAcceptanceCheck;
-        const raw_output = try self.verification_runner.runAlloc(self.allocator, check.command);
+        if (check.legacy_command != null) return error.LegacyAcceptanceCommandDenied;
+        try validateVerificationArgv(check.argv);
+        const raw_output = try self.verification_runner.runAlloc(self.allocator, check.argv);
         defer self.allocator.free(raw_output);
         const output = try zstd.Secrets.redactAlloc(self.allocator, raw_output);
         defer self.allocator.free(output);
+        const command_digest = std.fmt.bytesToHex(check.digest(), .lower);
+        const manifest_digest = std.fmt.bytesToHex(self.project.manifest_digest, .lower);
         return std.json.Stringify.valueAlloc(self.allocator, .{
             .schema = "ziac.verification-receipt.v1",
             .acceptance_check = check.id,
             .requirement = check.requirement,
-            .command = check.command,
+            .argv = check.argv,
+            .command_digest = &command_digest,
+            .manifest_digest = &manifest_digest,
             .passed = true,
             .output = output,
             .mutation_authorized = false,
@@ -133,7 +139,7 @@ pub const ScriptedVerificationRunner = struct {
         return .{ .ptr = self, .run_alloc = runAlloc };
     }
 
-    fn runAlloc(raw: *anyopaque, allocator: std.mem.Allocator, _: []const u8) ![]u8 {
+    fn runAlloc(raw: *anyopaque, allocator: std.mem.Allocator, _: []const []const u8) ![]u8 {
         const self: *ScriptedVerificationRunner = @ptrCast(@alignCast(raw));
         self.call_count += 1;
         return allocator.dupe(u8, self.output);
@@ -145,7 +151,7 @@ pub const UnavailableVerificationRunner = struct {
         return .{ .ptr = self, .run_alloc = runAlloc };
     }
 
-    fn runAlloc(_: *anyopaque, _: std.mem.Allocator, _: []const u8) ![]u8 {
+    fn runAlloc(_: *anyopaque, _: std.mem.Allocator, _: []const []const u8) ![]u8 {
         return error.VerificationRunnerUnavailable;
     }
 };
@@ -158,13 +164,11 @@ pub const NativeVerificationRunner = struct {
         return .{ .ptr = self, .run_alloc = runAlloc };
     }
 
-    fn runAlloc(raw: *anyopaque, allocator: std.mem.Allocator, command: []const u8) ![]u8 {
+    fn runAlloc(raw: *anyopaque, allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
         const self: *NativeVerificationRunner = @ptrCast(@alignCast(raw));
-        if (command.len == 0 or command.len > 16 * 1024 or std.mem.indexOfScalar(u8, command, 0) != null) {
-            return error.InvalidVerificationCommand;
-        }
+        try validateVerificationArgv(argv);
         const result = try std.process.run(allocator, self.io, .{
-            .argv = &.{ "/bin/sh", "-c", command },
+            .argv = argv,
             .cwd = if (self.cwd.len == 0) .inherit else .{ .path = self.cwd },
             .stdout_limit = .limited(4 * 1024 * 1024),
             .stderr_limit = .limited(4 * 1024 * 1024),
@@ -181,3 +185,17 @@ pub const NativeVerificationRunner = struct {
         return result.stdout;
     }
 };
+
+pub fn validateVerificationArgv(argv: []const []const u8) !void {
+    if (argv.len == 0 or argv.len > 64) return error.InvalidVerificationCommand;
+    const executable = argv[0];
+    if (std.fs.path.isAbsolute(executable)) return error.ShellVerificationDenied;
+    const basename = std.fs.path.basename(executable);
+    const shells = [_][]const u8{ "sh", "bash", "zsh", "fish", "cmd", "cmd.exe", "powershell", "pwsh" };
+    for (shells) |shell| if (std.ascii.eqlIgnoreCase(basename, shell)) return error.ShellVerificationDenied;
+    for (argv) |arg| {
+        if (arg.len == 0 or arg.len > 16 * 1024 or std.mem.indexOfScalar(u8, arg, 0) != null) return error.InvalidVerificationCommand;
+        var segments = std.mem.splitScalar(u8, arg, '/');
+        while (segments.next()) |segment| if (std.mem.eql(u8, segment, "..")) return error.VerificationTraversalDenied;
+    }
+}

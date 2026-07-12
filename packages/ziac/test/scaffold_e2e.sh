@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ziac_bin="$1"
+mcp_bin="$2"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 package_dir="$(cd "${script_dir}/.." && pwd)"
 workspace="$(mktemp -d "${TMPDIR:-/tmp}/ziac-scaffold-e2e.XXXXXX")"
@@ -27,3 +28,13 @@ grep -Eq '"noop":[1-9][0-9]*' noop.json
 "${ziac_bin}" dashboard --stack global-api --stage dev --artifact-only --out dashboard.json > dashboard-receipt.json
 grep -Fq '"status":"ready"' dashboard-receipt.json
 grep -Fq '"schema":"ziac.visual.v1"' dashboard.json
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ziac-e2e","version":"1"}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ziac_verify","arguments":{"acceptance_check":"check-global-api"}}}' |
+  "${mcp_bin}" --project ziac.project.json --stack global-api --stage dev > mcp.jsonl
+grep -Fq '"protocolVersion":"2025-11-25"' mcp.jsonl
+grep -Fq '"name":"ziac_verify"' mcp.jsonl
+grep -Fq 'ziac.verification-receipt.v1' mcp.jsonl
+grep -Fq '"command_digest"' mcp.jsonl

@@ -444,6 +444,13 @@ instead of selecting fixtures, live files refetch, and heavyweight canvas/map
 engines are lazy chunks. The native server and generated-project artifact path
 are release-gated.
 
+M20 agent protocol and process authority are complete locally. Ziac serves MCP
+`2025-11-25` over bounded newline-delimited stdio, advertises only implemented
+tools, and ships generated harness configuration. Acceptance checks are fixed
+argv, legacy shell strings are non-executable, process authority is distinct
+from read authority, and verification receipts bind both command and manifest
+digests. Hostile shell, traversal and capability tests are release-gated.
+
 No milestone is described as externally qualified until its authenticated live
 gate has produced a complete redacted evidence bundle. Credential-free code
 completion and external qualification remain separate roadmap states.
