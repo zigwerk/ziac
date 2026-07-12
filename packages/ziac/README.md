@@ -28,6 +28,48 @@ Bare `ziac init` derives a lowercase hyphenated project name from the current
 directory. `ziac init <name>` still creates a named child directory. `--ziac-path` is an
 explicit development override; normal installed use resolves the package from
 the installation prefix and does not depend on the Ziac source checkout.
+In an interactive terminal, `ziac init` first shows the inferred project,
+workspace, template, dashboard target, and agent harness setup for confirmation.
+Use `--yes` for deterministic scripts and CI.
+
+## Monorepo Workspaces
+
+A Git repository is a Ziac workspace and may contain any number of independently
+deployable Ziac projects. Initialize projects in the directories that own their
+infrastructure:
+
+```sh
+mkdir -p ziac-cloud/platform ziac-cloud/services/payments/infra
+cd ziac-cloud
+git init
+(cd platform && ziac init platform --dir .)
+(cd services/payments/infra && ziac init payments --dir .)
+ziac dashboard
+```
+
+The first initialization installs matching Codex, Claude Code, and Gemini skills
+at the Git root; later projects synchronize the same workspace-aware skill. Each
+project retains its own compiler, state, locks, authority and CI boundary.
+
+`ziac dashboard` discovers every nested `ziac.project.json`, ignores generated
+and dependency trees, compiles each program from its own project directory, and
+opens one local dashboard with a merged canvas. The WebUI project menu supports
+multi-selection, selected-only rendering, dependency context, and dependency
+plus consumer slices. Provider, region, operation, health and estate filters
+compose with the project slice.
+
+New projects declare their default dashboard stack and stage in
+`ziac.project.json`. Root launches use those per-project targets, while focused
+launches can select one project:
+
+```sh
+ziac dashboard --project payments
+ziac dashboard --artifact-only --out artifacts/workspace.json
+```
+
+The host refreshes the single atomic workspace artifact from fixed CLI arguments
+as the WebUI polls. Failed recompilation leaves the previous complete canvas
+available rather than exposing a partial graph.
 
 Ziac is a comptime-checked Infrastructure-as-Code engine for globally deployed
 Zig services on Google Cloud, powered by zigeffect. It combines an Engine V2
@@ -53,9 +95,10 @@ requirements drive preflight. Production calls use supported REST transcoding,
 and gRPC remains fail-closed until an HTTP/2 adapter passes every qualification
 and parity gate.
 
-The visual infrastructure Workbench is implemented. A versioned Ziac artifact
-drives a synchronized topology canvas and world map for global Cloud Run,
-load-balancer routing, plan operations, and CockroachDB locality.
+The visual infrastructure Workbench is implemented. Versioned project and
+workspace artifacts drive a synchronized topology canvas and world map for
+global Cloud Run, load-balancer routing, plan operations, CockroachDB locality,
+and filtered multi-project monorepo slices.
 
 The agent-first kernel now includes a strict project contract, capability and
 budget envelopes, durable sessions, hybrid development planning, supervised

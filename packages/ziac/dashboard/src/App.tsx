@@ -1,7 +1,7 @@
 import { Show, createMemo, createResource, onCleanup, onMount } from "solid-js";
 import { ZiacWorkbench } from "./ZiacWorkbench";
 import { loadDashboardPayload, requestEstateScan } from "./bridge";
-import { deriveZiacVisualModel, parseZiacVisualArtifact } from "./ziacVisualArtifact";
+import { deriveZiacDashboardModel } from "./ziacVisualArtifact";
 
 export function App() {
   const [payload, { refetch }] = createResource(loadDashboardPayload);
@@ -10,12 +10,12 @@ export function App() {
     onCleanup(() => window.clearInterval(refresh));
   });
   const parsed = createMemo(() => {
-    const loaded = payload();
+    const loaded = payload() ?? payload.latest;
     if (!loaded) return null;
     try {
       const raw: unknown = JSON.parse(loaded.artifactJson);
       return {
-        model: deriveZiacVisualModel(parseZiacVisualArtifact(raw)),
+        model: deriveZiacDashboardModel(raw),
         session: loaded.session,
         error: null as string | null,
       };
@@ -41,7 +41,7 @@ export function App() {
 
   return (
     <main class="ziac-dashboard-app">
-      <Show when={payload.loading}>
+      <Show when={payload.loading && !payload.latest}>
         <div class="ziac-dashboard-state">Loading Ziac infrastructure…</div>
       </Show>
       <Show when={payload.error}>

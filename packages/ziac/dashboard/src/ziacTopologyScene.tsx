@@ -153,15 +153,15 @@ function createRuntime(
   onHover: (hover: SceneHover | null) => void,
 ): SceneRuntime {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf8fafc);
   const camera = new THREE.OrthographicCamera(-12, 12, 8, -8, 0.1, 200);
   camera.position.set(20, 23, 26);
   camera.lookAt(0, 0, 0);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+  renderer.setClearColor(0xf8fafc, 0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;

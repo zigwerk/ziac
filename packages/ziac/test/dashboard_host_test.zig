@@ -58,3 +58,21 @@ test "dashboard host fails closed for missing and oversized artifacts" {
     var host = ziac.dashboard_host.Host.init(std.testing.allocator, std.testing.io, tmp.dir, .{ .artifact_path = "large.json" });
     try std.testing.expectError(error.DashboardArtifactTooLarge, host.loadArtifactAlloc());
 }
+
+test "dashboard host accepts one bounded workspace refresh command" {
+    const args = [_][:0]const u8{
+        "ziac-dashboard-host",
+        "--server-only",
+        "--workspace-refresh",
+        "/opt/ziac/bin/ziac",
+        "/repo/ziac-cloud",
+        ".ziac/dashboard/workspace/artifact.json",
+        "--project",
+        "payments",
+        "/repo/ziac-cloud/.ziac/dashboard/workspace/artifact.json",
+    };
+    const options = ziac.dashboard_host.parseLaunchArgs(&args).?;
+    try std.testing.expectEqualStrings("/opt/ziac/bin/ziac", options.refresh_executable.?);
+    try std.testing.expectEqualStrings("/repo/ziac-cloud", options.refresh_root.?);
+    try std.testing.expectEqualStrings("payments", options.refresh_project.?);
+}

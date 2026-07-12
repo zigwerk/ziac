@@ -46,6 +46,7 @@ pub fn loadAlloc(
 
 pub const NativeRunner = struct {
     io: std.Io,
+    cwd_path: ?[]const u8 = null,
 
     pub fn runner(self: *NativeRunner) Runner {
         return .{ .ptr = self, .runAllocFn = runAlloc };
@@ -55,7 +56,7 @@ pub const NativeRunner = struct {
         const self: *NativeRunner = @ptrCast(@alignCast(raw));
         const result = try std.process.run(allocator, self.io, .{
             .argv = argv,
-            .cwd = .inherit,
+            .cwd = if (self.cwd_path) |path| .{ .path = path } else .inherit,
             .stdout_limit = .limited(max_output_bytes),
             .stderr_limit = .limited(1024 * 1024),
         });

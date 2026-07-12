@@ -9,6 +9,20 @@ export type ZiacAccessMode = "read" | "write" | "read_write" | "invoke" | "admin
 export type ZiacRouteProvenance = "planned" | "inferred" | "observed";
 export type ZiacOwnership = "managed" | "observed" | "referenced";
 export type ZiacEstateScope = "managed" | "existing" | "combined";
+export type ZiacProjectScope = "selected" | "dependencies" | "connected";
+
+export type ZiacVisualProject = {
+  id: string;
+  path: string;
+  stack: string;
+  stage: string;
+  resources: number;
+};
+
+export type ZiacVisualWorkspace = {
+  id: string;
+  created_at_millis: number;
+};
 
 export type ZiacResourceDiscovery = {
   provider: "cloud_asset_inventory";
@@ -36,6 +50,9 @@ export type ZiacVisualResource = {
     replace_before_delete: boolean;
   };
   reasons: string[];
+  project_id?: string;
+  project_path?: string;
+  source_id?: string;
 };
 
 export type ZiacVisualEdge = {
@@ -98,6 +115,8 @@ export type ZiacVisualModel = {
   providerCounts: Record<ZiacProvider, number>;
   ownershipCounts: Record<ZiacOwnership, number>;
   warnings: string[];
+  workspace: ZiacVisualWorkspace | null;
+  projects: ZiacVisualProject[];
 };
 
 export type ZiacVisualFilters = {
@@ -107,6 +126,8 @@ export type ZiacVisualFilters = {
   operation: ZiacOperation | "all";
   health: ZiacHealth | "all";
   estate?: ZiacEstateScope;
+  projects?: string[];
+  projectScope?: ZiacProjectScope;
 };
 
 export type FilteredZiacVisualModel = ZiacVisualModel & { resourceIds: Set<string> };
@@ -219,34 +240,41 @@ export function parseZiacVisualArtifact(raw: unknown): ZiacVisualArtifact {
 }
 
 export function deriveZiacVisualModel(artifact: ZiacVisualArtifact): ZiacVisualModel {
+  const projectId = artifact.stack;
+  const resources = artifact.resources.map((resource) => ({
+    ...resource,
+    project_id: resource.project_id ?? projectId,
+    project_path: resource.project_path ?? ".",
+    source_id: resource.source_id ?? resource.id,
+  }));
   const operationCounts = Object.fromEntries(operations.map((operation) => [operation, 0])) as Record<ZiacOperation, number>;
   const providerCounts = Object.fromEntries(providers.map((provider) => [provider, 0])) as Record<ZiacProvider, number>;
   const ownershipCounts = Object.fromEntries(ownershipStates.map((ownership) => [ownership, 0])) as Record<ZiacOwnership, number>;
-  for (const resource of artifact.resources) {
+  for (const resource of resources) {
     operationCounts[resource.operation] += 1;
     providerCounts[resource.provider] += 1;
     ownershipCounts[resource.ownership] += 1;
   }
   const warnings: string[] = [];
   const regionNodes = artifact.regions.map((region): ZiacRegionNode => {
-    const resources = artifact.resources.filter((resource) => resource.regions.includes(region));
+    const regionResources = resources.filter((resource) => resource.regions.includes(region));
     const location = gcpRegionLocation(region);
     if (!location) warnings.push(`No map coordinates are registered for GCP region ${region}.`);
     return {
       id: region,
       location,
-      resources,
-      operations: unique(resources.map((resource) => resource.operation)),
-      health: aggregateHealth(resources),
+      resources: regionResources,
+      operations: unique(regionResources.map((resource) => resource.operation)),
+      health: aggregateHealth(regionResources),
     };
   });
-  const forwardingRules = artifact.resources.filter((resource) => resource.type === "gcp.compute.GlobalForwardingRule");
+  const forwardingRules = resources.filter((resource) => resource.type === "gcp.compute.GlobalForwardingRule");
   const frontDoor = forwardingRules.find((resource) => resource.logical_id.includes("https") || resource.inputs.port === 443)
     ?? forwardingRules[0]
     ?? null;
   return {
     artifact,
-    resources: artifact.resources,
+    resources,
     edges: artifact.edges,
     routes: artifact.routes,
     regionNodes,
@@ -255,12 +283,110 @@ export function deriveZiacVisualModel(artifact: ZiacVisualArtifact): ZiacVisualM
     providerCounts,
     ownershipCounts,
     warnings,
+    workspace: null,
+    projects: [{ id: projectId, path: ".", stack: artifact.stack, stage: artifact.stage, resources: resources.length }],
   };
+}
+
+export function deriveZiacDashboardModel(raw: unknown): ZiacVisualModel {
+  const root = objectValue(raw, "artifact");
+  if (root.schema === "ziac.visual.v1") return deriveZiacVisualModel(parseZiacVisualArtifact(root));
+  if (stringValue(root.schema, "schema") !== "ziac.workspace-visual.v1") throw new Error("unsupported Ziac dashboard schema");
+  if (integerValue(root.format_version, "format_version") !== 1) throw new Error("unsupported Ziac workspace format version");
+  const workspaceId = nonEmptyString(root.workspace, "workspace");
+  const createdAt = integerValue(root.created_at_millis, "created_at_millis");
+  const entries = arrayValue(root.projects, "projects");
+  if (entries.length === 0 || entries.length > 256) throw new Error("workspace projects must contain between 1 and 256 entries");
+
+  const projects: ZiacVisualProject[] = [];
+  const resources: ZiacVisualResource[] = [];
+  const edges: ZiacVisualEdge[] = [];
+  const routes: ZiacVisualRoute[] = [];
+  const childArtifacts: ZiacVisualArtifact[] = [];
+  const projectIds = new Set<string>();
+  for (const [index, rawEntry] of entries.entries()) {
+    const entry = objectValue(rawEntry, `projects[${index}]`);
+    const id = nonEmptyString(entry.project, `projects[${index}].project`);
+    if (projectIds.has(id)) throw new Error(`duplicate workspace project id: ${id}`);
+    projectIds.add(id);
+    const path = nonEmptyString(entry.path, `projects[${index}].path`);
+    const stack = nonEmptyString(entry.stack, `projects[${index}].stack`);
+    const stage = nonEmptyString(entry.stage, `projects[${index}].stage`);
+    const artifact = parseZiacVisualArtifact(entry.artifact);
+    childArtifacts.push(artifact);
+    projects.push({ id, path, stack, stage, resources: artifact.resources.length });
+    resources.push(...artifact.resources.map((resource) => ({
+      ...resource,
+      id: namespacedId(id, resource.id),
+      project_id: id,
+      project_path: path,
+      source_id: resource.id,
+    })));
+    edges.push(...artifact.edges.map((edge) => ({
+      ...edge,
+      id: namespacedId(id, edge.id),
+      from: namespacedId(id, edge.from),
+      to: namespacedId(id, edge.to),
+    })));
+    routes.push(...artifact.routes.map((route) => ({
+      ...route,
+      id: namespacedId(id, route.id),
+      from_resource: namespacedId(id, route.from_resource),
+      to_resource: namespacedId(id, route.to_resource),
+    })));
+  }
+
+  const links = root.links === undefined ? [] : arrayValue(root.links, "links");
+  for (const [index, rawLink] of links.entries()) {
+    const link = objectValue(rawLink, `links[${index}]`);
+    const from = workspaceEndpoint(link.from, `links[${index}].from`, projectIds);
+    const to = workspaceEndpoint(link.to, `links[${index}].to`, projectIds);
+    edges.push({
+      id: `workspace::${nonEmptyString(link.id, `links[${index}].id`)}`,
+      from: namespacedId(from.project, from.resource),
+      to: namespacedId(to.project, to.resource),
+      kind: enumValue(link.kind, `links[${index}].kind`, edgeKinds),
+    });
+  }
+
+  uniqueIds(resources, "resource");
+  uniqueIds(edges, "edge");
+  const resourceIds = new Set(resources.map((resource) => resource.id));
+  for (const edge of edges) if (!resourceIds.has(edge.from) || !resourceIds.has(edge.to)) {
+    throw new Error(`workspace edge ${edge.id} references unknown resource`);
+  }
+  const regions = unique(childArtifacts.flatMap((artifact) => artifact.regions)).sort();
+  const first = childArtifacts[0]!;
+  const merged: ZiacVisualArtifact = {
+    schema: "ziac.visual.v1",
+    format_version: 1,
+    truth_mode: childArtifacts.every((artifact) => artifact.truth_mode === first.truth_mode) ? first.truth_mode : "desired",
+    created_at_millis: createdAt,
+    stack: workspaceId,
+    stage: unique(projects.map((project) => project.stage)).length === 1 ? projects[0]!.stage : "mixed",
+    graph_digest: first.graph_digest,
+    state_serial: Math.max(...childArtifacts.map((artifact) => artifact.state_serial)),
+    summary: { resources: resources.length, edges: edges.length, regions: regions.length },
+    regions,
+    resources,
+    edges,
+    routes,
+    observations: childArtifacts.flatMap((artifact) => artifact.observations),
+    diagnostics: childArtifacts.flatMap((artifact) => artifact.diagnostics),
+  };
+  const model = deriveZiacVisualModel(merged);
+  return { ...model, workspace: { id: workspaceId, created_at_millis: createdAt }, projects };
 }
 
 export function filterZiacVisualModel(model: ZiacVisualModel, filters: ZiacVisualFilters): FilteredZiacVisualModel {
   const query = filters.text.trim().toLowerCase();
+  const selectedProjects = filters.projects === undefined ? null : new Set(filters.projects);
+  const projectResourceIds = selectedProjects === null
+    ? new Set(model.resources.map((resource) => resource.id))
+    : new Set(model.resources.filter((resource) => resource.project_id && selectedProjects.has(resource.project_id)).map((resource) => resource.id));
+  expandProjectSlice(projectResourceIds, model.edges, filters.projectScope ?? "selected");
   const resources = model.resources.filter((resource) => {
+    if (!projectResourceIds.has(resource.id)) return false;
     if (filters.estate === "managed" && resource.ownership !== "managed") return false;
     if (filters.estate === "existing" && resource.ownership === "managed") return false;
     if (filters.provider !== "all" && resource.provider !== filters.provider) return false;
@@ -283,6 +409,35 @@ export function filterZiacVisualModel(model: ZiacVisualModel, filters: ZiacVisua
     })).filter((node) => node.resources.length > 0),
     resourceIds,
   };
+}
+
+function expandProjectSlice(resourceIds: Set<string>, edges: ZiacVisualEdge[], scope: ZiacProjectScope): void {
+  if (scope === "selected") return;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of edges) {
+      if (resourceIds.has(edge.from) && !resourceIds.has(edge.to)) {
+        resourceIds.add(edge.to);
+        changed = true;
+      }
+      if (scope === "connected" && resourceIds.has(edge.to) && !resourceIds.has(edge.from)) {
+        resourceIds.add(edge.from);
+        changed = true;
+      }
+    }
+  }
+}
+
+function namespacedId(project: string, id: string): string {
+  return `${project}::${id}`;
+}
+
+function workspaceEndpoint(raw: unknown, path: string, projects: Set<string>): { project: string; resource: string } {
+  const value = objectValue(raw, path);
+  const project = nonEmptyString(value.project, `${path}.project`);
+  if (!projects.has(project)) throw new Error(`${path}.project references unknown project`);
+  return { project, resource: nonEmptyString(value.resource, `${path}.resource`) };
 }
 
 function parseResource(raw: unknown, index: number): ZiacVisualResource {

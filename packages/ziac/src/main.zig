@@ -54,6 +54,15 @@ pub fn main(init: std.process.Init) !void {
         };
         std.process.exit(code);
     }
+    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "dashboard")) {
+        const code = runWorkspaceDashboard(allocator, io, cwd, args.items[1..]);
+        std.process.exit(code catch |err| {
+            var error_buffer: [256]u8 = undefined;
+            const message = std.fmt.bufPrint(&error_buffer, "ziac dashboard: {s}\n", .{@errorName(err)}) catch "ziac dashboard failed\n";
+            std.Io.File.stderr().writeStreamingAll(io, message) catch {};
+            return;
+        });
+    }
     var local_fs = ziac.zstd.FileSystem.LocalFileSystem.init(&cwd, io);
     var auth_files = ziac.gcp.auth.localFileReader(&local_fs);
     var auth_env = ziac.zstd.Env.EnvMap.init(allocator);
@@ -131,59 +140,6 @@ pub fn main(init: std.process.Init) !void {
         try std.Io.File.stdout().writeStreamingAll(io, receipt);
         try std.Io.File.stdout().writeStreamingAll(io, "\n");
         std.process.exit(ziac.cli.Exit.success);
-    }
-    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "dashboard")) {
-        if (project_contract == null or project_program == null) {
-            try std.Io.File.stderr().writeStreamingAll(io, "ziac dashboard: project compiler is not configured\n");
-            std.process.exit(ziac.cli.Exit.invalid_graph);
-        }
-        const target = ziac.project_program.targetFromArgs(args.items).?;
-        var artifact = try ziac.visual_artifact.serializeAlloc(allocator, &project_program.?.graph, null, .{
-            .stack = target.stack,
-            .stage = target.stage,
-            .created_at_millis = @intCast(std.Io.Clock.real.now(io).toMilliseconds()),
-        });
-        defer artifact.deinit();
-        const default_path = try std.fmt.allocPrint(allocator, ".ziac/dashboard/{s}/{s}/artifact.json", .{ target.stack, target.stage });
-        defer allocator.free(default_path);
-        const artifact_path = optionValue(args.items, "--out") orelse default_path;
-        if (std.fs.path.dirname(artifact_path)) |parent| try cwd.createDirPath(io, parent);
-        try cwd.writeFile(io, .{ .sub_path = artifact_path, .data = artifact.bytes });
-        if (hasFlag(args.items, "--artifact-only")) {
-            const receipt = try std.json.Stringify.valueAlloc(allocator, .{
-                .schema = "ziac.dashboard-artifact.v1",
-                .status = "ready",
-                .path = artifact_path,
-                .resources = project_program.?.graph.resources.items.len,
-            }, .{});
-            defer allocator.free(receipt);
-            try std.Io.File.stdout().writeStreamingAll(io, receipt);
-            try std.Io.File.stdout().writeStreamingAll(io, "\n");
-            std.process.exit(ziac.cli.Exit.success);
-        }
-        const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
-        defer allocator.free(executable_dir);
-        const host_path = try std.fs.path.join(allocator, &.{ executable_dir, "ziac-dashboard-host" });
-        defer allocator.free(host_path);
-        var host_args = std.ArrayList([]const u8).empty;
-        defer host_args.deinit(allocator);
-        try host_args.append(allocator, host_path);
-        if (hasFlag(args.items, "--server-only")) try host_args.append(allocator, "--server-only");
-        if (optionValue(args.items, "--session")) |session| try host_args.appendSlice(allocator, &.{ "--session", session });
-        if (optionValue(args.items, "--logs")) |logs| try host_args.appendSlice(allocator, &.{ "--logs", logs });
-        try host_args.append(allocator, artifact_path);
-        var child = try std.process.spawn(io, .{
-            .argv = host_args.items,
-            .stdin = .ignore,
-            .stdout = .inherit,
-            .stderr = .inherit,
-        });
-        const term = try child.wait(io);
-        const code: u8 = switch (term) {
-            .exited => |exit_code| @intCast(exit_code),
-            else => ziac.cli.Exit.provider_error,
-        };
-        std.process.exit(code);
     }
 
     var local_http = ziac.zstd.Http.LocalClient.init(allocator, io);
@@ -371,6 +327,205 @@ pub fn main(init: std.process.Init) !void {
     std.process.exit(code);
 }
 
+fn runWorkspaceDashboard(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: std.Io.Dir,
+    args: []const []const u8,
+) !u8 {
+    if (hasFlag(args, "--help") or hasFlag(args, "-h")) {
+        try std.Io.File.stdout().writeStreamingAll(io,
+            \\Usage: ziac dashboard [options]
+            \\
+            \\Compile every nested Ziac project and open one local workspace dashboard.
+            \\
+            \\Options:
+            \\  --root <path>       Workspace root (defaults to the Git root)
+            \\  --project <id>      Compile one project into a focused workspace view
+            \\  --stack <name>      Override the declared dashboard stack
+            \\  --stage <name>      Override the declared dashboard stage
+            \\  --out <path>        Workspace artifact output path
+            \\  --artifact-only     Write the artifact without opening the host
+            \\  --server-only       Serve without opening a native window
+            \\  --session <path>    Agent session projection
+            \\  --logs <path>       Causal log snapshot
+            \\
+        );
+        return ziac.cli.Exit.success;
+    }
+    const root_path = try workspaceRootAlloc(allocator, io, cwd, optionValue(args, "--root"));
+    defer allocator.free(root_path);
+    var root = try std.Io.Dir.openDirAbsolute(io, root_path, .{ .iterate = true });
+    defer root.close(io);
+    var discovery = try ziac.workspace.discoverProjectsAlloc(allocator, io, root);
+    defer discovery.deinit();
+    if (discovery.projects.len == 0) return error.WorkspaceHasNoProjects;
+
+    const selected_project = optionValue(args, "--project");
+    const stack_override = optionValue(args, "--stack");
+    const stage_override = optionValue(args, "--stage");
+    var serialized = std.ArrayList(ziac.visual_artifact.SerializedArtifact).empty;
+    defer {
+        for (serialized.items) |*artifact| artifact.deinit();
+        serialized.deinit(allocator);
+    }
+    var project_artifacts = std.ArrayList(ziac.workspace.ProjectVisualArtifact).empty;
+    defer project_artifacts.deinit(allocator);
+    var resource_count: usize = 0;
+    const created_at_millis: u64 = @intCast(std.Io.Clock.real.now(io).toMilliseconds());
+
+    for (discovery.projects) |project| {
+        if (selected_project) |selected| {
+            if (!std.mem.eql(u8, selected, project.id) and !std.mem.eql(u8, selected, project.path)) continue;
+        }
+        const manifest_path = try std.fs.path.join(allocator, &.{ project.path, "ziac.project.json" });
+        defer allocator.free(manifest_path);
+        const manifest = try root.readFileAlloc(io, manifest_path, allocator, .limited(ziac.workspace.max_manifest_bytes));
+        defer allocator.free(manifest);
+        var contract = try ziac.agent_contract.Project.parseAlloc(allocator, manifest);
+        defer contract.deinit();
+        if (!std.mem.eql(u8, contract.id, project.id)) return error.WorkspaceProjectIdentityMismatch;
+        const compiler = contract.program orelse return error.WorkspaceProjectCompilerMissing;
+        const project_path = try std.fs.path.join(allocator, &.{ root_path, project.path });
+        defer allocator.free(project_path);
+        var runner = ziac.project_program.NativeRunner{ .io = io, .cwd_path = project_path };
+        const target = ziac.program_format.Target{
+            .stack = stack_override orelse project.stack,
+            .stage = stage_override orelse project.stage,
+        };
+        var program = try ziac.project_program.loadAlloc(allocator, compiler, runner.runner(), target);
+        defer program.deinit();
+        var artifact = try ziac.visual_artifact.serializeAlloc(allocator, &program.graph, null, .{
+            .stack = target.stack,
+            .stage = target.stage,
+            .created_at_millis = created_at_millis,
+        });
+        errdefer artifact.deinit();
+        resource_count += program.graph.resources.items.len;
+        try serialized.append(allocator, artifact);
+        const stored = &serialized.items[serialized.items.len - 1];
+        try project_artifacts.append(allocator, .{
+            .id = project.id,
+            .path = project.path,
+            .stack = target.stack,
+            .stage = target.stage,
+            .artifact_json = stored.bytes,
+        });
+    }
+    if (project_artifacts.items.len == 0) return error.WorkspaceProjectNotFound;
+
+    const workspace_name = try ziac.scaffold.projectNameAlloc(allocator, std.fs.path.basename(root_path));
+    defer allocator.free(workspace_name);
+    const artifact = try ziac.workspace.serializeVisualAlloc(allocator, .{
+        .workspace = workspace_name,
+        .created_at_millis = created_at_millis,
+        .projects = project_artifacts.items,
+    });
+    defer allocator.free(artifact);
+    const artifact_path = optionValue(args, "--out") orelse ".ziac/dashboard/workspace/artifact.json";
+    const absolute_artifact_path = if (std.fs.path.isAbsolute(artifact_path)) absolute: {
+        const parent = std.fs.path.dirname(artifact_path) orelse return error.InvalidWorkspaceArtifactPath;
+        var output_dir = try std.Io.Dir.openDirAbsolute(io, parent, .{});
+        defer output_dir.close(io);
+        const basename = std.fs.path.basename(artifact_path);
+        try writeAtomicFile(allocator, io, output_dir, basename, artifact);
+        break :absolute try allocator.dupe(u8, artifact_path);
+    } else relative: {
+        if (std.mem.indexOf(u8, artifact_path, "..") != null) return error.InvalidWorkspaceArtifactPath;
+        if (std.fs.path.dirname(artifact_path)) |parent| try root.createDirPath(io, parent);
+        try writeAtomicFile(allocator, io, root, artifact_path, artifact);
+        break :relative try root.realPathFileAlloc(io, artifact_path, allocator);
+    };
+    defer allocator.free(absolute_artifact_path);
+
+    if (hasFlag(args, "--artifact-only")) {
+        const receipt = try std.json.Stringify.valueAlloc(allocator, .{
+            .schema = "ziac.workspace-dashboard-artifact.v1",
+            .status = "ready",
+            .path = absolute_artifact_path,
+            .workspace = workspace_name,
+            .projects = project_artifacts.items.len,
+            .resources = resource_count,
+        }, .{});
+        defer allocator.free(receipt);
+        try std.Io.File.stdout().writeStreamingAll(io, receipt);
+        try std.Io.File.stdout().writeStreamingAll(io, "\n");
+        return ziac.cli.Exit.success;
+    }
+
+    const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
+    defer allocator.free(executable_dir);
+    const host_path = try std.fs.path.join(allocator, &.{ executable_dir, "ziac-dashboard-host" });
+    defer allocator.free(host_path);
+    const executable_path = try std.fs.path.join(allocator, &.{ executable_dir, "ziac" });
+    defer allocator.free(executable_path);
+    var host_args = std.ArrayList([]const u8).empty;
+    defer host_args.deinit(allocator);
+    try host_args.append(allocator, host_path);
+    if (hasFlag(args, "--server-only")) try host_args.append(allocator, "--server-only");
+    try host_args.appendSlice(allocator, &.{ "--workspace-refresh", executable_path, root_path, artifact_path });
+    if (selected_project) |selected| try host_args.appendSlice(allocator, &.{ "--project", selected });
+    if (optionValue(args, "--session")) |session| try host_args.appendSlice(allocator, &.{ "--session", session });
+    if (optionValue(args, "--logs")) |logs| try host_args.appendSlice(allocator, &.{ "--logs", logs });
+    try host_args.append(allocator, absolute_artifact_path);
+    var child = try std.process.spawn(io, .{
+        .argv = host_args.items,
+        .stdin = .ignore,
+        .stdout = .inherit,
+        .stderr = .inherit,
+    });
+    const term = try child.wait(io);
+    return switch (term) {
+        .exited => |exit_code| @intCast(exit_code),
+        else => ziac.cli.Exit.provider_error,
+    };
+}
+
+fn writeAtomicFile(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    dir: std.Io.Dir,
+    path: []const u8,
+    content: []const u8,
+) !void {
+    const temporary_path = try std.fmt.allocPrint(allocator, "{s}.tmp", .{path});
+    defer allocator.free(temporary_path);
+    try dir.writeFile(io, .{ .sub_path = temporary_path, .data = content });
+    dir.rename(temporary_path, dir, path, io) catch |err| {
+        dir.deleteFile(io, temporary_path) catch {};
+        return err;
+    };
+}
+
+fn workspaceRootAlloc(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: std.Io.Dir,
+    explicit_root: ?[]const u8,
+) ![]u8 {
+    if (explicit_root) |path| {
+        return if (std.fs.path.isAbsolute(path))
+            std.Io.Dir.realPathFileAbsoluteAlloc(io, path, allocator)
+        else
+            cwd.realPathFileAlloc(io, path, allocator);
+    }
+    const result = std.process.run(allocator, io, .{
+        .argv = &.{ "git", "rev-parse", "--show-toplevel" },
+        .stdout_limit = .limited(4096),
+        .stderr_limit = .limited(4096),
+    }) catch return cwd.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(result.stderr);
+    defer allocator.free(result.stdout);
+    const succeeded = switch (result.term) {
+        .exited => |code| code == 0,
+        else => false,
+    };
+    if (!succeeded) return cwd.realPathFileAlloc(io, ".", allocator);
+    const path = std.mem.trim(u8, result.stdout, " \t\r\n");
+    if (path.len == 0 or !std.fs.path.isAbsolute(path)) return error.InvalidWorkspaceRoot;
+    return allocator.dupe(u8, path);
+}
+
 fn runInit(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -388,6 +543,15 @@ fn runInit(
     defer if (inferred_name) |name| allocator.free(name);
     const name = explicit_name orelse inferred_name.?;
     const target = optionValue(options, "--dir") orelse if (explicit_name == null) "." else name;
+    const workspace_root = try workspaceRootAlloc(allocator, io, cwd, null);
+    defer allocator.free(workspace_root);
+    if (!hasFlag(options, "--yes") and try shouldPromptForInit(io)) {
+        const confirmed = try confirmInit(io, name, target, workspace_root);
+        if (!confirmed) {
+            try std.Io.File.stdout().writeStreamingAll(io, "Ziac project setup cancelled.\n");
+            return ziac.cli.Exit.success;
+        }
+    }
     const owned_package_path = if (optionValue(options, "--ziac-path")) |path|
         try allocator.dupe(u8, path)
     else
@@ -413,10 +577,38 @@ fn runInit(
     var target_dir = try cwd.openDir(io, target, .{});
     defer target_dir.close(io);
     try ziac.scaffold.write(target_dir, io, rendered, force);
+    var workspace_dir = try std.Io.Dir.openDirAbsolute(io, workspace_root, .{});
+    defer workspace_dir.close(io);
+    try ziac.scaffold.writeWorkspaceAgentFiles(workspace_dir, io, rendered);
     const message = try std.fmt.allocPrint(allocator, "Created Ziac project {s} in {s}\n", .{ name, target });
     defer allocator.free(message);
     try std.Io.File.stdout().writeStreamingAll(io, message);
     return ziac.cli.Exit.success;
+}
+
+fn shouldPromptForInit(io: std.Io) !bool {
+    return std.Io.File.stdin().isTty(io) catch false;
+}
+
+fn confirmInit(io: std.Io, name: []const u8, target: []const u8, workspace_root: []const u8) !bool {
+    var summary_buffer: [2048]u8 = undefined;
+    const summary = try std.fmt.bufPrint(&summary_buffer,
+        \\Ziac project setup
+        \\  Project        {s}
+        \\  Directory      {s}
+        \\  Workspace      {s}
+        \\  Template       Global Zig service on GCP
+        \\  Dashboard      global-api / dev
+        \\  Agent skills   Codex, Claude Code, Gemini
+        \\
+        \\Create project? [Y/n]
+    , .{ name, target, workspace_root });
+    try std.Io.File.stdout().writeStreamingAll(io, summary);
+    var read_buffer: [128]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(io, &read_buffer);
+    const line = (try reader.interface.takeDelimiter('\n')) orelse return true;
+    const answer = std.mem.trim(u8, line, " \t\r\n");
+    return answer.len == 0 or std.ascii.eqlIgnoreCase(answer, "y") or std.ascii.eqlIgnoreCase(answer, "yes");
 }
 
 fn defaultPackagePathAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {

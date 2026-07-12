@@ -65,3 +65,26 @@ printf '%s\n' \
 grep -Fq '"protocolVersion":"2025-11-25"' "${workspace}/mcp.jsonl"
 grep -Fq '"name":"ziac_verify"' "${workspace}/mcp.jsonl"
 grep -Fq 'ziac.verification-receipt.v1' "${workspace}/mcp.jsonl"
+
+mkdir -p "${workspace}/ziac-cloud/platform" "${workspace}/ziac-cloud/services/payments/infra"
+cd "${workspace}/ziac-cloud"
+git init -q
+(
+  cd platform
+  "${ziac_bin}" init platform --dir .
+)
+(
+  cd services/payments/infra
+  "${ziac_bin}" init payments --dir .
+)
+test -f .agents/skills/ziac/SKILL.md
+test -f .claude/skills/ziac/SKILL.md
+test -f .gemini/skills/ziac/SKILL.md
+grep -Fq 'merged canvas' .agents/skills/ziac/SKILL.md
+grep -Fq '"dashboard": { "stack": "global-api", "stage": "dev" }' platform/ziac.project.json
+"${ziac_bin}" dashboard --artifact-only --out "${workspace}/workspace-dashboard.json" > "${workspace}/workspace-dashboard-receipt.json"
+grep -Fq '"schema":"ziac.workspace-dashboard-artifact.v1"' "${workspace}/workspace-dashboard-receipt.json"
+grep -Fq '"projects":2' "${workspace}/workspace-dashboard-receipt.json"
+grep -Fq '"schema":"ziac.workspace-visual.v1"' "${workspace}/workspace-dashboard.json"
+grep -Fq '"project":"payments"' "${workspace}/workspace-dashboard.json"
+grep -Fq '"project":"platform"' "${workspace}/workspace-dashboard.json"

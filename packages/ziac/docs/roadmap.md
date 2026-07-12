@@ -535,3 +535,35 @@ end-to-end gate: a clean external project signs in, scans, edits, watches the
 local canvas update, deploys globally, reads and writes Cockroach, receives honest
 cost data, revokes access, and cleans up while Ziac's own hosted plane is deployed
 from Ziac code.
+
+## M41-M46: Monorepo Workspace Dashboard
+
+Status: Complete at the credential-free local product gate. The authoritative
+design and implementation record are:
+
+- `docs/superpowers/specs/2026-07-12-ziac-monorepo-workspace-dashboard-design.md`
+- `docs/superpowers/plans/2026-07-12-ziac-monorepo-workspace-dashboard.md`
+
+Ziac now treats a Git root as a workspace containing one or more independently
+deployable projects. Recursive bounded discovery ignores generated, VCS and
+dependency trees, sorts projects deterministically, and rejects duplicate stable
+project identities. Every compiler runs from its owning directory and uses the
+dashboard target declared by its project manifest.
+
+One root command emits `ziac.workspace-visual.v1` atomically, launches one local
+host, and refreshes through fixed argv without shell evaluation. The dashboard
+namespaces colliding resource identities by project, validates explicit
+cross-project links, renders one physical topology, and offers project
+multi-selection with selected, dependency and connected slices. All existing
+provider, region, health, operation and estate filters remain graph-safe.
+
+Interactive initialization confirms the inferred workspace setup, generated
+projects declare their visualization target, and Codex, Claude Code and Gemini
+receive the same monorepo-aware skill at both project and Git roots. The installed
+client E2E creates two nested projects and compiles them into one workspace
+artifact without a source-checkout escape hatch.
+
+This milestone does not claim the sub-250 ms incremental patch gate from M29.
+The current host recompiles through Zig's cache on bounded WebUI polling and
+preserves the last complete artifact on failure. Filesystem-triggered affected-
+project compilation and revision patches remain M29 work.

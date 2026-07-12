@@ -198,6 +198,7 @@ export function parseZiacLogSnapshot(payload: string): ZiacSession | null {
 
 function sampleNameFromSearch(search: string): string | null {
   const sample = new URLSearchParams(search).get("sample");
+  if (sample === "workspace") return "sample-ziac-workspace.json";
   if (sample === "estate") return "sample-ziac-estate.json";
   if (sample === "permissions") return "sample-ziac-permissions.json";
   if (sample === "ziac" || sample === "global") return "sample-ziac-global.json";
@@ -255,6 +256,30 @@ async function callBridgeFunction(bridge: ZiacBridgeWindow, name: BridgeFunction
 }
 
 async function loadSampleArtifact(sampleName: string): Promise<string> {
+  if (sampleName === "sample-ziac-workspace.json") {
+    const response = await fetch("./sample-ziac-global.json");
+    if (!response.ok) throw new Error(`failed to load Ziac sample (${response.status})`);
+    const artifact: unknown = await response.json();
+    const resourceId = isRecord(artifact) && Array.isArray(artifact.resources) && isRecord(artifact.resources[0]) && typeof artifact.resources[0].id === "string"
+      ? artifact.resources[0].id
+      : null;
+    return JSON.stringify({
+      schema: "ziac.workspace-visual.v1",
+      format_version: 1,
+      workspace: "ziac-cloud",
+      created_at_millis: 1783764000000,
+      projects: [
+        { project: "payments", path: "services/payments/infra", stack: "global-api", stage: "dev", artifact },
+        { project: "platform", path: "platform", stack: "foundation", stage: "dev", artifact },
+      ],
+      links: resourceId ? [{
+        id: "payments-platform",
+        from: { project: "payments", resource: resourceId },
+        to: { project: "platform", resource: resourceId },
+        kind: "dependency",
+      }] : [],
+    });
+  }
   const response = await fetch(`./${sampleName}`);
   if (!response.ok) throw new Error(`failed to load Ziac sample (${response.status})`);
   return response.text();

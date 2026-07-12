@@ -22,6 +22,7 @@ fn returnOwned(event: *webui.Event, bytes: []u8) void {
 }
 
 fn loadArtifact(event: *webui.Event) void {
+    host.refreshArtifact() catch {};
     returnOwned(event, host.loadArtifactAlloc() catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-error.v1\",\"code\":\"artifact_unavailable\"}");
         return;
@@ -112,6 +113,10 @@ pub fn main(init: std.process.Init) !void {
         .root_path = root_path,
         .estate_scan_executable = options.estate_scan_executable,
         .estate_connection_id = options.estate_connection_id,
+        .refresh_executable = options.refresh_executable,
+        .refresh_root = options.refresh_root,
+        .refresh_out = options.refresh_out,
+        .refresh_project = options.refresh_project,
     };
     host = ziac.dashboard_host.Host.init(std.heap.page_allocator, init.io, std.Io.Dir.cwd(), config);
     const initial_artifact = try host.loadArtifactAlloc();

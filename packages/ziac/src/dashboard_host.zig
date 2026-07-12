@@ -21,6 +21,10 @@ pub const Config = struct {
     root_path: [:0]const u8 = "dashboard/dist",
     estate_scan_executable: ?[]const u8 = null,
     estate_connection_id: ?[]const u8 = null,
+    refresh_executable: ?[]const u8 = null,
+    refresh_root: ?[]const u8 = null,
+    refresh_out: ?[]const u8 = null,
+    refresh_project: ?[]const u8 = null,
 };
 
 pub const LaunchOptions = struct {
@@ -31,6 +35,10 @@ pub const LaunchOptions = struct {
     root_path: [:0]const u8 = "dashboard/dist",
     estate_scan_executable: ?[:0]const u8 = null,
     estate_connection_id: ?[:0]const u8 = null,
+    refresh_executable: ?[:0]const u8 = null,
+    refresh_root: ?[:0]const u8 = null,
+    refresh_out: ?[:0]const u8 = null,
+    refresh_project: ?[:0]const u8 = null,
 };
 
 pub fn parseLaunchArgs(args: []const [:0]const u8) ?LaunchOptions {
@@ -60,6 +68,16 @@ pub fn parseLaunchArgs(args: []const [:0]const u8) ?LaunchOptions {
             options.estate_scan_executable = args[index + 1];
             options.estate_connection_id = args[index + 2];
             index += 3;
+        } else if (std.mem.eql(u8, arg, "--workspace-refresh")) {
+            if (index + 3 >= args.len or options.refresh_executable != null) return null;
+            options.refresh_executable = args[index + 1];
+            options.refresh_root = args[index + 2];
+            options.refresh_out = args[index + 3];
+            index += 4;
+        } else if (std.mem.eql(u8, arg, "--project")) {
+            if (index + 1 >= args.len or options.refresh_project != null) return null;
+            options.refresh_project = args[index + 1];
+            index += 2;
         } else if (std.mem.startsWith(u8, arg, "--") or artifact != null) return null else {
             artifact = arg;
             index += 1;
@@ -81,6 +99,28 @@ pub const Host = struct {
 
     pub fn loadArtifactAlloc(self: Host) ![]u8 {
         return self.readBounded(self.config.artifact_path, max_artifact_bytes, error.DashboardArtifactUnavailable, error.DashboardArtifactTooLarge);
+    }
+
+    pub fn refreshArtifact(self: Host) !void {
+        const executable = self.config.refresh_executable orelse return;
+        const root = self.config.refresh_root orelse return error.InvalidWorkspaceRefresh;
+        const out = self.config.refresh_out orelse return error.InvalidWorkspaceRefresh;
+        var argv = std.ArrayList([]const u8).empty;
+        defer argv.deinit(self.allocator);
+        try argv.appendSlice(self.allocator, &.{ executable, "dashboard", "--root", root, "--out", out, "--artifact-only" });
+        if (self.config.refresh_project) |project| try argv.appendSlice(self.allocator, &.{ "--project", project });
+        const result = try std.process.run(self.allocator, self.io, .{
+            .argv = argv.items,
+            .stdout_limit = .limited(64 * 1024),
+            .stderr_limit = .limited(64 * 1024),
+        });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        const passed = switch (result.term) {
+            .exited => |code| code == 0,
+            else => false,
+        };
+        if (!passed) return error.WorkspaceRefreshFailed;
     }
 
     pub fn loadSessionAlloc(self: Host) ![]u8 {

@@ -16,10 +16,15 @@ test("standalone dashboard loads only Ziac-owned samples", async () => {
     loaded.push(sample);
     return JSON.stringify({ schema: "ziac.visual.v1" });
   }, "?sample=estate");
+  const workspace = await loadDashboardPayloadFromBridge({}, async (sample) => {
+    loaded.push(sample);
+    return JSON.stringify({ schema: "ziac.workspace-visual.v1" });
+  }, "?sample=workspace");
 
-  expect(loaded).toEqual(["sample-ziac-global.json", "sample-ziac-estate.json"]);
+  expect(loaded).toEqual(["sample-ziac-global.json", "sample-ziac-estate.json", "sample-ziac-workspace.json"]);
   expect(base.session?.schema).toBe("ziac.dashboard-session.v1");
   expect(estate.session?.artifact_path).toBe("sample-ziac-estate.json");
+  expect(workspace.session?.artifact_path).toBe("sample-ziac-workspace.json");
 });
 
 test("standalone dashboard never substitutes a fixture for a missing live host", async () => {

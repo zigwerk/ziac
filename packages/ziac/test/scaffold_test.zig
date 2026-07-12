@@ -36,6 +36,9 @@ test "scaffold renders a complete agent-first global Zig project" {
     try std.testing.expect(std.mem.startsWith(u8, codex_skill, "---\nname: ziac\n"));
     try std.testing.expect(std.mem.indexOf(u8, codex_skill, "ziac check --stack global-api --stage dev --json") != null);
     try std.testing.expect(std.mem.indexOf(u8, codex_skill, "integrity-checked saved plan") != null);
+    try std.testing.expect(std.mem.indexOf(u8, codex_skill, "merged canvas") != null);
+    try std.testing.expect(std.mem.indexOf(u8, codex_skill, "smallest project that owns") != null);
+    try std.testing.expect(std.mem.indexOf(u8, manifest, "\"dashboard\": { \"stack\": \"global-api\", \"stage\": \"dev\" }") != null);
     try std.testing.expectEqualStrings(codex_skill, rendered.file(".claude/skills/ziac/SKILL.md").?);
     try std.testing.expectEqualStrings(codex_skill, rendered.file(".gemini/skills/ziac/SKILL.md").?);
 }

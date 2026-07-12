@@ -2,6 +2,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
+  deriveZiacDashboardModel,
   deriveZiacVisualModel,
   filterZiacVisualModel,
   gcpRegionLocation,
@@ -183,4 +184,88 @@ test("connected estate fixture keeps observed and managed infrastructure distinc
   expect(model.ownershipCounts).toEqual({ managed: 5, observed: 6, referenced: 1 });
   expect(model.resources.find((resource) => resource.type === "gcp.sql.Instance")?.ownership).toBe("observed");
   expect(model.edges.some((edge) => edge.id === "managed-assets")).toBe(true);
+});
+
+test("workspace artifacts merge projects with collision-safe identities", () => {
+  const payments = JSON.parse(sampleJson());
+  const platform = JSON.parse(sampleJson());
+  payments.resources = payments.resources.slice(0, 2);
+  payments.edges = payments.edges.filter((edge: { from: string; to: string }) =>
+    payments.resources.some((resource: { id: string }) => resource.id === edge.from) &&
+    payments.resources.some((resource: { id: string }) => resource.id === edge.to));
+  payments.routes = [];
+  payments.regions = ["europe-west1"];
+  payments.summary = { resources: payments.resources.length, edges: payments.edges.length, regions: 1 };
+  platform.resources = platform.resources.slice(0, 2);
+  platform.edges = platform.edges.filter((edge: { from: string; to: string }) =>
+    platform.resources.some((resource: { id: string }) => resource.id === edge.from) &&
+    platform.resources.some((resource: { id: string }) => resource.id === edge.to));
+  platform.routes = [];
+  platform.regions = ["europe-west1"];
+  platform.summary = { resources: platform.resources.length, edges: platform.edges.length, regions: 1 };
+
+  const model = deriveZiacDashboardModel({
+    schema: "ziac.workspace-visual.v1",
+    format_version: 1,
+    workspace: "ziac-cloud",
+    created_at_millis: 42,
+    projects: [
+      { project: "payments", path: "services/payments/infra", stack: "payments-api", stage: "dev", artifact: payments },
+      { project: "platform", path: "platform", stack: "foundation", stage: "dev", artifact: platform },
+    ],
+    links: [{
+      id: "payments-network",
+      from: { project: "payments", resource: payments.resources[0].id },
+      to: { project: "platform", resource: platform.resources[0].id },
+      kind: "dependency",
+    }],
+  });
+
+  expect(model.workspace?.id).toBe("ziac-cloud");
+  expect(model.projects.map((project) => project.id)).toEqual(["payments", "platform"]);
+  expect(model.resources).toHaveLength(4);
+  expect(model.resources.every((resource) => resource.id.startsWith(`${resource.project_id}::`))).toBe(true);
+  expect(model.edges.some((edge) => edge.id === "workspace::payments-network")).toBe(true);
+});
+
+test("project slices can include dependencies and consumers without dangling graph data", () => {
+  const raw = JSON.parse(sampleJson());
+  const project = (id: string, resource: Record<string, unknown>) => ({
+    project: id,
+    path: id,
+    stack: id,
+    stage: "dev",
+    artifact: {
+      ...raw,
+      resources: [resource],
+      edges: [],
+      routes: [],
+      regions: resource.regions as string[],
+      summary: { resources: 1, edges: 0, regions: (resource.regions as string[]).length },
+    },
+  });
+  const paymentsResource = { ...raw.resources[0], id: "service", logical_id: "payments" };
+  const platformResource = { ...raw.resources[1], id: "network", logical_id: "network" };
+  const searchResource = { ...raw.resources[2], id: "search", logical_id: "search" };
+  const model = deriveZiacDashboardModel({
+    schema: "ziac.workspace-visual.v1",
+    format_version: 1,
+    workspace: "ziac-cloud",
+    created_at_millis: 42,
+    projects: [project("payments", paymentsResource), project("platform", platformResource), project("search", searchResource)],
+    links: [
+      { id: "payments-platform", from: { project: "payments", resource: "service" }, to: { project: "platform", resource: "network" }, kind: "dependency" },
+      { id: "search-platform", from: { project: "search", resource: "search" }, to: { project: "platform", resource: "network" }, kind: "dependency" },
+    ],
+  });
+  const filters = { text: "", provider: "all" as const, region: "all", operation: "all" as const, health: "all" as const, projects: ["platform"] };
+
+  const selected = filterZiacVisualModel(model, { ...filters, projectScope: "selected" });
+  const dependencies = filterZiacVisualModel(model, { ...filters, projects: ["payments"], projectScope: "dependencies" });
+  const connected = filterZiacVisualModel(model, { ...filters, projectScope: "connected" });
+
+  expect(selected.resources.map((resource) => resource.project_id)).toEqual(["platform"]);
+  expect(dependencies.resources.map((resource) => resource.project_id).sort()).toEqual(["payments", "platform"]);
+  expect(connected.resources.map((resource) => resource.project_id).sort()).toEqual(["payments", "platform", "search"]);
+  expect(connected.edges.every((edge) => connected.resourceIds.has(edge.from) && connected.resourceIds.has(edge.to))).toBe(true);
 });

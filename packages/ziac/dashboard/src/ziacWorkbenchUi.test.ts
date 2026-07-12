@@ -31,6 +31,11 @@ test("Ziac Workbench exposes compact synchronized infrastructure controls", () =
   expect(value).toContain("Pro");
   expect(value).toContain("Connect through the desktop Ziac host");
   expect(value).toContain("onEstateRefresh");
+  expect(value).toContain('aria-label="Filter workspace projects"');
+  expect(value).toContain("Selected only");
+  expect(value).toContain("With dependencies");
+  expect(value).toContain("Dependencies and consumers");
+  expect(value).toContain("selectedProjectIds");
   expect(value).not.toContain("scanTimer");
 });
 
@@ -103,6 +108,8 @@ test("Ziac workspace has dedicated responsive canvas and operational styles", ()
   expect(value).toContain(".ziac-dock-stepper");
   expect(value).toContain(".ziac-estate-switch");
   expect(value).toContain(".ziac-estate-access");
+  expect(value).toContain(".ziac-project-filter-menu");
+  expect(value).toContain(".ziac-project-options");
   expect(value).toContain(".ziac-log-inspect {\n  grid-column: 4;");
   expect(value).toContain("@media (max-width: 760px)");
 });

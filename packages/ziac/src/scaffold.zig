@@ -103,6 +103,20 @@ pub fn write(dir: std.Io.Dir, io: std.Io, rendered: Rendered, force: bool) !void
     }
 }
 
+pub fn writeWorkspaceAgentFiles(dir: std.Io.Dir, io: std.Io, rendered: Rendered) !void {
+    const paths = [_][]const u8{
+        ".agents/skills/ziac/SKILL.md",
+        ".claude/skills/ziac/SKILL.md",
+        ".gemini/skills/ziac/SKILL.md",
+        "GEMINI.md",
+    };
+    for (paths) |path| {
+        const contents = rendered.file(path) orelse return error.MissingAgentScaffold;
+        if (std.fs.path.dirname(path)) |parent| try dir.createDirPath(io, parent);
+        try dir.writeFile(io, .{ .sub_path = path, .data = contents });
+    }
+}
+
 fn validateProjectName(name: []const u8) Error!void {
     if (name.len == 0 or name.len > 48 or name[0] == '-' or name[name.len - 1] == '-') return error.InvalidProjectName;
     for (name) |char| if (!(std.ascii.isLower(char) or std.ascii.isDigit(char) or char == '-')) return error.InvalidProjectName;
@@ -185,6 +199,7 @@ const project_json =
     \\  "project": "{s}",
     \\  "source_roots": ["src", "ziac.stack.zig"],
     \\  "program": {{ "argv": ["zig", "build", "ziac-program", "--"], "max_output_bytes": 8388608 }},
+    \\  "dashboard": {{ "stack": "global-api", "stage": "dev" }},
     \\  "components": [{{ "id": "api", "resources": [] }}],
     \\  "requirements": [{{ "id": "global-api-healthy", "summary": "The global API compiles and remains healthy", "component": "api", "required": true }}],
     \\  "acceptance_checks": [{{ "id": "check-global-api", "requirement": "global-api-healthy", "argv": ["zig", "build", "test"] }}],
@@ -312,21 +327,22 @@ const ziacignore =
 const agent_skill =
     \\---
     \\name: ziac
-    \\description: Build, validate, visualize, test, and deploy this Ziac and ZigEffect infrastructure project. Use for Zig application Env bindings, GCP or Cockroach resources, plans, local development, dashboard investigation, provider diagnostics, and capability-gated infrastructure changes.
+    \\description: Build, validate, visualize, test, and deploy Ziac and ZigEffect infrastructure across a standalone project or monorepo workspace. Use for Zig application Env bindings, GCP or Cockroach resources, plans, local development, dashboard investigation, provider diagnostics, project decomposition, and capability-gated infrastructure changes.
     \\---
     \\
     \\# Ziac Development
     \\
-    \\Treat `ziac.project.json` as executable project intent. Before changing infrastructure, read its requirements, acceptance checks, environments, adaptations, scenarios, and authority policy together with `ziac.stack.zig` and the application's `Env` declaration.
+    \\Treat every `ziac.project.json` as an independently deployable unit of executable intent. A repository may contain one project or many nested projects. Before changing infrastructure, discover all project manifests from the Git root, select the smallest project that owns the capability, and read its requirements, acceptance checks, environments, adaptations, scenarios, authority policy, `ziac.stack.zig`, and application `Env` declaration.
     \\
     \\## Development loop
     \\
-    \\1. Run `ziac check --stack global-api --stage dev --json`.
-    \\2. Run `zig build test --summary failures` and inspect the Testing v2 receipt under `.zigeffect/tests/suites/`.
-    \\3. Make the smallest typed change through public Ziac APIs. Keep application requirements, resource bindings, provider availability, scope, and outputs comptime-valid.
-    \\4. Run `ziac plan --stack global-api --stage dev --json`. Diagnose structured plan and causal evidence instead of parsing terminal scrollback.
-    \\5. Open `ziac dashboard --stack global-api --stage dev` when topology, ownership, locality, permissions, costs, or provider progress matter.
-    \\6. Apply only an integrity-checked saved plan under an explicit capability envelope. Never expand apply, delete, secret, live-network, project, stage, region, or cost authority implicitly.
+    \\1. From the workspace root, identify the owning project. Run project commands from that project root or select it explicitly with `--project` where supported.
+    \\2. Run `ziac check --stack global-api --stage dev --json` in the owning project.
+    \\3. Run `zig build test --summary failures` and inspect the Testing v2 receipt under `.zigeffect/tests/suites/`.
+    \\4. Make the smallest typed change through public Ziac APIs. Keep application requirements, resource bindings, provider availability, scope, and outputs comptime-valid.
+    \\5. Run `ziac plan --stack global-api --stage dev --json`. Diagnose structured plan and causal evidence instead of parsing terminal scrollback.
+    \\6. Open `ziac dashboard` from the repository root to inspect the merged canvas. Filter to the changed project, its dependencies, or its consumers while retaining workspace context.
+    \\7. Apply only an integrity-checked saved plan under an explicit capability envelope. Never expand apply, delete, secret, live-network, project, stage, region, or cost authority implicitly.
     \\
     \\## Infrastructure rules
     \\
@@ -335,6 +351,9 @@ const agent_skill =
     \\- Prefer the GCP and Cockroach high-level components already exported by Ziac. Preserve provider resource names, output wiring, lifecycle protection, and regional locality.
     \\- Use immutable images, readiness before traffic, and causal rollback evidence for Cloud Run changes.
     \\- Keep agent proposals non-mutating. Verification may run only manifest-declared fixed argv checks with process authority.
+    \\- Preserve project independence. Do not make an implicit cross-project dependency, edit a neighbouring project, or combine state merely because projects share a repository.
+    \\- Use explicit typed outputs and inputs for cross-project wiring. Validate the changed project and then the merged workspace graph. Treat duplicate ownership of one managed cloud resource as a conflict.
+    \\- Assume a project may later split. Keep feature boundaries, state ownership, provider authority, and CI targets clear enough to move without rewriting unrelated infrastructure.
     \\
     \\## Agent interface
     \\

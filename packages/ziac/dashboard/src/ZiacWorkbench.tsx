@@ -40,8 +40,10 @@ import {
   type ZiacHealth,
   type ZiacEstateScope,
   type ZiacOperation,
+  type ZiacProjectScope,
   type ZiacProvider,
   type ZiacVisualModel,
+  type ZiacVisualProject,
   type ZiacVisualResource,
 } from "./ziacVisualArtifact";
 import { estateAccessState, loadLiveLogSnapshot, requestEstateAccess, type ZiacLogEvent, type ZiacSession } from "./bridge";
@@ -72,8 +74,10 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
   const [region, setRegion] = createSignal<string | "all">("all");
   const [operation, setOperation] = createSignal<ZiacOperation | "all">("all");
   const [health, setHealth] = createSignal<ZiacHealth | "all">("all");
+  const [excludedProjects, setExcludedProjects] = createSignal<string[]>([]);
+  const [projectScope, setProjectScope] = createSignal<ZiacProjectScope>("selected");
   const [navigatorOpen, setNavigatorOpen] = createSignal(false);
-  const [inspectorOpen, setInspectorOpen] = createSignal(true);
+  const [inspectorOpen, setInspectorOpen] = createSignal(window.innerWidth > 900);
   const [dockOpen, setDockOpen] = createSignal(true);
   const [inspectorTab, setInspectorTab] = createSignal<InspectorTab>("overview");
   const [dockTab, setDockTab] = createSignal<DockTab>("deployments");
@@ -109,7 +113,13 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
     operation: operation(),
     health: health(),
     estate: estateScope(),
+    projects: props.model.projects.filter((project) => !excludedProjects().includes(project.id)).map((project) => project.id),
+    projectScope: projectScope(),
   }));
+  const selectedProjectIds = createMemo(() => props.model.projects.filter((project) => !excludedProjects().includes(project.id)).map((project) => project.id));
+  const toggleProject = (id: string) => setExcludedProjects((current) => current.includes(id)
+    ? current.filter((project) => project !== id)
+    : [...current, id]);
   const sceneResourceIds = createMemo(() => new Set(deriveZiacSceneModel(filtered(), mode()).nodes.map((node) => node.id)));
   const effectiveSelectedResourceId = createMemo(() => {
     const requested = selectedResourceId();
@@ -159,8 +169,8 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
         </div>
         <button type="button" class="ziac-stack-switch" title="Switch stack and stage">
           <CloudCog size={15} />
-          <strong>{props.model.artifact.stack}</strong>
-          <span>{props.model.artifact.stage}</span>
+          <strong>{props.model.workspace?.id ?? props.model.artifact.stack}</strong>
+          <span>{props.model.workspace ? `${props.model.projects.length} projects` : props.model.artifact.stage}</span>
           <ChevronDown size={13} />
         </button>
         <label class="ziac-command-search">
@@ -193,6 +203,15 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
           <ViewButton active={view() === "map"} label="Global Map" icon={<Globe2 size={14} />} onClick={() => setView("map")} />
           <ViewButton active={view() === "operations"} label="Operations" icon={<Activity size={14} />} onClick={() => setView("operations")} />
         </div>
+        <ProjectFilter
+          projects={props.model.projects}
+          selected={selectedProjectIds()}
+          scope={projectScope()}
+          onToggle={toggleProject}
+          onAll={() => setExcludedProjects([])}
+          onNone={() => setExcludedProjects(props.model.projects.map((project) => project.id))}
+          onScope={setProjectScope}
+        />
         <div class="ziac-estate-switch" aria-label="Estate scope">
           <EstateScopeButton value="managed" label="Ziac" scope={estateScope()} onSelect={selectEstateScope} />
           <EstateScopeButton value="existing" label="Existing" scope={estateScope()} locked={!estateAccess.ready} pro onSelect={selectEstateScope} />
@@ -291,6 +310,46 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
 
 function ViewButton(props: { active: boolean; label: string; icon: unknown; onClick: () => void }) {
   return <button type="button" aria-label={props.label} classList={{ active: props.active }} onClick={props.onClick}>{props.icon as never}<span>{props.label}</span></button>;
+}
+
+function ProjectFilter(props: {
+  projects: ZiacVisualProject[];
+  selected: string[];
+  scope: ZiacProjectScope;
+  onToggle: (id: string) => void;
+  onAll: () => void;
+  onNone: () => void;
+  onScope: (scope: ZiacProjectScope) => void;
+}) {
+  return <details class="ziac-project-filter">
+    <summary aria-label="Filter workspace projects">
+      <Boxes size={13} />
+      <span>Projects</span>
+      <strong>{props.selected.length}/{props.projects.length}</strong>
+      <ChevronDown size={12} />
+    </summary>
+    <div class="ziac-project-filter-menu">
+      <header>
+        <div><strong>Canvas projects</strong><small>Render a workspace slice</small></div>
+        <span><button type="button" onClick={props.onAll}>All</button><button type="button" onClick={props.onNone}>None</button></span>
+      </header>
+      <label class="ziac-project-scope">
+        <span>Include</span>
+        <select value={props.scope} onChange={(event) => props.onScope(event.currentTarget.value as ZiacProjectScope)}>
+          <option value="selected">Selected only</option>
+          <option value="dependencies">With dependencies</option>
+          <option value="connected">Dependencies and consumers</option>
+        </select>
+      </label>
+      <div class="ziac-project-options">
+        <For each={props.projects}>{(project) => <label>
+          <input type="checkbox" checked={props.selected.includes(project.id)} onChange={() => props.onToggle(project.id)} />
+          <span><strong>{project.id}</strong><small>{project.path}</small></span>
+          <em>{project.resources}</em>
+        </label>}</For>
+      </div>
+    </div>
+  </details>;
 }
 
 function ModeButton(props: { value: ZiacTopologyMode; label: string; mode: ZiacTopologyMode; onSelect: (mode: ZiacTopologyMode) => void }) {
@@ -402,7 +461,7 @@ function ResourceNavigator(props: {
         <header><span>{group.label}</span><strong>{group.resources.length}</strong></header>
         <For each={group.resources}>{(resource) => <button type="button" classList={{ selected: resource.id === props.selectedId }} onClick={() => props.onSelect(resource.id)}>
           <ResourceIcon resource={resource} />
-          <span><strong>{resource.logical_id}</strong><small>{resource.region ?? resource.scope}</small></span>
+          <span><strong>{resource.logical_id}</strong><small>{resource.project_id} · {resource.region ?? resource.scope}</small></span>
           <i class={`health-${resource.health}`} />
         </button>}</For>
       </section>}</For>
@@ -476,6 +535,7 @@ function ResourceInspector(props: {
             <dl class="ziac-inspector-grid">
               <dt>Operation</dt><dd><span class={`ziac-operation-${resource().operation}`}>{resource().operation}</span></dd>
               <dt>Ownership</dt><dd><span class={`ziac-ownership-${resource().ownership}`}>{resource().ownership}</span></dd>
+              <dt>Ziac project</dt><dd><code>{resource().project_id ?? props.model.artifact.stack}</code></dd>
               <dt>Health</dt><dd>{resource().health}</dd>
               <dt>Scope</dt><dd>{resource().region ?? resource().scope}</dd>
               <dt>Type</dt><dd><code>{resource().type}</code></dd>
