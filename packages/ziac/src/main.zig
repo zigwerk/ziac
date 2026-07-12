@@ -377,11 +377,24 @@ fn runInit(
     cwd: std.Io.Dir,
     args: []const []const u8,
 ) !u8 {
-    if (args.len == 0 or std.mem.startsWith(u8, args[0], "--")) return ziac.cli.Exit.usage;
-    const name = args[0];
-    const target = optionValue(args[1..], "--dir") orelse name;
-    const package_path = optionValue(args[1..], "--ziac-path") orelse build_options.package_root;
-    const force = hasFlag(args[1..], "--force");
+    const explicit_name = if (args.len > 0 and !std.mem.startsWith(u8, args[0], "--")) args[0] else null;
+    const options = if (explicit_name == null) args else args[1..];
+    const current_path = try cwd.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(current_path);
+    const inferred_name = if (explicit_name == null)
+        try ziac.scaffold.projectNameAlloc(allocator, std.fs.path.basename(current_path))
+    else
+        null;
+    defer if (inferred_name) |name| allocator.free(name);
+    const name = explicit_name orelse inferred_name.?;
+    const target = optionValue(options, "--dir") orelse if (explicit_name == null) "." else name;
+    const owned_package_path = if (optionValue(options, "--ziac-path")) |path|
+        try allocator.dupe(u8, path)
+    else
+        try defaultPackagePathAlloc(allocator, io);
+    defer allocator.free(owned_package_path);
+    const package_path = owned_package_path;
+    const force = hasFlag(options, "--force");
     try cwd.createDirPath(io, target);
     const target_path = try cwd.realPathFileAlloc(io, target, allocator);
     defer allocator.free(target_path);
@@ -404,6 +417,21 @@ fn runInit(
     defer allocator.free(message);
     try std.Io.File.stdout().writeStreamingAll(io, message);
     return ziac.cli.Exit.success;
+}
+
+fn defaultPackagePathAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
+    defer allocator.free(executable_dir);
+    const installed_candidate = try std.fs.path.resolve(allocator, &.{ executable_dir, "..", "share", "ziac" });
+    errdefer allocator.free(installed_candidate);
+    const installed_manifest = try std.fs.path.join(allocator, &.{ installed_candidate, "build.zig.zon" });
+    defer allocator.free(installed_manifest);
+    var installed = std.Io.Dir.openFileAbsolute(io, installed_manifest, .{}) catch |err| switch (err) {
+        error.FileNotFound => return allocator.dupe(u8, build_options.package_root),
+        else => return err,
+    };
+    installed.close(io);
+    return installed_candidate;
 }
 
 fn optionValue(args: []const []const u8, name: []const u8) ?[]const u8 {

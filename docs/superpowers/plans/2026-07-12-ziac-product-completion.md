@@ -29,10 +29,13 @@ Status: complete
 - Gate: a generated project outside this repository drives the installed CLI.
 
 Evidence: `zig build test` now includes `test/scaffold_e2e.sh`, which creates a
-temporary external project, runs its Testing v2 application suite, emits and
+temporary Git project from the installed relocatable distribution, generates
+matching Codex, Claude Code, and Gemini skills, runs its Testing v2 application suite, emits and
 integrity-checks `ziac.program.v1`, runs `ziac check`, plans and applies through
-the installed CLI, and proves the next plan is a no-op. The package suite
-discovers 430 tests with 429 passing and one credential-gated skip.
+the installed CLI, proves the next plan is a no-op, renders the visual artifact,
+launches the installed dashboard host, and verifies through the installed MCP
+server. A separate acceptance run uses an arbitrary prefix and empty Zig global
+cache so source-checkout paths cannot satisfy the build accidentally.
 
 ## Milestone 2: Standalone Dashboard Host
 

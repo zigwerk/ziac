@@ -430,12 +430,17 @@ deployment, the Estate Pro control plane, pricing and billing attribution, one
 authenticated source-to-global-Cloud-Run-to-Cockroach qualification, and beta
 release packaging.
 
-M18 user-project compilation is complete locally. `ziac init` generates an
-external Zig 0.16 project with a real `gcp.global.ZigService`, Testing v2,
-project-owned agent skills, and a fixed program compiler. `ziac check`, plan,
-fake apply, and no-op replay consume the integrity-bound `ziac.program.v1`
-artifact through the installed CLI; built-in stacks are no longer selected when
-a project compiler is declared.
+M18 user-project compilation and installed-client packaging are complete at the
+credential-free gate. `zig build --prefix <prefix>` installs the CLI, dashboard
+host, MCP server, control-plane executable, dashboard bundle, and relocatable
+Ziac/ZigEffect package sources. Bare `ziac init` initializes the current Git
+repository, derives a stable project name, and generates a real
+`gcp.global.ZigService`, Testing v2, fixed program compiler, MCP configurations,
+and matching project-local skills for Codex, Claude Code, and Gemini CLI.
+An isolated-prefix acceptance gate uses a fresh Zig global cache to run tests,
+`ziac check`, plan, fake apply, no-op replay, dashboard artifact generation,
+the installed dashboard host, and installed MCP verification without a path back
+to the source checkout.
 
 M19 standalone dashboard hosting is complete locally. The Ziac package owns the
 native host and every `ziac_*` bridge binding. User project graphs produce real
@@ -464,8 +469,8 @@ watch still provides stable-proxy hot reload and failed-generation preservation.
 Authenticated Cloud Run latency evidence remains in M24 rather than being
 misreported as locally proven.
 
-M22 Estate Pro is complete at the credential-free implementation gate. The server-side authorization
-kernel now hashes bearer assertions, enforces Google-subject ownership and Pro
+M22 Estate Pro has a useful deterministic kernel but is not yet a complete paid
+product. The server-side authorization kernel hashes bearer assertions, enforces Google-subject ownership and Pro
 expiry, resolves only connected projects, revokes immediately, and writes
 append-only audit events without credential metadata. The Google OAuth adapter
 performs PKCE code exchange and verifies OIDC audience, issuer, nonce, expiry,
@@ -480,6 +485,20 @@ OAuth exchange, Cloud Run ADC, Cloud KMS vault and bounded HTTP server. It
 refuses startup when any production dependency is missing. A paid identity scan
 against a disposable project remains an M24 authenticated qualification item.
 
+Production blockers retained for M26-M28:
+
+- KMS encryption must send `plaintextCrc32c` and verify both request and response
+  integrity instead of requiring a verification flag for a checksum it omitted.
+- A first-time account must exist before foreign-keyed credential persistence.
+- OAuth challenges need cleanup, rate limiting, and recoverable failure states.
+- No production endpoint currently creates and preflights a GCP connection.
+- Stored Google refresh credentials are not yet decrypted and exchanged for the
+  short-lived access token used by a hosted scan; the CLI scanner still needs ADC.
+- Production entitlements are read-only; billing webhooks, operator grants,
+  renewal, cancellation, replay protection, and signed local feature leases are
+  not implemented.
+- The dashboard access action is not yet connected to the hosted OAuth flow.
+
 M23 cost intelligence is in active implementation. The shared cost contract now
 distinguishes configuration estimates, projected month-end cost and actual
 billed cost at the type level. Estimates require explicit SKU, region, unit and
@@ -491,3 +510,28 @@ projection and replacement of dashboard fixture guesses remain open.
 No milestone is described as externally qualified until its authenticated live
 gate has produced a complete redacted evidence bundle. Credential-free code
 completion and external qualification remain separate roadmap states.
+
+## M26-M40: Local-First SaaS And Self-Hosting Programme
+
+Status: In progress. The authoritative architecture and complete remaining
+execution programme are:
+
+- `docs/superpowers/specs/2026-07-12-ziac-local-first-saas-self-hosting-design.md`
+- `docs/superpowers/plans/2026-07-12-ziac-local-first-saas-self-hosting.md`
+
+The programme preserves the local dashboard as the primary developer product
+while adding a hosted intelligence plane for subscriptions, Google connections,
+scheduled estate discovery, actual billing data, history, teams, and reports.
+It covers production-blocker closure, customer connection lifecycle, signed
+feature leases, realtime graph revisions, real dashboard operations, scheduled
+estate snapshots, honest cost intelligence, customer and internal admin portals,
+Ziac's typed self-host bootstrap and production stacks, organization features,
+reports and adoption, unified authenticated qualification, and private beta.
+
+The immediate client-install gate is complete. M26 production blocker closure,
+M27 hosted GCP connection lifecycle, M29 realtime canvas updates, and M35 the
+first self-host project are the next executable slices. M39 remains the decisive
+end-to-end gate: a clean external project signs in, scans, edits, watches the
+local canvas update, deploys globally, reads and writes Cockroach, receives honest
+cost data, revokes access, and cleans up while Ziac's own hosted plane is deployed
+from Ziac code.

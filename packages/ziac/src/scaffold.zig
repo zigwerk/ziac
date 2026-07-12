@@ -59,11 +59,33 @@ pub fn renderAlloc(allocator: std.mem.Allocator, options: Options) Error!Rendere
     try appendStatic(allocator, &files, ".ziacignore", ziacignore);
     try appendStatic(allocator, &files, ".agents/skills/ziac/SKILL.md", agent_skill);
     try appendStatic(allocator, &files, ".claude/skills/ziac/SKILL.md", agent_skill);
+    try appendStatic(allocator, &files, ".gemini/skills/ziac/SKILL.md", agent_skill);
     try appendStatic(allocator, &files, "GEMINI.md", gemini_md);
     try appendStatic(allocator, &files, ".mcp.json", mcp_json);
     try appendStatic(allocator, &files, ".codex/config.toml", codex_config);
     try appendStatic(allocator, &files, ".gemini/settings.json", gemini_settings);
     return .{ .allocator = allocator, .files = try files.toOwnedSlice(allocator) };
+}
+
+pub fn projectNameAlloc(allocator: std.mem.Allocator, directory_name: []const u8) Error![]u8 {
+    if (directory_name.len == 0 or directory_name.len > 512 or std.mem.indexOfScalar(u8, directory_name, 0) != null) {
+        return error.InvalidProjectName;
+    }
+    var output = std.ArrayList(u8).empty;
+    errdefer output.deinit(allocator);
+    var pending_separator = false;
+    for (directory_name) |char| {
+        if (std.ascii.isAlphanumeric(char)) {
+            if (pending_separator and output.items.len > 0 and output.items.len < 48) try output.append(allocator, '-');
+            pending_separator = false;
+            if (output.items.len < 48) try output.append(allocator, std.ascii.toLower(char));
+        } else {
+            pending_separator = output.items.len > 0;
+        }
+    }
+    while (output.items.len > 0 and output.items[output.items.len - 1] == '-') _ = output.pop();
+    if (output.items.len == 0) return error.InvalidProjectName;
+    return output.toOwnedSlice(allocator);
 }
 
 pub fn write(dir: std.Io.Dir, io: std.Io, rendered: Rendered, force: bool) !void {
@@ -281,25 +303,49 @@ const gitignore =
 const ziacignore =
     \\.agents/
     \\.claude/
+    \\.gemini/
     \\.git/
     \\.ziac/
     \\docs/
 ;
 
 const agent_skill =
-    \\# Ziac Project Skill
+    \\---
+    \\name: ziac
+    \\description: Build, validate, visualize, test, and deploy this Ziac and ZigEffect infrastructure project. Use for Zig application Env bindings, GCP or Cockroach resources, plans, local development, dashboard investigation, provider diagnostics, and capability-gated infrastructure changes.
+    \\---
     \\
-    \\Validate `ziac.project.json` and run `zig build test` before proposing infrastructure changes.
-    \\Use `ziac plan --stack global-api --stage dev` for non-mutating previews.
-    \\Treat observed estate resources as read-only and never request secret values.
-    \\Apply only immutable saved plans with an explicit capability envelope.
+    \\# Ziac Development
+    \\
+    \\Treat `ziac.project.json` as executable project intent. Before changing infrastructure, read its requirements, acceptance checks, environments, adaptations, scenarios, and authority policy together with `ziac.stack.zig` and the application's `Env` declaration.
+    \\
+    \\## Development loop
+    \\
+    \\1. Run `ziac check --stack global-api --stage dev --json`.
+    \\2. Run `zig build test --summary failures` and inspect the Testing v2 receipt under `.zigeffect/tests/suites/`.
+    \\3. Make the smallest typed change through public Ziac APIs. Keep application requirements, resource bindings, provider availability, scope, and outputs comptime-valid.
+    \\4. Run `ziac plan --stack global-api --stage dev --json`. Diagnose structured plan and causal evidence instead of parsing terminal scrollback.
+    \\5. Open `ziac dashboard --stack global-api --stage dev` when topology, ownership, locality, permissions, costs, or provider progress matter.
+    \\6. Apply only an integrity-checked saved plan under an explicit capability envelope. Never expand apply, delete, secret, live-network, project, stage, region, or cost authority implicitly.
+    \\
+    \\## Infrastructure rules
+    \\
+    \\- Keep `observed`, `referenced`, and Ziac-managed resources distinct. Observed estate resources are read-only until a zero-change adoption plan is proved.
+    \\- Bind secrets by provider reference. Never request, print, persist, or place secret values in source, plans, state, logs, receipts, MCP arguments, or dashboard artifacts.
+    \\- Prefer the GCP and Cockroach high-level components already exported by Ziac. Preserve provider resource names, output wiring, lifecycle protection, and regional locality.
+    \\- Use immutable images, readiness before traffic, and causal rollback evidence for Cloud Run changes.
+    \\- Keep agent proposals non-mutating. Verification may run only manifest-declared fixed argv checks with process authority.
+    \\
+    \\## Agent interface
+    \\
+    \\Use the project-local Ziac MCP server for simulation, proposals, and declared verification. Query the graph and receipts before inferring state. If required evidence is missing, incomplete, stale, truncated, or credential-gated, report that limitation rather than claiming success.
 ;
 
 const gemini_md =
     \\# Ziac Agent Context
     \\
     \\This project uses the same Ziac project contract and safety boundaries across Gemini, Codex, and Claude Code.
-    \\Read `.agents/skills/ziac/SKILL.md` before infrastructure work.
+    \\Activate the workspace skill at `.gemini/skills/ziac/SKILL.md` before infrastructure work.
 ;
 
 const mcp_json =

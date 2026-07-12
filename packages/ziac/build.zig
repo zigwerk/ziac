@@ -104,9 +104,9 @@ pub fn build(b: *std.Build) void {
         .root_module = estate_control_plane_module,
     });
     b.installArtifact(estate_control_plane_executable);
-
     const dashboard_ui_build = b.addSystemCommand(&.{ "bun", "run", "ziac:dashboard:build" });
     dashboard_ui_build.setCwd(.{ .cwd_relative = "../.." });
+    installClientDistribution(b, &dashboard_ui_build.step);
     const run_dashboard_host = b.addRunArtifact(dashboard_host_executable);
     run_dashboard_host.step.dependOn(&dashboard_ui_build.step);
     if (b.args) |args| run_dashboard_host.addArgs(args);
@@ -170,8 +170,10 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&compile_contracts.step);
     const scaffold_e2e = b.addSystemCommand(&.{"bash"});
     scaffold_e2e.addFileArg(b.path("test/scaffold_e2e.sh"));
-    scaffold_e2e.addArtifactArg(executable);
-    scaffold_e2e.addArtifactArg(mcp_server_executable);
+    scaffold_e2e.addArg(b.getInstallPath(.bin, "ziac"));
+    scaffold_e2e.addArg(b.getInstallPath(.bin, "ziac-mcp"));
+    scaffold_e2e.addArg(b.getInstallPath(.bin, "ziac-dashboard-host"));
+    scaffold_e2e.step.dependOn(b.getInstallStep());
     test_step.dependOn(&scaffold_e2e.step);
     test_step.dependOn(&dashboard_host_executable.step);
     test_step.dependOn(&mcp_server_executable.step);
@@ -227,6 +229,61 @@ pub fn build(b: *std.Build) void {
     release_gate.dependOn(&estate_control_plane_executable.step);
     release_gate.dependOn(&dashboard_ui_build.step);
     release_gate.dependOn(&container_e2e_command.step);
+}
+
+fn installClientDistribution(b: *std.Build, dashboard_build: *std.Build.Step) void {
+    installPackage(b, "ziac", ".", &.{
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+    }, &.{ "examples", "proto", "src", "test" });
+    installPackage(b, "zigeffect", "../zigeffect", &.{
+        "CHANGELOG.md",
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+    }, &.{ "conformance", "examples", "scripts", "src", "test", "tools", "workbench" });
+    installPackage(b, "zigeffect-std", "../zigeffect-std", &.{
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+    }, &.{ "conformance", "examples", "src" });
+    installPackage(b, "zigeffect-postgres", "../zigeffect-postgres", &.{
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+    }, &.{ "examples", "scripts", "src" });
+    const dashboard_install = b.addInstallDirectory(.{
+        .source_dir = b.path("dashboard"),
+        .install_dir = .prefix,
+        .install_subdir = "share/ziac/dashboard",
+    });
+    dashboard_install.step.dependOn(dashboard_build);
+    b.getInstallStep().dependOn(&dashboard_install.step);
+}
+
+fn installPackage(
+    b: *std.Build,
+    name: []const u8,
+    root: []const u8,
+    files: []const []const u8,
+    directories: []const []const u8,
+) void {
+    for (files) |file| {
+        const source = if (std.mem.eql(u8, root, ".")) b.path(file) else b.path(b.pathJoin(&.{ root, file }));
+        const destination = b.pathJoin(&.{ "share", name, file });
+        const install = b.addInstallFileWithDir(source, .prefix, destination);
+        b.getInstallStep().dependOn(&install.step);
+    }
+    for (directories) |directory| {
+        const source = if (std.mem.eql(u8, root, ".")) b.path(directory) else b.path(b.pathJoin(&.{ root, directory }));
+        const install = b.addInstallDirectory(.{
+            .source_dir = source,
+            .install_dir = .prefix,
+            .install_subdir = b.pathJoin(&.{ "share", name, directory }),
+        });
+        b.getInstallStep().dependOn(&install.step);
+    }
 }
 
 fn addExample(

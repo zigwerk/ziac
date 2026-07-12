@@ -16,6 +16,7 @@ test "scaffold renders a complete agent-first global Zig project" {
     try std.testing.expect(rendered.file("src/main.zig") != null);
     try std.testing.expect(rendered.file(".agents/skills/ziac/SKILL.md") != null);
     try std.testing.expect(rendered.file(".claude/skills/ziac/SKILL.md") != null);
+    try std.testing.expect(rendered.file(".gemini/skills/ziac/SKILL.md") != null);
     try std.testing.expect(rendered.file("GEMINI.md") != null);
     try std.testing.expect(rendered.file(".mcp.json") != null);
     try std.testing.expect(rendered.file(".codex/config.toml") != null);
@@ -31,6 +32,12 @@ test "scaffold renders a complete agent-first global Zig project" {
     try std.testing.expect(std.mem.indexOf(u8, rendered.file("ziac.stack.zig").?, "gcp.global.ZigService") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered.file("build.zig").?, "zigeffect_test_runner") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered.file("build.zig.zon").?, "../../opt/ziac") != null);
+    const codex_skill = rendered.file(".agents/skills/ziac/SKILL.md").?;
+    try std.testing.expect(std.mem.startsWith(u8, codex_skill, "---\nname: ziac\n"));
+    try std.testing.expect(std.mem.indexOf(u8, codex_skill, "ziac check --stack global-api --stage dev --json") != null);
+    try std.testing.expect(std.mem.indexOf(u8, codex_skill, "integrity-checked saved plan") != null);
+    try std.testing.expectEqualStrings(codex_skill, rendered.file(".claude/skills/ziac/SKILL.md").?);
+    try std.testing.expectEqualStrings(codex_skill, rendered.file(".gemini/skills/ziac/SKILL.md").?);
 }
 
 test "scaffold rejects ambiguous names and unsafe dependency paths" {
@@ -42,6 +49,13 @@ test "scaffold rejects ambiguous names and unsafe dependency paths" {
         .project_name = "safe-name",
         .ziac_path = "/absolute/ziac",
     }));
+}
+
+test "scaffold derives a stable package name from a fresh Git directory" {
+    const name = try ziac.scaffold.projectNameAlloc(std.testing.allocator, "My Fresh_API.project-73AB");
+    defer std.testing.allocator.free(name);
+    try std.testing.expectEqualStrings("my-fresh-api-project-73ab", name);
+    try std.testing.expectError(error.InvalidProjectName, ziac.scaffold.projectNameAlloc(std.testing.allocator, "..."));
 }
 
 test "scaffold writes without overwriting an existing project" {

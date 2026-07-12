@@ -97,7 +97,12 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(2);
     };
     host_io = init.io;
-    const selected_root = if (std.mem.eql(u8, options.root_path, "dashboard/dist")) dashboard_options.dashboard_root else options.root_path;
+    const installed_root = if (std.mem.eql(u8, options.root_path, "dashboard/dist"))
+        try installedDashboardRootAlloc(init.gpa, init.io)
+    else
+        null;
+    defer if (installed_root) |root| init.gpa.free(root);
+    const selected_root = installed_root orelse options.root_path;
     const root_path = try init.gpa.dupeZ(u8, selected_root);
     defer init.gpa.free(root_path);
     config = .{
@@ -129,4 +134,22 @@ pub fn main(init: std.process.Init) !void {
     }
     webui.wait();
     webui.clean();
+}
+
+fn installedDashboardRootAlloc(allocator: std.mem.Allocator, io: std.Io) !?[]u8 {
+    const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
+    defer allocator.free(executable_dir);
+    const candidate = try std.fs.path.resolve(allocator, &.{ executable_dir, "..", "share", "ziac", "dashboard", "dist" });
+    errdefer allocator.free(candidate);
+    const index_path = try std.fs.path.join(allocator, &.{ candidate, "index.html" });
+    defer allocator.free(index_path);
+    var index = std.Io.Dir.openFileAbsolute(io, index_path, .{}) catch |err| switch (err) {
+        error.FileNotFound => {
+            allocator.free(candidate);
+            return @as(?[]u8, try allocator.dupe(u8, dashboard_options.dashboard_root));
+        },
+        else => return err,
+    };
+    index.close(io);
+    return candidate;
 }

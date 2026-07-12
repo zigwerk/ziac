@@ -1,5 +1,34 @@
 # Ziac
 
+## Install And Start A Project
+
+Build and install the CLI, dashboard host, MCP server, control-plane executable,
+and the Zig package sources into one relocatable prefix:
+
+```sh
+cd packages/ziac
+zig build --prefix "$HOME/.local"
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Create a fresh Git project and initialize it in place:
+
+```sh
+mkdir global-api
+cd global-api
+git init
+ziac init
+zig build test
+ziac check --stack global-api --stage dev --json
+ziac plan --stack global-api --stage dev --json
+ziac dashboard --stack global-api --stage dev
+```
+
+Bare `ziac init` derives a lowercase hyphenated project name from the current
+directory. `ziac init <name>` still creates a named child directory. `--ziac-path` is an
+explicit development override; normal installed use resolves the package from
+the installation prefix and does not depend on the Ziac source checkout.
+
 Ziac is a comptime-checked Infrastructure-as-Code engine for globally deployed
 Zig services on Google Cloud, powered by zigeffect. It combines an Engine V2
 resource lifecycle with high-level GCP and CockroachDB components.
