@@ -24,3 +24,6 @@ grep -Fq '"create":0' noop.json
 grep -Fq '"update":0' noop.json
 grep -Fq '"delete":0' noop.json
 grep -Eq '"noop":[1-9][0-9]*' noop.json
+"${ziac_bin}" dashboard --stack global-api --stage dev --artifact-only --out dashboard.json > dashboard-receipt.json
+grep -Fq '"status":"ready"' dashboard-receipt.json
+grep -Fq '"schema":"ziac.visual.v1"' dashboard.json

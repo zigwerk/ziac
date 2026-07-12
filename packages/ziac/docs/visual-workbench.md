@@ -3,6 +3,13 @@
 Ziac emits a deterministic, redacted `ziac.visual.v1` artifact that its
 standalone dashboard renders as three synchronized infrastructure views:
 
+Run `ziac dashboard --stack <name> --stage <stage>` from a scaffolded project to
+compile the project-owned stack, write `.ziac/dashboard/<stack>/<stage>/artifact.json`,
+and open the standalone native host. `--server-only` prints a local URL instead
+of opening a window. `--artifact-only --out <path>` creates the same redacted
+artifact for CI. Samples are available only through an explicit `?sample=` query;
+a missing native bridge is shown as an error and never silently replaced.
+
 - **Canvas** shows the compiled resource graph, regional and global groups,
   plan operations, output wiring, request traffic, connectivity, rollout
   dependencies, and lifecycle policy.

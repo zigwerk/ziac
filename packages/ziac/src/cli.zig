@@ -317,6 +317,11 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .options = command_options[0..3],
     },
     .{
+        .name = "dashboard",
+        .description = "compile and open the live Ziac infrastructure dashboard",
+        .options = command_options[0..3],
+    },
+    .{
         .name = "dev",
         .description = "compile the hybrid local development runtime",
         .options = dev_options[0..],

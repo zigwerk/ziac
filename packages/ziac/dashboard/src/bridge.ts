@@ -85,6 +85,7 @@ export async function loadDashboardPayloadFromBridge(
   }
 
   const sampleName = sampleNameFromSearch(search);
+  if (sampleName === null) throw new Error("Ziac dashboard host is not connected");
   return {
     artifactJson: await loadSample(sampleName),
     session: sampleSession(sampleName),
@@ -195,11 +196,12 @@ export function parseZiacLogSnapshot(payload: string): ZiacSession | null {
   };
 }
 
-function sampleNameFromSearch(search: string): string {
+function sampleNameFromSearch(search: string): string | null {
   const sample = new URLSearchParams(search).get("sample");
   if (sample === "estate") return "sample-ziac-estate.json";
   if (sample === "permissions") return "sample-ziac-permissions.json";
-  return "sample-ziac-global.json";
+  if (sample === "ziac" || sample === "global") return "sample-ziac-global.json";
+  return null;
 }
 
 function sampleSession(sampleName: string): ZiacSession {

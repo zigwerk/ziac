@@ -36,7 +36,7 @@ discovers 430 tests with 429 passing and one credential-gated skip.
 
 ## Milestone 2: Standalone Dashboard Host
 
-Status: pending
+Status: complete
 
 - Move the native WebUI host into Ziac ownership.
 - Bind `ziac_load_artifact`, `ziac_load_session`, log, estate, and operation APIs.
@@ -44,6 +44,14 @@ Status: pending
 - Add artifact/session refresh events and browser tests against the native host.
 - Lazy-load Three.js, map, and operational views to control bundle size.
 - Gate: changing a real project graph refreshes the dashboard without fixtures.
+
+Evidence: Ziac now owns a bounded host kernel and `ziac-dashboard-host` WebUI
+executable with the five `ziac_*` bindings. `ziac dashboard` compiles the user
+program, writes a redacted visual artifact, and launches the sibling host;
+`--artifact-only` is covered by the generated-project E2E gate. Fixture fallback
+requires an explicit `?sample=` query. The live bridge refetches artifact and
+session data, the production bundle is served successfully by WebUI, and Three
+and MapLibre/deck.gl are isolated from the 106 kB initial application chunk.
 
 ## Milestone 3: Agent Protocol and Safety
 

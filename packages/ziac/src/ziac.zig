@@ -21,6 +21,7 @@ pub const plan_format = @import("plan_format.zig");
 pub const program_format = @import("program_format.zig");
 pub const project_program = @import("project_program.zig");
 pub const scaffold = @import("scaffold.zig");
+pub const dashboard_host = @import("dashboard_host.zig");
 pub const visual_artifact = @import("visual_artifact.zig");
 pub const estate = @import("estate.zig");
 pub const estate_access = @import("estate_access.zig");

@@ -1,10 +1,14 @@
-import { Show, createMemo, createResource } from "solid-js";
+import { Show, createMemo, createResource, onCleanup, onMount } from "solid-js";
 import { ZiacWorkbench } from "./ZiacWorkbench";
 import { loadDashboardPayload, requestEstateScan } from "./bridge";
 import { deriveZiacVisualModel, parseZiacVisualArtifact } from "./ziacVisualArtifact";
 
 export function App() {
   const [payload, { refetch }] = createResource(loadDashboardPayload);
+  onMount(() => {
+    const refresh = window.setInterval(() => void refetch(), 2_500);
+    onCleanup(() => window.clearInterval(refresh));
+  });
   const parsed = createMemo(() => {
     const loaded = payload();
     if (!loaded) return null;
@@ -40,6 +44,9 @@ export function App() {
       <Show when={payload.loading}>
         <div class="ziac-dashboard-state">Loading Ziac infrastructure…</div>
       </Show>
+      <Show when={payload.error}>
+        <div class="ziac-dashboard-state error">{payload.error instanceof Error ? payload.error.message : "Ziac dashboard host is unavailable"}</div>
+      </Show>
       <Show when={parsed()?.error}>
         <div class="ziac-dashboard-state error">{parsed()?.error}</div>
       </Show>
@@ -49,4 +56,3 @@ export function App() {
     </main>
   );
 }
-

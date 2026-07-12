@@ -110,6 +110,59 @@ pub fn main(init: std.process.Init) !void {
         try std.Io.File.stdout().writeStreamingAll(io, "\n");
         std.process.exit(ziac.cli.Exit.success);
     }
+    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "dashboard")) {
+        if (project_contract == null or project_program == null) {
+            try std.Io.File.stderr().writeStreamingAll(io, "ziac dashboard: project compiler is not configured\n");
+            std.process.exit(ziac.cli.Exit.invalid_graph);
+        }
+        const target = ziac.project_program.targetFromArgs(args.items).?;
+        var artifact = try ziac.visual_artifact.serializeAlloc(allocator, &project_program.?.graph, null, .{
+            .stack = target.stack,
+            .stage = target.stage,
+            .created_at_millis = @intCast(std.Io.Clock.real.now(io).toMilliseconds()),
+        });
+        defer artifact.deinit();
+        const default_path = try std.fmt.allocPrint(allocator, ".ziac/dashboard/{s}/{s}/artifact.json", .{ target.stack, target.stage });
+        defer allocator.free(default_path);
+        const artifact_path = optionValue(args.items, "--out") orelse default_path;
+        if (std.fs.path.dirname(artifact_path)) |parent| try cwd.createDirPath(io, parent);
+        try cwd.writeFile(io, .{ .sub_path = artifact_path, .data = artifact.bytes });
+        if (hasFlag(args.items, "--artifact-only")) {
+            const receipt = try std.json.Stringify.valueAlloc(allocator, .{
+                .schema = "ziac.dashboard-artifact.v1",
+                .status = "ready",
+                .path = artifact_path,
+                .resources = project_program.?.graph.resources.items.len,
+            }, .{});
+            defer allocator.free(receipt);
+            try std.Io.File.stdout().writeStreamingAll(io, receipt);
+            try std.Io.File.stdout().writeStreamingAll(io, "\n");
+            std.process.exit(ziac.cli.Exit.success);
+        }
+        const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
+        defer allocator.free(executable_dir);
+        const host_path = try std.fs.path.join(allocator, &.{ executable_dir, "ziac-dashboard-host" });
+        defer allocator.free(host_path);
+        var host_args = std.ArrayList([]const u8).empty;
+        defer host_args.deinit(allocator);
+        try host_args.append(allocator, host_path);
+        if (hasFlag(args.items, "--server-only")) try host_args.append(allocator, "--server-only");
+        if (optionValue(args.items, "--session")) |session| try host_args.appendSlice(allocator, &.{ "--session", session });
+        if (optionValue(args.items, "--logs")) |logs| try host_args.appendSlice(allocator, &.{ "--logs", logs });
+        try host_args.append(allocator, artifact_path);
+        var child = try std.process.spawn(io, .{
+            .argv = host_args.items,
+            .stdin = .ignore,
+            .stdout = .inherit,
+            .stderr = .inherit,
+        });
+        const term = try child.wait(io);
+        const code: u8 = switch (term) {
+            .exited => |exit_code| @intCast(exit_code),
+            else => ziac.cli.Exit.provider_error,
+        };
+        std.process.exit(code);
+    }
 
     var local_http = ziac.zstd.Http.LocalClient.init(allocator, io);
     defer local_http.deinit();

@@ -33,7 +33,6 @@ import {
   Workflow,
   X,
 } from "lucide-solid";
-import { ZiacTopologyScene } from "./ziacTopologyScene";
 import { deriveZiacSceneModel, type ZiacTopologyMode } from "./ziacTopologySceneModel";
 import {
   filterZiacVisualModel,
@@ -50,6 +49,11 @@ import { estateAccessState, loadLiveLogSnapshot, requestEstateAccess, type ZiacL
 const ZiacGlobalMap = lazy(async () => {
   const module = await import("./ziacGlobalMap");
   return { default: module.ZiacGlobalMap };
+});
+
+const ZiacTopologyScene = lazy(async () => {
+  const module = await import("./ziacTopologyScene");
+  return { default: module.ZiacTopologyScene };
 });
 
 type InfrastructureView = "canvas" | "map" | "operations";
@@ -236,7 +240,9 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
 
         <main class="ziac-stage">
           <Show when={view() === "canvas"}>
-            <ZiacTopologyScene model={filtered()} mode={mode()} selectedId={effectiveSelectedResourceId()} onSelect={setSelectedResourceId} />
+            <Suspense fallback={<div class="ziac-map-loading">Loading infrastructure canvas</div>}>
+              <ZiacTopologyScene model={filtered()} mode={mode()} selectedId={effectiveSelectedResourceId()} onSelect={setSelectedResourceId} />
+            </Suspense>
           </Show>
           <Show when={view() === "map"}>
             <Suspense fallback={<div class="ziac-map-loading">Loading global map</div>}>

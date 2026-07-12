@@ -10,6 +10,13 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const zig_webui = b.dependency("zig_webui", .{
+        .target = target,
+        .optimize = optimize,
+        .enable_tls = false,
+        .is_static = true,
+    });
+
     const zigeffect_std_dependency = b.dependency("zigeffect_std", .{});
     const zigeffect_std = zigeffect_std_dependency.module("zigeffect_std");
     const testing_runner = zigeffect_std_dependency.module("zigeffect_test_runner").root_source_file.?;
@@ -57,6 +64,30 @@ pub fn build(b: *std.Build) void {
         .root_module = main_module,
     });
     b.installArtifact(executable);
+
+    const dashboard_host_module = b.createModule(.{
+        .root_source_file = b.path("src/dashboard_host_main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    dashboard_host_module.addImport("ziac", ziac);
+    dashboard_host_module.addImport("webui", zig_webui.module("webui"));
+    const dashboard_options = b.addOptions();
+    dashboard_options.addOption([]const u8, "dashboard_root", b.pathFromRoot("dashboard/dist"));
+    dashboard_host_module.addOptions("dashboard_options", dashboard_options);
+    const dashboard_host_executable = b.addExecutable(.{
+        .name = "ziac-dashboard-host",
+        .root_module = dashboard_host_module,
+    });
+    b.installArtifact(dashboard_host_executable);
+
+    const dashboard_ui_build = b.addSystemCommand(&.{ "bun", "run", "ziac:dashboard:build" });
+    dashboard_ui_build.setCwd(.{ .cwd_relative = "../.." });
+    const run_dashboard_host = b.addRunArtifact(dashboard_host_executable);
+    run_dashboard_host.step.dependOn(&dashboard_ui_build.step);
+    if (b.args) |args| run_dashboard_host.addArgs(args);
+    const dashboard_host_step = b.step("dashboard-host", "Open the standalone Ziac dashboard host");
+    dashboard_host_step.dependOn(&run_dashboard_host.step);
 
     const proto_codegen_module = b.createModule(.{
         .root_source_file = b.path("src/gcp/proto_codegen_main.zig"),
@@ -117,6 +148,7 @@ pub fn build(b: *std.Build) void {
     scaffold_e2e.addFileArg(b.path("test/scaffold_e2e.sh"));
     scaffold_e2e.addArtifactArg(executable);
     test_step.dependOn(&scaffold_e2e.step);
+    test_step.dependOn(&dashboard_host_executable.step);
 
     const container_e2e_command = b.addSystemCommand(&.{"bash"});
     container_e2e_command.addFileArg(b.path("test/run_zig_service_container.sh"));
@@ -163,6 +195,8 @@ pub fn build(b: *std.Build) void {
     release_gate.dependOn(&release_checks.step);
     release_gate.dependOn(examples_step);
     release_gate.dependOn(&executable.step);
+    release_gate.dependOn(&dashboard_host_executable.step);
+    release_gate.dependOn(&dashboard_ui_build.step);
     release_gate.dependOn(&container_e2e_command.step);
 }
 

@@ -437,6 +437,13 @@ fake apply, and no-op replay consume the integrity-bound `ziac.program.v1`
 artifact through the installed CLI; built-in stacks are no longer selected when
 a project compiler is declared.
 
+M19 standalone dashboard hosting is complete locally. The Ziac package owns the
+native host and every `ziac_*` bridge binding. User project graphs produce real
+redacted visual artifacts through `ziac dashboard`; missing hosts fail visibly
+instead of selecting fixtures, live files refetch, and heavyweight canvas/map
+engines are lazy chunks. The native server and generated-project artifact path
+are release-gated.
+
 No milestone is described as externally qualified until its authenticated live
 gate has produced a complete redacted evidence bundle. Credential-free code
 completion and external qualification remain separate roadmap states.

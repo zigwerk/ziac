@@ -17,6 +17,7 @@ comptime {
     _ = @import("plan_format_test.zig");
     _ = @import("program_format_test.zig");
     _ = @import("scaffold_test.zig");
+    _ = @import("dashboard_host_test.zig");
     _ = @import("visual_artifact_test.zig");
     _ = @import("estate_scan_test.zig");
     _ = @import("estate_access_test.zig");

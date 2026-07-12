@@ -11,7 +11,7 @@ test("standalone dashboard loads only Ziac-owned samples", async () => {
   const base = await loadDashboardPayloadFromBridge({}, async (sample) => {
     loaded.push(sample);
     return JSON.stringify({ schema: "ziac.visual.v1" });
-  });
+  }, "?sample=ziac");
   const estate = await loadDashboardPayloadFromBridge({}, async (sample) => {
     loaded.push(sample);
     return JSON.stringify({ schema: "ziac.visual.v1" });
@@ -20,6 +20,15 @@ test("standalone dashboard loads only Ziac-owned samples", async () => {
   expect(loaded).toEqual(["sample-ziac-global.json", "sample-ziac-estate.json"]);
   expect(base.session?.schema).toBe("ziac.dashboard-session.v1");
   expect(estate.session?.artifact_path).toBe("sample-ziac-estate.json");
+});
+
+test("standalone dashboard never substitutes a fixture for a missing live host", async () => {
+  let sampleCalls = 0;
+  await expect(loadDashboardPayloadFromBridge({}, async () => {
+    sampleCalls += 1;
+    return "{}";
+  })).rejects.toThrow("Ziac dashboard host is not connected");
+  expect(sampleCalls).toBe(0);
 });
 
 test("standalone dashboard uses Ziac-namespaced host functions", async () => {
@@ -77,4 +86,3 @@ test("Ziac log snapshots are bounded and reject credential material", () => {
   expect(snapshot?.log_summary).toEqual({ retained: 1, dropped: 2, suppressed: 1 });
   expect(parseZiacLogSnapshot('{"schema":"ziac.log.v1","authorization":"Bearer secret"}')).toBeNull();
 });
-
