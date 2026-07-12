@@ -37,3 +37,16 @@ test "cost intelligence reports unavailable instead of inventing missing usage" 
     _ = result;
     return error.ExpectedUnavailable;
 }
+
+test "Cloud Billing adapters parse catalog prices and normalized detailed export rows" {
+    var catalog = try ziac.cost.parseCatalogPageAlloc(std.testing.allocator, "{\"skus\":[{\"skuId\":\"run-cpu\",\"serviceRegions\":[\"europe-west1\"],\"pricingInfo\":[{\"pricingExpression\":{\"usageUnit\":\"vCPU-second\",\"baseUnitConversionFactor\":1,\"tieredRates\":[{\"unitPrice\":{\"units\":\"0\",\"nanos\":24000}}]}}]}],\"nextPageToken\":\"next-1\"}");
+    defer catalog.deinit();
+    try std.testing.expectEqual(@as(usize, 1), catalog.prices.len);
+    try std.testing.expectEqual(@as(i64, 24), catalog.prices[0].unit_price_micros);
+    try std.testing.expectEqualStrings("next-1", catalog.next_page_token.?);
+
+    const query = try ziac.cost.detailedBillingQueryAlloc(std.testing.allocator, "billing-project.normalized.detailed_cost", "acme-prod");
+    defer std.testing.allocator.free(query);
+    try std.testing.expect(std.mem.indexOf(u8, query, "resource.global_name") != null);
+    try std.testing.expect(std.mem.indexOf(u8, query, "SUM(cost + credits)") != null);
+}
