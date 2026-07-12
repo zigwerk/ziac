@@ -5,7 +5,7 @@ Design: `docs/superpowers/specs/2026-07-12-ziac-product-completion-design.md`
 
 ## Milestone 0: Repository Truth
 
-Status: in progress
+Status: complete
 
 - Commit the standalone dashboard, SolidStart product site, case study, specs,
   and the deliberate removal of Ziac code from the ZigEffect workbench.
@@ -80,7 +80,7 @@ verification through Testing v2.
 
 ## Milestone 4: Rapid Development and Deployment
 
-Status: pending
+Status: complete locally; authenticated rollout qualification remains in Milestone 7
 
 - Connect project programs to existing local adaptation and stable-proxy watch.
 - Implement the native cloud watch runtime over Cloud Build and Cloud Run.
@@ -89,6 +89,19 @@ Status: pending
 - Add digest caching and no-op suppression; reject destructive watch plans.
 - Gate: one saved source change reaches a development Cloud Run revision and
   healthy traffic with a bounded event receipt.
+
+Evidence: the installed CLI now constructs a graph-derived GCP watch runtime
+for every `gcp.run.Service` in the user program. The runtime uses Cloud Run v2
+RPCs directly: it reads and preserves the current template, creates the new
+immutable-image revision while pinning all traffic to the prior revision, waits
+for the Google long-running operation, independently proves terminal readiness,
+and only then promotes the exact new revision. The launcher requires an
+integrity-checked saved plan, verifies target and desired-graph identity, rejects
+destructive plans and cross-project services, derives capability authority from
+the verified digest, and writes the phase chain to the durable causal session.
+Local source supervision and stable-proxy hot reload remain release-gated by the
+native child-process E2E. The provider-level rollout is deterministic-fixture
+qualified; a real Cloud Run timing receipt is intentionally part of Milestone 7.
 
 ## Milestone 5: Estate Pro Control Plane
 

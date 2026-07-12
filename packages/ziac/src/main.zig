@@ -279,6 +279,48 @@ pub fn main(init: std.process.Init) !void {
         };
     }
 
+    var watch_context = ziac.provider.OperationContext.init(allocator);
+    var live_watch_runtime: ?ziac.gcp.watch_runtime.LiveRuntime = null;
+    defer if (live_watch_runtime) |*runtime| runtime.deinit();
+    var watch_stages: [1][]const u8 = undefined;
+    var watch_projects: [1][]const u8 = undefined;
+    var watch_config: ?ziac.cli.WatchDeployConfig = null;
+    if (requestsWatchDeploy(args.items) and token_cache != null and live_project != null and project_program != null) {
+        live_watch_runtime = ziac.gcp.watch_runtime.LiveRuntime.initForProjectAlloc(
+            &google_client,
+            &watch_context,
+            &project_program.?.graph,
+            live_project.?,
+        ) catch |err| {
+            try console.stderr.print(allocator, "watch-deploy: {s}\n", .{@errorName(err)});
+            try std.Io.File.stderr().writeStreamingAll(io, console.stderrText());
+            std.process.exit(ziac.cli.Exit.invalid_graph);
+        };
+        const stage = optionValue(args.items, "--stage") orelse "";
+        watch_stages[0] = stage;
+        watch_projects[0] = live_project.?;
+        const now_millis: u64 = @intCast(std.Io.Clock.real.now(io).toMilliseconds());
+        watch_config = .{
+            .runtime = live_watch_runtime.?.runtime(),
+            .envelope = .{
+                .id = "ziac-cli-saved-plan-watch",
+                .stages = &watch_stages,
+                .projects = &watch_projects,
+                .providers = &.{.gcp},
+                .permissions = .{ .apply = true },
+                .budget = .{
+                    .max_updates = live_watch_runtime.?.regionCount(),
+                    .max_regions = live_watch_runtime.?.regionCount(),
+                },
+                .expires_at_millis = now_millis + std.time.ms_per_hour,
+            },
+            .project = live_project.?,
+            .now_millis = now_millis,
+            .regions = live_watch_runtime.?.regionCount(),
+            .require_saved_plan = true,
+        };
+    }
+
     var local_backend = ziac.state_backend.Local.init(ziac.local_state.Store.init(
         allocator,
         ziac.local_state.localFiles.store(&local_fs),
@@ -311,6 +353,7 @@ pub fn main(init: std.process.Init) !void {
         .auth_files = auth_files,
         .live_providers = live_providers,
         .live_project_id = live_project,
+        .watch_deploy = watch_config,
         .estate_scan = estate_scan_config,
         .dev_host = .{ .io = io, .root = cwd },
         .cloud_logging = cloud_logging_config,
@@ -375,11 +418,17 @@ fn hasFlag(args: []const []const u8, name: []const u8) bool {
 
 fn requestsGoogleClient(args: []const []const u8) bool {
     if (requestsEstateScan(args)) return true;
+    if (requestsWatchDeploy(args)) return true;
     for (args, 0..) |arg, index| {
         if (!std.mem.eql(u8, arg, "--provider")) continue;
         if (index + 1 < args.len and std.mem.eql(u8, args[index + 1], "gcp")) return true;
     }
     return false;
+}
+
+fn requestsWatchDeploy(args: []const []const u8) bool {
+    if (args.len == 0 or !std.mem.eql(u8, args[0], "deploy")) return false;
+    return hasFlag(args, "--watch");
 }
 
 fn requestsEstateScan(args: []const []const u8) bool {

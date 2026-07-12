@@ -41,6 +41,8 @@ pub const WatchDeployConfig = struct {
     envelope: agent_contract.CapabilityEnvelope,
     project: []const u8,
     now_millis: u64,
+    regions: usize = 1,
+    require_saved_plan: bool = false,
 };
 
 pub const EstateScanConfig = struct {
@@ -1151,19 +1153,63 @@ fn runWatchDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         try writeError(env, "watch-deploy", error.WatchDeployRuntimeUnavailable);
         return Exit.provider_error;
     };
-    const receipt = watch_deploy_mod.execute(configured.runtime, configured.envelope, .{
+    var loaded_plan: ?plan_format.LoadedPlan = null;
+    defer if (loaded_plan) |*plan| plan.deinit();
+    var verified_digest_buffer: [64]u8 = undefined;
+    var verified_digest: ?[]const u8 = null;
+    if (configured.require_saved_plan) {
+        const path = args.plan_path orelse {
+            try writeError(env, "watch-deploy", error.SavedPlanRequired);
+            return Exit.usage;
+        };
+        const files = env.plan_files orelse {
+            try writeError(env, "watch-deploy", error.PlanFileSystemUnavailable);
+            return Exit.state_error;
+        };
+        loaded_plan = plan_format.load(files, allocator, path, .{}) catch |err| {
+            return handlePlanError(env, err);
+        };
+        const saved = &loaded_plan.?;
+        if (!std.mem.eql(u8, saved.stack, args.stack) or !std.mem.eql(u8, saved.stage, args.stage)) {
+            return handlePlanError(env, error.PlanTargetMismatch);
+        }
+        if (plan_mod.hasDestructiveOperations(saved.plan.operations)) {
+            try writeError(env, "watch-deploy", error.WatchDestructiveChange);
+            return Exit.provider_error;
+        }
+        var program = buildProgram(allocator, env, args) catch |err| return handleStackError(env, err);
+        defer program.deinit();
+        const graph_digest = plan_mod.desiredGraphDigestAlloc(allocator, &program.graph) catch |err| {
+            return handlePlanError(env, err);
+        };
+        if (!std.mem.eql(u8, &graph_digest, &saved.plan.preconditions.desired_graph_digest)) {
+            return handlePlanError(env, error.PlanDesiredGraphMismatch);
+        }
+        verified_digest_buffer = saved.metadata().digestHex();
+        verified_digest = &verified_digest_buffer;
+        if (args.plan_digest) |claimed| {
+            if (!std.mem.eql(u8, claimed, verified_digest.?)) {
+                try writeError(env, "watch-deploy", error.PlanApprovalMismatch);
+                return Exit.provider_error;
+            }
+        }
+    }
+    const plan_digest = verified_digest orelse args.plan_digest orelse {
+        try writeError(env, "watch-deploy", error.MissingPlanDigest);
+        return Exit.usage;
+    };
+    var envelope = configured.envelope;
+    if (configured.require_saved_plan) envelope.approved_plan_digest = plan_digest;
+    const receipt = watch_deploy_mod.execute(configured.runtime, envelope, .{
         .now_millis = configured.now_millis,
         .stage = args.stage,
         .project = configured.project,
-        .plan_digest = args.plan_digest orelse {
-            try writeError(env, "watch-deploy", error.MissingPlanDigest);
-            return Exit.usage;
-        },
+        .plan_digest = plan_digest,
         .image_ref = args.image_ref orelse {
             try writeError(env, "watch-deploy", error.MissingImageReference);
             return Exit.usage;
         },
-        .regions = 1,
+        .regions = configured.regions,
     }) catch |err| {
         try writeError(env, "watch-deploy", err);
         return Exit.provider_error;
@@ -1173,8 +1219,83 @@ fn runWatchDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return Exit.provider_error;
     };
     defer allocator.free(events);
+    persistWatchReceipt(allocator, env, args, plan_digest, receipt) catch |err| {
+        try writeError(env, "watch-deploy-log", err);
+        return Exit.agent_error;
+    };
     try env.console.writeOut(events);
     return if (receipt.status == .complete) Exit.success else Exit.provider_error;
+}
+
+fn persistWatchReceipt(
+    allocator: std.mem.Allocator,
+    env: *Env,
+    args: Args,
+    plan_digest: []const u8,
+    receipt: watch_deploy_mod.Receipt,
+) !void {
+    const files = env.log_files orelse return error.LogFileSystemUnavailable;
+    const sessions = log_mod.SessionStore.init(allocator, files, .{});
+    var log = sessions.load(args.stack, args.stage) catch |err| switch (err) {
+        error.MissingLogSession, error.FileNotFound => log_mod.Store.init(allocator, .{}),
+        else => return err,
+    };
+    defer log.deinit();
+    const phase_names = [_][]const u8{ "image", "revision", "readiness", "traffic" };
+    const phase_sources = [_]log_mod.Source{ .provider, .cloud_run, .health, .cloud_run };
+    const phase_messages = [_][]const u8{
+        "Immutable image verified",
+        "Cloud Run revision created with prior traffic pinned",
+        "Cloud Run revision readiness proved",
+        "Healthy revision promoted to traffic",
+    };
+    const phase_durations = [_]u64{
+        receipt.timings.push_millis,
+        receipt.timings.revision_millis,
+        receipt.timings.readiness_millis,
+        receipt.timings.traffic_millis,
+    };
+    var elapsed: u64 = 0;
+    var parent: ?[]const u8 = null;
+    var owned_parent: ?[]const u8 = null;
+    defer if (owned_parent) |value| allocator.free(value);
+    for (phase_names, 0..) |phase, index| {
+        elapsed +|= phase_durations[index];
+        const event_id = try std.fmt.allocPrint(allocator, "watch-{s}-{s}", .{ plan_digest, phase });
+        defer allocator.free(event_id);
+        try log.append(.{
+            .event_id = event_id,
+            .parent_event_id = parent,
+            .timestamp_millis = @intCast(env.watch_deploy.?.now_millis +| elapsed),
+            .source = phase_sources[index],
+            .stream = .system,
+            .severity = if (receipt.status == .complete or index < failedPhaseIndex(receipt.status)) .info else .err,
+            .message = phase_messages[index],
+            .session_id = plan_digest,
+            .stack = args.stack,
+            .stage = args.stage,
+            .revision = receipt.image_ref,
+            .fields = &.{
+                .{ .name = "phase", .value = phase },
+                .{ .name = "duration_millis", .value = "recorded" },
+            },
+        });
+        if (owned_parent) |value| allocator.free(value);
+        owned_parent = try allocator.dupe(u8, event_id);
+        parent = owned_parent;
+        if (receipt.status != .complete and index >= failedPhaseIndex(receipt.status)) break;
+    }
+    try sessions.save(args.stack, args.stage, &log);
+}
+
+fn failedPhaseIndex(status: watch_deploy_mod.Status) usize {
+    return switch (status) {
+        .complete => 4,
+        .push_failed => 0,
+        .revision_failed => 1,
+        .readiness_failed => 2,
+        .traffic_failed => 3,
+    };
 }
 
 fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {

@@ -592,6 +592,16 @@ pub const FakeProvider = struct {
                 };
                 output_count += 1;
             }
+        } else if (std.mem.eql(u8, node.type_name, "gcp.cloudbuild.ZigImage")) {
+            const build_digest = inputString(node, "build_digest");
+            if (build_digest) |digest| {
+                dynamic_output = try std.fmt.allocPrint(self.allocator, "sha256:{s}", .{digest});
+                output_source[output_count] = .{
+                    .name = "image_digest",
+                    .value = .{ .string = dynamic_output.? },
+                };
+                output_count += 1;
+            }
         } else if (std.mem.eql(u8, node.type_name, "gcp.compute.GlobalAddress")) {
             output_source[output_count] = .{
                 .name = "address",

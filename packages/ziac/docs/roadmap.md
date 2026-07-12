@@ -451,6 +451,19 @@ argv, legacy shell strings are non-executable, process authority is distinct
 from read authority, and verification receipts bind both command and manifest
 digests. Hostile shell, traversal and capability tests are release-gated.
 
+M21 rapid development is complete at the credential-free implementation gate.
+The standalone CLI now wires `deploy --watch` to a graph-derived, project-bound
+Cloud Run v2 runtime instead of a scripted-only adapter. A watch rollout must
+name an immutable image and an integrity-checked saved plan; it preserves the
+current template, pins traffic to the prior revision, waits on the LRO, proves
+the candidate revision healthy, then promotes that exact revision. Cross-project
+targets, mutable images, production stages, destructive plans, stale graph
+digests and self-asserted plan digests fail closed. Phase receipts are persisted
+to the same causal log session consumed by the dashboard. Existing native local
+watch still provides stable-proxy hot reload and failed-generation preservation.
+Authenticated Cloud Run latency evidence remains in M24 rather than being
+misreported as locally proven.
+
 No milestone is described as externally qualified until its authenticated live
 gate has produced a complete redacted evidence bundle. Credential-free code
 completion and external qualification remain separate roadmap states.
