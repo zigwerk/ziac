@@ -1,0 +1,264 @@
+{
+  "schema": "ziac.visual.v1",
+  "format_version": 1,
+  "truth_mode": "live",
+  "created_at_millis": 1783764000000,
+  "stack": "estate-scan",
+  "stage": "prod",
+  "graph_digest": "e006c5d697ce715f42e7855b00ce62c25c75799e7a4df9e165ee2c3c7ec31ae1",
+  "state_serial": 4,
+  "summary": {
+    "resources": 12,
+    "edges": 10,
+    "regions": 3
+  },
+  "regions": [
+    "asia-northeast1",
+    "europe-west1",
+    "us-central1"
+  ],
+  "resources": [
+    {
+      "id": "gcp.compute.GlobalForwardingRule.managed-https",
+      "provider": "gcp",
+      "type": "gcp.compute.GlobalForwardingRule",
+      "logical_id": "managed-https",
+      "scope": "global",
+      "regions": [],
+      "operation": "noop",
+      "health": "healthy",
+      "ownership": "managed",
+      "inputs": { "name": "managed-https", "port": 443, "project_id": "acme-foundation-prod" },
+      "lifecycle": { "protect": true, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.run.Service.asia-northeast1.managed-api",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "managed-api",
+      "scope": "regional",
+      "region": "asia-northeast1",
+      "regions": ["asia-northeast1"],
+      "operation": "noop",
+      "health": "healthy",
+      "ownership": "managed",
+      "inputs": { "name": "managed-api", "cpu": "1", "memory": "512Mi", "project_id": "acme-foundation-prod" },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.run.Service.europe-west1.managed-api",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "managed-api",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "noop",
+      "health": "healthy",
+      "ownership": "managed",
+      "inputs": { "name": "managed-api", "cpu": "1", "memory": "512Mi", "project_id": "acme-foundation-prod" },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.run.Service.us-central1.managed-api",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "managed-api",
+      "scope": "regional",
+      "region": "us-central1",
+      "regions": ["us-central1"],
+      "operation": "noop",
+      "health": "healthy",
+      "ownership": "managed",
+      "inputs": { "name": "managed-api", "cpu": "1", "memory": "512Mi", "project_id": "acme-foundation-prod" },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "cockroach.Cluster.managed-data",
+      "provider": "cockroach",
+      "type": "cockroach.Cluster",
+      "logical_id": "managed-data",
+      "scope": "multi_region",
+      "regions": ["asia-northeast1", "europe-west1", "us-central1"],
+      "operation": "noop",
+      "health": "healthy",
+      "ownership": "managed",
+      "inputs": { "name": "managed-data", "primary_region": "europe-west1", "plan": "STANDARD" },
+      "lifecycle": { "protect": true, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.compute.GlobalForwardingRule.legacy-https",
+      "provider": "gcp",
+      "type": "gcp.compute.GlobalForwardingRule",
+      "logical_id": "legacy-https",
+      "scope": "global",
+      "regions": [],
+      "operation": "read",
+      "health": "healthy",
+      "ownership": "observed",
+      "discovery": {
+        "provider": "cloud_asset_inventory",
+        "project_id": "acme-foundation-prod",
+        "observed_at_millis": 1783764000000,
+        "source_name": "//compute.googleapis.com/projects/acme-foundation-prod/global/forwardingRules/legacy-https"
+      },
+      "inputs": { "name": "legacy-https", "port": 443, "network_tier": "PREMIUM" },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.run.Service.europe-west1.legacy-orders",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "legacy-orders",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "read",
+      "health": "healthy",
+      "ownership": "observed",
+      "discovery": {
+        "provider": "cloud_asset_inventory",
+        "project_id": "acme-foundation-prod",
+        "observed_at_millis": 1783764000000,
+        "source_name": "//run.googleapis.com/projects/acme-foundation-prod/locations/europe-west1/services/legacy-orders"
+      },
+      "inputs": { "name": "legacy-orders", "cpu": "2", "memory": "1Gi", "min_instances": 1 },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.run.Service.us-central1.legacy-orders",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "legacy-orders",
+      "scope": "regional",
+      "region": "us-central1",
+      "regions": ["us-central1"],
+      "operation": "read",
+      "health": "degraded",
+      "ownership": "observed",
+      "discovery": {
+        "provider": "cloud_asset_inventory",
+        "project_id": "acme-foundation-prod",
+        "observed_at_millis": 1783764000000,
+        "source_name": "//run.googleapis.com/projects/acme-foundation-prod/locations/us-central1/services/legacy-orders"
+      },
+      "inputs": { "name": "legacy-orders", "cpu": "2", "memory": "1Gi", "min_instances": 0 },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.sql.Instance.europe-west1.orders-db",
+      "provider": "gcp",
+      "type": "gcp.sql.Instance",
+      "logical_id": "orders-db",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "read",
+      "health": "healthy",
+      "ownership": "observed",
+      "discovery": {
+        "provider": "cloud_asset_inventory",
+        "project_id": "acme-foundation-prod",
+        "observed_at_millis": 1783764000000,
+        "source_name": "//sqladmin.googleapis.com/projects/acme-foundation-prod/instances/orders-db"
+      },
+      "inputs": { "name": "orders-db", "database_version": "POSTGRES_16", "tier": "db-custom-2-7680" },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.storage.Bucket.shared-assets",
+      "provider": "gcp",
+      "type": "gcp.storage.Bucket",
+      "logical_id": "shared-assets",
+      "scope": "project",
+      "regions": [],
+      "operation": "read",
+      "health": "healthy",
+      "ownership": "referenced",
+      "discovery": {
+        "provider": "cloud_asset_inventory",
+        "project_id": "acme-foundation-prod",
+        "observed_at_millis": 1783764000000,
+        "source_name": "//storage.googleapis.com/shared-assets"
+      },
+      "inputs": { "name": "shared-assets", "location": "EU", "storage_class": "STANDARD" },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.compute.Network.shared-vpc",
+      "provider": "gcp",
+      "type": "gcp.compute.Network",
+      "logical_id": "shared-vpc",
+      "scope": "global",
+      "regions": [],
+      "operation": "read",
+      "health": "healthy",
+      "ownership": "observed",
+      "discovery": {
+        "provider": "cloud_asset_inventory",
+        "project_id": "acme-foundation-prod",
+        "observed_at_millis": 1783764000000,
+        "source_name": "//compute.googleapis.com/projects/acme-foundation-prod/global/networks/shared-vpc"
+      },
+      "inputs": { "name": "shared-vpc", "routing_mode": "GLOBAL" },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    },
+    {
+      "id": "gcp.compute.Instance.europe-west1.ops-jump",
+      "provider": "gcp",
+      "type": "gcp.compute.Instance",
+      "logical_id": "ops-jump",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "read",
+      "health": "healthy",
+      "ownership": "observed",
+      "discovery": {
+        "provider": "cloud_asset_inventory",
+        "project_id": "acme-foundation-prod",
+        "observed_at_millis": 1783764000000,
+        "source_name": "//compute.googleapis.com/projects/acme-foundation-prod/zones/europe-west1-b/instances/ops-jump"
+      },
+      "inputs": { "name": "ops-jump", "machine_type": "e2-small", "zone": "europe-west1-b" },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": []
+    }
+  ],
+  "edges": [
+    { "id": "managed-lb-asia", "from": "gcp.compute.GlobalForwardingRule.managed-https", "to": "gcp.run.Service.asia-northeast1.managed-api", "kind": "traffic" },
+    { "id": "managed-lb-europe", "from": "gcp.compute.GlobalForwardingRule.managed-https", "to": "gcp.run.Service.europe-west1.managed-api", "kind": "traffic" },
+    { "id": "managed-lb-us", "from": "gcp.compute.GlobalForwardingRule.managed-https", "to": "gcp.run.Service.us-central1.managed-api", "kind": "traffic" },
+    { "id": "legacy-lb-europe", "from": "gcp.compute.GlobalForwardingRule.legacy-https", "to": "gcp.run.Service.europe-west1.legacy-orders", "kind": "traffic" },
+    { "id": "legacy-lb-us", "from": "gcp.compute.GlobalForwardingRule.legacy-https", "to": "gcp.run.Service.us-central1.legacy-orders", "kind": "traffic" },
+    { "id": "legacy-europe-db", "from": "gcp.run.Service.europe-west1.legacy-orders", "to": "gcp.sql.Instance.europe-west1.orders-db", "kind": "connectivity" },
+    { "id": "legacy-us-db", "from": "gcp.run.Service.us-central1.legacy-orders", "to": "gcp.sql.Instance.europe-west1.orders-db", "kind": "connectivity" },
+    { "id": "managed-assets", "from": "gcp.run.Service.europe-west1.managed-api", "to": "gcp.storage.Bucket.shared-assets", "kind": "iam", "access": "read", "permissions": ["storage.objects.get"] },
+    { "id": "vpc-legacy-europe", "from": "gcp.compute.Network.shared-vpc", "to": "gcp.run.Service.europe-west1.legacy-orders", "kind": "connectivity" },
+    { "id": "vpc-legacy-us", "from": "gcp.compute.Network.shared-vpc", "to": "gcp.run.Service.us-central1.legacy-orders", "kind": "connectivity" }
+  ],
+  "routes": [
+    { "id": "managed-asia", "from_resource": "gcp.compute.GlobalForwardingRule.managed-https", "to_resource": "gcp.run.Service.asia-northeast1.managed-api", "to_region": "asia-northeast1", "provenance": "observed" },
+    { "id": "managed-europe", "from_resource": "gcp.compute.GlobalForwardingRule.managed-https", "to_resource": "gcp.run.Service.europe-west1.managed-api", "to_region": "europe-west1", "provenance": "observed" },
+    { "id": "managed-us", "from_resource": "gcp.compute.GlobalForwardingRule.managed-https", "to_resource": "gcp.run.Service.us-central1.managed-api", "to_region": "us-central1", "provenance": "observed" },
+    { "id": "legacy-europe", "from_resource": "gcp.compute.GlobalForwardingRule.legacy-https", "to_resource": "gcp.run.Service.europe-west1.legacy-orders", "to_region": "europe-west1", "provenance": "observed" },
+    { "id": "legacy-us", "from_resource": "gcp.compute.GlobalForwardingRule.legacy-https", "to_resource": "gcp.run.Service.us-central1.legacy-orders", "to_region": "us-central1", "provenance": "observed" }
+  ],
+  "observations": [
+    { "source": "development_fixture", "project_id": "acme-foundation-prod", "observed_at_millis": 1783764000000 }
+  ],
+  "diagnostics": [
+    { "severity": "info", "message": "Redacted Cloud Asset Inventory development fixture" }
+  ]
+}

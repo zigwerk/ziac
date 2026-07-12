@@ -1,0 +1,52 @@
+import { Show, createMemo, createResource } from "solid-js";
+import { ZiacWorkbench } from "./ZiacWorkbench";
+import { loadDashboardPayload, requestEstateScan } from "./bridge";
+import { deriveZiacVisualModel, parseZiacVisualArtifact } from "./ziacVisualArtifact";
+
+export function App() {
+  const [payload, { refetch }] = createResource(loadDashboardPayload);
+  const parsed = createMemo(() => {
+    const loaded = payload();
+    if (!loaded) return null;
+    try {
+      const raw: unknown = JSON.parse(loaded.artifactJson);
+      return {
+        model: deriveZiacVisualModel(parseZiacVisualArtifact(raw)),
+        session: loaded.session,
+        error: null as string | null,
+      };
+    } catch (error) {
+      return {
+        model: null,
+        session: loaded.session,
+        error: error instanceof Error ? error.message : "failed to parse Ziac artifact",
+      };
+    }
+  });
+
+  const refreshEstate = async () => {
+    try {
+      const result = await requestEstateScan();
+      if (!result.ok) return false;
+      await refetch();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  return (
+    <main class="ziac-dashboard-app">
+      <Show when={payload.loading}>
+        <div class="ziac-dashboard-state">Loading Ziac infrastructure…</div>
+      </Show>
+      <Show when={parsed()?.error}>
+        <div class="ziac-dashboard-state error">{parsed()?.error}</div>
+      </Show>
+      <Show when={parsed()?.model}>
+        {(model) => <ZiacWorkbench model={model()} session={parsed()?.session ?? null} onEstateRefresh={refreshEstate} />}
+      </Show>
+    </main>
+  );
+}
+

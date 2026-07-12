@@ -1,0 +1,133 @@
+{
+  "schema": "ziac.visual.v1",
+  "format_version": 1,
+  "truth_mode": "plan",
+  "created_at_millis": 1783728000000,
+  "stack": "media-api",
+  "stage": "prod",
+  "graph_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "state_serial": 0,
+  "summary": { "resources": 7, "edges": 2, "regions": 1 },
+  "regions": ["europe-west1"],
+  "resources": [
+    {
+      "id": "gcp.run.Service.europe-west1.api-0",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "api-0",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "create",
+      "health": "healthy",
+      "inputs": { "name": "api-0", "region": "europe-west1", "service_account": "media-api@example.iam.gserviceaccount.com", "min_instances": 1, "max_instances": 20 },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": ["resource is not in state"]
+    },
+    {
+      "id": "gcp.run.Service.europe-west1.api-1",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "api-1",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "create",
+      "health": "healthy",
+      "inputs": { "name": "api-1", "region": "europe-west1", "service_account": "media-api@example.iam.gserviceaccount.com", "min_instances": 1, "max_instances": 20 },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": ["resource is not in state"]
+    },
+    {
+      "id": "gcp.run.Service.europe-west1.api-2",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "api-2",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "create",
+      "health": "healthy",
+      "inputs": { "name": "api-2", "region": "europe-west1", "service_account": "media-api@example.iam.gserviceaccount.com", "min_instances": 1, "max_instances": 20 },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": ["resource is not in state"]
+    },
+    {
+      "id": "gcp.run.Service.europe-west1.api-3",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "api-3",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "create",
+      "health": "healthy",
+      "inputs": { "name": "api-3", "region": "europe-west1", "service_account": "media-api@example.iam.gserviceaccount.com", "min_instances": 1, "max_instances": 20 },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": ["resource is not in state"]
+    },
+    {
+      "id": "gcp.run.Service.europe-west1.api-4",
+      "provider": "gcp",
+      "type": "gcp.run.Service",
+      "logical_id": "api-4",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "create",
+      "health": "healthy",
+      "inputs": { "name": "api-4", "region": "europe-west1", "service_account": "media-api@example.iam.gserviceaccount.com", "min_instances": 1, "max_instances": 20 },
+      "lifecycle": { "protect": false, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": ["resource is not in state"]
+    },
+    {
+      "id": "gcp.storage.Bucket.europe-west1.assets",
+      "provider": "gcp",
+      "type": "gcp.storage.Bucket",
+      "logical_id": "assets",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "create",
+      "health": "healthy",
+      "inputs": { "name": "media-assets", "location": "EUROPE-WEST1", "uniform_bucket_level_access": true },
+      "lifecycle": { "protect": true, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": ["resource is not in state"]
+    },
+    {
+      "id": "gcp.storage.Bucket.europe-west1.uploads",
+      "provider": "gcp",
+      "type": "gcp.storage.Bucket",
+      "logical_id": "uploads",
+      "scope": "regional",
+      "region": "europe-west1",
+      "regions": ["europe-west1"],
+      "operation": "create",
+      "health": "healthy",
+      "inputs": { "name": "media-uploads", "location": "EUROPE-WEST1", "uniform_bucket_level_access": true },
+      "lifecycle": { "protect": true, "retain_on_delete": false, "replace_before_delete": false },
+      "reasons": ["resource is not in state"]
+    }
+  ],
+  "edges": [
+    {
+      "id": "runtime-assets-read-write",
+      "from": "gcp.run.Service.europe-west1.api-0",
+      "to": "gcp.storage.Bucket.europe-west1.assets",
+      "kind": "iam",
+      "access": "read_write",
+      "permissions": ["storage.objects.create", "storage.objects.get"]
+    },
+    {
+      "id": "runtime-uploads-write",
+      "from": "gcp.run.Service.europe-west1.api-1",
+      "to": "gcp.storage.Bucket.europe-west1.uploads",
+      "kind": "iam",
+      "access": "write",
+      "permissions": ["storage.objects.create"]
+    }
+  ],
+  "routes": [],
+  "observations": [],
+  "diagnostics": []
+}

@@ -172,10 +172,10 @@ their exact contract code: `ZIAC100` through `ZIAC104`, `ZIAC110`, `ZIAC111`, or
 It does not become a second state format and it cannot be applied. Resources,
 edges, regions, operations, and routes are sorted; the desired graph digest and
 state serial preserve their engine meanings. Secret references and
-secret-shaped fields are redacted before the artifact crosses the Workbench
+secret-shaped fields are redacted before the artifact crosses the dashboard
 bridge.
 
-The SolidJS Workbench routes this schema to a dedicated Ziac workspace. G6
+The standalone SolidJS Ziac dashboard accepts only this schema. Three.js
 renders the dependency topology and MapLibre plus deck.gl render geographic
 placement and routes. Both consume one parsed model and share filters and
 selection. The browser performs no provider calls and receives no credentials.

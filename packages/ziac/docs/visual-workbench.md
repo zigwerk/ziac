@@ -1,7 +1,7 @@
 # Visual Infrastructure Workbench
 
-Ziac emits a deterministic, redacted `ziac.visual.v1` artifact that the shared
-ZigEffect Workbench renders as three synchronized infrastructure views:
+Ziac emits a deterministic, redacted `ziac.visual.v1` artifact that its
+standalone dashboard renders as three synchronized infrastructure views:
 
 - **Canvas** shows the compiled resource graph, regional and global groups,
   plan operations, output wiring, request traffic, connectivity, rollout
@@ -49,8 +49,8 @@ The representative fixture is generated from a real three-region
 ```sh
 cd packages/ziac
 zig build visual-sample > /tmp/ziac-global.visual.json
-cd ../zigeffect
-zig build causal-workbench -- /tmp/ziac-global.visual.json
+cd ../..
+bun run ziac:dashboard:dev -- --port 5178
 ```
 
 The generic API for an application-owned graph is:
@@ -67,11 +67,11 @@ defer artifact.deinit();
 For frontend development:
 
 ```sh
-bun run zigeffect:workbench:dev -- --port 5178
+bun run ziac:dashboard:dev -- --port 5178
 ```
 
-Open `http://127.0.0.1:5178/?sample=ziac` for the generated checked-in sample.
-Open `http://127.0.0.1:5178/?sample=ziac-estate` for the connected Pro estate
+Open `http://127.0.0.1:5178/` for the generated checked-in sample. Open
+`http://127.0.0.1:5178/?sample=estate` for the connected Pro estate
 sample with managed and existing GCP infrastructure.
 
 ## Truth And Routing
@@ -170,7 +170,7 @@ IAM edges may carry optional `access` (`read`, `write`, `read_write`, `invoke`,
 or `admin`) and a bounded `permissions` list. Same-slab access renders as a
 low-lift local route with an access badge such as `READ / WRITE`; cross-slab
 access remains a normal topology route. Ordinary dependencies are never
-presented as permissions. Open `?sample=ziac-permissions` to exercise the
+presented as permissions. Open `?sample=permissions` to exercise the
 grouped Cloud Run-to-Cloud Storage permission fixture.
 
 The surrounding command deck uses a 40px global command bar, 34px context mode

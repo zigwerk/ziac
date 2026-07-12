@@ -15,6 +15,7 @@
         "README.md",
         "build.zig",
         "build.zig.zon",
+        "dashboard",
         "docs",
         "examples",
         "src",

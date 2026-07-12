@@ -415,3 +415,21 @@ remain open.
 Gate: a paid authenticated user scans a disposable project through the Zig
 host, receives a redacted observation artifact with no credentials, and sees
 existing and managed resources remain graph-correct and mutation-isolated.
+
+## M18-M25: Product Completion Programme
+
+Status: In progress. The authoritative design and execution checklist are:
+
+- `docs/superpowers/specs/2026-07-12-ziac-product-completion-design.md`
+- `docs/superpowers/plans/2026-07-12-ziac-product-completion.md`
+
+The programme closes the remaining boundary between the engine and a usable
+product: user-project compilation and scaffolding, the standalone live dashboard
+host, a standards-compliant and capability-safe MCP server, native cloud watch
+deployment, the Estate Pro control plane, pricing and billing attribution, one
+authenticated source-to-global-Cloud-Run-to-Cockroach qualification, and beta
+release packaging.
+
+No milestone is described as externally qualified until its authenticated live
+gate has produced a complete redacted evidence bundle. Credential-free code
+completion and external qualification remain separate roadmap states.

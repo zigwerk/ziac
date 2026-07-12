@@ -1,0 +1,26 @@
+{
+  "name": "@ziac/site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vinxi dev --host 127.0.0.1",
+    "build": "vinxi build",
+    "preview": "serve .output/public -l 4320",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src"
+  },
+  "dependencies": {
+    "@solidjs/meta": "0.29.4",
+    "@solidjs/router": "0.16.1",
+    "@solidjs/start": "1.3.2",
+    "lucide-solid": "1.24.0",
+    "solid-js": "1.9.13",
+    "three": "0.185.1",
+    "vinxi": "0.5.11"
+  },
+  "devDependencies": {
+    "@types/three": "0.185.1",
+    "serve": "14.2.5",
+    "typescript": "5.9.3"
+  }
+}

@@ -58,13 +58,17 @@ zig build
 zig build proto-snapshot > proto/cloud-run-v2.contract.json
 ```
 
-Generate and open the representative visual topology:
+Generate the representative visual topology and run the standalone Ziac
+dashboard:
 
 ```sh
 zig build visual-sample > /tmp/ziac-global.visual.json
-cd ../zigeffect
-zig build causal-workbench -- /tmp/ziac-global.visual.json
+cd ../..
+bun run ziac:dashboard:dev -- --port 5178
 ```
+
+Open `http://127.0.0.1:5178/`. The dashboard is owned entirely by Ziac; it is
+not a sample route inside the ZigEffect Workbench.
 
 The complete source, CockroachDB, PSC, Secret Manager, Direct VPC, Cloud Run,
 global load balancer, DNS, and canary composition is in
