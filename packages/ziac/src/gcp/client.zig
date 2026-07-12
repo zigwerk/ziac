@@ -20,6 +20,7 @@ pub const Api = enum {
     cloud_build,
     cloud_asset,
     logging,
+    cloud_kms,
 };
 
 pub const Endpoints = struct {
@@ -35,6 +36,7 @@ pub const Endpoints = struct {
     cloud_build: []const u8 = "https://cloudbuild.googleapis.com",
     cloud_asset: []const u8 = "https://cloudasset.googleapis.com",
     logging: []const u8 = "https://logging.googleapis.com",
+    cloud_kms: []const u8 = "https://cloudkms.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
         return switch (api) {
@@ -50,6 +52,7 @@ pub const Endpoints = struct {
             .cloud_build => self.cloud_build,
             .cloud_asset => self.cloud_asset,
             .logging => self.logging,
+            .cloud_kms => self.cloud_kms,
         };
     }
 };

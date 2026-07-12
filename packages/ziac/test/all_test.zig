@@ -56,6 +56,7 @@ comptime {
     _ = @import("gcp_estate_client_test.zig");
     _ = @import("gcp_logging_client_test.zig");
     _ = @import("gcp_oauth_test.zig");
+    _ = @import("gcp_kms_vault_test.zig");
     _ = @import("gcp_watch_runtime_test.zig");
     _ = @import("gcp_rpc_test.zig");
     _ = @import("gcp_proto_contract_test.zig");

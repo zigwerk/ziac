@@ -7,6 +7,7 @@ pub const client = @import("client.zig");
 pub const estate_client = @import("estate_client.zig");
 pub const logging_client = @import("logging_client.zig");
 pub const oauth = @import("oauth.zig");
+pub const kms_vault = @import("kms_vault.zig");
 pub const watch_runtime = @import("watch_runtime.zig");
 pub const rpc = @import("rpc.zig");
 pub const proto_contract = @import("proto_contract.zig");
