@@ -13,6 +13,11 @@ pub fn build(b: *std.Build) void {
     const zigeffect_std_dependency = b.dependency("zigeffect_std", .{});
     const zigeffect_std = zigeffect_std_dependency.module("zigeffect_std");
     const testing_runner = zigeffect_std_dependency.module("zigeffect_test_runner").root_source_file.?;
+    _ = b.addModule("zigeffect_test_runner", .{
+        .root_source_file = testing_runner,
+        .target = target,
+        .optimize = optimize,
+    });
     const zigeffect_postgres = b.dependency("zigeffect_postgres", .{}).module("zigeffect_postgres");
 
     const ziac = b.addModule("ziac", .{
@@ -41,6 +46,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const build_options = b.addOptions();
+    build_options.addOption([]const u8, "package_root", b.pathFromRoot("."));
+    main_module.addOptions("build_options", build_options);
     main_module.addImport("ziac", ziac);
     main_module.addImport("zigeffect_std", zigeffect_std);
 
@@ -105,6 +113,10 @@ pub fn build(b: *std.Build) void {
     const compile_contracts = b.addSystemCommand(&.{"bash"});
     compile_contracts.addFileArg(b.path("test/compile_fail/run.sh"));
     test_step.dependOn(&compile_contracts.step);
+    const scaffold_e2e = b.addSystemCommand(&.{"bash"});
+    scaffold_e2e.addFileArg(b.path("test/scaffold_e2e.sh"));
+    scaffold_e2e.addArtifactArg(executable);
+    test_step.dependOn(&scaffold_e2e.step);
 
     const container_e2e_command = b.addSystemCommand(&.{"bash"});
     container_e2e_command.addFileArg(b.path("test/run_zig_service_container.sh"));

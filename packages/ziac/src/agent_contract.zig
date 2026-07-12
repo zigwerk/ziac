@@ -73,6 +73,11 @@ pub const Development = struct {
     poll_millis: u64,
 };
 
+pub const ProgramCompiler = struct {
+    argv: []const []const u8,
+    max_output_bytes: usize = 8 * 1024 * 1024,
+};
+
 pub const ParseError = std.mem.Allocator.Error || error{
     InvalidProjectJson,
     UnsupportedProjectSchema,
@@ -87,6 +92,7 @@ pub const ParseError = std.mem.Allocator.Error || error{
     InvalidScenario,
     InvalidAdaptation,
     InvalidDevelopment,
+    InvalidProgramCompiler,
     UnsafeDefaultAuthority,
 };
 
@@ -103,6 +109,7 @@ pub const Project = struct {
     scenarios: []const Scenario,
     authority: Permissions,
     development: ?Development,
+    program: ?ProgramCompiler,
 
     pub fn parseAlloc(allocator: std.mem.Allocator, bytes: []const u8) ParseError!Project {
         const arena = try allocator.create(std.heap.ArenaAllocator);
@@ -125,6 +132,7 @@ pub const Project = struct {
         const scenarios = try parseScenarios(a, root.get("scenarios") orelse return error.InvalidProjectJson);
         const authority = try parsePermissions(root.get("authority") orelse return error.InvalidProjectJson);
         const development = if (root.get("development")) |value| try parseDevelopment(a, value) else null;
+        const program = if (root.get("program")) |value| try parseProgramCompiler(a, value) else null;
 
         var project = Project{
             .allocator = allocator,
@@ -139,6 +147,7 @@ pub const Project = struct {
             .scenarios = scenarios,
             .authority = authority,
             .development = development,
+            .program = program,
         };
         try project.validate();
         return project;
@@ -216,6 +225,16 @@ pub const Project = struct {
                 development.poll_millis < 10 or development.poll_millis > 10_000)
             {
                 return error.InvalidDevelopment;
+            }
+        }
+        if (self.program) |program| {
+            if (program.argv.len == 0 or program.max_output_bytes < 1024 or program.max_output_bytes > 64 * 1024 * 1024) {
+                return error.InvalidProgramCompiler;
+            }
+            const executable = program.argv[0];
+            if (!std.mem.eql(u8, executable, "zig")) return error.InvalidProgramCompiler;
+            for (program.argv) |arg| {
+                if (arg.len == 0 or std.mem.indexOfScalar(u8, arg, 0) != null) return error.InvalidProgramCompiler;
             }
         }
     }
@@ -397,6 +416,21 @@ fn parseDevelopment(allocator: std.mem.Allocator, value: std.json.Value) ParseEr
         .proxy_port = proxy_port,
         .generation_base_port = generation_base_port,
         .poll_millis = try requiredU64(source, "poll_millis"),
+    };
+}
+
+fn parseProgramCompiler(allocator: std.mem.Allocator, value: std.json.Value) ParseError!ProgramCompiler {
+    const source = object(value) orelse return error.InvalidProjectJson;
+    const max_output = if (source.get("max_output_bytes")) |entry|
+        switch (entry) {
+            .integer => |inner| std.math.cast(usize, inner) orelse return error.InvalidProjectJson,
+            else => return error.InvalidProjectJson,
+        }
+    else
+        8 * 1024 * 1024;
+    return .{
+        .argv = try parseStringArray(allocator, source.get("argv") orelse return error.InvalidProjectJson),
+        .max_output_bytes = max_output,
     };
 }
 

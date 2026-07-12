@@ -430,6 +430,13 @@ deployment, the Estate Pro control plane, pricing and billing attribution, one
 authenticated source-to-global-Cloud-Run-to-Cockroach qualification, and beta
 release packaging.
 
+M18 user-project compilation is complete locally. `ziac init` generates an
+external Zig 0.16 project with a real `gcp.global.ZigService`, Testing v2,
+project-owned agent skills, and a fixed program compiler. `ziac check`, plan,
+fake apply, and no-op replay consume the integrity-bound `ziac.program.v1`
+artifact through the installed CLI; built-in stacks are no longer selected when
+a project compiler is declared.
+
 No milestone is described as externally qualified until its authenticated live
 gate has produced a complete redacted evidence bundle. Credential-free code
 completion and external qualification remain separate roadmap states.

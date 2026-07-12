@@ -66,6 +66,7 @@ pub const CloudLoggingConfig = struct {
 pub const Env = struct {
     console: *zstd.Console.CapturedConsole,
     registry: stack_registry.StackRegistry,
+    program_loader: ?stack_registry.ProgramLoader = null,
     state: state_backend.Store,
     migration_source: ?local_state.Store = null,
     plan_files: ?local_state.FileStore = null,
@@ -81,6 +82,11 @@ pub const Env = struct {
     cloud_logging: ?CloudLoggingConfig = null,
     verification_runner: ?agent_tools.VerificationRunner = null,
 };
+
+fn buildProgram(allocator: std.mem.Allocator, env: *Env, args: Args) !stack_registry.StackProgram {
+    if (env.program_loader) |loader| return loader.build(allocator, .{ .stack = args.stack, .stage = args.stage });
+    return env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage });
+}
 
 const Args = struct {
     command: []const u8,
@@ -301,6 +307,15 @@ const agent_subcommands = [_]zstd.Cli.CommandSpec{
 };
 
 const subcommands = [_]zstd.Cli.CommandSpec{
+    .{
+        .name = "init",
+        .description = "scaffold an agent-first global Zig backend",
+    },
+    .{
+        .name = "check",
+        .description = "compile and validate the user project program",
+        .options = command_options[0..3],
+    },
     .{
         .name = "dev",
         .description = "compile the hybrid local development runtime",
@@ -556,7 +571,7 @@ fn runAgent(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return Exit.agent_error;
     };
     defer project.deinit();
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         try writeError(env, "agent", err);
         return Exit.agent_error;
     };
@@ -692,7 +707,7 @@ fn runDev(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         return Exit.agent_error;
     };
     defer project.deinit();
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         try writeError(env, "dev", err);
         return Exit.agent_error;
     };
@@ -978,7 +993,7 @@ fn runEstateScan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 }
 
 fn runPlan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         return handleStackError(env, err);
     };
     defer program.deinit();
@@ -1026,7 +1041,7 @@ fn runPlan(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 
 fn runDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     if (args.watch) return runWatchDeploy(allocator, env, args);
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         return handleStackError(env, err);
     };
     defer program.deinit();
@@ -1157,7 +1172,7 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     if (args.preview_cleanup) {
         ci_mod.validatePreviewCleanup(args.stage) catch |err| return handlePlanError(env, err);
     }
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         return handleStackError(env, err);
     };
     defer program.deinit();
@@ -1205,7 +1220,7 @@ fn runDestroy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 
 fn runRollback(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     if (!args.confirm) return handleApplyError(env, error.DestructiveConfirmationRequired);
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         return handleStackError(env, err);
     };
     defer program.deinit();
@@ -1405,7 +1420,7 @@ fn runStateMigrate(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 }
 
 fn runRefresh(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         return handleStackError(env, err);
     };
     defer program.deinit();
@@ -1439,7 +1454,7 @@ fn runRefresh(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
 }
 
 fn runImport(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         return handleStackError(env, err);
     };
     defer program.deinit();
@@ -1503,7 +1518,7 @@ fn runFailRegion(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
         try writeError(env, "usage", error.MissingRequiredOption);
         return Exit.usage;
     };
-    var program = env.registry.build(allocator, .{ .stack = args.stack, .stage = args.stage }) catch |err| {
+    var program = buildProgram(allocator, env, args) catch |err| {
         return handleStackError(env, err);
     };
     defer program.deinit();

@@ -16,7 +16,7 @@ Status: in progress
 
 ## Milestone 1: User Project Compiler Boundary
 
-Status: pending
+Status: complete
 
 - Add `ziac init`, `ziac check`, and deterministic scaffold templates.
 - Define and validate `ziac.program.v1`.
@@ -27,6 +27,12 @@ Status: pending
 - Add clean temporary-project tests for init, check, plan, comptime failure,
   visual export, and no-op replay.
 - Gate: a generated project outside this repository drives the installed CLI.
+
+Evidence: `zig build test` now includes `test/scaffold_e2e.sh`, which creates a
+temporary external project, runs its Testing v2 application suite, emits and
+integrity-checks `ziac.program.v1`, runs `ziac check`, plans and applies through
+the installed CLI, and proves the next plan is a no-op. The package suite
+discovers 430 tests with 429 passing and one credential-gated skip.
 
 ## Milestone 2: Standalone Dashboard Host
 
@@ -123,4 +129,3 @@ Status: pending
 | Estate | OIDC/entitlement/CAI fixtures | disposable project scan |
 | Cost | SKU and billing-export fixtures | billing reconciliation |
 | Global stack | topology/provider tests | HTTPS, failover, Cockroach |
-

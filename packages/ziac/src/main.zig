@@ -1,5 +1,6 @@
 const std = @import("std");
 const ziac = @import("ziac");
+const build_options = @import("build_options");
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
@@ -22,6 +23,15 @@ pub fn main(init: std.process.Init) !void {
     }
 
     var cwd = std.Io.Dir.cwd();
+    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "init")) {
+        const code = runInit(allocator, io, cwd, args.items[1..]);
+        std.process.exit(code catch |err| {
+            var error_buffer: [256]u8 = undefined;
+            const message = std.fmt.bufPrint(&error_buffer, "ziac init: {s}\n", .{@errorName(err)}) catch "ziac init failed\n";
+            std.Io.File.stderr().writeStreamingAll(io, message) catch {};
+            return;
+        });
+    }
     var local_fs = ziac.zstd.FileSystem.LocalFileSystem.init(&cwd, io);
     var auth_files = ziac.gcp.auth.localFileReader(&local_fs);
     var auth_env = ziac.zstd.Env.EnvMap.init(allocator);
@@ -54,6 +64,52 @@ pub fn main(init: std.process.Init) !void {
         })
     else
         ziac.stack_registry.fixtureRegistry();
+
+    var project_contract: ?ziac.agent_contract.Project = null;
+    defer if (project_contract) |*project| project.deinit();
+    var project_program: ?ziac.stack_registry.StackProgram = null;
+    defer if (project_program) |*program| program.deinit();
+    var project_loader: ziac.stack_registry.StaticProgramLoader = undefined;
+    var selected_program_loader: ?ziac.stack_registry.ProgramLoader = null;
+    if (ziac.project_program.targetFromArgs(args.items)) |target| {
+        const project_path = optionValue(args.items, "--project") orelse "ziac.project.json";
+        const project_bytes = cwd.readFileAlloc(io, project_path, allocator, .limited(4 * 1024 * 1024)) catch |err| switch (err) {
+            error.FileNotFound => null,
+            else => return err,
+        };
+        if (project_bytes) |bytes| {
+            defer allocator.free(bytes);
+            project_contract = try ziac.agent_contract.Project.parseAlloc(allocator, bytes);
+            if (project_contract.?.program) |compiler| {
+                var runner = ziac.project_program.NativeRunner{ .io = io };
+                project_program = ziac.project_program.loadAlloc(allocator, compiler, runner.runner(), target) catch |err| {
+                    try std.Io.File.stderr().writeStreamingAll(io, "ziac project compiler failed: ");
+                    try std.Io.File.stderr().writeStreamingAll(io, @errorName(err));
+                    try std.Io.File.stderr().writeStreamingAll(io, "\n");
+                    std.process.exit(ziac.cli.Exit.invalid_graph);
+                };
+                project_loader = .{ .stack = target.stack, .stage = target.stage, .program = &project_program.? };
+                selected_program_loader = project_loader.loader();
+            }
+        }
+    }
+    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "check")) {
+        if (project_contract == null or project_program == null) {
+            try std.Io.File.stderr().writeStreamingAll(io, "ziac check: project compiler is not configured\n");
+            std.process.exit(ziac.cli.Exit.invalid_graph);
+        }
+        const receipt = try std.json.Stringify.valueAlloc(allocator, .{
+            .schema = "ziac.check.v1",
+            .status = "valid",
+            .project = project_contract.?.id,
+            .resources = project_program.?.graph.resources.items.len,
+            .dependencies = project_program.?.graph.dependencies.items.len,
+        }, .{});
+        defer allocator.free(receipt);
+        try std.Io.File.stdout().writeStreamingAll(io, receipt);
+        try std.Io.File.stdout().writeStreamingAll(io, "\n");
+        std.process.exit(ziac.cli.Exit.success);
+    }
 
     var local_http = ziac.zstd.Http.LocalClient.init(allocator, io);
     defer local_http.deinit();
@@ -170,6 +226,7 @@ pub fn main(init: std.process.Init) !void {
     var env = ziac.cli.Env{
         .console = &console,
         .registry = registry,
+        .program_loader = selected_program_loader,
         .state = selected_state,
         .migration_source = if (remote_state_initialized) local_backend.delegate else null,
         .plan_files = ziac.local_state.localFiles.store(&local_fs),
@@ -194,6 +251,51 @@ pub fn main(init: std.process.Init) !void {
         try std.Io.File.stderr().writeStreamingAll(io, console.stderrText());
     }
     std.process.exit(code);
+}
+
+fn runInit(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: std.Io.Dir,
+    args: []const []const u8,
+) !u8 {
+    if (args.len == 0 or std.mem.startsWith(u8, args[0], "--")) return ziac.cli.Exit.usage;
+    const name = args[0];
+    const target = optionValue(args[1..], "--dir") orelse name;
+    const package_path = optionValue(args[1..], "--ziac-path") orelse build_options.package_root;
+    const force = hasFlag(args[1..], "--force");
+    try cwd.createDirPath(io, target);
+    const target_path = try cwd.realPathFileAlloc(io, target, allocator);
+    defer allocator.free(target_path);
+    const package_absolute = if (std.fs.path.isAbsolute(package_path))
+        try std.Io.Dir.realPathFileAbsoluteAlloc(io, package_path, allocator)
+    else
+        try cwd.realPathFileAlloc(io, package_path, allocator);
+    defer allocator.free(package_absolute);
+    const dependency_path = try std.fs.path.relative(allocator, ".", null, target_path, package_absolute);
+    defer allocator.free(dependency_path);
+    var rendered = try ziac.scaffold.renderAlloc(allocator, .{
+        .project_name = name,
+        .ziac_path = dependency_path,
+    });
+    defer rendered.deinit();
+    var target_dir = try cwd.openDir(io, target, .{});
+    defer target_dir.close(io);
+    try ziac.scaffold.write(target_dir, io, rendered, force);
+    const message = try std.fmt.allocPrint(allocator, "Created Ziac project {s} in {s}\n", .{ name, target });
+    defer allocator.free(message);
+    try std.Io.File.stdout().writeStreamingAll(io, message);
+    return ziac.cli.Exit.success;
+}
+
+fn optionValue(args: []const []const u8, name: []const u8) ?[]const u8 {
+    for (args, 0..) |arg, index| if (std.mem.eql(u8, arg, name) and index + 1 < args.len) return args[index + 1];
+    return null;
+}
+
+fn hasFlag(args: []const []const u8, name: []const u8) bool {
+    for (args) |arg| if (std.mem.eql(u8, arg, name)) return true;
+    return false;
 }
 
 fn requestsGoogleClient(args: []const []const u8) bool {

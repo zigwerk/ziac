@@ -15,6 +15,8 @@ comptime {
     _ = @import("state_workflow_test.zig");
     _ = @import("plan_precondition_test.zig");
     _ = @import("plan_format_test.zig");
+    _ = @import("program_format_test.zig");
+    _ = @import("scaffold_test.zig");
     _ = @import("visual_artifact_test.zig");
     _ = @import("estate_scan_test.zig");
     _ = @import("estate_access_test.zig");

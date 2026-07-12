@@ -30,7 +30,7 @@ pub const OutputDefinition = struct {
     source: OutputSource,
     secret: bool = false,
 
-    fn deinit(self: *OutputDefinition, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *OutputDefinition, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
         switch (self.source) {
             .literal => |literal| allocator.free(literal),
@@ -52,6 +52,22 @@ pub const StackProgram = struct {
         self.graph.deinit();
         for (self.outputs.items) |*entry| entry.deinit(self.allocator);
         self.outputs.deinit(self.allocator);
+    }
+
+    pub fn cloneAlloc(self: *const StackProgram, allocator: std.mem.Allocator) !StackProgram {
+        var graph = resource.ResourceGraph.init(allocator);
+        errdefer graph.deinit();
+        try graph.appendGraph(&self.graph);
+        var outputs = std.ArrayList(OutputDefinition).empty;
+        errdefer {
+            for (outputs.items) |*entry| entry.deinit(allocator);
+            outputs.deinit(allocator);
+        }
+        for (self.outputs.items) |entry| switch (entry.source) {
+            .literal => |literal| try appendLiteral(allocator, &outputs, entry.name, literal, entry.secret),
+            .resource_ref => |reference| try appendReference(allocator, &outputs, entry.name, reference, entry.secret),
+        };
+        return .{ .allocator = allocator, .graph = graph, .outputs = outputs };
     }
 
     pub fn resolveOutputsAlloc(
@@ -79,6 +95,31 @@ pub const StackProgram = struct {
     pub fn freeResolvedOutputs(allocator: std.mem.Allocator, outputs: []OutputEntry) void {
         for (outputs) |entry| allocator.free(entry.value);
         allocator.free(outputs);
+    }
+};
+
+pub const ProgramLoader = struct {
+    ptr: *anyopaque,
+    buildFn: *const fn (*anyopaque, std.mem.Allocator, StackArgs) anyerror!StackProgram,
+
+    pub fn build(self: ProgramLoader, allocator: std.mem.Allocator, args: StackArgs) !StackProgram {
+        return self.buildFn(self.ptr, allocator, args);
+    }
+};
+
+pub const StaticProgramLoader = struct {
+    stack: []const u8,
+    stage: []const u8,
+    program: *const StackProgram,
+
+    pub fn loader(self: *StaticProgramLoader) ProgramLoader {
+        return .{ .ptr = self, .buildFn = build };
+    }
+
+    fn build(raw: *anyopaque, allocator: std.mem.Allocator, args: StackArgs) !StackProgram {
+        const self: *StaticProgramLoader = @ptrCast(@alignCast(raw));
+        if (!std.mem.eql(u8, self.stack, args.stack) or !std.mem.eql(u8, self.stage, args.stage)) return error.UnknownStack;
+        return self.program.cloneAlloc(allocator);
     }
 };
 
