@@ -22,6 +22,7 @@ comptime {
     _ = @import("estate_scan_test.zig");
     _ = @import("estate_access_test.zig");
     _ = @import("estate_control_plane_test.zig");
+    _ = @import("estate_service_test.zig");
     _ = @import("testing_receipt_test.zig");
     _ = @import("agent_contract_test.zig");
     _ = @import("agent_kernel_test.zig");
@@ -54,6 +55,7 @@ comptime {
     _ = @import("gcp_client_test.zig");
     _ = @import("gcp_estate_client_test.zig");
     _ = @import("gcp_logging_client_test.zig");
+    _ = @import("gcp_oauth_test.zig");
     _ = @import("gcp_watch_runtime_test.zig");
     _ = @import("gcp_rpc_test.zig");
     _ = @import("gcp_proto_contract_test.zig");

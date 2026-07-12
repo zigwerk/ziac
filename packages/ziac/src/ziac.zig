@@ -25,6 +25,7 @@ pub const dashboard_host = @import("dashboard_host.zig");
 pub const visual_artifact = @import("visual_artifact.zig");
 pub const estate = @import("estate.zig");
 pub const estate_access = @import("estate_access.zig");
+pub const estate_service = @import("estate_service.zig");
 pub const testing_receipt = @import("testing_receipt.zig");
 pub const agent_contract = @import("agent_contract.zig");
 pub const agent = @import("agent.zig");

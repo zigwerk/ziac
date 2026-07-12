@@ -464,6 +464,19 @@ watch still provides stable-proxy hot reload and failed-generation preservation.
 Authenticated Cloud Run latency evidence remains in M24 rather than being
 misreported as locally proven.
 
+M22 Estate Pro is in active implementation. The server-side authorization
+kernel now hashes bearer assertions, enforces Google-subject ownership and Pro
+expiry, resolves only connected projects, revokes immediately, and writes
+append-only audit events without credential metadata. The Google OAuth adapter
+performs PKCE code exchange and verifies OIDC audience, issuer, nonce, expiry,
+subject and email before exposing a zeroing grant to the callback coordinator.
+The callback consumes a challenge through an injected one-time verifier, sends
+the refresh token directly to a credential vault, stores only a session digest,
+and returns the new assertion once. The Cockroach production schema covers
+accounts, sessions, entitlements, encrypted credentials, challenges and audit.
+The deployed Cockroach repository, KMS implementation and HTTP process remain
+the open work before M22 can be marked locally complete.
+
 No milestone is described as externally qualified until its authenticated live
 gate has produced a complete redacted evidence bundle. Credential-free code
 completion and external qualification remain separate roadmap states.
