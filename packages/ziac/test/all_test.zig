@@ -23,6 +23,7 @@ comptime {
     _ = @import("estate_access_test.zig");
     _ = @import("estate_control_plane_test.zig");
     _ = @import("estate_service_test.zig");
+    _ = @import("estate_cockroach_test.zig");
     _ = @import("testing_receipt_test.zig");
     _ = @import("agent_contract_test.zig");
     _ = @import("agent_kernel_test.zig");

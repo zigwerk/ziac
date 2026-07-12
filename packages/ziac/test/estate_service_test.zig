@@ -137,6 +137,15 @@ test "Estate Pro Google callback consumes PKCE, vaults refresh credentials, and 
         .session_ttl_millis = 60_000,
     });
 
+    var created = try service.handleAlloc(std.testing.allocator, .{
+        .method = "POST",
+        .path = "/v1/oauth/google/challenges",
+        .body = "{\"state\":\"state-73\",\"nonce\":\"nonce-73\",\"code_verifier\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"redirect_uri\":\"http://127.0.0.1:48321/oauth/callback\"}",
+        .now_millis = 999,
+    });
+    defer created.deinit();
+    try std.testing.expectEqual(@as(u16, 201), created.status);
+
     var callback = try service.handleAlloc(std.testing.allocator, .{
         .method = "POST",
         .path = "/v1/oauth/google/callback",
@@ -148,7 +157,8 @@ test "Estate Pro Google callback consumes PKCE, vaults refresh credentials, and 
     try std.testing.expectEqual(@as(u16, 200), callback.status);
     try std.testing.expect(std.mem.indexOf(u8, callback.body, FixedIssuer.assertion) != null);
     try std.testing.expect(std.mem.indexOf(u8, callback.body, "refresh-secret") == null);
-    try std.testing.expectEqual(@as(usize, 1), challenge.calls);
+    try std.testing.expectEqual(@as(usize, 1), challenge.create_calls);
+    try std.testing.expectEqual(@as(usize, 1), challenge.consume_calls);
     try std.testing.expectEqual(@as(usize, 1), exchange.calls);
     try std.testing.expectEqual(@as(usize, 1), vault.calls);
     try std.testing.expectEqual(@as(usize, 1), store.sessions.items.len);
@@ -186,15 +196,21 @@ const ScriptedExchange = struct {
 };
 
 const ScriptedChallenge = struct {
-    calls: usize = 0,
+    create_calls: usize = 0,
+    consume_calls: usize = 0,
 
     fn verifier(self: *ScriptedChallenge) ziac.estate_service.ChallengeVerifier {
-        return .{ .ptr = self, .consume_fn = consume };
+        return .{ .ptr = self, .create_fn = create, .consume_fn = consume };
+    }
+
+    fn create(raw: *anyopaque, _: []const u8, _: []const u8, _: []const u8, _: []const u8, _: u64) !void {
+        const self: *ScriptedChallenge = @ptrCast(@alignCast(raw));
+        self.create_calls += 1;
     }
 
     fn consume(raw: *anyopaque, state: []const u8, nonce: []const u8, verifier_text: []const u8, redirect: []const u8, _: u64) !void {
         const self: *ScriptedChallenge = @ptrCast(@alignCast(raw));
-        self.calls += 1;
+        self.consume_calls += 1;
         if (!std.mem.eql(u8, state, "state-73") or !std.mem.eql(u8, nonce, "nonce-73") or verifier_text.len < 43 or
             !std.mem.endsWith(u8, redirect, "/oauth/callback")) return error.ChallengeMismatch;
     }

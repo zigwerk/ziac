@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS ziac_accounts (
     google_subject STRING PRIMARY KEY,
-    email_hash BYTES NOT NULL,
+    identity_hash BYTES NOT NULL CHECK (length(identity_hash) = 32),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     disabled_at TIMESTAMPTZ NULL
 );
@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS ziac_gcp_connections (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     revoked_at TIMESTAMPTZ NULL,
     UNIQUE (google_subject, project_id)
+);
+
+CREATE TABLE IF NOT EXISTS ziac_google_credentials (
+    google_subject STRING PRIMARY KEY REFERENCES ziac_accounts (google_subject),
+    credential_ciphertext BYTES NOT NULL,
+    credential_kms_key_version STRING NOT NULL,
+    credential_sha256 BYTES NOT NULL CHECK (length(credential_sha256) = 32),
+    rotated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS ziac_oauth_challenges (

@@ -44,6 +44,7 @@ pub const Repository = struct {
 
 pub const ChallengeVerifier = struct {
     ptr: *anyopaque,
+    create_fn: *const fn (*anyopaque, []const u8, []const u8, []const u8, []const u8, u64) anyerror!void,
     consume_fn: *const fn (*anyopaque, []const u8, []const u8, []const u8, []const u8, u64) anyerror!void,
 };
 
@@ -99,11 +100,15 @@ pub const Service = struct {
     pub fn handleAlloc(self: *Service, allocator: std.mem.Allocator, request: Request) !Response {
         if (request.body.len > 64 * 1024 or request.now_millis == 0) return responseAlloc(allocator, 400, .{ .error_code = "invalid_request" });
         if (!std.mem.eql(u8, request.method, "POST")) return responseAlloc(allocator, 405, .{ .error_code = "method_not_allowed" });
+        if (std.mem.eql(u8, request.path, "/v1/oauth/google/challenges")) return self.createGoogleChallengeAlloc(allocator, request);
         if (std.mem.eql(u8, request.path, "/v1/oauth/google/callback")) return self.completeGoogleCallbackAlloc(allocator, request);
 
-        const session = self.authenticate(request.authorization, request.now_millis) catch {
+        var session = self.authenticate(request.authorization, request.now_millis) catch {
             return responseAlloc(allocator, 401, .{ .error_code = "google_identity_required" });
         };
+        const owned_subject = try allocator.dupe(u8, session.subject);
+        defer allocator.free(owned_subject);
+        session.subject = owned_subject;
         if (std.mem.eql(u8, request.path, "/v1/estate/identity:verify")) {
             try self.audit(request.now_millis, session.subject, "identity.verify", "identity", "allowed");
             return responseAlloc(allocator, 200, .{
@@ -142,6 +147,22 @@ pub const Service = struct {
         }
         try self.audit(request.now_millis, session.subject, "route.unknown", "unknown", "denied");
         return responseAlloc(allocator, 404, .{ .error_code = "not_found" });
+    }
+
+    fn createGoogleChallengeAlloc(self: *Service, allocator: std.mem.Allocator, request: Request) !Response {
+        const callback = self.google_callback orelse return responseAlloc(allocator, 503, .{ .error_code = "google_oauth_unavailable" });
+        const state = parseStringField(allocator, request.body, "state") catch return responseAlloc(allocator, 400, .{ .error_code = "invalid_oauth_challenge" });
+        defer allocator.free(state);
+        const nonce = parseStringField(allocator, request.body, "nonce") catch return responseAlloc(allocator, 400, .{ .error_code = "invalid_oauth_challenge" });
+        defer allocator.free(nonce);
+        const verifier = parseStringField(allocator, request.body, "code_verifier") catch return responseAlloc(allocator, 400, .{ .error_code = "invalid_oauth_challenge" });
+        defer allocator.free(verifier);
+        const redirect = parseStringField(allocator, request.body, "redirect_uri") catch return responseAlloc(allocator, 400, .{ .error_code = "invalid_oauth_challenge" });
+        defer allocator.free(redirect);
+        callback.challenges.create_fn(callback.challenges.ptr, state, nonce, verifier, redirect, request.now_millis) catch {
+            return responseAlloc(allocator, 400, .{ .error_code = "oauth_challenge_rejected" });
+        };
+        return responseAlloc(allocator, 201, .{ .status = "ready", .expires_at_millis = request.now_millis + 10 * std.time.ms_per_min });
     }
 
     fn completeGoogleCallbackAlloc(self: *Service, allocator: std.mem.Allocator, request: Request) !Response {

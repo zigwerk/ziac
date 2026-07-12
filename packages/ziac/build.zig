@@ -93,6 +93,18 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(mcp_server_executable);
 
+    const estate_control_plane_module = b.createModule(.{
+        .root_source_file = b.path("src/estate_control_plane_main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    estate_control_plane_module.addImport("ziac", ziac);
+    const estate_control_plane_executable = b.addExecutable(.{
+        .name = "ziac-estate-control-plane",
+        .root_module = estate_control_plane_module,
+    });
+    b.installArtifact(estate_control_plane_executable);
+
     const dashboard_ui_build = b.addSystemCommand(&.{ "bun", "run", "ziac:dashboard:build" });
     dashboard_ui_build.setCwd(.{ .cwd_relative = "../.." });
     const run_dashboard_host = b.addRunArtifact(dashboard_host_executable);
@@ -163,6 +175,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&scaffold_e2e.step);
     test_step.dependOn(&dashboard_host_executable.step);
     test_step.dependOn(&mcp_server_executable.step);
+    test_step.dependOn(&estate_control_plane_executable.step);
 
     const container_e2e_command = b.addSystemCommand(&.{"bash"});
     container_e2e_command.addFileArg(b.path("test/run_zig_service_container.sh"));
@@ -211,6 +224,7 @@ pub fn build(b: *std.Build) void {
     release_gate.dependOn(&executable.step);
     release_gate.dependOn(&dashboard_host_executable.step);
     release_gate.dependOn(&mcp_server_executable.step);
+    release_gate.dependOn(&estate_control_plane_executable.step);
     release_gate.dependOn(&dashboard_ui_build.step);
     release_gate.dependOn(&container_e2e_command.step);
 }

@@ -32,6 +32,22 @@ The in-memory repository is for deterministic tests and local development only.
 A production process must refuse startup unless the Cockroach repository and KMS
 credential envelope are configured.
 
+## Service process
+
+`zig build` installs `ziac-estate-control-plane`. It requires:
+
+- `DATABASE_URL` with `sslmode=verify-full`;
+- `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`;
+- `ZIAC_ESTATE_KMS_KEY` as a complete Cloud KMS CryptoKey resource name;
+- Application Default Credentials, supplied by Cloud Run metadata in GCP;
+- optional `PORT`, defaulting to `8080`.
+
+Run `migrations/001_estate_control_plane.sql` before starting the service. The
+process creates and atomically consumes ten-minute PKCE challenges, exchanges
+the callback with Google, stores the encrypted refresh credential, and returns a
+random session assertion exactly once. Subsequent desktop calls use the four
+Estate operations above.
+
 ## Authorization invariants
 
 - A session stores only `SHA-256(assertion)` and expires server-side.

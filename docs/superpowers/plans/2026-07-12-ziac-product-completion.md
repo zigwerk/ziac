@@ -105,7 +105,7 @@ qualified; a real Cloud Run timing receipt is intentionally part of Milestone 7.
 
 ## Milestone 5: Estate Pro Control Plane
 
-Status: pending
+Status: complete locally; paid-user qualification remains in Milestone 7
 
 - Add a separately deployable control-plane service and persistence schema.
 - Implement Google OIDC/PKCE callback, identity session, Pro entitlement,
@@ -114,6 +114,19 @@ Status: pending
 - Add managed/observed/referenced isolation and zero-mutation tests.
 - Gate: a paid test identity scans a disposable project and no credential reaches
   the browser artifact.
+
+Evidence: `ziac-estate-control-plane` is a separately installed HTTP service
+that refuses startup without verified-TLS Cockroach, Google OAuth client, and
+Cloud KMS configuration. PKCE challenges are persisted as digests and consumed
+atomically; OIDC audience, issuer, nonce, expiry, subject, and verified email are
+checked; refresh credentials pass directly into KMS; Cockroach stores only
+ciphertext, key version, and digest; session assertions are random, returned
+once, and persisted only by digest. Identity, Pro entitlement, connection
+ownership, immediate revocation, and append-only audit are enforced by the same
+server kernel consumed by the desktop resolver. Browser artifacts expose none of
+the assertion, subject, credential, or KMS metadata. The live paid-identity scan
+is deliberately retained in Milestone 7 because it needs external OAuth,
+billing, GCP, KMS, and Cockroach configuration.
 
 ## Milestone 6: Cost Intelligence
 
