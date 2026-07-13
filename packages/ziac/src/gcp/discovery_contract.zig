@@ -26,6 +26,27 @@ pub const sources = [_]Source{
         .document_sha256 = "39b1f648d4fa0824cfc0e8ee19101ddfeda12a53dc3ee3d8c1869a8dae0aeba6",
     },
     .{
+        .id = "redis:v1",
+        .version = "v1",
+        .revision = "20260707",
+        .discovery_url = "https://redis.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "600495e7c28025e4af8a2d83067a0ded935c55a96acaa67ed9128e584b6646a2",
+    },
+    .{
+        .id = "servicenetworking:v1",
+        .version = "v1",
+        .revision = "20260622",
+        .discovery_url = "https://servicenetworking.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "d845894da9ed689b1b76e80a570c105834b3dcd89670f389ba5d0d147ea3575f",
+    },
+    .{
+        .id = "spanner:v1",
+        .version = "v1",
+        .revision = "20260622",
+        .discovery_url = "https://spanner.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "6e97664d011e3f3e91b19f654a926e4977270cbea2351e94c2cb45896502d5d1",
+    },
+    .{
         .id = "sqladmin:v1",
         .version = "v1",
         .revision = "20260627",

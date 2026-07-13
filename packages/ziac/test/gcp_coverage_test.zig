@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 85), managed_count);
+    try std.testing.expectEqual(@as(usize, 96), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -110,6 +110,21 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     const sql_certificate = ziac.gcp.coverage.find("gcp.sql.ClientCertificate") orelse return error.TestExpectedEqual;
     try std.testing.expect(!sql_certificate.capabilities.update);
     try std.testing.expect(sql_certificate.capabilities.import_resource);
+
+    const spanner = ziac.gcp.coverage.find("gcp.spanner.Database") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M66", spanner.milestone);
+    try std.testing.expect(spanner.capabilities.estate);
+    try std.testing.expect(spanner.capabilities.visual);
+    try std.testing.expect(spanner.capabilities.cost);
+
+    const redis = ziac.gcp.coverage.find("gcp.redis.Cluster") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.redis, redis.service);
+    try std.testing.expect(redis.capabilities.update);
+    try std.testing.expect(redis.capabilities.import_resource);
+
+    const private_connection = ziac.gcp.coverage.find("gcp.servicenetworking.Connection") orelse return error.TestExpectedEqual;
+    try std.testing.expect(private_connection.capabilities.visual);
+    try std.testing.expect(!private_connection.capabilities.cost);
 
     try std.testing.expect(ziac.gcp.coverage.find("gcp.not.a.Resource") == null);
 }

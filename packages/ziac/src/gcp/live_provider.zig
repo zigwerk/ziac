@@ -7,7 +7,10 @@ const dns_provider = @import("dns_provider.zig");
 const network_provider = @import("network_provider.zig");
 const kms_provider = @import("kms_provider.zig");
 const scheduler_provider = @import("scheduler_provider.zig");
+const service_networking_provider = @import("service_networking_provider.zig");
 const sql_provider = @import("sql_provider.zig");
+const spanner_provider = @import("spanner_provider.zig");
+const redis_provider = @import("redis_provider.zig");
 const pubsub_provider = @import("pubsub_provider.zig");
 const tasks_provider = @import("tasks_provider.zig");
 const eventarc_provider = @import("eventarc_provider.zig");
@@ -58,6 +61,7 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.HttpRedirectUrlMap",
     "gcp.compute.ManagedSslCertificate",
     "gcp.compute.Network",
+    "gcp.compute.PrivateServiceRange",
     "gcp.compute.PscAddress",
     "gcp.compute.PscEndpoint",
     "gcp.compute.RegionServerlessNeg",
@@ -101,6 +105,9 @@ pub const managed_type_names = [_][]const u8{
     "gcp.pubsub.SubscriptionIamMember",
     "gcp.pubsub.Topic",
     "gcp.pubsub.TopicIamMember",
+    "gcp.redis.AclPolicy",
+    "gcp.redis.Cluster",
+    "gcp.redis.Instance",
     "gcp.run.Job",
     "gcp.run.JobIamMember",
     "gcp.run.Service",
@@ -110,6 +117,13 @@ pub const managed_type_names = [_][]const u8{
     "gcp.secret.Secret",
     "gcp.secret.SecretIamMember",
     "gcp.secret.SecretVersion",
+    "gcp.servicenetworking.Connection",
+    "gcp.spanner.Backup",
+    "gcp.spanner.BackupSchedule",
+    "gcp.spanner.Database",
+    "gcp.spanner.DatabaseIamMember",
+    "gcp.spanner.Instance",
+    "gcp.spanner.InstanceIamMember",
     "gcp.sql.ClientCertificate",
     "gcp.sql.Database",
     "gcp.sql.Instance",
@@ -169,6 +183,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return self.runIamHandler().read(context, node, null);
         if (network_provider.supports(node)) return self.networkHandler().read(context, node, null);
         if (compute_provider.supports(node)) return self.computeHandler().read(context, node, null);
+        if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().read(context, node, null);
         if (dns_provider.supports(node)) return self.dnsHandler().read(context, node, null);
         if (storage_provider.supports(node)) return self.storageHandler().read(context, node, null);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().read(context, node, null);
@@ -180,6 +195,8 @@ pub const LiveProvider = struct {
         if (firestore_provider.supports(node)) return self.firestoreHandler().read(context, node, null);
         if (sql_provider.supports(node)) return self.sqlHandler().read(context, node, null);
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().read(context, node, null);
+        if (spanner_provider.supports(node)) return self.spannerHandler().read(context, node, null);
+        if (redis_provider.supports(node)) return self.redisHandler().read(context, node, null);
         return error.InvalidConfiguration;
     }
 
@@ -198,6 +215,7 @@ pub const LiveProvider = struct {
         if (iam_admin_provider.supports(node)) return iam_admin_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (compute_provider.supports(node)) return compute_provider.Handler.diff(context, node, observed);
+        if (service_networking_provider.supports(node)) return service_networking_provider.Handler.diff(context, node, observed);
         if (dns_provider.supports(node)) return dns_provider.Handler.diff(context, node, observed);
         if (storage_provider.supports(node)) return storage_provider.Handler.diff(context, node, observed);
         if (cloud_build_provider.supports(node)) return cloud_build_provider.Handler.diff(context, node, observed);
@@ -209,6 +227,8 @@ pub const LiveProvider = struct {
         if (firestore_provider.supports(node)) return firestore_provider.Handler.diff(context, node, observed);
         if (sql_provider.supports(node)) return sql_provider.Handler.diff(context, node, observed);
         if (bigquery_provider.supports(node)) return bigquery_provider.Handler.diff(context, node, observed);
+        if (spanner_provider.supports(node)) return spanner_provider.Handler.diff(context, node, observed);
+        if (redis_provider.supports(node)) return redis_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else if (isType(node, artifact_repository_type))
@@ -240,6 +260,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return self.runIamHandler().create(context, node);
         if (network_provider.supports(node)) return self.networkHandler().create(context, node);
         if (compute_provider.supports(node)) return self.computeHandler().create(context, node);
+        if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().create(context, node);
         if (dns_provider.supports(node)) return self.dnsHandler().create(context, node);
         if (storage_provider.supports(node)) return self.storageHandler().create(context, node);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().create(context, node);
@@ -251,6 +272,8 @@ pub const LiveProvider = struct {
         if (firestore_provider.supports(node)) return self.firestoreHandler().create(context, node);
         if (sql_provider.supports(node)) return self.sqlHandler().create(context, node);
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().create(context, node);
+        if (spanner_provider.supports(node)) return self.spannerHandler().create(context, node);
+        if (redis_provider.supports(node)) return self.redisHandler().create(context, node);
         return error.InvalidConfiguration;
     }
 
@@ -271,6 +294,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return self.runIamHandler().update(context, node, observed.physical_id);
         if (network_provider.supports(node)) return self.networkHandler().update(context, node, observed.physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().update(context, node, observed.physical_id);
+        if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().update(context, node, observed);
         if (dns_provider.supports(node)) return self.dnsHandler().update(context, node, observed.physical_id);
         if (storage_provider.supports(node)) return self.storageHandler().update(context, node, observed.physical_id);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().update(context, node, observed.physical_id);
@@ -282,6 +306,8 @@ pub const LiveProvider = struct {
         if (firestore_provider.supports(node)) return self.firestoreHandler().update(context, node, observed);
         if (sql_provider.supports(node)) return self.sqlHandler().update(context, node, observed);
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().update(context, node, observed);
+        if (spanner_provider.supports(node)) return self.spannerHandler().update(context, node, observed);
+        if (redis_provider.supports(node)) return self.redisHandler().update(context, node, observed);
         return error.InvalidConfiguration;
     }
 
@@ -304,6 +330,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return self.runIamHandler().delete(context, node, physical_id);
         if (network_provider.supports(node)) return self.networkHandler().delete(context, node, physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().delete(context, node, physical_id);
+        if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().delete(context, node, physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().delete(context, node, physical_id);
         if (storage_provider.supports(node)) return self.storageHandler().delete(context, node, physical_id);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().delete(context, node, physical_id);
@@ -315,6 +342,8 @@ pub const LiveProvider = struct {
         if (firestore_provider.supports(node)) return self.firestoreHandler().delete(context, node, physical_id);
         if (sql_provider.supports(node)) return self.sqlHandler().delete(context, node, physical_id);
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().delete(context, node, physical_id);
+        if (spanner_provider.supports(node)) return self.spannerHandler().delete(context, node, physical_id);
+        if (redis_provider.supports(node)) return self.redisHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
             removed.deinit();
@@ -428,6 +457,7 @@ pub const LiveProvider = struct {
                 .present => |present| present,
             };
         }
+        if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().importResource(context, node, physical_id);
         if (dns_provider.supports(node)) {
             const result = try self.dnsHandler().read(context, node, physical_id);
             return switch (result) {
@@ -499,6 +529,8 @@ pub const LiveProvider = struct {
                 .present => |present| present,
             };
         }
+        if (spanner_provider.supports(node)) return self.spannerHandler().importResource(context, node, physical_id);
+        if (redis_provider.supports(node)) return self.redisHandler().importResource(context, node, physical_id);
         return error.InvalidConfiguration;
     }
 
@@ -1127,6 +1159,10 @@ pub const LiveProvider = struct {
         };
     }
 
+    fn serviceNetworkingHandler(self: *LiveProvider) service_networking_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
     fn dnsHandler(self: *LiveProvider) dns_provider.Handler {
         return .{ .client = self.client };
     }
@@ -1181,6 +1217,14 @@ pub const LiveProvider = struct {
 
     fn bigqueryHandler(self: *LiveProvider) bigquery_provider.Handler {
         return .{ .client = self.client };
+    }
+
+    fn spannerHandler(self: *LiveProvider) spanner_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn redisHandler(self: *LiveProvider) redis_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy, .secret_source = self.secret_source };
     }
 };
 

@@ -30,6 +30,9 @@ pub const Api = enum {
     cloud_tasks,
     eventarc,
     firestore,
+    redis,
+    service_networking,
+    spanner,
     sql_admin,
 };
 
@@ -56,6 +59,9 @@ pub const Endpoints = struct {
     cloud_tasks: []const u8 = "https://cloudtasks.googleapis.com",
     eventarc: []const u8 = "https://eventarc.googleapis.com",
     firestore: []const u8 = "https://firestore.googleapis.com",
+    redis: []const u8 = "https://redis.googleapis.com",
+    service_networking: []const u8 = "https://servicenetworking.googleapis.com",
+    spanner: []const u8 = "https://spanner.googleapis.com",
     sql_admin: []const u8 = "https://sqladmin.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
@@ -82,6 +88,9 @@ pub const Endpoints = struct {
             .cloud_tasks => self.cloud_tasks,
             .eventarc => self.eventarc,
             .firestore => self.firestore,
+            .redis => self.redis,
+            .service_networking => self.service_networking,
+            .spanner => self.spanner,
             .sql_admin => self.sql_admin,
         };
     }
