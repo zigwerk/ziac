@@ -790,6 +790,7 @@ fn requestsCloudLogging(args: []const []const u8) bool {
 }
 
 fn requestsStateFreeCommand(args: []const []const u8) bool {
+    if (args.len >= 1 and std.mem.eql(u8, args[0], "provider")) return true;
     if (args.len >= 1 and std.mem.eql(u8, args[0], "preview-stage")) return true;
     if (args.len >= 1 and std.mem.eql(u8, args[0], "dev")) return true;
     if (args.len >= 1 and (std.mem.eql(u8, args[0], "logs") or std.mem.eql(u8, args[0], "tail") or

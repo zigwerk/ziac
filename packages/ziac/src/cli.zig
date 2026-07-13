@@ -11,6 +11,7 @@ const estate_mod = @import("estate.zig");
 const estate_access = @import("estate_access.zig");
 const executor = @import("executor.zig");
 const gcp_auth = @import("gcp/auth/root.zig");
+const gcp_coverage = @import("gcp/coverage.zig");
 const importer = @import("importer.zig");
 const local_state = @import("local_state.zig");
 const log_mod = @import("log.zig");
@@ -121,6 +122,7 @@ const Args = struct {
     plan_digest: ?[]const u8 = null,
     connection_id: ?[]const u8 = null,
     tool_arguments: ?[]const u8 = null,
+    provider_service: ?gcp_coverage.Service = null,
 };
 
 const command_options = [_]zstd.Cli.OptionSpec{
@@ -254,6 +256,15 @@ const estate_options = [_]zstd.Cli.OptionSpec{
 
 const estate_subcommands = [_]zstd.Cli.CommandSpec{
     .{ .name = "scan", .description = "scan an authorized GCP project read-only", .options = estate_options[0..] },
+};
+
+const provider_resource_options = [_]zstd.Cli.OptionSpec{
+    .{ .name = "service", .kind = .string, .help = "filter by Google service family" },
+    .{ .name = "json", .kind = .boolean, .help = "emit stable JSON" },
+};
+
+const provider_subcommands = [_]zstd.Cli.CommandSpec{
+    .{ .name = "resources", .description = "report managed and planned GCP provider resources", .options = provider_resource_options[0..] },
 };
 
 const agent_options = [_]zstd.Cli.OptionSpec{
@@ -406,6 +417,11 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .subcommands = estate_subcommands[0..],
     },
     .{
+        .name = "provider",
+        .description = "inspect provider contracts and resource coverage",
+        .subcommands = provider_subcommands[0..],
+    },
+    .{
         .name = "agent",
         .description = "operate through structured agent artifacts",
         .subcommands = agent_subcommands[0..],
@@ -426,6 +442,7 @@ pub fn run(allocator: std.mem.Allocator, raw_args: []const []const u8, env: *Env
         return Exit.usage;
     };
 
+    if (std.mem.eql(u8, args.command, "resources")) return runProviderResources(allocator, env, args);
     if (std.mem.eql(u8, args.command, "plan")) return runPlan(allocator, env, args);
     if (std.mem.eql(u8, args.command, "dev")) return runDev(allocator, env, args);
     if (std.mem.eql(u8, args.command, "logs") or std.mem.eql(u8, args.command, "tail") or
@@ -460,6 +477,18 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
             .command = parsed.command,
             .stack = "",
             .stage = "",
+        };
+    }
+    if (std.mem.eql(u8, parsed.command, "resources")) {
+        return .{
+            .command = parsed.command,
+            .stack = "",
+            .stage = "",
+            .json = parsed.optionValue("json") != null,
+            .provider_service = if (parsed.optionValue("service")) |service|
+                gcp_coverage.parseService(service) orelse return error.InvalidProviderService
+            else
+                null,
         };
     }
     if (std.mem.eql(u8, parsed.command, "scan")) {
@@ -549,6 +578,18 @@ fn parseArgs(allocator: std.mem.Allocator, raw_args: []const []const u8) !Args {
         .image_ref = parsed.optionValue("image"),
         .plan_digest = parsed.optionValue("plan-digest"),
     };
+}
+
+fn runProviderResources(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
+    const filter = gcp_coverage.Filter{ .service = args.provider_service };
+    const report = if (args.json)
+        try gcp_coverage.jsonAlloc(allocator, filter)
+    else
+        try gcp_coverage.markdownAlloc(allocator, filter);
+    defer allocator.free(report);
+    try env.console.writeOut(report);
+    if (report.len == 0 or report[report.len - 1] != '\n') try env.console.writeOut("\n");
+    return Exit.success;
 }
 
 fn isAgentCommand(command: []const u8) bool {

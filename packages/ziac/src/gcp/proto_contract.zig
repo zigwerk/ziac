@@ -264,6 +264,24 @@ pub fn diffFacts(
     };
 }
 
+pub fn semanticDiffJsonAlloc(
+    allocator: std.mem.Allocator,
+    current: []const SemanticFact,
+    next: []const SemanticFact,
+) std.mem.Allocator.Error![]u8 {
+    var diff = try diffFacts(allocator, current, next);
+    defer diff.deinit(allocator);
+    return std.json.Stringify.valueAlloc(allocator, .{
+        .schema = "ziac.google.proto-semantic-diff.v1",
+        .googleapis_revision = googleapis_revision,
+        .descriptor_sha256 = descriptor_sha256,
+        .breaking = diff.breaking,
+        .added = diff.added,
+        .removed = diff.removed,
+        .changed = diff.changed,
+    }, .{}) catch return error.OutOfMemory;
+}
+
 fn findFact(facts: []const SemanticFact, path: []const u8) ?SemanticFact {
     for (facts) |fact| if (std.mem.eql(u8, fact.path, path)) return fact;
     return null;

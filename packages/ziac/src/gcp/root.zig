@@ -15,6 +15,7 @@ pub const scheduler = @import("scheduler.zig");
 pub const watch_runtime = @import("watch_runtime.zig");
 pub const rpc = @import("rpc.zig");
 pub const proto_contract = @import("proto_contract.zig");
+pub const discovery_contract = @import("discovery_contract.zig");
 pub const aip = @import("aip.zig");
 pub const grpc = @import("grpc.zig");
 pub const intelligence = @import("intelligence.zig");

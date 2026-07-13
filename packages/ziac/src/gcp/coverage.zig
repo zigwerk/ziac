@@ -1,4 +1,6 @@
 const std = @import("std");
+const discovery_contract = @import("discovery_contract.zig");
+const proto_contract = @import("proto_contract.zig");
 
 pub const Stage = enum {
     planned,
@@ -205,6 +207,83 @@ pub fn find(type_name: []const u8) ?Resource {
         }
     }
     return null;
+}
+
+pub const Filter = struct {
+    service: ?Service = null,
+};
+
+pub fn parseService(value: []const u8) ?Service {
+    inline for (@typeInfo(Service).@"enum".fields) |field| {
+        if (serviceNameMatches(value, field.name)) return @enumFromInt(field.value);
+    }
+    return null;
+}
+
+pub fn jsonAlloc(allocator: std.mem.Allocator, filter: Filter) std.mem.Allocator.Error![]u8 {
+    var selected: std.ArrayList(Resource) = .empty;
+    defer selected.deinit(allocator);
+    for (resources) |entry| {
+        if (filter.service) |service| if (entry.service != service) continue;
+        try selected.append(allocator, entry);
+    }
+    return std.json.Stringify.valueAlloc(allocator, .{
+        .schema = "ziac.gcp.provider-coverage.v1",
+        .filter = if (filter.service) |service| @tagName(service) else null,
+        .contracts = .{
+            .googleapis_revision = proto_contract.googleapis_revision,
+            .proto_descriptor_sha256 = proto_contract.descriptor_sha256,
+            .proto_snapshot_sha256 = proto_contract.snapshot_sha256,
+            .discovery_pinned_at = discovery_contract.pinned_at,
+            .discovery = &discovery_contract.sources,
+        },
+        .resources = selected.items,
+    }, .{}) catch return error.OutOfMemory;
+}
+
+pub fn markdownAlloc(allocator: std.mem.Allocator, filter: Filter) std.mem.Allocator.Error![]u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    try output.appendSlice(allocator, "# Ziac GCP Provider Resources\n\n");
+    try output.print(allocator, "Google APIs contract: `{s}`  \n", .{proto_contract.googleapis_revision});
+    try output.print(allocator, "Proto descriptor: `{s}`  \n", .{proto_contract.descriptor_sha256});
+    try output.print(allocator, "Discovery contracts pinned: `{s}`\n\n", .{discovery_contract.pinned_at});
+    try output.appendSlice(allocator, "| Resource | Service | Scope | Stage | Contract | Milestone | Capabilities |\n");
+    try output.appendSlice(allocator, "| --- | --- | --- | --- | --- | --- | --- |\n");
+    for (resources) |entry| {
+        if (filter.service) |service| if (entry.service != service) continue;
+        try output.print(allocator, "| `{s}` | {s} | {s} | {s} | {s} | {s} | ", .{
+            entry.type_name,
+            @tagName(entry.service),
+            @tagName(entry.scope),
+            @tagName(entry.stage),
+            @tagName(entry.contract),
+            entry.milestone,
+        });
+        try appendCapabilities(&output, allocator, entry.capabilities);
+        try output.appendSlice(allocator, " |\n");
+    }
+    return output.toOwnedSlice(allocator);
+}
+
+fn appendCapabilities(output: *std.ArrayList(u8), allocator: std.mem.Allocator, value: Capabilities) !void {
+    var first = true;
+    inline for (@typeInfo(Capabilities).@"struct".fields) |field| {
+        if (@field(value, field.name)) {
+            if (!first) try output.appendSlice(allocator, ", ");
+            try output.appendSlice(allocator, field.name);
+            first = false;
+        }
+    }
+    if (first) try output.appendSlice(allocator, "planned");
+}
+
+fn serviceNameMatches(value: []const u8, enum_name: []const u8) bool {
+    if (value.len != enum_name.len) return false;
+    for (value, enum_name) |left, right| {
+        if (left != right and !(left == '-' and right == '_')) return false;
+    }
+    return true;
 }
 
 fn managed(

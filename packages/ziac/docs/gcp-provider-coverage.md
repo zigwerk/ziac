@@ -13,13 +13,25 @@ specialization, not a limit on the resources Ziac intends to manage.
 - `qualified`: an authenticated disposable-project lifecycle receipt also
   passes.
 
-Use `gcp.coverage.resources` as the machine-readable contract for the installed
-version. Observed Cloud Asset Inventory kinds do not count as managed resources.
+Use `ziac provider resources --json` as the machine-readable contract for the
+installed version. Add `--service storage`, `--service cloud-run`, or another
+service family to return one slice. Without `--json`, the command emits the same
+deterministic catalog as a Markdown table. Observed Cloud Asset Inventory kinds
+do not count as managed resources.
+
+The report includes the pinned `googleapis/googleapis` revision, Cloud Run v2
+descriptor and normalized snapshot digests, plus dated Compute v1, Cloud DNS v1
+and Cloud Storage v1 Discovery revisions and document digests. Proto field
+behavior and Discovery source upgrades produce versioned semantic-diff JSON
+before a contract lock changes.
 
 ## Managed Surface
 
 The current deterministic provider gate contains 34 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
+The live dispatcher exports the same sorted type registry, and tests compare it
+to the catalog in both directions so provider code and documentation cannot
+silently diverge.
 
 ### Foundation and identity
 

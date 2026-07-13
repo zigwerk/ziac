@@ -489,7 +489,7 @@ const agent_skill =
     \\
     \\## Bundled knowledge
     \\
-    \\Resolve `.dependencies.ziac.path` from the owning project's `build.zig.zon`. That relocatable directory is the installed Ziac knowledge root; it must not be replaced with a source-checkout or machine-specific path. Read its `README.md` and `docs/agent-development-kit.md` first, then load only the provider or workflow document relevant to the task. Use local docs for the behavior and pinned contracts shipped with this CLI. Delegate current Google Cloud facts to `gcp-developer-researcher` before relying on them.
+    \\Resolve `.dependencies.ziac.path` from the owning project's `build.zig.zon`. That relocatable directory is the installed Ziac knowledge root; it must not be replaced with a source-checkout or machine-specific path. Read its `README.md`, `docs/agent-development-kit.md`, and `docs/gcp-provider-coverage.md` first, then load only the provider or workflow document relevant to the task. Run `ziac provider resources --json` for the exact managed and planned surface shipped by the installed CLI. Use local docs for the behavior and pinned contracts shipped with this CLI. Delegate current Google Cloud facts to `gcp-developer-researcher` before relying on them.
     \\
     \\## Development loop
     \\

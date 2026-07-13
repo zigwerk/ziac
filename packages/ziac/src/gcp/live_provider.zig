@@ -26,6 +26,43 @@ const secret_version_type = "gcp.secret.SecretVersion";
 const secret_iam_member_type = "gcp.secret.SecretIamMember";
 const cloud_run_service_type = "gcp.run.Service";
 
+pub const managed_type_names = [_][]const u8{
+    "gcp.artifact.Repository",
+    "gcp.cloudbuild.ZigImage",
+    "gcp.compute.BackendService",
+    "gcp.compute.GlobalAddress",
+    "gcp.compute.GlobalForwardingRule",
+    "gcp.compute.HttpRedirectUrlMap",
+    "gcp.compute.ManagedSslCertificate",
+    "gcp.compute.Network",
+    "gcp.compute.PscAddress",
+    "gcp.compute.PscEndpoint",
+    "gcp.compute.RegionServerlessNeg",
+    "gcp.compute.RegionalAddress",
+    "gcp.compute.Router",
+    "gcp.compute.RouterNat",
+    "gcp.compute.Subnetwork",
+    "gcp.compute.TargetHttpProxy",
+    "gcp.compute.TargetHttpsProxy",
+    "gcp.compute.UrlMap",
+    "gcp.dns.ManagedZone",
+    "gcp.dns.RecordSet",
+    "gcp.iam.ProjectMember",
+    "gcp.iam.ServiceAccount",
+    "gcp.kms.CryptoKey",
+    "gcp.kms.KeyRing",
+    "gcp.project.Service",
+    "gcp.run.Service",
+    "gcp.scheduler.Job",
+    "gcp.secret.Secret",
+    "gcp.secret.SecretIamMember",
+    "gcp.secret.SecretVersion",
+    "gcp.storage.Bucket",
+    "gcp.storage.BucketIamMember",
+    "gcp.storage.BuildBucket",
+    "gcp.storage.SourceObject",
+};
+
 pub const PayloadDeinitObserver = secret_mod.PayloadDeinitObserver;
 pub const SecretPayload = secret_mod.SecretPayload;
 pub const SecretSource = secret_mod.SecretSource;
@@ -1345,21 +1382,12 @@ fn isType(node: resource.ResourceNode, expected: []const u8) bool {
 }
 
 pub fn supports(node: resource.ResourceNode) bool {
-    return isType(node, project_service_type) or
-        isType(node, service_account_type) or
-        isType(node, project_member_type) or
-        isType(node, artifact_repository_type) or
-        isType(node, secret_type) or
-        isType(node, secret_version_type) or
-        isType(node, secret_iam_member_type) or
-        isType(node, cloud_run_service_type) or
-        network_provider.supports(node) or
-        compute_provider.supports(node) or
-        dns_provider.supports(node) or
-        storage_provider.supports(node) or
-        cloud_build_provider.supports(node) or
-        kms_provider.supports(node) or
-        scheduler_provider.supports(node);
+    return supportsType(node.type_name);
+}
+
+pub fn supportsType(type_name: []const u8) bool {
+    for (managed_type_names) |candidate| if (std.mem.eql(u8, candidate, type_name)) return true;
+    return false;
 }
 
 fn isSupported(node: resource.ResourceNode) bool {

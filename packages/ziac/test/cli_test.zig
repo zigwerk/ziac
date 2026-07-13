@@ -22,6 +22,41 @@ fn testEnv(
     };
 }
 
+test "cli reports exact GCP provider resources without project state or credentials" {
+    var fs = ziac.zstd.FileSystem.MemoryFileSystem.init(std.testing.allocator);
+    defer fs.deinit();
+    var console = ziac.zstd.Console.CapturedConsole.init(std.testing.allocator);
+    defer console.deinit();
+    var local: ziac.state_backend.Local = undefined;
+    var env = testEnv(&local, &fs, &console);
+
+    const json_code = try ziac.cli.run(std.testing.allocator, &.{
+        "provider", "resources", "--service", "storage", "--json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, json_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "ziac.gcp.provider-coverage.v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "gcp.storage.Bucket") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "gcp.pubsub.Topic") == null);
+    try std.testing.expect(!fs.exists(".ziac/state"));
+
+    console.stdout.clearRetainingCapacity();
+    const markdown_code = try ziac.cli.run(std.testing.allocator, &.{
+        "provider", "resources", "--service", "pubsub",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.success, markdown_code);
+    try std.testing.expect(std.mem.startsWith(u8, console.stdoutText(), "# Ziac GCP Provider Resources\n"));
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "`gcp.pubsub.Topic`") != null);
+    try std.testing.expect(std.mem.indexOf(u8, console.stdoutText(), "`gcp.storage.Bucket`") == null);
+
+    console.stdout.clearRetainingCapacity();
+    console.stderr.clearRetainingCapacity();
+    const invalid_code = try ziac.cli.run(std.testing.allocator, &.{
+        "provider", "resources", "--service", "not-a-google-service", "--json",
+    }, &env);
+    try std.testing.expectEqual(ziac.cli.Exit.usage, invalid_code);
+    try std.testing.expect(std.mem.indexOf(u8, console.stderrText(), "InvalidProviderService") != null);
+}
+
 const CliEstateResolver = struct {
     fn resolver(self: *CliEstateResolver) ziac.estate_access.Resolver {
         return .{

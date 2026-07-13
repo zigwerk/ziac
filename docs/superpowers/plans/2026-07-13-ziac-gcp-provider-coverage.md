@@ -25,12 +25,18 @@ Design: `docs/superpowers/specs/2026-07-13-ziac-gcp-provider-coverage-design.md`
 - [x] Add planned entries for M57-M61 so agents can explain unsupported gaps.
 - [x] Reject duplicate type names and invalid capability/stage combinations.
 - [x] Verify every managed catalog entry is accepted by the live provider.
-- [ ] Add a reverse dispatcher-to-catalog generation check so an implemented
+- [x] Add a reverse dispatcher-to-catalog generation check so an implemented
   live type cannot be omitted from the catalog.
-- [ ] Emit deterministic JSON and Markdown reference artifacts.
-- [ ] Add `ziac provider resources [--service <name>] [--json]`.
-- [ ] Include the catalog in the relocatable installation and generated skills.
-- [ ] Add pinned proto/Discovery descriptor provenance and semantic diff output.
+- [x] Emit deterministic JSON and Markdown reference artifacts.
+- [x] Add `ziac provider resources [--service <name>] [--json]`.
+- [x] Include the catalog in the relocatable installation and generated skills.
+- [x] Add pinned proto/Discovery descriptor provenance and semantic diff output.
+
+M56 evidence: `zig build test --summary failures` completed with the Testing v2
+`ziac-tests` receipt reporting 491 discovered and executed, 490 passed, one
+credential-gated skip, and zero failures, pending tests, leaks or logged errors.
+The scaffold E2E gate installed Ziac into fresh repositories and queried the
+installed catalog without project state or Google credentials.
 
 Gate: installed Ziac reports the exact managed and planned GCP surface, and CI
 fails when implementation, documentation and catalog disagree.

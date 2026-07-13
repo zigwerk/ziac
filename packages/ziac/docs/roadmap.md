@@ -688,10 +688,14 @@ AIP-aware drift, IAM/preflight, estate mapping, canvas semantics, honest cost,
 agent documentation and authenticated disposable-project evidence. A serializer
 or observed Cloud Asset kind alone does not count as provider coverage.
 
-M56's first slice now ships the installed `gcp.coverage.resources` catalog with
-34 managed types and visible planned entries for the next tranche. M57's first
-slice adds a general Cloud Storage bucket and additive bucket IAM lifecycle with
-metageneration-safe updates, dual-form import and unrelated-policy preservation.
-The remaining M56 generation/CLI work and M57 object, CORS, lifecycle, cost,
-canvas, component and authenticated qualification work remain open. The
-installed current-state reference is `docs/gcp-provider-coverage.md`.
+M56 is complete. The installed `ziac provider resources` command emits the
+versioned 34-type managed catalog and visible planned surface as deterministic
+JSON or Markdown, with service filtering, bidirectional dispatcher parity,
+pinned proto/Discovery provenance and semantic upgrade-diff artifacts. Generated
+skills point agents at the same installed reference.
+
+M57's first slice adds a general Cloud Storage bucket and additive bucket IAM
+lifecycle with metageneration-safe updates, dual-form import and unrelated-policy
+preservation. Object, CORS, multi-rule lifecycle, IAM conditions, cost, canvas,
+component and authenticated qualification work remain open. The installed
+current-state reference is `docs/gcp-provider-coverage.md`.

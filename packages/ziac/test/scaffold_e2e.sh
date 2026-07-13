@@ -14,6 +14,7 @@ test -f "$(dirname "${ziac_bin}")/../share/ziac/cloudbuild.self-host.yaml"
 test -x "$(dirname "${ziac_bin}")/../share/ziac/scripts/qualify-ziac-cloud.sh"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/agent-development-kit.md"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-developer-research.md"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-provider-coverage.md"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/dashboard/dist/index.html"
 test -f "$(dirname "${ziac_bin}")/../share/zigeffect/src/zigeffect.zig"
 mkdir -p "${workspace}/global-api"
@@ -35,6 +36,8 @@ test -f .env.example
 grep -Fq 'name: ziac' .agents/skills/ziac/SKILL.md
 grep -Fq 'build.zig.zon' .agents/skills/ziac/SKILL.md
 grep -Fq 'docs/agent-development-kit.md' .agents/skills/ziac/SKILL.md
+grep -Fq 'docs/gcp-provider-coverage.md' .agents/skills/ziac/SKILL.md
+grep -Fq 'ziac provider resources --json' .agents/skills/ziac/SKILL.md
 grep -Fq 'docs/gcp-specialization.md' .agents/skills/gcp-developer-research/SKILL.md
 cmp .agents/skills/ziac/SKILL.md .claude/skills/ziac/SKILL.md
 cmp .agents/skills/ziac/SKILL.md .gemini/skills/ziac/SKILL.md
@@ -44,6 +47,13 @@ grep -Fq 'https://developerknowledge.googleapis.com/mcp' .mcp.json
 grep -Fq 'DEVELOPERKNOWLEDGE_API_KEY' .codex/config.toml
 grep -Fq 'search_documents' .gemini/settings.json
 grep -Fq 'permissionMode: plan' .claude/agents/gcp-developer-researcher.md
+"${ziac_bin}" provider resources --service storage --json > "${workspace}/provider-resources.json"
+grep -Fq '"schema":"ziac.gcp.provider-coverage.v1"' "${workspace}/provider-resources.json"
+grep -Fq 'gcp.storage.Bucket' "${workspace}/provider-resources.json"
+if grep -Fq 'gcp.pubsub.Topic' "${workspace}/provider-resources.json"; then
+  echo 'provider resource service filter included an unrelated service' >&2
+  exit 1
+fi
 test "$(cat .env.example)" = 'DEVELOPERKNOWLEDGE_API_KEY='
 zig build test --summary failures
 zig build ziac-program -- --stack global-api --stage dev > "${workspace}/program.json"
