@@ -29,6 +29,7 @@ pub const Api = enum {
     pubsub,
     cloud_tasks,
     eventarc,
+    firestore,
 };
 
 pub const Endpoints = struct {
@@ -53,6 +54,7 @@ pub const Endpoints = struct {
     pubsub: []const u8 = "https://pubsub.googleapis.com",
     cloud_tasks: []const u8 = "https://cloudtasks.googleapis.com",
     eventarc: []const u8 = "https://eventarc.googleapis.com",
+    firestore: []const u8 = "https://firestore.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
         return switch (api) {
@@ -77,6 +79,7 @@ pub const Endpoints = struct {
             .pubsub => self.pubsub,
             .cloud_tasks => self.cloud_tasks,
             .eventarc => self.eventarc,
+            .firestore => self.firestore,
         };
     }
 };

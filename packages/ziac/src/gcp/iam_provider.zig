@@ -13,6 +13,7 @@ const supported_types = [_][]const u8{
     "gcp.bigquery.ReservationIamMember",
     "gcp.bigquery.RoutineIamMember",
     "gcp.bigquery.TableIamMember",
+    "gcp.firestore.DatabaseIamMember",
     "gcp.iam.FolderBinding",
     "gcp.iam.FolderMember",
     "gcp.iam.FolderPolicy",
@@ -178,6 +179,7 @@ fn ownership(node: resource.ResourceNode) ProviderError!Ownership {
 }
 
 fn policyApi(node: resource.ResourceNode) client_mod.Api {
+    if (std.mem.startsWith(u8, node.type_name, "gcp.firestore.")) return .firestore;
     if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.Connection")) return .bigquery_connection;
     if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.Reservation")) return .bigquery_reservation;
     if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.")) return .bigquery;
@@ -190,6 +192,9 @@ fn policyPathAlloc(
     target: []const u8,
     get: bool,
 ) ProviderError![]const u8 {
+    if (std.mem.startsWith(u8, node.type_name, "gcp.firestore.")) {
+        return std.fmt.allocPrint(allocator, "/v1/{s}:{s}IamPolicy", .{ target, if (get) "get" else "set" }) catch error.OutOfMemory;
+    }
     if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.")) {
         const version: []const u8 = if (std.mem.indexOf(u8, node.type_name, "Connection") != null or
             std.mem.indexOf(u8, node.type_name, "Reservation") != null) "v1" else "bigquery/v2";

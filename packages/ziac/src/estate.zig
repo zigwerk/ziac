@@ -320,6 +320,8 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.bigquery.Routine"
     else if (std.mem.eql(u8, asset_type, "bigqueryreservation.googleapis.com/Reservation"))
         "gcp.bigquery.Reservation"
+    else if (std.mem.eql(u8, asset_type, "firestore.googleapis.com/Database"))
+        "gcp.firestore.Database"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -385,6 +387,11 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
     }
     if (std.mem.eql(u8, asset_type, "bigqueryreservation.googleapis.com/Reservation")) {
         const prefix = "//bigqueryreservation.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "firestore.googleapis.com/Database")) {
+        const prefix = "//firestore.googleapis.com/";
         if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
         return allocator.dupe(u8, name[prefix.len..]);
     }

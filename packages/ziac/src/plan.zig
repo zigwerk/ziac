@@ -86,10 +86,12 @@ pub fn buildPlan(
         }
 
         const desired_hash = std.fmt.bytesToHex(node.inputs_hash, .lower);
-        if (std.mem.eql(u8, existing.?.desired_hash, desired_hash[0..])) {
-            try appendGraphOperation(allocator, &operations, graph, .noop, node, &.{});
-        } else {
+        if (!std.mem.eql(u8, existing.?.desired_hash, desired_hash[0..])) {
             try appendGraphOperation(allocator, &operations, graph, .update, node, &.{"desired inputs changed"});
+        } else if (lifecycleChanged(existing.?, node)) {
+            try appendGraphOperation(allocator, &operations, graph, .update, node, &.{"lifecycle policy changed"});
+        } else {
+            try appendGraphOperation(allocator, &operations, graph, .noop, node, &.{});
         }
     }
     try appendRemovedResources(allocator, &operations, graph, store);
@@ -138,18 +140,26 @@ pub fn buildRefreshedPlan(
             .present => |*observed| {
                 var diff = try provider.diffWithContext(&context, node, observed);
                 defer diff.deinit();
+                const lifecycle_changed = if (store.get(node.id)) |existing| lifecycleChanged(existing, node) else false;
                 const kind: OperationKind = switch (diff.kind) {
-                    .noop => .noop,
+                    .noop => if (lifecycle_changed) .update else .noop,
                     .update => .update,
                     .replace => .replace,
                 };
-                if (kind == .replace and node.lifecycle.protect) return error.ProtectedResource;
-                try appendGraphOperation(allocator, &operations, graph, kind, node, diff.reasons);
+                if (kind == .replace and (if (store.get(node.id)) |existing| existing.protect else node.lifecycle.protect)) return error.ProtectedResource;
+                const lifecycle_reasons = [_][]const u8{"lifecycle policy changed"};
+                const reasons: []const []const u8 = if (diff.kind == .noop and lifecycle_changed) &lifecycle_reasons else diff.reasons;
+                try appendGraphOperation(allocator, &operations, graph, kind, node, reasons);
             },
         }
     }
     try appendRemovedResources(allocator, &operations, graph, store);
     return finishPlan(allocator, &operations, store.metadata(), try desiredGraphDigestAlloc(allocator, graph));
+}
+
+fn lifecycleChanged(existing: state.StateRecord, node: resource.ResourceNode) bool {
+    return existing.protect != node.lifecycle.protect or
+        existing.retain_on_delete != node.lifecycle.retain_on_delete;
 }
 
 pub fn buildDestroyPlan(

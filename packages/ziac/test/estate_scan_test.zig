@@ -180,3 +180,23 @@ test "estate scan maps BigQuery datasets tables routines and reservations to man
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.bigquery.Reservation") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/datasets/analytics/tables/events\"") != null);
 }
+
+test "estate scan maps Firestore databases without claiming unsupported child discovery" {
+    var client = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer client.deinit();
+    try client.addPage(
+        \\{"results":[
+        \\{"name":"//firestore.googleapis.com/projects/acme-prod/databases/documents","assetType":"firestore.googleapis.com/Database","project":"projects/123","location":"eur3","displayName":"documents"}
+        \\]}
+    );
+    var scan = try ziac.estate.scanAlloc(std.testing.allocator, client.client(), .{
+        .identity = .{ .provider = .google, .verified = true, .subject = "subject" },
+        .entitlement = .pro,
+        .connection = .{ .status = .connected, .project_id = "acme-prod" },
+        .observed_at_millis = 1_783_764_000_000,
+    });
+    defer scan.deinit();
+    try std.testing.expectEqual(@as(usize, 1), scan.resource_count);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.firestore.Database") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/databases/documents\"") != null);
+}

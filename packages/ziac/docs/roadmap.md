@@ -803,3 +803,26 @@ The M63 local Testing v2 gate is complete with 602 discovered and executed
 tests, 601 passed, one credential-gated skip, and zero failures, pending tests,
 leaks or logged errors. The provider catalog reports 75 managed resources and
 the public analytics-warehouse example compiles.
+
+M64 is locally complete and awaiting authenticated Firestore qualification.
+Five managed resource types cover Database, Index, Field, BackupSchedule and
+database IAM. The handwritten Firestore Admin v1 adapter persists and resumes
+long-running operations, preserves server-assigned index and schedule names,
+uses database etags for compare-and-swap mutation, reverts field overrides
+without deleting document data and normalizes remote output-only state before
+drift comparison. Databases are protected and retained by default.
+
+`ziac.gcp.DocumentStore` composes a database with typed indexes, TTL and index
+field overrides, one daily and one weekly backup schedule, and exact
+reader/writer IAM. API and permission synthesis, Cloud Asset database identity,
+canvas topology and IAM edges, and explicit document operation, storage and
+backup cost assumptions are synchronized. The local qualification applies the
+graph, imports it into an empty second state, refreshes to no-op and performs
+retention-aware cleanup. `scripts/qualify-firestore.sh` requires ADC and a
+project ending in `-ziac-disposable`; otherwise it emits a structured exit-77
+skip. See `docs/gcp-firestore.md`.
+
+The M64 local Testing v2 gate is complete with 615 discovered and executed
+tests, 614 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. The provider catalog reports 80 managed resources and
+the public document-store example compiles.

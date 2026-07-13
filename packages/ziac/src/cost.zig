@@ -107,6 +107,22 @@ pub const BigqueryEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const FirestoreEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    read_sku_id: []const u8,
+    write_sku_id: []const u8,
+    delete_sku_id: []const u8,
+    storage_sku_id: []const u8,
+    backup_sku_id: []const u8,
+    document_reads: u64,
+    document_writes: u64,
+    document_deletes: u64,
+    stored_gib_month: u64,
+    backup_gib_month: u64,
+    observed_at_millis: u64,
+};
+
 pub const CloudRunJobEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8,
@@ -389,6 +405,31 @@ pub fn bigqueryConfigurationEstimate(
     if (input.reserved_slot_hours > 0) {
         if (input.slot_sku_id.len == 0) return error.InvalidPricing;
         usage[count] = .{ .sku_id = input.slot_sku_id, .region = input.region, .quantity = input.reserved_slot_hours };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn firestoreConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: FirestoreEstimateInput,
+) !ResourceCost {
+    var usage: [5]UsageAssumption = undefined;
+    var count: usize = 0;
+    const assumptions = [_]struct {
+        quantity: u64,
+        sku_id: []const u8,
+    }{
+        .{ .quantity = input.document_reads, .sku_id = input.read_sku_id },
+        .{ .quantity = input.document_writes, .sku_id = input.write_sku_id },
+        .{ .quantity = input.document_deletes, .sku_id = input.delete_sku_id },
+        .{ .quantity = input.stored_gib_month, .sku_id = input.storage_sku_id },
+        .{ .quantity = input.backup_gib_month, .sku_id = input.backup_sku_id },
+    };
+    for (assumptions) |assumption| {
+        if (assumption.quantity == 0) continue;
+        if (assumption.sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = assumption.sku_id, .region = input.region, .quantity = assumption.quantity };
         count += 1;
     }
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);

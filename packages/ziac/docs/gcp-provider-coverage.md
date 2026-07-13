@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 48 managed GCP resource types.
+The current deterministic provider gate contains 80 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -218,6 +218,20 @@ Permission synthesis separates deployer RPC authority from runtime data access.
 Cloud Asset identities, canvas metadata, IAM edge semantics and explicit query,
 storage and slot cost assumptions are synchronized. See `gcp-bigquery.md`.
 
+### Firestore document platform
+
+M64 adds five managed Firestore resources: Database, Index, Field,
+BackupSchedule and DatabaseIamMember. `ziac.gcp.DocumentStore` composes a
+protected database with typed indexes, TTL and index field overrides, daily or
+weekly backups, and exact reader/writer access.
+
+The lifecycle adapter resumes Firestore Admin long-running operations,
+preserves server-assigned child identities, uses database etags for mutation,
+reverts field configuration without deleting data, and normalizes output-only
+state before drift comparison. Permission synthesis, supported Cloud Asset
+database identity, canvas metadata, IAM edge semantics and explicit operation,
+storage and backup estimates are synchronized. See `gcp-firestore.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`
@@ -234,8 +248,8 @@ M56-M62 adds the provider catalog and generation spine, then completes:
 4. general additive and authoritative IAM semantics;
 5. one integrated authenticated application-platform qualification.
 
-The subsequent waves cover Firestore, Cloud SQL, Spanner, Memorystore, Compute
-Engine, GKE, broader networking, Cloud Armor, Certificate
+The subsequent waves cover Cloud SQL, Spanner, Memorystore, Compute Engine,
+GKE, broader networking, Cloud Armor, Certificate
 Manager, Monitoring, Logging, Cloud Build/Deploy, organization governance,
 security, analytics, integration and stable Vertex AI resources.
 

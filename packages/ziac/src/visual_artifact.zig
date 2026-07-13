@@ -185,6 +185,7 @@ fn appendResource(
     try appendAsyncDeliveryDetails(output, allocator, item.node);
     try appendRunWorkloadDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
+    try appendFirestoreDetails(output, allocator, item.node);
     try appendIamDetails(output, allocator, item.node);
     try appendConfigurationCost(output, allocator, observed_at_millis);
     try output.appendSlice(allocator, ",\"inputs\":");
@@ -255,6 +256,8 @@ fn iamEdgeDetails(role: []const u8) ?IamEdgeDetails {
         .{ .role = "roles/bigquery.dataViewer", .access = "read", .permission = "bigquery.tables.getData" },
         .{ .role = "roles/bigquery.jobUser", .access = "write", .permission = "bigquery.jobs.create" },
         .{ .role = "roles/cloudtasks.enqueuer", .access = "write", .permission = "cloudtasks.tasks.create" },
+        .{ .role = "roles/datastore.user", .access = "read_write", .permission = "datastore.entities.create" },
+        .{ .role = "roles/datastore.viewer", .access = "read", .permission = "datastore.entities.get" },
         .{ .role = "roles/iam.workloadIdentityUser", .access = "invoke", .permission = "iam.serviceAccounts.getAccessToken" },
         .{ .role = "roles/pubsub.publisher", .access = "write", .permission = "pubsub.topics.publish" },
         .{ .role = "roles/pubsub.subscriber", .access = "read", .permission = "pubsub.subscriptions.consume" },
@@ -324,6 +327,7 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
     }
     if (std.mem.eql(u8, node.type_name, "gcp.storage.Bucket") or
         std.mem.startsWith(u8, node.type_name, "gcp.bigquery.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.firestore.") or
         std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
         std.mem.startsWith(u8, node.type_name, "gcp.eventarc."))
     {
@@ -331,6 +335,68 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         return if (location == .string) location.string else null;
     }
     return null;
+}
+
+fn appendFirestoreDetails(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    if (!std.mem.startsWith(u8, node.type_name, "gcp.firestore.")) return;
+    try output.appendSlice(allocator, ",\"firestore\":{");
+    if (std.mem.eql(u8, node.type_name, "gcp.firestore.Database")) {
+        try appendNamedString(output, allocator, "kind", "database", false);
+        try appendOptionalStorageString(output, allocator, node, "database_id", "database_id");
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageString(output, allocator, node, "database_type", "database_type");
+        try appendOptionalStorageString(output, allocator, node, "edition", "edition");
+        try appendOptionalStorageBool(output, allocator, node, "point_in_time_recovery", "point_in_time_recovery");
+        try appendOptionalStorageBool(output, allocator, node, "delete_protection", "delete_protection");
+        try appendOptionalStorageString(output, allocator, node, "kms_key_name", "kms_key_name");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.firestore.Index")) {
+        try appendNamedString(output, allocator, "kind", "index", false);
+        try appendOptionalStorageString(output, allocator, node, "database_id", "database_id");
+        try appendOptionalStorageString(output, allocator, node, "collection_group", "collection_group");
+        try appendOptionalStorageString(output, allocator, node, "query_scope", "query_scope");
+        try appendOptionalStorageString(output, allocator, node, "api_scope", "api_scope");
+        try appendJsonArrayCount(output, allocator, node, "fields_json", "field_count");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.firestore.Field")) {
+        try appendNamedString(output, allocator, "kind", "field", false);
+        try appendOptionalStorageString(output, allocator, node, "database_id", "database_id");
+        try appendOptionalStorageString(output, allocator, node, "collection_group", "collection_group");
+        try appendOptionalStorageString(output, allocator, node, "field_path", "field_path");
+        try appendOptionalStorageBool(output, allocator, node, "ttl_enabled", "ttl_enabled");
+        try appendJsonArrayCount(output, allocator, node, "index_modes_json", "index_mode_count");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.firestore.BackupSchedule")) {
+        try appendNamedString(output, allocator, "kind", "backup_schedule", false);
+        try appendOptionalStorageString(output, allocator, node, "database_id", "database_id");
+        try appendOptionalStorageString(output, allocator, node, "recurrence", "recurrence");
+        try appendOptionalStorageString(output, allocator, node, "day_of_week", "day_of_week");
+        try appendOptionalStorageInteger(output, allocator, node, "retention_seconds", "retention_seconds");
+    } else {
+        try appendNamedString(output, allocator, "kind", "iam_member", false);
+        try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
+        try appendOptionalStorageString(output, allocator, node, "member", "iam_member");
+    }
+    try output.append(allocator, '}');
+}
+
+fn appendJsonArrayCount(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    input_name: []const u8,
+    output_name: []const u8,
+) !void {
+    const encoded = objectField(node.inputs, input_name) orelse return;
+    if (encoded != .string) return;
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, encoded.string, .{}) catch return;
+    defer parsed.deinit();
+    const count = switch (parsed.value) {
+        .array => |array| array.items.len,
+        else => return,
+    };
+    try appendNamedUnsigned(output, allocator, output_name, count, true);
 }
 
 fn appendBigqueryDetails(

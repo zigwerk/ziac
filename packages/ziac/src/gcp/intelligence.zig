@@ -417,6 +417,21 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Eventarc.CreateTrigger", .permission = "eventarc.triggers.create" },
         .{ .suffix = "Eventarc.UpdateTrigger", .permission = "eventarc.triggers.update" },
         .{ .suffix = "Eventarc.DeleteTrigger", .permission = "eventarc.triggers.delete" },
+        .{ .suffix = "FirestoreAdmin.GetDatabase", .permission = "datastore.databases.get" },
+        .{ .suffix = "FirestoreAdmin.CreateDatabase", .permission = "datastore.databases.create" },
+        .{ .suffix = "FirestoreAdmin.UpdateDatabase", .permission = "datastore.databases.update" },
+        .{ .suffix = "FirestoreAdmin.DeleteDatabase", .permission = "datastore.databases.delete" },
+        .{ .suffix = "FirestoreAdmin.GetIndex", .permission = "datastore.indexes.get" },
+        .{ .suffix = "FirestoreAdmin.CreateIndex", .permission = "datastore.indexes.create" },
+        .{ .suffix = "FirestoreAdmin.DeleteIndex", .permission = "datastore.indexes.delete" },
+        .{ .suffix = "FirestoreAdmin.GetField", .permission = "datastore.fields.get" },
+        .{ .suffix = "FirestoreAdmin.UpdateField", .permission = "datastore.fields.update" },
+        .{ .suffix = "FirestoreAdmin.GetBackupSchedule", .permission = "datastore.backupSchedules.get" },
+        .{ .suffix = "FirestoreAdmin.CreateBackupSchedule", .permission = "datastore.backupSchedules.create" },
+        .{ .suffix = "FirestoreAdmin.UpdateBackupSchedule", .permission = "datastore.backupSchedules.update" },
+        .{ .suffix = "FirestoreAdmin.DeleteBackupSchedule", .permission = "datastore.backupSchedules.delete" },
+        .{ .suffix = "FirestoreAdmin.GetIamPolicy", .permission = "datastore.databases.getIamPolicy" },
+        .{ .suffix = "FirestoreAdmin.SetIamPolicy", .permission = "datastore.databases.setIamPolicy" },
         .{ .suffix = "CloudScheduler.GetJob", .permission = "cloudscheduler.jobs.get" },
         .{ .suffix = "CloudScheduler.CreateJob", .permission = "cloudscheduler.jobs.create" },
         .{ .suffix = "CloudScheduler.UpdateJob", .permission = "cloudscheduler.jobs.update" },
@@ -567,6 +582,31 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Assignments.CreateAssignment" },
         .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Assignments.DeleteAssignment" },
     };
+    const firestore_database = [_]RpcUsage{
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.GetDatabase" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.CreateDatabase" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.UpdateDatabase" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.DeleteDatabase" },
+    };
+    const firestore_index = [_]RpcUsage{
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.GetIndex" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.CreateIndex" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.DeleteIndex" },
+    };
+    const firestore_field = [_]RpcUsage{
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.GetField" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.UpdateField" },
+    };
+    const firestore_backup_schedule = [_]RpcUsage{
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.GetBackupSchedule" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.CreateBackupSchedule" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.UpdateBackupSchedule" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.DeleteBackupSchedule" },
+    };
+    const firestore_database_iam = [_]RpcUsage{
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.GetIamPolicy" },
+        .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.SetIamPolicy" },
+    };
     const iam_service_account = [_]RpcUsage{
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.GetServiceAccount" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.CreateServiceAccount" },
@@ -697,6 +737,11 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.bigquery.ReservationIamMember")) return &bigquery_reservation_iam;
     if (std.mem.eql(u8, type_name, "gcp.bigquery.CapacityCommitment")) return &bigquery_commitment;
     if (std.mem.eql(u8, type_name, "gcp.bigquery.ReservationAssignment")) return &bigquery_assignment;
+    if (std.mem.eql(u8, type_name, "gcp.firestore.Database")) return &firestore_database;
+    if (std.mem.eql(u8, type_name, "gcp.firestore.DatabaseIamMember")) return &firestore_database_iam;
+    if (std.mem.eql(u8, type_name, "gcp.firestore.Index")) return &firestore_index;
+    if (std.mem.eql(u8, type_name, "gcp.firestore.Field")) return &firestore_field;
+    if (std.mem.eql(u8, type_name, "gcp.firestore.BackupSchedule")) return &firestore_backup_schedule;
     if (std.mem.eql(u8, type_name, "gcp.iam.ServiceAccount")) return &iam_service_account;
     if (std.mem.startsWith(u8, type_name, "gcp.iam.Project") and
         !std.mem.eql(u8, type_name, "gcp.iam.ProjectCustomRole")) return &project_iam;
@@ -731,6 +776,8 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/bigquery.dataViewer", .permission = "bigquery.tables.getData" },
         .{ .role = "roles/bigquery.dataEditor", .permission = "bigquery.tables.updateData" },
         .{ .role = "roles/bigquery.jobUser", .permission = "bigquery.jobs.create" },
+        .{ .role = "roles/datastore.user", .permission = "datastore.entities.create" },
+        .{ .role = "roles/datastore.viewer", .permission = "datastore.entities.get" },
         .{ .role = "roles/bigquery.connectionUser", .permission = "bigquery.connections.use" },
         .{ .role = "roles/cloudtasks.enqueuer", .permission = "cloudtasks.tasks.create" },
         .{ .role = "roles/iam.workloadIdentityUser", .permission = "iam.serviceAccounts.getAccessToken" },

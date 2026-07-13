@@ -58,6 +58,30 @@ test "local planner noops matching desired hashes and updates changed hashes" {
     try std.testing.expectEqualStrings("desired inputs changed", changes.operations[0].reasons[0]);
 }
 
+test "planner updates lifecycle-only protection and retention changes" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try addService(&graph, "example/api:v1", .{});
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    const matching_hash = std.fmt.bytesToHex(graph.resources.items[0].inputs_hash, .lower);
+    try state.put(.{
+        .resource_id = graph.resources.items[0].id,
+        .provider = .gcp,
+        .type_name = graph.resources.items[0].type_name,
+        .logical_id = graph.resources.items[0].logical_id,
+        .desired_hash = matching_hash[0..],
+        .protect = true,
+        .retain_on_delete = true,
+        .status = .created,
+    });
+
+    var changes = try ziac.plan.buildPlan(std.testing.allocator, &graph, &state);
+    defer changes.deinit();
+    try std.testing.expectEqual(ziac.plan.OperationKind.update, changes.operations[0].kind);
+    try std.testing.expectEqualStrings("lifecycle policy changed", changes.operations[0].reasons[0]);
+}
+
 test "refreshed planner uses provider diff for noop update and replace" {
     var original = ziac.ResourceGraph.init(std.testing.allocator);
     defer original.deinit();

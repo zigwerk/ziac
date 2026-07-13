@@ -979,3 +979,174 @@ pub const eventarc_v1 = struct {
         .{ .validate_only = true, .etag = true },
     );
 };
+
+const firestore_transport = TransportSupport{
+    .grpc = true,
+    .rest_transcoding = true,
+};
+const firestore_create_database_query = [_]QueryField{
+    .{ .request_field = "database_id", .wire_name = "databaseId" },
+};
+const firestore_update_query = [_]QueryField{
+    .{ .request_field = "update_mask", .wire_name = "updateMask" },
+};
+const firestore_delete_database_query = [_]QueryField{
+    .{ .request_field = "etag", .wire_name = "etag" },
+};
+const firestore_database_lro = LongRunning{
+    .response_type = "google.firestore.admin.v1.Database",
+    .metadata_type = "google.firestore.admin.v1.DatabaseOperationMetadata",
+};
+const firestore_index_lro = LongRunning{
+    .response_type = "google.firestore.admin.v1.Index",
+    .metadata_type = "google.firestore.admin.v1.IndexOperationMetadata",
+};
+const firestore_field_lro = LongRunning{
+    .response_type = "google.firestore.admin.v1.Field",
+    .metadata_type = "google.firestore.admin.v1.FieldOperationMetadata",
+};
+
+fn firestoreMethod(
+    method: []const u8,
+    request_type: []const u8,
+    response_type: []const u8,
+    rest: RestBinding,
+    routing_field: []const u8,
+    long_running: ?LongRunning,
+    semantics: Semantics,
+) Method {
+    return .{
+        .package = "google.firestore.admin.v1",
+        .service = "google.firestore.admin.v1.FirestoreAdmin",
+        .method = method,
+        .default_host = "firestore.googleapis.com",
+        .request_type = request_type,
+        .response_type = response_type,
+        .rest = rest,
+        .routing_field = routing_field,
+        .long_running = long_running,
+        .transports = firestore_transport,
+        .semantics = semantics,
+    };
+}
+
+/// Firestore Admin v1 method metadata pinned to `googleapis_revision`.
+pub const firestore_admin_v1 = struct {
+    pub const create_database = firestoreMethod(
+        "CreateDatabase",
+        "google.firestore.admin.v1.CreateDatabaseRequest",
+        "google.longrunning.Operation",
+        .{ .method = .post, .path_template = "/v1/{parent=projects/*}/databases", .body = "database", .query_fields = &firestore_create_database_query },
+        "parent",
+        firestore_database_lro,
+        .{ .etag = true },
+    );
+    pub const get_database = firestoreMethod(
+        "GetDatabase",
+        "google.firestore.admin.v1.GetDatabaseRequest",
+        "google.firestore.admin.v1.Database",
+        .{ .method = .get, .path_template = "/v1/{name=projects/*/databases/*}" },
+        "name",
+        null,
+        .{ .etag = true },
+    );
+    pub const update_database = firestoreMethod(
+        "UpdateDatabase",
+        "google.firestore.admin.v1.UpdateDatabaseRequest",
+        "google.longrunning.Operation",
+        .{ .method = .patch, .path_template = "/v1/{database.name=projects/*/databases/*}", .body = "database", .query_fields = &firestore_update_query },
+        "database.name",
+        firestore_database_lro,
+        .{ .update_mask = true, .etag = true },
+    );
+    pub const delete_database = firestoreMethod(
+        "DeleteDatabase",
+        "google.firestore.admin.v1.DeleteDatabaseRequest",
+        "google.longrunning.Operation",
+        .{ .method = .delete, .path_template = "/v1/{name=projects/*/databases/*}", .query_fields = &firestore_delete_database_query },
+        "name",
+        firestore_database_lro,
+        .{ .etag = true },
+    );
+    pub const create_index = firestoreMethod(
+        "CreateIndex",
+        "google.firestore.admin.v1.CreateIndexRequest",
+        "google.longrunning.Operation",
+        .{ .method = .post, .path_template = "/v1/{parent=projects/*/databases/*/collectionGroups/*}/indexes", .body = "index" },
+        "parent",
+        firestore_index_lro,
+        .{},
+    );
+    pub const get_index = firestoreMethod(
+        "GetIndex",
+        "google.firestore.admin.v1.GetIndexRequest",
+        "google.firestore.admin.v1.Index",
+        .{ .method = .get, .path_template = "/v1/{name=projects/*/databases/*/collectionGroups/*/indexes/*}" },
+        "name",
+        null,
+        .{},
+    );
+    pub const delete_index = firestoreMethod(
+        "DeleteIndex",
+        "google.firestore.admin.v1.DeleteIndexRequest",
+        "google.protobuf.Empty",
+        .{ .method = .delete, .path_template = "/v1/{name=projects/*/databases/*/collectionGroups/*/indexes/*}" },
+        "name",
+        null,
+        .{},
+    );
+    pub const get_field = firestoreMethod(
+        "GetField",
+        "google.firestore.admin.v1.GetFieldRequest",
+        "google.firestore.admin.v1.Field",
+        .{ .method = .get, .path_template = "/v1/{name=projects/*/databases/*/collectionGroups/*/fields/*}" },
+        "name",
+        null,
+        .{},
+    );
+    pub const update_field = firestoreMethod(
+        "UpdateField",
+        "google.firestore.admin.v1.UpdateFieldRequest",
+        "google.longrunning.Operation",
+        .{ .method = .patch, .path_template = "/v1/{field.name=projects/*/databases/*/collectionGroups/*/fields/*}", .body = "field", .query_fields = &firestore_update_query },
+        "field.name",
+        firestore_field_lro,
+        .{ .update_mask = true },
+    );
+    pub const create_backup_schedule = firestoreMethod(
+        "CreateBackupSchedule",
+        "google.firestore.admin.v1.CreateBackupScheduleRequest",
+        "google.firestore.admin.v1.BackupSchedule",
+        .{ .method = .post, .path_template = "/v1/{parent=projects/*/databases/*}/backupSchedules", .body = "backup_schedule" },
+        "parent",
+        null,
+        .{},
+    );
+    pub const get_backup_schedule = firestoreMethod(
+        "GetBackupSchedule",
+        "google.firestore.admin.v1.GetBackupScheduleRequest",
+        "google.firestore.admin.v1.BackupSchedule",
+        .{ .method = .get, .path_template = "/v1/{name=projects/*/databases/*/backupSchedules/*}" },
+        "name",
+        null,
+        .{},
+    );
+    pub const update_backup_schedule = firestoreMethod(
+        "UpdateBackupSchedule",
+        "google.firestore.admin.v1.UpdateBackupScheduleRequest",
+        "google.firestore.admin.v1.BackupSchedule",
+        .{ .method = .patch, .path_template = "/v1/{backup_schedule.name=projects/*/databases/*/backupSchedules/*}", .body = "backup_schedule", .query_fields = &firestore_update_query },
+        "backup_schedule.name",
+        null,
+        .{ .update_mask = true },
+    );
+    pub const delete_backup_schedule = firestoreMethod(
+        "DeleteBackupSchedule",
+        "google.firestore.admin.v1.DeleteBackupScheduleRequest",
+        "google.protobuf.Empty",
+        .{ .method = .delete, .path_template = "/v1/{name=projects/*/databases/*/backupSchedules/*}" },
+        "name",
+        null,
+        .{},
+    );
+};

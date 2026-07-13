@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 75), managed_count);
+    try std.testing.expectEqual(@as(usize, 80), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -84,6 +84,22 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     try std.testing.expect(topic.capabilities.estate);
     try std.testing.expect(topic.capabilities.visual);
     try std.testing.expect(topic.capabilities.cost);
+
+    const firestore_database = ziac.gcp.coverage.find("gcp.firestore.Database") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(ziac.gcp.coverage.Stage.managed, firestore_database.stage);
+    try std.testing.expectEqualStrings("M64", firestore_database.milestone);
+    try std.testing.expect(firestore_database.capabilities.estate);
+    try std.testing.expect(firestore_database.capabilities.visual);
+    try std.testing.expect(firestore_database.capabilities.cost);
+
+    const firestore_index = ziac.gcp.coverage.find("gcp.firestore.Index") orelse return error.TestExpectedEqual;
+    try std.testing.expect(firestore_index.capabilities.create);
+    try std.testing.expect(!firestore_index.capabilities.update);
+    try std.testing.expect(firestore_index.capabilities.import_resource);
+
+    const firestore_member = ziac.gcp.coverage.find("gcp.firestore.DatabaseIamMember") orelse return error.TestExpectedEqual;
+    try std.testing.expect(firestore_member.capabilities.iam);
+    try std.testing.expect(firestore_member.capabilities.visual);
 
     try std.testing.expect(ziac.gcp.coverage.find("gcp.not.a.Resource") == null);
 }
