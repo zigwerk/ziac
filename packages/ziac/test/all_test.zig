@@ -3,6 +3,9 @@ comptime {
     _ = @import("gcp_bigquery_product_test.zig");
     _ = @import("gcp_firestore_live_provider_test.zig");
     _ = @import("gcp_firestore_product_test.zig");
+    _ = @import("gcp_cloud_sql_test.zig");
+    _ = @import("gcp_cloud_sql_product_test.zig");
+    _ = @import("gcp_cloud_sql_live_provider_test.zig"); // M65 lifecycle and recovery evidence.
     _ = @import("smoke_test.zig");
     _ = @import("core_test.zig");
     _ = @import("value_test.zig");

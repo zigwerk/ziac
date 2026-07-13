@@ -32,6 +32,7 @@ test "paid Google estate scan consumes pages and emits mutation-isolated observe
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"operation\":\"read\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.run.Service") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.sql.Instance") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/instances/orders\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.compute.Network") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.storage.Bucket") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"buckets/ziac-assets\"") != null);

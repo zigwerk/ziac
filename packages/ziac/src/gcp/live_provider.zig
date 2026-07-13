@@ -7,6 +7,7 @@ const dns_provider = @import("dns_provider.zig");
 const network_provider = @import("network_provider.zig");
 const kms_provider = @import("kms_provider.zig");
 const scheduler_provider = @import("scheduler_provider.zig");
+const sql_provider = @import("sql_provider.zig");
 const pubsub_provider = @import("pubsub_provider.zig");
 const tasks_provider = @import("tasks_provider.zig");
 const eventarc_provider = @import("eventarc_provider.zig");
@@ -109,6 +110,11 @@ pub const managed_type_names = [_][]const u8{
     "gcp.secret.Secret",
     "gcp.secret.SecretIamMember",
     "gcp.secret.SecretVersion",
+    "gcp.sql.ClientCertificate",
+    "gcp.sql.Database",
+    "gcp.sql.Instance",
+    "gcp.sql.ReadReplica",
+    "gcp.sql.User",
     "gcp.storage.Bucket",
     "gcp.storage.BucketIamMember",
     "gcp.storage.BuildBucket",
@@ -172,6 +178,7 @@ pub const LiveProvider = struct {
         if (tasks_provider.supports(node)) return self.tasksHandler().read(context, node, null);
         if (eventarc_provider.supports(node)) return self.eventarcHandler().read(context, node, null);
         if (firestore_provider.supports(node)) return self.firestoreHandler().read(context, node, null);
+        if (sql_provider.supports(node)) return self.sqlHandler().read(context, node, null);
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().read(context, node, null);
         return error.InvalidConfiguration;
     }
@@ -200,6 +207,7 @@ pub const LiveProvider = struct {
         if (tasks_provider.supports(node)) return tasks_provider.Handler.diff(context, node, observed);
         if (eventarc_provider.supports(node)) return eventarc_provider.Handler.diff(context, node, observed);
         if (firestore_provider.supports(node)) return firestore_provider.Handler.diff(context, node, observed);
+        if (sql_provider.supports(node)) return sql_provider.Handler.diff(context, node, observed);
         if (bigquery_provider.supports(node)) return bigquery_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
@@ -241,6 +249,7 @@ pub const LiveProvider = struct {
         if (tasks_provider.supports(node)) return self.tasksHandler().create(context, node);
         if (eventarc_provider.supports(node)) return self.eventarcHandler().create(context, node);
         if (firestore_provider.supports(node)) return self.firestoreHandler().create(context, node);
+        if (sql_provider.supports(node)) return self.sqlHandler().create(context, node);
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().create(context, node);
         return error.InvalidConfiguration;
     }
@@ -271,6 +280,7 @@ pub const LiveProvider = struct {
         if (tasks_provider.supports(node)) return self.tasksHandler().update(context, node, observed.physical_id);
         if (eventarc_provider.supports(node)) return self.eventarcHandler().update(context, node, observed);
         if (firestore_provider.supports(node)) return self.firestoreHandler().update(context, node, observed);
+        if (sql_provider.supports(node)) return self.sqlHandler().update(context, node, observed);
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().update(context, node, observed);
         return error.InvalidConfiguration;
     }
@@ -303,6 +313,7 @@ pub const LiveProvider = struct {
         if (tasks_provider.supports(node)) return self.tasksHandler().delete(context, node, physical_id);
         if (eventarc_provider.supports(node)) return self.eventarcHandler().delete(context, node, physical_id);
         if (firestore_provider.supports(node)) return self.firestoreHandler().delete(context, node, physical_id);
+        if (sql_provider.supports(node)) return self.sqlHandler().delete(context, node, physical_id);
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
@@ -480,6 +491,7 @@ pub const LiveProvider = struct {
                 .present => |present| present,
             };
         }
+        if (sql_provider.supports(node)) return self.sqlHandler().importResource(context, node, physical_id);
         if (bigquery_provider.supports(node)) {
             const result = try self.bigqueryHandler().read(context, node, physical_id);
             return switch (result) {
@@ -1157,6 +1169,14 @@ pub const LiveProvider = struct {
 
     fn firestoreHandler(self: *LiveProvider) firestore_provider.Handler {
         return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn sqlHandler(self: *LiveProvider) sql_provider.Handler {
+        return .{
+            .client = self.client,
+            .operation_policy = self.operation_policy,
+            .secret_source = self.secret_source,
+        };
     }
 
     fn bigqueryHandler(self: *LiveProvider) bigquery_provider.Handler {

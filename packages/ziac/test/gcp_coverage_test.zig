@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 80), managed_count);
+    try std.testing.expectEqual(@as(usize, 85), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -101,6 +101,16 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     try std.testing.expect(firestore_member.capabilities.iam);
     try std.testing.expect(firestore_member.capabilities.visual);
 
+    const sql_instance = ziac.gcp.coverage.find("gcp.sql.Instance") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M65", sql_instance.milestone);
+    try std.testing.expect(sql_instance.capabilities.estate);
+    try std.testing.expect(sql_instance.capabilities.visual);
+    try std.testing.expect(sql_instance.capabilities.cost);
+
+    const sql_certificate = ziac.gcp.coverage.find("gcp.sql.ClientCertificate") orelse return error.TestExpectedEqual;
+    try std.testing.expect(!sql_certificate.capabilities.update);
+    try std.testing.expect(sql_certificate.capabilities.import_resource);
+
     try std.testing.expect(ziac.gcp.coverage.find("gcp.not.a.Resource") == null);
 }
 
@@ -115,6 +125,7 @@ test "GCP provider coverage reports are deterministic filterable and provenance 
     try std.testing.expect(std.mem.indexOf(u8, json_first, ziac.gcp.proto_contract.descriptor_sha256) != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "compute:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "dns:v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json_first, "sqladmin:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "storage:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "gcp.storage.Bucket") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "gcp.pubsub.Topic") == null);

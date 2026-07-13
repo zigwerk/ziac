@@ -123,6 +123,22 @@ pub const FirestoreEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const CloudSqlEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    cpu_sku_id: []const u8,
+    memory_sku_id: []const u8,
+    storage_sku_id: []const u8,
+    backup_sku_id: []const u8,
+    egress_sku_id: []const u8,
+    vcpu_hours: u64,
+    memory_gib_hours: u64,
+    stored_gib_month: u64,
+    backup_gib_month: u64,
+    egress_gib: u64,
+    observed_at_millis: u64,
+};
+
 pub const CloudRunJobEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8,
@@ -425,6 +441,31 @@ pub fn firestoreConfigurationEstimate(
         .{ .quantity = input.document_deletes, .sku_id = input.delete_sku_id },
         .{ .quantity = input.stored_gib_month, .sku_id = input.storage_sku_id },
         .{ .quantity = input.backup_gib_month, .sku_id = input.backup_sku_id },
+    };
+    for (assumptions) |assumption| {
+        if (assumption.quantity == 0) continue;
+        if (assumption.sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = assumption.sku_id, .region = input.region, .quantity = assumption.quantity };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn cloudSqlConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: CloudSqlEstimateInput,
+) !ResourceCost {
+    var usage: [5]UsageAssumption = undefined;
+    var count: usize = 0;
+    const assumptions = [_]struct {
+        quantity: u64,
+        sku_id: []const u8,
+    }{
+        .{ .quantity = input.vcpu_hours, .sku_id = input.cpu_sku_id },
+        .{ .quantity = input.memory_gib_hours, .sku_id = input.memory_sku_id },
+        .{ .quantity = input.stored_gib_month, .sku_id = input.storage_sku_id },
+        .{ .quantity = input.backup_gib_month, .sku_id = input.backup_sku_id },
+        .{ .quantity = input.egress_gib, .sku_id = input.egress_sku_id },
     };
     for (assumptions) |assumption| {
         if (assumption.quantity == 0) continue;

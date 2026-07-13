@@ -26,6 +26,13 @@ pub const sources = [_]Source{
         .document_sha256 = "39b1f648d4fa0824cfc0e8ee19101ddfeda12a53dc3ee3d8c1869a8dae0aeba6",
     },
     .{
+        .id = "sqladmin:v1",
+        .version = "v1",
+        .revision = "20260627",
+        .discovery_url = "https://sqladmin.googleapis.com/discovery/v1/apis/sqladmin/v1/rest",
+        .document_sha256 = "e974b1b2e9778df3727ed425582401b2166507e15e842f331f203ed5596e4f4e",
+    },
+    .{
         .id = "storage:v1",
         .version = "v1",
         .revision = "20260707",

@@ -338,6 +338,11 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
 }
 
 fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, name: []const u8) ![]const u8 {
+    if (std.mem.eql(u8, asset_type, "sqladmin.googleapis.com/Instance")) {
+        const prefix = "//sqladmin.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
     if (std.mem.eql(u8, asset_type, "run.googleapis.com/Service") or
         std.mem.eql(u8, asset_type, "run.googleapis.com/Job") or
         std.mem.eql(u8, asset_type, "run.googleapis.com/WorkerPool"))

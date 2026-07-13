@@ -432,6 +432,21 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "FirestoreAdmin.DeleteBackupSchedule", .permission = "datastore.backupSchedules.delete" },
         .{ .suffix = "FirestoreAdmin.GetIamPolicy", .permission = "datastore.databases.getIamPolicy" },
         .{ .suffix = "FirestoreAdmin.SetIamPolicy", .permission = "datastore.databases.setIamPolicy" },
+        .{ .suffix = "SqlInstancesService.Get", .permission = "cloudsql.instances.get" },
+        .{ .suffix = "SqlInstancesService.Create", .permission = "cloudsql.instances.create" },
+        .{ .suffix = "SqlInstancesService.Update", .permission = "cloudsql.instances.update" },
+        .{ .suffix = "SqlInstancesService.Delete", .permission = "cloudsql.instances.delete" },
+        .{ .suffix = "SqlDatabasesService.Get", .permission = "cloudsql.databases.get" },
+        .{ .suffix = "SqlDatabasesService.Create", .permission = "cloudsql.databases.create" },
+        .{ .suffix = "SqlDatabasesService.Update", .permission = "cloudsql.databases.update" },
+        .{ .suffix = "SqlDatabasesService.Delete", .permission = "cloudsql.databases.delete" },
+        .{ .suffix = "SqlUsersService.Get", .permission = "cloudsql.users.get" },
+        .{ .suffix = "SqlUsersService.Create", .permission = "cloudsql.users.create" },
+        .{ .suffix = "SqlUsersService.Update", .permission = "cloudsql.users.update" },
+        .{ .suffix = "SqlUsersService.Delete", .permission = "cloudsql.users.delete" },
+        .{ .suffix = "SqlSslCertsService.Get", .permission = "cloudsql.sslCerts.get" },
+        .{ .suffix = "SqlSslCertsService.Create", .permission = "cloudsql.sslCerts.create" },
+        .{ .suffix = "SqlSslCertsService.Delete", .permission = "cloudsql.sslCerts.delete" },
         .{ .suffix = "CloudScheduler.GetJob", .permission = "cloudscheduler.jobs.get" },
         .{ .suffix = "CloudScheduler.CreateJob", .permission = "cloudscheduler.jobs.create" },
         .{ .suffix = "CloudScheduler.UpdateJob", .permission = "cloudscheduler.jobs.update" },
@@ -607,6 +622,29 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.GetIamPolicy" },
         .{ .service = "firestore.googleapis.com", .method = "google.firestore.admin.v1.FirestoreAdmin.SetIamPolicy" },
     };
+    const sql_instance = [_]RpcUsage{
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlInstancesService.Get" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlInstancesService.Create" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlInstancesService.Update" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlInstancesService.Delete" },
+    };
+    const sql_database = [_]RpcUsage{
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlDatabasesService.Get" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlDatabasesService.Create" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlDatabasesService.Update" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlDatabasesService.Delete" },
+    };
+    const sql_user = [_]RpcUsage{
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlUsersService.Get" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlUsersService.Create" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlUsersService.Update" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlUsersService.Delete" },
+    };
+    const sql_certificate = [_]RpcUsage{
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlSslCertsService.Get" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlSslCertsService.Create" },
+        .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlSslCertsService.Delete" },
+    };
     const iam_service_account = [_]RpcUsage{
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.GetServiceAccount" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.CreateServiceAccount" },
@@ -742,6 +780,10 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.firestore.Index")) return &firestore_index;
     if (std.mem.eql(u8, type_name, "gcp.firestore.Field")) return &firestore_field;
     if (std.mem.eql(u8, type_name, "gcp.firestore.BackupSchedule")) return &firestore_backup_schedule;
+    if (std.mem.eql(u8, type_name, "gcp.sql.Instance") or std.mem.eql(u8, type_name, "gcp.sql.ReadReplica")) return &sql_instance;
+    if (std.mem.eql(u8, type_name, "gcp.sql.Database")) return &sql_database;
+    if (std.mem.eql(u8, type_name, "gcp.sql.User")) return &sql_user;
+    if (std.mem.eql(u8, type_name, "gcp.sql.ClientCertificate")) return &sql_certificate;
     if (std.mem.eql(u8, type_name, "gcp.iam.ServiceAccount")) return &iam_service_account;
     if (std.mem.startsWith(u8, type_name, "gcp.iam.Project") and
         !std.mem.eql(u8, type_name, "gcp.iam.ProjectCustomRole")) return &project_iam;
@@ -780,6 +822,8 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/datastore.viewer", .permission = "datastore.entities.get" },
         .{ .role = "roles/bigquery.connectionUser", .permission = "bigquery.connections.use" },
         .{ .role = "roles/cloudtasks.enqueuer", .permission = "cloudtasks.tasks.create" },
+        .{ .role = "roles/cloudsql.client", .permission = "cloudsql.instances.connect" },
+        .{ .role = "roles/cloudsql.instanceUser", .permission = "cloudsql.instances.login" },
         .{ .role = "roles/iam.workloadIdentityUser", .permission = "iam.serviceAccounts.getAccessToken" },
         .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },
         .{ .role = "roles/pubsub.subscriber", .permission = "pubsub.subscriptions.consume" },

@@ -826,3 +826,27 @@ The M64 local Testing v2 gate is complete with 615 discovered and executed
 tests, 614 passed, one credential-gated skip, and zero failures, pending tests,
 leaks or logged errors. The provider catalog reports 80 managed resources and
 the public document-store example compiles.
+
+M65 is locally complete and awaiting authenticated Cloud SQL qualification.
+Five managed resource types cover PostgreSQL primary instances, read replicas,
+databases, built-in and IAM users, and client certificates. The handwritten
+Cloud SQL Admin v1 adapter checkpoints Operations, resumes interrupted work,
+uses `settingsVersion` for compare-and-swap updates, canonicalizes flags and
+authorized networks, rejects unsupported private-IP removal and persists
+passwords and one-time private keys only through secret-safe boundaries.
+
+`ziac.gcp.ManagedPostgres` composes a protected primary, databases, users,
+replicas, exact login/client IAM and an optional Secret Manager-backed client
+certificate. Private Services Access remains explicit: the component refuses a
+private primary without a declared connectivity dependency and never creates a
+hidden VPC or peering mutation. API/permission synthesis, Cloud Asset instance
+identity, canvas topology and IAM edges, and explicit compute/storage/backup/
+egress estimates are synchronized. `scripts/qualify-cloud-sql.sh` requires ADC,
+Cloud SQL Auth Proxy, PostgreSQL client tools and a project ending in
+`-ziac-disposable`; otherwise it emits a structured exit-77 skip. See
+`docs/gcp-cloud-sql.md`.
+
+The M65 local Testing v2 gate is complete with 631 discovered and executed
+tests, 630 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. The provider catalog reports 85 managed resources and
+the public managed-postgres example compiles.

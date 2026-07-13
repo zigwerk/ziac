@@ -186,6 +186,7 @@ fn appendResource(
     try appendRunWorkloadDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
+    try appendCloudSqlDetails(output, allocator, item.node);
     try appendIamDetails(output, allocator, item.node);
     try appendConfigurationCost(output, allocator, observed_at_millis);
     try output.appendSlice(allocator, ",\"inputs\":");
@@ -256,6 +257,8 @@ fn iamEdgeDetails(role: []const u8) ?IamEdgeDetails {
         .{ .role = "roles/bigquery.dataViewer", .access = "read", .permission = "bigquery.tables.getData" },
         .{ .role = "roles/bigquery.jobUser", .access = "write", .permission = "bigquery.jobs.create" },
         .{ .role = "roles/cloudtasks.enqueuer", .access = "write", .permission = "cloudtasks.tasks.create" },
+        .{ .role = "roles/cloudsql.client", .access = "connect", .permission = "cloudsql.instances.connect" },
+        .{ .role = "roles/cloudsql.instanceUser", .access = "login", .permission = "cloudsql.instances.login" },
         .{ .role = "roles/datastore.user", .access = "read_write", .permission = "datastore.entities.create" },
         .{ .role = "roles/datastore.viewer", .access = "read", .permission = "datastore.entities.get" },
         .{ .role = "roles/iam.workloadIdentityUser", .access = "invoke", .permission = "iam.serviceAccounts.getAccessToken" },
@@ -328,6 +331,7 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
     if (std.mem.eql(u8, node.type_name, "gcp.storage.Bucket") or
         std.mem.startsWith(u8, node.type_name, "gcp.bigquery.") or
         std.mem.startsWith(u8, node.type_name, "gcp.firestore.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.sql.") or
         std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
         std.mem.startsWith(u8, node.type_name, "gcp.eventarc."))
     {
@@ -335,6 +339,48 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         return if (location == .string) location.string else null;
     }
     return null;
+}
+
+fn appendCloudSqlDetails(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    if (!std.mem.startsWith(u8, node.type_name, "gcp.sql.")) return;
+    try output.appendSlice(allocator, ",\"cloud_sql\":{");
+    if (std.mem.eql(u8, node.type_name, "gcp.sql.Instance") or std.mem.eql(u8, node.type_name, "gcp.sql.ReadReplica")) {
+        try appendNamedString(output, allocator, "kind", "instance", false);
+        try appendOptionalStorageString(output, allocator, node, "database_version", "engine");
+        try appendOptionalStorageString(output, allocator, node, "edition", "edition");
+        try appendOptionalStorageString(output, allocator, node, "availability", "availability");
+        try appendNamedString(output, allocator, "role", if (std.mem.eql(u8, node.type_name, "gcp.sql.ReadReplica")) "read_replica" else "primary", true);
+        try appendNamedBool(output, allocator, "private_ip", nonEmptyInputString(node, "private_network"), true);
+        try appendOptionalStorageBool(output, allocator, node, "ipv4_enabled", "public_ip");
+        try appendOptionalStorageBool(output, allocator, node, "backup_enabled", "backup");
+        try appendOptionalStorageBool(output, allocator, node, "point_in_time_recovery", "pitr");
+        try appendOptionalStorageString(output, allocator, node, "ssl_mode", "ssl_mode");
+        try appendOptionalStorageString(output, allocator, node, "connector_enforcement", "connector_enforcement");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.sql.Database")) {
+        try appendNamedString(output, allocator, "kind", "database", false);
+        try appendOptionalStorageString(output, allocator, node, "instance_id", "instance_id");
+        try appendOptionalStorageString(output, allocator, node, "name", "name");
+        try appendOptionalStorageString(output, allocator, node, "charset", "charset");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.sql.User")) {
+        try appendNamedString(output, allocator, "kind", "user", false);
+        try appendOptionalStorageString(output, allocator, node, "instance_id", "instance_id");
+        try appendOptionalStorageString(output, allocator, node, "name", "name");
+        try appendOptionalStorageString(output, allocator, node, "user_type", "user_type");
+    } else {
+        try appendNamedString(output, allocator, "kind", "client_certificate", false);
+        try appendOptionalStorageString(output, allocator, node, "instance_id", "instance_id");
+        try appendOptionalStorageString(output, allocator, node, "common_name", "common_name");
+    }
+    try output.append(allocator, '}');
+}
+
+fn nonEmptyInputString(node: resource.ResourceNode, name: []const u8) bool {
+    const present = objectField(node.inputs, name) orelse return false;
+    return present == .string and present.string.len > 0;
 }
 
 fn appendFirestoreDetails(

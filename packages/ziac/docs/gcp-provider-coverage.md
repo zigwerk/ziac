@@ -232,6 +232,21 @@ state before drift comparison. Permission synthesis, supported Cloud Asset
 database identity, canvas metadata, IAM edge semantics and explicit operation,
 storage and backup estimates are synchronized. See `gcp-firestore.md`.
 
+### Cloud SQL PostgreSQL platform
+
+M65 adds five managed Cloud SQL resources: Instance, ReadReplica, Database,
+User and ClientCertificate. `ziac.gcp.ManagedPostgres` composes a protected
+PostgreSQL primary, declared databases and identities, optional regional
+replicas, exact login/client IAM and a Secret Manager-backed certificate.
+
+The lifecycle adapter resumes SQL Admin operations, uses settings-version
+preconditions, normalizes unordered policy fields, preserves write-only secret
+references and treats region, engine, allocated range and private-IP removal as
+replacement boundaries. Private Services Access is an explicit dependency and
+is never synthesized as a hidden side effect. Permission synthesis, Cloud Asset
+instance identity, canvas metadata, IAM edges and explicit compute, storage,
+backup and egress estimates are synchronized. See `gcp-cloud-sql.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`
@@ -248,7 +263,7 @@ M56-M62 adds the provider catalog and generation spine, then completes:
 4. general additive and authoritative IAM semantics;
 5. one integrated authenticated application-platform qualification.
 
-The subsequent waves cover Cloud SQL, Spanner, Memorystore, Compute Engine,
+The subsequent waves cover Spanner, Memorystore, Compute Engine,
 GKE, broader networking, Cloud Armor, Certificate
 Manager, Monitoring, Logging, Cloud Build/Deploy, organization governance,
 security, analytics, integration and stable Vertex AI resources.

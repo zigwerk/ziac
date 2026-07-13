@@ -9,6 +9,7 @@ pub const Kind = enum {
     generic,
     compute_global,
     compute_regional,
+    cloud_sql,
 };
 
 pub const Target = struct {
@@ -52,6 +53,22 @@ pub const Target = struct {
                 allocator,
                 "{s}/projects/{s}/regions/{s}/operations/{s}",
                 .{ std.mem.trimEnd(u8, base_url, "/"), project_id, region, operation_name },
+            ),
+        };
+    }
+
+    pub fn cloudSqlAlloc(
+        allocator: std.mem.Allocator,
+        base_url: []const u8,
+        project_id: []const u8,
+        operation_name: []const u8,
+    ) std.mem.Allocator.Error!Target {
+        return .{
+            .kind = .cloud_sql,
+            .url = try std.fmt.allocPrint(
+                allocator,
+                "{s}/v1/projects/{s}/operations/{s}",
+                .{ std.mem.trimEnd(u8, base_url, "/"), project_id, operation_name },
             ),
         };
     }
@@ -138,7 +155,27 @@ fn inspectResponse(allocator: std.mem.Allocator, kind: Kind, body: []const u8) P
     return switch (kind) {
         .generic => inspectGeneric(root),
         .compute_global, .compute_regional => inspectCompute(root),
+        .cloud_sql => inspectCloudSql(root),
     };
+}
+
+fn inspectCloudSql(root: std.json.ObjectMap) PollState {
+    const status = if (root.get("status")) |value| switch (value) {
+        .string => |text| text,
+        else => return .{ .done = false },
+    } else return .{ .done = false };
+    if (!std.mem.eql(u8, status, "DONE")) return .{ .done = false };
+    if (root.get("error")) |error_value| {
+        const error_object = switch (error_value) {
+            .object => |object| object,
+            else => return .{ .done = true, .failure = error.ProviderBug },
+        };
+        if (error_object.get("errors")) |errors| switch (errors) {
+            .array => |items| if (items.items.len > 0) return .{ .done = true, .failure = error.ProviderBug },
+            else => return .{ .done = true, .failure = error.ProviderBug },
+        };
+    }
+    return .{ .done = true };
 }
 
 fn inspectGeneric(root: std.json.ObjectMap) PollState {
