@@ -19,8 +19,33 @@ a missing native bridge is shown as an error and never silently replaced.
 - **Operations** keeps agent state, causal logs, deployment progress, and
   bounded evidence available without leaving the infrastructure context.
 
-The Workbench is read-only. It cannot change Zig source, Ziac state, saved
-plans, or provider resources.
+The canvas and inspectors are read-only. The command deck may request a fixed
+Ziac plan, require explicit saved-digest approval, and start a host-owned watch
+deploy. Browser input cannot select an executable, working directory, process
+ID, plan path, or shell command.
+
+## Realtime Workspace Protocol
+
+Merged workspace artifacts carry a deterministic revision over workspace
+identity and complete ordered project slices; wall-clock creation time is not
+part of that digest. The native host hashes each project's manifest and
+declared source roots on a bounded local interval. It invokes the existing
+target-aware affected-project compiler only after that source revision changes.
+
+A successful compile emits `ziac.workspace-patch.v1` with an exact base
+revision, next revision, complete changed project slices, removed project IDs,
+project order, and cross-project links. WebUI broadcasts the patch as a local
+browser event. The frontend applies it only to the named base revision; a stale
+or malformed patch causes one full snapshot reload. There is no periodic
+full-artifact browser poll.
+
+Apply after approval uses the asynchronous operation protocol. The host returns
+an opaque operation ID immediately, persists bounded stdout and stderr under
+`.ziac/dashboard/operations/`, and exposes real queued, running, cancelling,
+cancelled, succeeded, or failed state. The dock renders those phases and actual
+retained causal events. It never displays an invented percentage or rollout
+phase. Cancel can address only an operation ID started and recorded by that
+host process.
 
 ## Artifact Contract
 
@@ -197,9 +222,10 @@ selection, health, warnings, and active plan operations.
 
 The browser must never receive Google or Cockroach credentials. Refresh,
 service health, Cloud Run revision readiness, long-running operation progress,
-request IDs, metrics, and probes belong in the Zig host. The host may publish a
-new bounded artifact through the existing bridge or live attachment; both views
-then update from the same parsed model.
+request IDs, metrics, and probes belong in the Zig host. The host publishes
+revisioned local project patches through the existing bridge; both views update
+from the same parsed model. Provider-side health, metrics, probes, and request
+traces remain future live attachments to that same secret-free model.
 
 The connected development fixture demonstrates the browser contract only. A
 production estate scan still requires the server-side Google identity callback,

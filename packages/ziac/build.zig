@@ -25,7 +25,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const zigeffect_postgres = b.dependency("zigeffect_postgres", .{}).module("zigeffect_postgres");
+    const zigeffect_postgres = b.dependency("zigeffect_postgres", .{
+        .openssl_include_path = b.option(std.Build.LazyPath, "openssl_include_path", "OpenSSL include directory for hosted Linux builds"),
+    }).module("zigeffect_postgres");
 
     const ziac = b.addModule("ziac", .{
         .root_source_file = b.path("src/ziac.zig"),
@@ -104,6 +106,17 @@ pub fn build(b: *std.Build) void {
         .root_module = estate_control_plane_module,
     });
     b.installArtifact(estate_control_plane_executable);
+    const billing_worker_module = b.createModule(.{
+        .root_source_file = b.path("src/billing_worker_main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    billing_worker_module.addImport("ziac", ziac);
+    const billing_worker_executable = b.addExecutable(.{
+        .name = "ziac-billing-worker",
+        .root_module = billing_worker_module,
+    });
+    b.installArtifact(billing_worker_executable);
     const dashboard_ui_build = b.addSystemCommand(&.{ "bun", "run", "ziac:dashboard:build" });
     dashboard_ui_build.setCwd(.{ .cwd_relative = "../.." });
     installClientDistribution(b, &dashboard_ui_build.step);
@@ -178,6 +191,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&dashboard_host_executable.step);
     test_step.dependOn(&mcp_server_executable.step);
     test_step.dependOn(&estate_control_plane_executable.step);
+    test_step.dependOn(&billing_worker_executable.step);
 
     const container_e2e_command = b.addSystemCommand(&.{"bash"});
     container_e2e_command.addFileArg(b.path("test/run_zig_service_container.sh"));
@@ -227,8 +241,22 @@ pub fn build(b: *std.Build) void {
     release_gate.dependOn(&dashboard_host_executable.step);
     release_gate.dependOn(&mcp_server_executable.step);
     release_gate.dependOn(&estate_control_plane_executable.step);
+    release_gate.dependOn(&billing_worker_executable.step);
     release_gate.dependOn(&dashboard_ui_build.step);
     release_gate.dependOn(&container_e2e_command.step);
+
+    const self_host_gate = b.step("self-host-gate", "Compile and verify the external Ziac Cloud bootstrap workspace");
+    self_host_gate.dependOn(test_step);
+    self_host_gate.dependOn(&format_check.step);
+    self_host_gate.dependOn(&dashboard_ui_build.step);
+    self_host_gate.dependOn(&estate_control_plane_executable.step);
+    self_host_gate.dependOn(&billing_worker_executable.step);
+
+    const self_host_binaries = b.step("self-host-binaries", "Build the Ziac Cloud hosted service binaries");
+    const install_estate_control_plane = b.addInstallArtifact(estate_control_plane_executable, .{});
+    const install_billing_worker = b.addInstallArtifact(billing_worker_executable, .{});
+    self_host_binaries.dependOn(&install_estate_control_plane.step);
+    self_host_binaries.dependOn(&install_billing_worker.step);
 }
 
 fn installClientDistribution(b: *std.Build, dashboard_build: *std.Build.Step) void {
@@ -236,7 +264,9 @@ fn installClientDistribution(b: *std.Build, dashboard_build: *std.Build.Step) vo
         "README.md",
         "build.zig",
         "build.zig.zon",
-    }, &.{ "examples", "proto", "src", "test" });
+        "Dockerfile.self-host",
+        "cloudbuild.self-host.yaml",
+    }, &.{ "docs", "examples", "migrations", "proto", "scripts", "src", "test" });
     installPackage(b, "zigeffect", "../zigeffect", &.{
         "CHANGELOG.md",
         "README.md",

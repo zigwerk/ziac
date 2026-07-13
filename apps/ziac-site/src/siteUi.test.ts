@@ -78,6 +78,15 @@ describe("Ziac product site contract", () => {
     expect(appSource).toContain('role="tab"');
   });
 
+  test("markets the complete relocatable agent development kit", () => {
+    expect(appSource).toContain("One install. Every agent equipped.");
+    expect(appSource).toContain("Relocatable by design");
+    expect(appSource).toContain("Ziac MCP server");
+    expect(appSource).toContain("GCP Developer Researcher");
+    expect(appSource).toContain("DEVELOPERKNOWLEDGE_API_KEY");
+    expect(appSource).toContain('href="/how-it-works#scaffold"');
+  });
+
   test("makes the Pulumi and Terraform differentiation concrete", () => {
     expect(appSource).toContain("Pulumi and Terraform are broad");
     expect(appSource).toContain("App + infrastructure");

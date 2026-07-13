@@ -52,14 +52,14 @@ test("resource objects own face identity and sit exactly on their scope slab", (
     const nodeBottom = node.position[1] - node.size[1] / 2;
     expect(Math.abs(planeTop - nodeBottom)).toBeLessThan(0.001);
     expect(node.face).toEqual({ type: node.service, name: node.label, id: node.id });
-    expect(node.tooltip.forecastMonthly).toMatch(/^\$[0-9,]+-\$[0-9,]+ estimated$/);
+    expect(node.tooltip.forecastMonthly).toBe("Billing data unavailable");
     expect(node.tooltip.uptime.length).toBeGreaterThan(0);
   }
 
   const europe = scene.planes.find((plane) => plane.id === "region:europe-west1");
   expect(europe?.surface).toMatchObject({ title: "europe-west1", subtitle: "VPC global-api" });
   expect(europe?.tooltip.resourceCount).toBe(1);
-  expect(europe?.tooltip.forecastMonthly).toContain("estimated");
+  expect(europe?.tooltip.forecastMonthly).toBe("Billing data unavailable");
 });
 
 test("topology modes preserve resources while changing emphasized routes and planes", () => {
@@ -267,7 +267,7 @@ test("Three topology renderer maps identity to object faces and exposes hover in
   expect(value).not.toContain("CSS2DRenderer");
   expect(value).toContain("Raycaster");
   expect(value).toContain("ziac-scene-tooltip");
-  expect(value).toContain("Monthly estimate");
+  expect(value).toContain("Actual spend appears only from an authorized detailed Cloud Billing export");
   expect(value).toContain("Uptime");
   expect(value).toContain('aria-label="3D infrastructure topology"');
   expect(value).toContain("ResizeObserver");

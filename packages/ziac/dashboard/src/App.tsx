@@ -1,19 +1,29 @@
-import { Show, createMemo, createResource, onCleanup, onMount } from "solid-js";
+import { Show, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js";
 import { ZiacWorkbench } from "./ZiacWorkbench";
-import { loadDashboardPayload, requestEstateScan } from "./bridge";
+import { applyWorkspacePatch, loadDashboardPayload, requestEstateScan, subscribeWorkspacePatches } from "./bridge";
 import { deriveZiacDashboardModel } from "./ziacVisualArtifact";
 
 export function App() {
   const [payload, { refetch }] = createResource(loadDashboardPayload);
+  const [liveArtifact, setLiveArtifact] = createSignal<string | null>(null);
+  createEffect(() => {
+    const loaded = payload();
+    if (loaded) setLiveArtifact(loaded.artifactJson);
+  });
   onMount(() => {
-    const refresh = window.setInterval(() => void refetch(), 2_500);
-    onCleanup(() => window.clearInterval(refresh));
+    const unsubscribe = subscribeWorkspacePatches((patchJson) => {
+      const current = liveArtifact();
+      const next = current === null ? null : applyWorkspacePatch(current, patchJson);
+      if (next === null) void refetch();
+      else setLiveArtifact(next);
+    });
+    onCleanup(unsubscribe);
   });
   const parsed = createMemo(() => {
     const loaded = payload() ?? payload.latest;
     if (!loaded) return null;
     try {
-      const raw: unknown = JSON.parse(loaded.artifactJson);
+      const raw: unknown = JSON.parse(liveArtifact() ?? loaded.artifactJson);
       return {
         model: deriveZiacDashboardModel(raw),
         session: loaded.session,

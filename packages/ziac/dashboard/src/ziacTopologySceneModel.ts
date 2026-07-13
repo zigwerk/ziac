@@ -786,31 +786,27 @@ function resourceConnectionCounts(model: FilteredZiacVisualModel) {
   return counts;
 }
 
-type ForecastRange = { minimum: number; maximum: number };
+type ForecastRange = { minimum: number; maximum: number; available: boolean; origin?: "configuration_estimate" | "projected_month_end" | "actual_billed" };
 
 function resourceForecast(resource: ZiacVisualResource): ForecastRange {
-  if (resource.provider === "cockroach") return { minimum: 295, maximum: 1200 };
-  if (resource.type === "gcp.run.Service") return { minimum: 18, maximum: 120 };
-  if (resource.type.includes("GlobalForwardingRule")) return { minimum: 20, maximum: 45 };
-  if (resource.type.includes("BackendService")) return { minimum: 18, maximum: 55 };
-  if (resource.type.includes("GlobalAddress")) return { minimum: 7, maximum: 12 };
-  if (resource.type.includes("ManagedSslCertificate")) return { minimum: 0, maximum: 15 };
-  if (resource.type.includes("RecordSet")) return { minimum: 1, maximum: 8 };
-  if (resource.type.includes("ServerlessNeg")) return { minimum: 0, maximum: 5 };
-  if (resource.type.includes("Secret")) return { minimum: 1, maximum: 12 };
-  if (resource.type.includes("Artifact")) return { minimum: 2, maximum: 30 };
-  return { minimum: 0, maximum: 20 };
+  if (resource.cost?.amount_micros === null || resource.cost === undefined) return { minimum: 0, maximum: 0, available: false };
+  const amount = resource.cost.amount_micros / 1_000_000;
+  return { minimum: amount, maximum: amount, available: true, origin: resource.cost.origin };
 }
 
 function aggregateForecast(resources: ZiacVisualResource[]): ForecastRange {
-  return resources.reduce((total, resource) => {
+  return resources.reduce<ForecastRange>((total, resource) => {
     const forecast = resourceForecast(resource);
-    return { minimum: total.minimum + forecast.minimum, maximum: total.maximum + forecast.maximum };
-  }, { minimum: 0, maximum: 0 });
+    return { minimum: total.minimum + forecast.minimum, maximum: total.maximum + forecast.maximum, available: total.available || forecast.available };
+  }, { minimum: 0, maximum: 0, available: false });
 }
 
 function formatForecast(forecast: ForecastRange) {
-  return `$${formatInteger(forecast.minimum)}-$${formatInteger(forecast.maximum)} estimated`;
+  if (!forecast.available) return "Billing data unavailable";
+  const amount = `$${formatInteger(Math.round(forecast.minimum))}`;
+  if (forecast.origin === "actual_billed") return `${amount} actual billed`;
+  if (forecast.origin === "projected_month_end") return `${amount} projected month end`;
+  return `${amount} configuration estimate`;
 }
 
 function formatInteger(value: number) {

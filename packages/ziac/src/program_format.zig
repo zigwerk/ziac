@@ -262,6 +262,8 @@ fn containsSecretLiteral(value: value_mod.Value, field_name: ?[]const u8) bool {
 }
 
 fn isSecretField(name: []const u8) bool {
+    const metadata_fields = [_][]const u8{ "secret_id", "secret_name" };
+    for (metadata_fields) |field| if (std.mem.eql(u8, name, field)) return false;
     const needles = [_][]const u8{ "secret", "password", "token", "credential", "private_key", "database_url", "connection_string" };
     var lower: [256]u8 = undefined;
     if (name.len > lower.len) return true;

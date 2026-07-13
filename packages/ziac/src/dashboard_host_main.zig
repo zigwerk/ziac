@@ -6,6 +6,7 @@ const dashboard_options = @import("dashboard_options");
 var host: ziac.dashboard_host.Host = undefined;
 var config: ziac.dashboard_host.Config = undefined;
 var host_io: std.Io = undefined;
+var observer_stop = std.atomic.Value(bool).init(false);
 
 fn returnStatic(event: *webui.Event, value: [:0]const u8) void {
     event.returnValue(value);
@@ -22,11 +23,53 @@ fn returnOwned(event: *webui.Event, bytes: []u8) void {
 }
 
 fn loadArtifact(event: *webui.Event) void {
-    host.refreshArtifact() catch {};
     returnOwned(event, host.loadArtifactAlloc() catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-error.v1\",\"code\":\"artifact_unavailable\"}");
         return;
     });
+}
+
+fn observeWorkspace(window: *webui) void {
+    var source_revision = host.workspaceSourceRevision() catch return;
+    var current_artifact = host.loadArtifactAlloc() catch return;
+    defer std.heap.page_allocator.free(current_artifact);
+    while (!observer_stop.load(.acquire)) {
+        std.Io.sleep(host_io, .fromMilliseconds(250), .awake) catch return;
+        if (observer_stop.load(.acquire)) return;
+        const next_source_revision = host.workspaceSourceRevision() catch continue;
+        if (std.mem.eql(u8, &source_revision, &next_source_revision)) continue;
+        host.refreshArtifact() catch continue;
+        const next_artifact = host.loadArtifactAlloc() catch continue;
+        const patch = ziac.workspace.patchAlloc(std.heap.page_allocator, current_artifact, next_artifact) catch {
+            std.heap.page_allocator.free(next_artifact);
+            continue;
+        };
+        if (!std.mem.eql(u8, ziac.workspace.revision(current_artifact) orelse "", ziac.workspace.revision(next_artifact) orelse "")) {
+            const encoded = std.json.Stringify.valueAlloc(std.heap.page_allocator, patch, .{}) catch {
+                std.heap.page_allocator.free(patch);
+                std.heap.page_allocator.free(next_artifact);
+                continue;
+            };
+            const script = std.fmt.allocPrintSentinel(
+                std.heap.page_allocator,
+                "window.dispatchEvent(new CustomEvent(\"ziac-workspace-patch\",{{detail:{s}}}));",
+                .{encoded},
+                0,
+            ) catch {
+                std.heap.page_allocator.free(encoded);
+                std.heap.page_allocator.free(patch);
+                std.heap.page_allocator.free(next_artifact);
+                continue;
+            };
+            window.run(script);
+            std.heap.page_allocator.free(script);
+            std.heap.page_allocator.free(encoded);
+        }
+        std.heap.page_allocator.free(patch);
+        std.heap.page_allocator.free(current_artifact);
+        current_artifact = next_artifact;
+        source_revision = next_source_revision;
+    }
 }
 
 fn loadSession(event: *webui.Event) void {
@@ -81,12 +124,45 @@ fn requestEstateAccess(event: *webui.Event) void {
     returnStatic(event, "{\"schema\":\"ziac.estate-access.v1\",\"status\":\"control_plane_required\"}");
 }
 
+fn runOperation(event: *webui.Event) void {
+    returnOwned(event, host.runOperationAlloc(event.getString()) catch {
+        returnStatic(event, "{\"schema\":\"ziac.dashboard-operation-error.v1\",\"code\":\"host_failure\"}");
+        return;
+    });
+}
+
+fn startWatch(event: *webui.Event) void {
+    returnOwned(event, host.startWatchAlloc(event.getString()) catch {
+        returnStatic(event, "{\"schema\":\"ziac.dashboard-operation-error.v1\",\"code\":\"host_failure\"}");
+        return;
+    });
+}
+
+fn operationStatus(event: *webui.Event) void {
+    returnOwned(event, host.operationStatusAlloc(event.getString()) catch {
+        returnStatic(event, "{\"schema\":\"ziac.dashboard-operation-error.v1\",\"code\":\"host_failure\"}");
+        return;
+    });
+}
+
+fn cancelOperation(event: *webui.Event) void {
+    returnOwned(event, host.cancelOperationAlloc(event.getString()) catch {
+        returnStatic(event, "{\"schema\":\"ziac.dashboard-operation-error.v1\",\"code\":\"host_failure\"}");
+        return;
+    });
+}
+
 fn configureWindow(window: *webui) !void {
     _ = try window.binding(ziac.dashboard_host.bridge_names.load_artifact, loadArtifact);
     _ = try window.binding(ziac.dashboard_host.bridge_names.load_session, loadSession);
     _ = try window.binding(ziac.dashboard_host.bridge_names.load_log_snapshot, loadLogs);
     _ = try window.binding(ziac.dashboard_host.bridge_names.scan_estate, scanEstate);
     _ = try window.binding(ziac.dashboard_host.bridge_names.request_estate_access, requestEstateAccess);
+    _ = try window.binding(ziac.dashboard_host.bridge_names.operation_plan, runOperation);
+    _ = try window.binding(ziac.dashboard_host.bridge_names.operation_apply, runOperation);
+    _ = try window.binding(ziac.dashboard_host.bridge_names.operation_watch, startWatch);
+    _ = try window.binding(ziac.dashboard_host.bridge_names.operation_status, operationStatus);
+    _ = try window.binding(ziac.dashboard_host.bridge_names.operation_cancel, cancelOperation);
     try window.setRootFolder(config.root_path);
     window.setSize(1280, 860);
 }
@@ -127,9 +203,9 @@ pub fn main(init: std.process.Init) !void {
     try configureWindow(&window);
     switch (options.mode) {
         .window => window.show("index.html") catch {
-            var server = webui.newWindow();
-            try configureWindow(&server);
-            const url = try server.startServer("index.html");
+            window = webui.newWindow();
+            try configureWindow(&window);
+            const url = try window.startServer("index.html");
             std.debug.print("Ziac dashboard: {s}\n", .{url});
         },
         .server_only => {
@@ -137,7 +213,13 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("Ziac dashboard: {s}\n", .{url});
         },
     }
+    const observer = if (config.refresh_root != null)
+        try std.Thread.spawn(.{}, observeWorkspace, .{&window})
+    else
+        null;
     webui.wait();
+    observer_stop.store(true, .release);
+    if (observer) |thread| thread.join();
     webui.clean();
 }
 

@@ -3,7 +3,7 @@ import { HowItWorks } from "../HowItWorks";
 import { SITE_URL } from "../seo";
 
 const title = "How Ziac works - Agentic global infrastructure for Zig";
-const description = "Scaffold a Ziac project, bring Codex, Claude Code, or Gemini CLI, and watch specialist agents compile, deploy, diagnose, and verify global Google Cloud infrastructure.";
+const description = "Install a complete local Ziac agent development kit for Codex, Claude Code, or Gemini CLI, then compile, deploy, diagnose, and verify global Google Cloud infrastructure.";
 const canonical = `${SITE_URL}/how-it-works`;
 
 const howToSchema = JSON.stringify({
@@ -13,7 +13,7 @@ const howToSchema = JSON.stringify({
   description,
   totalTime: "PT15M",
   step: [
-    { "@type": "HowToStep", name: "Scaffold the project", text: "Create a Zig service, Ziac project contract, global GCP stack, specialist skills, and agent adapters." },
+    { "@type": "HowToStep", name: "Scaffold the project", text: "Run ziac init in a Git project to create a Zig service, global GCP stack, local documentation, harness-native skills, and read-only GCP research adapters." },
     { "@type": "HowToStep", name: "Choose an agent harness", text: "Use Codex, Claude Code, or Gemini CLI against the same governed Ziac kernel." },
     { "@type": "HowToStep", name: "Compile and verify", text: "Compile application bindings and infrastructure, preflight GCP, and run deterministic scenarios." },
     { "@type": "HowToStep", name: "Deploy globally", text: "Build an immutable Zig image and provision regional Cloud Run behind global HTTPS routing." },

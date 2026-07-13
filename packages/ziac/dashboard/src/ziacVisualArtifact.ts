@@ -31,6 +31,16 @@ export type ZiacResourceDiscovery = {
   source_name: string;
 };
 
+export type ZiacResourceCost = {
+  schema: "ziac.resource-cost.v1";
+  origin: "configuration_estimate" | "projected_month_end" | "actual_billed";
+  currency: string;
+  amount_micros: number | null;
+  confidence: "explicit_usage" | "billing_partial_month" | "billing_complete";
+  observed_at_millis: number;
+  is_billing_export: boolean;
+};
+
 export type ZiacVisualResource = {
   id: string;
   provider: ZiacProvider;
@@ -43,6 +53,7 @@ export type ZiacVisualResource = {
   health: ZiacHealth;
   ownership: ZiacOwnership;
   discovery?: ZiacResourceDiscovery;
+  cost?: ZiacResourceCost;
   inputs: Record<string, unknown>;
   lifecycle: {
     protect: boolean;
@@ -452,6 +463,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
   const discovery = value.discovery === undefined
     ? undefined
     : parseDiscovery(value.discovery, index);
+  const cost = value.cost === undefined ? undefined : parseCost(value.cost, index);
   if (ownership !== "managed" && discovery === undefined) {
     throw new Error(`resources[${index}].discovery is required for ${ownership} resources`);
   }
@@ -467,6 +479,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
     health: enumValue(value.health, `resources[${index}].health`, healthStates),
     ownership,
     ...(discovery ? { discovery } : {}),
+    ...(cost ? { cost } : {}),
     inputs,
     lifecycle: {
       protect: booleanValue(lifecycle.protect, "lifecycle.protect"),
@@ -474,6 +487,26 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
       replace_before_delete: booleanValue(lifecycle.replace_before_delete, "lifecycle.replace_before_delete"),
     },
     reasons: stringArray(value.reasons, `resources[${index}].reasons`),
+  };
+}
+
+function parseCost(raw: unknown, index: number): ZiacResourceCost {
+  const path = `resources[${index}].cost`;
+  const value = objectValue(raw, path);
+  const currency = nonEmptyString(value.currency, `${path}.currency`);
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error(`${path}.currency must be ISO 4217`);
+  const amount = value.amount_micros === null ? null : integerValue(value.amount_micros, `${path}.amount_micros`);
+  const origin = enumValue(value.origin, `${path}.origin`, ["configuration_estimate", "projected_month_end", "actual_billed"]);
+  const billingExport = booleanValue(value.is_billing_export, `${path}.is_billing_export`);
+  if ((origin === "actual_billed" || origin === "projected_month_end") && !billingExport) throw new Error(`${path} actual cost requires billing export provenance`);
+  return {
+    schema: enumValue(value.schema, `${path}.schema`, ["ziac.resource-cost.v1"]),
+    origin,
+    currency,
+    amount_micros: amount,
+    confidence: enumValue(value.confidence, `${path}.confidence`, ["explicit_usage", "billing_partial_month", "billing_complete"]),
+    observed_at_millis: integerValue(value.observed_at_millis, `${path}.observed_at_millis`),
+    is_billing_export: billingExport,
   };
 }
 

@@ -1,0 +1,12 @@
+.git
+.git/**
+**/.zig-cache
+**/.zig-cache/**
+**/zig-out
+**/zig-out/**
+**/node_modules
+**/node_modules/**
+**/dashboard/dist
+**/dashboard/dist/**
+**/.zigeffect
+**/.zigeffect/**

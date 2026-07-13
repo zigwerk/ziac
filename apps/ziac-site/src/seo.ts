@@ -3,7 +3,7 @@ const configuredSiteUrl = import.meta.env.PUBLIC_SITE_URL?.trim();
 export const SITE_URL = (configuredSiteUrl || "https://ziac.dev").replace(/\/$/, "");
 export const SITE_TITLE = "Ziac - Google Cloud infrastructure, compiled";
 export const SITE_DESCRIPTION =
-  "Observe existing Google Cloud infrastructure, compile safe GCP plans with specialist agents, and deploy Zig services globally on Cloud Run.";
+  "Install a complete local agent development kit, observe existing Google Cloud infrastructure, compile safe GCP plans, and deploy Zig services globally on Cloud Run.";
 export const SOCIAL_IMAGE_URL = `${SITE_URL}/ziac-operations.png`;
 
 export const SOFTWARE_APPLICATION_SCHEMA = JSON.stringify({
@@ -26,5 +26,6 @@ export const SOFTWARE_APPLICATION_SCHEMA = JSON.stringify({
     "Global Cloud Run deployment planning",
     "Causal infrastructure debugging",
     "Observed and managed infrastructure separation",
+    "Relocatable agent development kit with current GCP research skills",
   ],
 });

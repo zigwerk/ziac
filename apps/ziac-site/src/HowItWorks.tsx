@@ -1,6 +1,7 @@
 import Activity from "lucide-solid/icons/activity";
 import ArrowRight from "lucide-solid/icons/arrow-right";
 import Bot from "lucide-solid/icons/bot";
+import BookOpen from "lucide-solid/icons/book-open";
 import Boxes from "lucide-solid/icons/boxes";
 import Braces from "lucide-solid/icons/braces";
 import Check from "lucide-solid/icons/check";
@@ -87,10 +88,10 @@ const controlLoop = [
 
 const generatedFiles = [
   ["ziac.project.json", "Requirements, environments, budgets, authority, and scenarios"],
+  ["build.zig.zon", "A relocatable dependency on the installed Ziac package"],
   ["src/main.zig", "A production-ready Zig HTTP service and typed App.Env"],
-  ["infra/main.zig", "Global Cloud Run, load balancing, IAM, DNS, and data wiring"],
-  [".agents/skills/", "GCP, Ziac, and Zig skills generated for supported harnesses"],
-  [".ziac/scenarios/", "Deterministic rollout, failure, and recovery acceptance checks"],
+  ["ziac.stack.zig", "Global Cloud Run, load balancing, IAM, DNS, and data wiring"],
+  [".agents/ · .claude/ · .gemini/", "Project-aware skills and GCP research agents for every harness"],
   [".mcp.json", "Bounded Ziac tools with explicit read, plan, verify, and apply authority"],
 ] as const;
 
@@ -144,7 +145,7 @@ export function HowItWorks() {
           <div class="how-section-heading" data-reveal>
             <p class="eyebrow">01 / Scaffold</p>
             <h2 id="scaffold-title">A project that teaches every agent how to build it.</h2>
-            <p>The private-beta scaffold creates more than source files. It packages infrastructure intent, agent skills, permissions, deterministic scenarios, and the dashboard contract beside the application.</p>
+            <p><code>ziac init</code> creates more than source files. It packages infrastructure intent, local documentation, harness-native skills, bounded MCP tools, and the dashboard contract beside the application. Everything resolves through the installed package, so the project remains portable without a Ziac source checkout.</p>
           </div>
 
           <div class="scaffold-layout">
@@ -153,17 +154,22 @@ export function HowItWorks() {
                 <span><SquareTerminal size={15} /> Private beta CLI flow</span>
                 <span>global-api</span>
               </div>
-              <pre><code><span class="prompt">$</span> ziac init global-api --template gcp-global
-
-<span class="success">created</span> Zig HTTP service + typed App.Env
-<span class="success">created</span> global Cloud Run architecture
-<span class="success">created</span> GCP, Ziac, and Zig skills
-<span class="success">created</span> agent harness adapters + MCP tools
-<span class="success">created</span> deterministic acceptance scenarios
-
-<span class="prompt">$</span> cd global-api
-<span class="prompt">$</span> ziac agent orient --objective "ship globally"
-<span class="prompt">$</span> ziac dev --watch</code></pre>
+              <pre><code>
+                <span class="cli-line"><span class="prompt">$</span> mkdir global-api && cd global-api</span>
+                <span class="cli-line"><span class="prompt">$</span> git init</span>
+                <span class="cli-line"><span class="prompt">$</span> ziac init --yes</span>
+                <span class="cli-line cli-line-spacer" aria-hidden="true"> </span>
+                <span class="cli-line"><span class="success">created</span> Zig HTTP service + typed App.Env</span>
+                <span class="cli-line"><span class="success">created</span> global Cloud Run architecture</span>
+                <span class="cli-line"><span class="success">created</span> Codex, Claude Code, and Gemini skills</span>
+                <span class="cli-line"><span class="success">created</span> GCP Developer Researcher + docs</span>
+                <span class="cli-line"><span class="success">created</span> local Ziac MCP + dashboard contract</span>
+                <span class="cli-line cli-line-spacer" aria-hidden="true"> </span>
+                <span class="cli-line"><span class="prompt">$</span> export DEVELOPERKNOWLEDGE_API_KEY=...</span>
+                <span class="cli-line"><span class="prompt">$</span> zig build test</span>
+                <span class="cli-line"><span class="prompt">$</span> ziac dashboard</span>
+                <span class="cli-line"><span class="prompt">$</span> ziac dev --watch</span>
+              </code></pre>
             </div>
 
             <div class="generated-manifest" data-reveal style={{ "--reveal-delay": "110ms" }}>
@@ -175,6 +181,11 @@ export function HowItWorks() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div class="kit-boundary" data-reveal aria-label="Installed and user-provided development boundaries">
+            <div><span>Bundled by Ziac</span><p>Compiler and CLI, package sources, local docs, dashboard assets, Ziac MCP server, skills, and researcher agents.</p></div>
+            <div><span>You provide</span><p>The Zig compiler, your preferred agent harness, Google application credentials, and <code>DEVELOPERKNOWLEDGE_API_KEY</code> for current documentation research.</p></div>
           </div>
         </section>
 
@@ -222,6 +233,7 @@ export function HowItWorks() {
               <article><Cloud size={21} /><div><strong>GCP architect</strong><p>Cloud Run, global load balancing, IAM, APIs, quotas, VPC, DNS, billing, and Google RPC semantics.</p></div></article>
               <article><Braces size={21} /><div><strong>Ziac operator</strong><p>Typed graphs, saved plans, capabilities, scenarios, causal evidence, state, rollout, and recovery.</p></div></article>
               <article><Rocket size={21} /><div><strong>Zig runtime engineer</strong><p>App.Env, builds, immutable OCI images, performance, health checks, tests, and production diagnostics.</p></div></article>
+              <article><BookOpen size={21} /><div><strong>GCP Developer Researcher</strong><p>Searches current official Google documentation, compares it with the shipped Ziac baseline, and returns source-backed findings without mutation authority.</p></div></article>
             </div>
           </div>
         </section>

@@ -3,7 +3,8 @@
 ## Install And Start A Project
 
 Build and install the CLI, dashboard host, MCP server, control-plane executable,
-and the Zig package sources into one relocatable prefix:
+the Zig package sources, dashboard assets, provider documentation, and agent
+research protocols into one relocatable prefix:
 
 ```sh
 cd packages/ziac
@@ -32,6 +33,13 @@ In an interactive terminal, `ziac init` first shows the inferred project,
 workspace, template, dashboard target, and agent harness setup for confirmation.
 Use `--yes` for deterministic scripts and CI.
 
+The generated skills resolve the installed Ziac package through
+`build.zig.zon`, so Codex, Claude Code, and Gemini can read the exact provider
+and workflow documentation shipped with that CLI version. Current Google Cloud
+claims are researched through the official Developer Knowledge connection; the
+local docs remain the implementation baseline rather than a substitute for
+current upstream documentation.
+
 ## Monorepo Workspaces
 
 A Git repository is a Ziac workspace and may contain any number of independently
@@ -47,9 +55,12 @@ git init
 ziac dashboard
 ```
 
-The first initialization installs matching Codex, Claude Code, and Gemini skills
-at the Git root; later projects synchronize the same workspace-aware skill. Each
-project retains its own compiler, state, locks, authority and CI boundary.
+The first initialization installs matching Ziac and GCP developer-research
+skills plus a read-only `gcp-developer-researcher` agent for Codex, Claude Code,
+and Gemini at the Git root. Set `DEVELOPERKNOWLEDGE_API_KEY` to enable its
+official Google Developer Knowledge MCP connection. Later projects synchronize
+the same workspace-aware skills. Each project retains its own compiler, state,
+locks, authority and CI boundary.
 
 `ziac dashboard` discovers every nested `ziac.project.json`, ignores generated
 and dependency trees, compiles each program from its own project directory, and
@@ -67,9 +78,11 @@ ziac dashboard --project payments
 ziac dashboard --artifact-only --out artifacts/workspace.json
 ```
 
-The host refreshes the single atomic workspace artifact from fixed CLI arguments
-as the WebUI polls. Failed recompilation leaves the previous complete canvas
-available rather than exposing a partial graph.
+The native host hashes each project's declared inputs. A changed revision runs
+the affected-project compiler through fixed argv, then broadcasts a monotonic
+project-slice patch to the WebUI. Stale patches trigger one snapshot reload;
+failed recompilation leaves the previous complete canvas available rather than
+exposing a partial graph.
 
 Ziac is a comptime-checked Infrastructure-as-Code engine for globally deployed
 Zig services on Google Cloud, powered by zigeffect. It combines an Engine V2
@@ -105,8 +118,10 @@ budget envelopes, durable sessions, hybrid development planning, supervised
 reload decisions, bounded causal logs, deterministic OCI/watch deployment,
 replayable infrastructure scenarios, governed MCP tools, ephemeral leases and
 Cloud Run-to-Cockroach diagnosis. The Workbench Operations view presents the
-same session and evidence model. Native long-running dev/proxy wiring and live
-cloud adapters remain explicitly tracked in `docs/roadmap.md`.
+same session and evidence model. Dashboard watch deploys are host-supervised,
+status-addressable and cancellable without granting arbitrary process
+authority. Native long-running dev/proxy wiring and live cloud adapters remain
+explicitly tracked in `docs/roadmap.md`.
 
 ## Quickstart
 

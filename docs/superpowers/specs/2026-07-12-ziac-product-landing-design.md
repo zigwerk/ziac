@@ -180,3 +180,24 @@ The Ziac mark becomes a small live Three.js resource cube. Its four side faces c
 When the site names Zig in the final compatibility and conversion sections, it uses the official Zig Project logomark sourced from `ziglang/logo`, preserves the artwork, and records the CC BY-SA 4.0 attribution. The mark must remain a supporting signal rather than imply Zig Project endorsement.
 
 The private-beta close should no longer look like a generic tinted CTA card. It becomes an unframed editorial conversion band with a specific read-only-first promise, one strong action, and a concise observe/compile/deploy sequence.
+
+## Relocatable Agent Development Kit
+
+The homepage and `/how-it-works` must make the installed product boundary clear:
+
+1. Ziac installs as a relocatable local development kit, not a thin remote CLI.
+2. The kit carries the CLI, project-local MCP server, dashboard host and assets,
+   Ziac/ZigEffect package sources, provider contracts, documentation, examples,
+   and scripts.
+3. `ziac init` creates the real shipped project files and installs matching Ziac
+   plus GCP research skills and specialist agents for Codex, Claude Code, and
+   Gemini.
+4. The read-only GCP Developer Researcher combines the installed Ziac baseline
+   with current official Google Developer Knowledge and labels uncertainty.
+5. The original Ziac source checkout is not required. User-owned agent harnesses,
+   the Zig compiler, API keys, ADC, and cloud mutation authority remain explicit
+   external inputs.
+
+The homepage expresses this as one compact full-width product band and a framed
+install manifest, not a collection of decorative cards. The how-it-works page
+uses the exact current `ziac init --yes` flow and real generated paths.

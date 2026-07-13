@@ -1,0 +1,12 @@
+steps:
+  - name: gcr.io/cloud-builders/docker@sha256:6c9b879570fe1c63a78af0b575ca5ac52f6c2c7e25f76f91ae1f2d6cb2a872ee
+    args: ["build", "--platform", "linux/amd64", "--target", "control-plane", "-f", "ziac/Dockerfile.self-host", "-t", "${_CONTROL_PLANE_IMAGE}", "."]
+  - name: gcr.io/cloud-builders/docker@sha256:6c9b879570fe1c63a78af0b575ca5ac52f6c2c7e25f76f91ae1f2d6cb2a872ee
+    args: ["build", "--platform", "linux/amd64", "--target", "billing-worker", "-f", "ziac/Dockerfile.self-host", "-t", "${_BILLING_IMAGE}", "."]
+  - name: gcr.io/cloud-builders/docker@sha256:6c9b879570fe1c63a78af0b575ca5ac52f6c2c7e25f76f91ae1f2d6cb2a872ee
+    args: ["push", "${_CONTROL_PLANE_IMAGE}"]
+  - name: gcr.io/cloud-builders/docker@sha256:6c9b879570fe1c63a78af0b575ca5ac52f6c2c7e25f76f91ae1f2d6cb2a872ee
+    args: ["push", "${_BILLING_IMAGE}"]
+images: ["${_CONTROL_PLANE_IMAGE}", "${_BILLING_IMAGE}"]
+options:
+  logging: CLOUD_LOGGING_ONLY

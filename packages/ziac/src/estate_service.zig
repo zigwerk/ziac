@@ -99,6 +99,11 @@ pub const Service = struct {
 
     pub fn handleAlloc(self: *Service, allocator: std.mem.Allocator, request: Request) !Response {
         if (request.body.len > 64 * 1024 or request.now_millis == 0) return responseAlloc(allocator, 400, .{ .error_code = "invalid_request" });
+        if (std.mem.eql(u8, request.method, "GET") and
+            (std.mem.eql(u8, request.path, "/health/startup") or std.mem.eql(u8, request.path, "/health/live")))
+        {
+            return responseAlloc(allocator, 200, .{ .status = "ready" });
+        }
         if (!std.mem.eql(u8, request.method, "POST")) return responseAlloc(allocator, 405, .{ .error_code = "method_not_allowed" });
         if (std.mem.eql(u8, request.path, "/v1/oauth/google/challenges")) return self.createGoogleChallengeAlloc(allocator, request);
         if (std.mem.eql(u8, request.path, "/v1/oauth/google/callback")) return self.completeGoogleCallbackAlloc(allocator, request);

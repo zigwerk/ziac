@@ -18,6 +18,7 @@ comptime {
     _ = @import("program_format_test.zig");
     _ = @import("scaffold_test.zig");
     _ = @import("dashboard_host_test.zig");
+    _ = @import("dashboard_operation_test.zig");
     _ = @import("visual_artifact_test.zig");
     _ = @import("workspace_dashboard_test.zig");
     _ = @import("estate_scan_test.zig");
@@ -26,6 +27,9 @@ comptime {
     _ = @import("estate_service_test.zig");
     _ = @import("estate_cockroach_test.zig");
     _ = @import("cost_test.zig");
+    _ = @import("gcp_billing_test.zig");
+    _ = @import("billing_worker_test.zig");
+    _ = @import("self_host_test.zig");
     _ = @import("testing_receipt_test.zig");
     _ = @import("agent_contract_test.zig");
     _ = @import("agent_kernel_test.zig");
@@ -60,6 +64,8 @@ comptime {
     _ = @import("gcp_logging_client_test.zig");
     _ = @import("gcp_oauth_test.zig");
     _ = @import("gcp_kms_vault_test.zig");
+    _ = @import("gcp_kms_test.zig");
+    _ = @import("gcp_scheduler_test.zig");
     _ = @import("gcp_watch_runtime_test.zig");
     _ = @import("gcp_rpc_test.zig");
     _ = @import("gcp_proto_contract_test.zig");

@@ -64,7 +64,7 @@ but cannot negate mandatory ones.
 
 `Dockerfile.ziac` is injected into the archive. The default recipe:
 
-- pins Zig 0.15.2 and verifies the official architecture checksum;
+- pins Zig 0.16.0 and verifies the official architecture checksum;
 - supports x86_64 and aarch64 Linux musl outputs;
 - builds `ReleaseSafe` through the source package's `install` step;
 - copies only the selected executable into a pinned distroless static image;

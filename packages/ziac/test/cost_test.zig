@@ -48,5 +48,6 @@ test "Cloud Billing adapters parse catalog prices and normalized detailed export
     const query = try ziac.cost.detailedBillingQueryAlloc(std.testing.allocator, "billing-project.normalized.detailed_cost", "acme-prod");
     defer std.testing.allocator.free(query);
     try std.testing.expect(std.mem.indexOf(u8, query, "resource.global_name") != null);
-    try std.testing.expect(std.mem.indexOf(u8, query, "SUM(cost + credits)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, query, "cost_micros") != null);
+    try std.testing.expect(std.mem.indexOf(u8, query, "credit_micros") != null);
 }

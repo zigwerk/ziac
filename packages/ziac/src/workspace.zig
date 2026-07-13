@@ -1,5 +1,83 @@
 const std = @import("std");
 
+pub const ProjectRevision = struct {
+    id: []const u8,
+    digest: [32]u8,
+};
+
+pub fn changedProjectsAlloc(
+    allocator: std.mem.Allocator,
+    before: []const ProjectRevision,
+    after: []const ProjectRevision,
+) ![][]const u8 {
+    var changed = std.ArrayList([]const u8).empty;
+    errdefer changed.deinit(allocator);
+    for (after) |candidate| {
+        var previous: ?[32]u8 = null;
+        for (before) |entry| if (std.mem.eql(u8, entry.id, candidate.id)) {
+            previous = entry.digest;
+            break;
+        };
+        if (previous == null or !std.mem.eql(u8, &previous.?, &candidate.digest)) try changed.append(allocator, candidate.id);
+    }
+    return changed.toOwnedSlice(allocator);
+}
+
+pub fn projectRevision(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    project_dir: std.Io.Dir,
+    manifest: []const u8,
+    source_roots: []const []const u8,
+) ![32]u8 {
+    var paths = std.ArrayList([]u8).empty;
+    defer {
+        for (paths.items) |path| allocator.free(path);
+        paths.deinit(allocator);
+    }
+    for (source_roots) |source_root| {
+        if (!validSourceRoot(source_root)) return error.InvalidWorkspaceSourceRoot;
+        const stat = project_dir.statFile(io, source_root, .{}) catch return error.WorkspaceSourceUnavailable;
+        if (stat.kind == .file) {
+            try paths.append(allocator, try allocator.dupe(u8, source_root));
+            continue;
+        }
+        if (stat.kind != .directory) return error.WorkspaceSourceUnavailable;
+        var source_dir = try project_dir.openDir(io, source_root, .{ .iterate = true });
+        defer source_dir.close(io);
+        var walker = try source_dir.walk(allocator);
+        defer walker.deinit();
+        while (try walker.next(io)) |entry| {
+            if (entry.kind == .directory and excludedDirectory(entry.basename)) {
+                walker.leave(io);
+                continue;
+            }
+            if (entry.kind != .file) continue;
+            try paths.append(allocator, try std.fs.path.join(allocator, &.{ source_root, entry.path }));
+        }
+    }
+    std.mem.sort([]u8, paths.items, {}, struct {
+        fn lessThan(_: void, left: []u8, right: []u8) bool {
+            return std.mem.order(u8, left, right) == .lt;
+        }
+    }.lessThan);
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    hasher.update(manifest);
+    for (paths.items) |path| {
+        hasher.update(path);
+        const bytes = try project_dir.readFileAlloc(io, path, allocator, .limited(16 * 1024 * 1024));
+        defer allocator.free(bytes);
+        hasher.update(bytes);
+    }
+    var digest: [32]u8 = undefined;
+    hasher.final(&digest);
+    return digest;
+}
+
+fn validSourceRoot(path: []const u8) bool {
+    return path.len > 0 and path.len <= 1024 and !std.fs.path.isAbsolute(path) and std.mem.indexOf(u8, path, "..") == null and std.mem.indexOfScalar(u8, path, 0) == null;
+}
+
 pub const schema = "ziac.workspace-visual.v1";
 pub const format_version: u32 = 1;
 pub const max_projects: usize = 256;
@@ -79,34 +157,201 @@ pub fn serializeVisualAlloc(allocator: std.mem.Allocator, options: VisualOptions
     if (options.projects.len == 0) return error.EmptyWorkspace;
     if (options.projects.len > max_projects) return error.TooManyWorkspaceProjects;
 
-    var output = std.ArrayList(u8).empty;
-    errdefer output.deinit(allocator);
-    try output.appendSlice(allocator, "{\"schema\":\"");
-    try output.appendSlice(allocator, schema);
-    try output.appendSlice(allocator, "\",\"format_version\":1,\"workspace\":");
-    try appendJsonString(&output, allocator, options.workspace);
-    try output.print(allocator, ",\"created_at_millis\":{d},\"projects\":[", .{options.created_at_millis});
+    var projects_json = std.ArrayList(u8).empty;
+    defer projects_json.deinit(allocator);
+    try projects_json.append(allocator, '[');
     for (options.projects, 0..) |project, index| {
         try validateToken(project.id);
         try validateRelativePath(project.path);
         try validateToken(project.stack);
         try validateToken(project.stage);
         try validateVisualArtifact(allocator, project.artifact_json);
-        if (index != 0) try output.append(allocator, ',');
-        try output.appendSlice(allocator, "{\"project\":");
-        try appendJsonString(&output, allocator, project.id);
-        try output.appendSlice(allocator, ",\"path\":");
-        try appendJsonString(&output, allocator, project.path);
-        try output.appendSlice(allocator, ",\"stack\":");
-        try appendJsonString(&output, allocator, project.stack);
-        try output.appendSlice(allocator, ",\"stage\":");
-        try appendJsonString(&output, allocator, project.stage);
-        try output.appendSlice(allocator, ",\"artifact\":");
-        try output.appendSlice(allocator, project.artifact_json);
-        try output.append(allocator, '}');
+        if (index != 0) try projects_json.append(allocator, ',');
+        try projects_json.appendSlice(allocator, "{\"project\":");
+        try appendJsonString(&projects_json, allocator, project.id);
+        try projects_json.appendSlice(allocator, ",\"path\":");
+        try appendJsonString(&projects_json, allocator, project.path);
+        try projects_json.appendSlice(allocator, ",\"stack\":");
+        try appendJsonString(&projects_json, allocator, project.stack);
+        try projects_json.appendSlice(allocator, ",\"stage\":");
+        try appendJsonString(&projects_json, allocator, project.stage);
+        try projects_json.appendSlice(allocator, ",\"artifact\":");
+        try projects_json.appendSlice(allocator, project.artifact_json);
+        try projects_json.append(allocator, '}');
     }
-    try output.appendSlice(allocator, "],\"links\":[]}");
+    try projects_json.append(allocator, ']');
+    const revision_hex = workspaceRevisionHex(options.workspace, projects_json.items);
+    return emitWorkspaceAlloc(allocator, options.workspace, options.created_at_millis, &revision_hex, projects_json.items, "[]");
+}
+
+pub fn revision(bytes: []const u8) ?[]const u8 {
+    const marker = "\"revision\":\"";
+    const start = (std.mem.indexOf(u8, bytes, marker) orelse return null) + marker.len;
+    if (start + 64 > bytes.len or bytes[start + 64] != '"') return null;
+    const value = bytes[start .. start + 64];
+    for (value) |byte| if (!(std.ascii.isDigit(byte) or byte >= 'a' and byte <= 'f')) return null;
+    return value;
+}
+
+pub fn patchAlloc(allocator: std.mem.Allocator, before_bytes: []const u8, after_bytes: []const u8) ![]u8 {
+    var before = std.json.parseFromSlice(std.json.Value, allocator, before_bytes, .{}) catch return error.InvalidWorkspaceArtifact;
+    defer before.deinit();
+    var after = std.json.parseFromSlice(std.json.Value, allocator, after_bytes, .{}) catch return error.InvalidWorkspaceArtifact;
+    defer after.deinit();
+    const before_root = try workspaceRoot(before.value);
+    const after_root = try workspaceRoot(after.value);
+    const base_revision = revision(before_bytes) orelse return error.InvalidWorkspaceArtifact;
+    const next_revision = revision(after_bytes) orelse return error.InvalidWorkspaceArtifact;
+    const after_projects = try workspaceProjects(after_root);
+    const before_projects = try workspaceProjects(before_root);
+    const workspace_name = jsonString(after_root.get("workspace")) orelse return error.InvalidWorkspaceArtifact;
+    const created_at = jsonInteger(after_root.get("created_at_millis")) orelse return error.InvalidWorkspaceArtifact;
+    const links = after_root.get("links") orelse return error.InvalidWorkspaceArtifact;
+
+    var output = std.ArrayList(u8).empty;
+    errdefer output.deinit(allocator);
+    try output.appendSlice(allocator, "{\"schema\":\"ziac.workspace-patch.v1\",\"base_revision\":");
+    try appendJsonString(&output, allocator, base_revision);
+    try output.appendSlice(allocator, ",\"revision\":");
+    try appendJsonString(&output, allocator, next_revision);
+    try output.appendSlice(allocator, ",\"workspace\":");
+    try appendJsonString(&output, allocator, workspace_name);
+    try output.print(allocator, ",\"created_at_millis\":{d},\"changed_projects\":[", .{created_at});
+    var changed_count: usize = 0;
+    for (after_projects.items) |project| {
+        const id = try visualProjectId(project);
+        const previous = findVisualProject(before_projects.items, id);
+        if (previous != null and try jsonValuesEqual(allocator, previous.?, project)) continue;
+        if (changed_count != 0) try output.append(allocator, ',');
+        try appendJsonValue(&output, allocator, project);
+        changed_count += 1;
+    }
+    try output.appendSlice(allocator, "],\"removed_project_ids\":[");
+    var removed_count: usize = 0;
+    for (before_projects.items) |project| {
+        const id = try visualProjectId(project);
+        if (findVisualProject(after_projects.items, id) != null) continue;
+        if (removed_count != 0) try output.append(allocator, ',');
+        try appendJsonString(&output, allocator, id);
+        removed_count += 1;
+    }
+    try output.appendSlice(allocator, "],\"project_order\":[");
+    for (after_projects.items, 0..) |project, index| {
+        if (index != 0) try output.append(allocator, ',');
+        try appendJsonString(&output, allocator, try visualProjectId(project));
+    }
+    try output.appendSlice(allocator, "],\"links\":");
+    try appendJsonValue(&output, allocator, links);
+    try output.append(allocator, '}');
     return output.toOwnedSlice(allocator);
+}
+
+pub fn applyPatchAlloc(allocator: std.mem.Allocator, current_bytes: []const u8, patch_bytes: []const u8) ![]u8 {
+    const current_revision = revision(current_bytes) orelse return error.InvalidWorkspaceArtifact;
+    var current = std.json.parseFromSlice(std.json.Value, allocator, current_bytes, .{}) catch return error.InvalidWorkspaceArtifact;
+    defer current.deinit();
+    var patch = std.json.parseFromSlice(std.json.Value, allocator, patch_bytes, .{}) catch return error.InvalidWorkspacePatch;
+    defer patch.deinit();
+    const current_root = try workspaceRoot(current.value);
+    if (patch.value != .object) return error.InvalidWorkspacePatch;
+    const patch_root = patch.value.object;
+    if (!std.mem.eql(u8, jsonString(patch_root.get("schema")) orelse return error.InvalidWorkspacePatch, "ziac.workspace-patch.v1")) return error.InvalidWorkspacePatch;
+    const base_revision = jsonString(patch_root.get("base_revision")) orelse return error.InvalidWorkspacePatch;
+    if (!std.mem.eql(u8, current_revision, base_revision)) return error.StaleWorkspacePatch;
+    const next_revision = jsonString(patch_root.get("revision")) orelse return error.InvalidWorkspacePatch;
+    const workspace_name = jsonString(patch_root.get("workspace")) orelse return error.InvalidWorkspacePatch;
+    const created_at = jsonInteger(patch_root.get("created_at_millis")) orelse return error.InvalidWorkspacePatch;
+    const changed = jsonArray(patch_root.get("changed_projects")) orelse return error.InvalidWorkspacePatch;
+    const order = jsonArray(patch_root.get("project_order")) orelse return error.InvalidWorkspacePatch;
+    const links = patch_root.get("links") orelse return error.InvalidWorkspacePatch;
+    const current_projects = try workspaceProjects(current_root);
+
+    var projects_json = std.ArrayList(u8).empty;
+    defer projects_json.deinit(allocator);
+    try projects_json.append(allocator, '[');
+    for (order.items, 0..) |id_value, index| {
+        if (id_value != .string) return error.InvalidWorkspacePatch;
+        const selected = findVisualProject(changed.items, id_value.string) orelse findVisualProject(current_projects.items, id_value.string) orelse return error.InvalidWorkspacePatch;
+        if (index != 0) try projects_json.append(allocator, ',');
+        try appendJsonValue(&projects_json, allocator, selected);
+    }
+    try projects_json.append(allocator, ']');
+    const computed_revision = workspaceRevisionHex(workspace_name, projects_json.items);
+    if (!std.mem.eql(u8, &computed_revision, next_revision)) return error.InvalidWorkspacePatch;
+    const links_json = try std.json.Stringify.valueAlloc(allocator, links, .{});
+    defer allocator.free(links_json);
+    return emitWorkspaceAlloc(allocator, workspace_name, created_at, &computed_revision, projects_json.items, links_json);
+}
+
+fn emitWorkspaceAlloc(
+    allocator: std.mem.Allocator,
+    workspace_name: []const u8,
+    created_at_millis: u64,
+    revision_hex: []const u8,
+    projects_json: []const u8,
+    links_json: []const u8,
+) ![]u8 {
+    var output = std.ArrayList(u8).empty;
+    errdefer output.deinit(allocator);
+    try output.appendSlice(allocator, "{\"schema\":\"");
+    try output.appendSlice(allocator, schema);
+    try output.appendSlice(allocator, "\",\"format_version\":1,\"workspace\":");
+    try appendJsonString(&output, allocator, workspace_name);
+    try output.print(allocator, ",\"created_at_millis\":{d},\"revision\":", .{created_at_millis});
+    try appendJsonString(&output, allocator, revision_hex);
+    try output.appendSlice(allocator, ",\"projects\":");
+    try output.appendSlice(allocator, projects_json);
+    try output.appendSlice(allocator, ",\"links\":");
+    try output.appendSlice(allocator, links_json);
+    try output.append(allocator, '}');
+    return output.toOwnedSlice(allocator);
+}
+
+fn workspaceRevisionHex(workspace_name: []const u8, projects_json: []const u8) [64]u8 {
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    hasher.update(workspace_name);
+    hasher.update("\x00");
+    hasher.update(projects_json);
+    var digest: [32]u8 = undefined;
+    hasher.final(&digest);
+    return std.fmt.bytesToHex(digest, .lower);
+}
+
+fn workspaceRoot(value: std.json.Value) !std.json.ObjectMap {
+    if (value != .object) return error.InvalidWorkspaceArtifact;
+    if (!std.mem.eql(u8, jsonString(value.object.get("schema")) orelse return error.InvalidWorkspaceArtifact, schema)) return error.InvalidWorkspaceArtifact;
+    return value.object;
+}
+
+fn workspaceProjects(root: std.json.ObjectMap) !std.json.Array {
+    return jsonArray(root.get("projects")) orelse error.InvalidWorkspaceArtifact;
+}
+
+fn visualProjectId(value: std.json.Value) ![]const u8 {
+    if (value != .object) return error.InvalidWorkspaceArtifact;
+    return jsonString(value.object.get("project")) orelse error.InvalidWorkspaceArtifact;
+}
+
+fn findVisualProject(projects: []const std.json.Value, id: []const u8) ?std.json.Value {
+    for (projects) |project| {
+        const candidate = visualProjectId(project) catch continue;
+        if (std.mem.eql(u8, candidate, id)) return project;
+    }
+    return null;
+}
+
+fn jsonValuesEqual(allocator: std.mem.Allocator, left: std.json.Value, right: std.json.Value) !bool {
+    const left_bytes = try std.json.Stringify.valueAlloc(allocator, left, .{});
+    defer allocator.free(left_bytes);
+    const right_bytes = try std.json.Stringify.valueAlloc(allocator, right, .{});
+    defer allocator.free(right_bytes);
+    return std.mem.eql(u8, left_bytes, right_bytes);
+}
+
+fn appendJsonValue(output: *std.ArrayList(u8), allocator: std.mem.Allocator, value: std.json.Value) !void {
+    const encoded = try std.json.Stringify.valueAlloc(allocator, value, .{});
+    defer allocator.free(encoded);
+    try output.appendSlice(allocator, encoded);
 }
 
 fn parseDiscoveredProjectAlloc(allocator: std.mem.Allocator, manifest_path: []const u8, bytes: []const u8) !DiscoveredProject {
@@ -181,6 +426,19 @@ fn normalizePathAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
 fn jsonString(value: ?std.json.Value) ?[]const u8 {
     const present = value orelse return null;
     return if (present == .string) present.string else null;
+}
+
+fn jsonInteger(value: ?std.json.Value) ?u64 {
+    const present = value orelse return null;
+    return switch (present) {
+        .integer => |number| if (number >= 0) @intCast(number) else null,
+        else => null,
+    };
+}
+
+fn jsonArray(value: ?std.json.Value) ?std.json.Array {
+    const present = value orelse return null;
+    return if (present == .array) present.array else null;
 }
 
 fn excludedDirectory(name: []const u8) bool {

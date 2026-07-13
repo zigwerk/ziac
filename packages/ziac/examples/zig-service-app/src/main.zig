@@ -1,8 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const ok = "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 15\r\nconnection: close\r\n\r\n{\"status\":\"ok\"}";
-const not_found = "HTTP/1.1 404 Not Found\r\ncontent-type: application/json\r\ncontent-length: 21\r\nconnection: close\r\n\r\n{\"error\":\"not found\"}";
+const ok = "{\"status\":\"ok\"}";
+const not_found = "{\"error\":\"not found\"}";
 
 pub fn main() !void {
     if (comptime builtin.zig_version.minor >= 16) {
@@ -19,17 +19,24 @@ fn mainCurrent() !void {
 
     while (true) {
         const stream = server.accept(io) catch continue;
-        defer stream.close(io);
-        var read_buffer: [4096]u8 = undefined;
-        var reader = stream.reader(io, &read_buffer);
-        var request: [4096]u8 = undefined;
-        const length = reader.interface.readSliceShort(&request) catch continue;
-        const response = responseFor(request[0..length]);
-        var write_buffer: [4096]u8 = undefined;
-        var writer = stream.writer(io, &write_buffer);
-        writer.interface.writeAll(response) catch continue;
-        writer.interface.flush() catch continue;
+        handleCurrent(io, stream) catch {};
     }
+}
+
+fn handleCurrent(io: std.Io, stream: std.Io.net.Stream) !void {
+    defer stream.close(io);
+    var read_buffer: [4096]u8 = undefined;
+    var reader = stream.reader(io, &read_buffer);
+    var write_buffer: [4096]u8 = undefined;
+    var writer = stream.writer(io, &write_buffer);
+    var server = std.http.Server.init(&reader.interface, &writer.interface);
+    var request = try server.receiveHead();
+    const found = routeFound(request.head.target);
+    try request.respond(if (found) ok else not_found, .{
+        .status = if (found) .ok else .not_found,
+        .keep_alive = false,
+        .extra_headers = &.{.{ .name = "content-type", .value = "application/json" }},
+    });
 }
 
 fn mainLegacy() !void {
@@ -51,9 +58,13 @@ fn handleLegacy(stream: anytype) void {
 }
 
 fn responseFor(request: []const u8) []const u8 {
-    return if (std.mem.startsWith(u8, request, "GET /health/startup ") or
-        std.mem.startsWith(u8, request, "GET /health/live ") or
-        std.mem.startsWith(u8, request, "GET / ")) ok else not_found;
+    return if (std.mem.startsWith(u8, request, "GET ") and routeFound(request[4 .. std.mem.indexOfScalarPos(u8, request, 4, ' ') orelse request.len])) ok else not_found;
+}
+
+fn routeFound(target: []const u8) bool {
+    return std.mem.eql(u8, target, "/health/startup") or
+        std.mem.eql(u8, target, "/health/live") or
+        std.mem.eql(u8, target, "/");
 }
 
 fn writeAllLegacy(file_descriptor: anytype, bytes: []const u8) !void {
@@ -63,17 +74,7 @@ fn writeAllLegacy(file_descriptor: anytype, bytes: []const u8) !void {
     }
 }
 
-test "sample HTTP responses have exact content lengths" {
-    try expectContentLength(ok);
-    try expectContentLength(not_found);
-}
-
-fn expectContentLength(response: []const u8) !void {
-    const separator = "\r\n\r\n";
-    const split = std.mem.indexOf(u8, response, separator) orelse return error.InvalidResponse;
-    const marker = "content-length: ";
-    const start = (std.mem.indexOf(u8, response[0..split], marker) orelse return error.InvalidResponse) + marker.len;
-    const end = std.mem.indexOfPos(u8, response, start, "\r\n") orelse return error.InvalidResponse;
-    const declared = try std.fmt.parseInt(usize, response[start..end], 10);
-    try std.testing.expectEqual(declared, response[split + separator.len ..].len);
+test "sample HTTP routing is exact" {
+    try std.testing.expectEqualStrings(ok, responseFor("GET /health/live HTTP/1.1\r\n"));
+    try std.testing.expectEqualStrings(not_found, responseFor("GET /missing HTTP/1.1\r\n"));
 }

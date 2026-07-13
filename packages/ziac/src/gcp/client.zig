@@ -21,6 +21,9 @@ pub const Api = enum {
     cloud_asset,
     logging,
     cloud_kms,
+    cloud_billing,
+    bigquery,
+    cloud_scheduler,
 };
 
 pub const Endpoints = struct {
@@ -37,6 +40,9 @@ pub const Endpoints = struct {
     cloud_asset: []const u8 = "https://cloudasset.googleapis.com",
     logging: []const u8 = "https://logging.googleapis.com",
     cloud_kms: []const u8 = "https://cloudkms.googleapis.com",
+    cloud_billing: []const u8 = "https://cloudbilling.googleapis.com",
+    bigquery: []const u8 = "https://bigquery.googleapis.com",
+    cloud_scheduler: []const u8 = "https://cloudscheduler.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
         return switch (api) {
@@ -53,6 +59,9 @@ pub const Endpoints = struct {
             .cloud_asset => self.cloud_asset,
             .logging => self.logging,
             .cloud_kms => self.cloud_kms,
+            .cloud_billing => self.cloud_billing,
+            .bigquery => self.bigquery,
+            .cloud_scheduler => self.cloud_scheduler,
         };
     }
 };

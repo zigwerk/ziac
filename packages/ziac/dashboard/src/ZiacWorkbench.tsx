@@ -46,7 +46,7 @@ import {
   type ZiacVisualProject,
   type ZiacVisualResource,
 } from "./ziacVisualArtifact";
-import { estateAccessState, loadLiveLogSnapshot, requestEstateAccess, type ZiacLogEvent, type ZiacSession } from "./bridge";
+import { cancelDashboardOperation, estateAccessState, loadDashboardOperation, loadLiveLogSnapshot, requestEstateAccess, runDashboardOperation, startDashboardWatch, type ZiacCommandReceipt, type ZiacDashboardOperation, type ZiacLogEvent, type ZiacSession } from "./bridge";
 
 const ZiacGlobalMap = lazy(async () => {
   const module = await import("./ziacGlobalMap");
@@ -82,15 +82,15 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
   const [inspectorTab, setInspectorTab] = createSignal<InspectorTab>("overview");
   const [dockTab, setDockTab] = createSignal<DockTab>("deployments");
   const [deploying, setDeploying] = createSignal(false);
+  const [pendingPlan, setPendingPlan] = createSignal<ZiacCommandReceipt | null>(null);
+  const [activeOperation, setActiveOperation] = createSignal<ZiacDashboardOperation | null>(null);
+  const [deployError, setDeployError] = createSignal<string | null>(null);
   const [scanning, setScanning] = createSignal(false);
   const [scanFailed, setScanFailed] = createSignal(false);
   const [estateGateOpen, setEstateGateOpen] = createSignal(false);
   const [estateRequestState, setEstateRequestState] = createSignal<"idle" | "sent" | "host_required">("idle");
-  let deployTimer: ReturnType<typeof setTimeout> | undefined;
-
-  onCleanup(() => {
-    if (deployTimer) clearTimeout(deployTimer);
-  });
+  let operationMonitor = 0;
+  onCleanup(() => operationMonitor += 1);
   onMount(() => {
     let active = true;
     const refresh = async () => {
@@ -132,12 +132,90 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
     return filtered().resources[0]?.id ?? null;
   });
   const selected = createMemo(() => filtered().resources.find((resource) => resource.id === effectiveSelectedResourceId()) ?? null);
-  const deploy = () => {
+  const operationProject = createMemo(() => {
+    const resourceProject = selected()?.project_id;
+    return props.model.projects.find((project) => project.id === resourceProject) ?? props.model.projects[0] ?? null;
+  });
+  const operationBusy = createMemo(() => {
+    const phase = activeOperation()?.phase;
+    return deploying() || phase === "queued" || phase === "running" || phase === "cancelling";
+  });
+  const monitorOperation = async (operationId: string) => {
+    const generation = ++operationMonitor;
+    while (generation === operationMonitor) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (generation !== operationMonitor) return;
+      try {
+        const status = await loadDashboardOperation(operationId);
+        setActiveOperation(status);
+        if (["cancelled", "succeeded", "failed"].includes(status.phase)) return;
+      } catch (error) {
+        setDeployError(error instanceof Error ? error.message : "Operation status unavailable");
+        return;
+      }
+    }
+  };
+  const deploy = async () => {
     if (deploying()) return;
     setDeploying(true);
+    setDeployError(null);
     setDockOpen(true);
     setDockTab("deployments");
-    deployTimer = setTimeout(() => setDeploying(false), 2600);
+    const project = operationProject();
+    if (!project) {
+      setDeployError("Select a managed Ziac project before planning.");
+      setDeploying(false);
+      return;
+    }
+    try {
+      setPendingPlan(await runDashboardOperation({
+        schema: "ziac.dashboard-operation-request.v1",
+        operation: "plan",
+        project: project.id,
+        stack: project.stack,
+        stage: project.stage,
+        provider: "gcp",
+      }));
+    } catch (error) {
+      setDeployError(error instanceof Error ? error.message : "Plan failed");
+    } finally {
+      setDeploying(false);
+    }
+  };
+  const approveDeploy = async () => {
+    const plan = pendingPlan();
+    const project = operationProject();
+    if (!plan?.plan_digest || !project || deploying()) return;
+    setDeploying(true);
+    setDeployError(null);
+    try {
+      const started = await startDashboardWatch({
+        schema: "ziac.dashboard-operation-request.v1",
+        operation: "watch",
+        project: project.id,
+        stack: plan.stack,
+        stage: plan.stage,
+        provider: "gcp",
+        plan_digest: plan.plan_digest,
+        confirm_destructive: plan.delete > 0,
+      });
+      setActiveOperation(started);
+      setPendingPlan(null);
+      void monitorOperation(started.operation_id);
+    } catch (error) {
+      setDeployError(error instanceof Error ? error.message : "Deploy failed");
+    } finally {
+      setDeploying(false);
+    }
+  };
+  const cancelDeploy = async () => {
+    const current = activeOperation();
+    if (!current || current.phase === "cancelling") return;
+    try {
+      setActiveOperation(await cancelDashboardOperation(current.operation_id));
+    } catch (error) {
+      setDeployError(error instanceof Error ? error.message : "Cancel failed");
+    }
   };
   const scan = async () => {
     if (scanning()) return;
@@ -186,16 +264,28 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
         <div class="ziac-global-state">
           <span class="ziac-health-state"><CircleDot size={12} />Healthy</span>
           <span class="ziac-plan-state"><small>{estateScope() === "existing" ? "observed" : props.model.artifact.truth_mode}</small><strong>{estateScope() === "existing" ? `${filtered().resources.length} resources` : `${props.model.operationCounts.create} changes`}</strong></span>
-          <button type="button" class="ziac-deploy-button" classList={{ running: deploying() || scanning(), scan: estateScope() === "existing", failed: scanFailed() }} title={scanFailed() ? "Estate scan failed" : undefined} onClick={() => estateScope() === "existing" ? void scan() : deploy()}>
-            <Show when={estateScope() === "existing"} fallback={<Show when={!deploying()} fallback={<Activity size={15} />}><Rocket size={15} /></Show>}>
+          <button type="button" class="ziac-deploy-button" disabled={estateScope() !== "existing" && operationBusy()} classList={{ running: operationBusy() || scanning(), scan: estateScope() === "existing", failed: scanFailed() || deployError() !== null }} title={scanFailed() ? "Estate scan failed" : deployError() ?? undefined} onClick={() => estateScope() === "existing" ? void scan() : void deploy()}>
+            <Show when={estateScope() === "existing"} fallback={<Show when={!operationBusy()} fallback={<Activity size={15} />}><Rocket size={15} /></Show>}>
               <RefreshCw size={15} classList={{ spinning: scanning() }} />
             </Show>
-            <span>{estateScope() === "existing" ? scanning() ? "Scanning" : "Refresh scan" : deploying() ? "Deploying" : "Deploy plan"}</span>
+            <span>{estateScope() === "existing" ? scanning() ? "Scanning" : "Refresh scan" : operationBusy() ? activeOperation()?.phase ?? "Planning" : "Deploy plan"}</span>
           </button>
           <button type="button" class="ziac-icon-button" title="Notifications"><Bell size={16} /><i /></button>
           <button type="button" class="ziac-avatar" title="Account">SK</button>
         </div>
       </header>
+
+      <Show when={pendingPlan()}>
+        {(plan) => <div class="ziac-plan-approval" role="dialog" aria-modal="true" aria-label="Approve saved Ziac plan">
+          <div class="ziac-plan-approval-body">
+            <span>Saved plan</span>
+            <strong>{plan().stack} / {plan().stage}</strong>
+            <p>{plan().create} create · {plan().update} update · {plan().delete} delete</p>
+            <code>{plan().plan_digest?.slice(0, 16)}…</code>
+            <div><button type="button" onClick={() => setPendingPlan(null)}>Cancel</button><button type="button" disabled={deploying()} onClick={() => void approveDeploy()}>{deploying() ? "Applying" : "Approve and deploy"}</button></div>
+          </div>
+        </div>}
+      </Show>
 
       <div class="ziac-context-bar">
         <div class="ziac-view-switch" aria-label="Ziac infrastructure view">
@@ -289,12 +379,13 @@ export function ZiacWorkbench(props: { model: ZiacVisualModel; session: ZiacSess
       <DeploymentDock
         open={dockOpen()}
         tab={dockTab()}
-        deploying={deploying()}
+        operation={activeOperation()}
         model={props.model}
         session={liveSession()}
         onTab={setDockTab}
         onToggle={() => setDockOpen(!dockOpen())}
         onSelectResource={setSelectedResourceId}
+        onCancel={() => void cancelDeploy()}
       />
       <Show when={estateGateOpen()}>
         <EstateAccessGate
@@ -608,17 +699,19 @@ function resourceYaml(resource: ZiacVisualResource) {
 function DeploymentDock(props: {
   open: boolean;
   tab: DockTab;
-  deploying: boolean;
+  operation: ZiacDashboardOperation | null;
   model: ZiacVisualModel;
   session: ZiacSession | null;
   onTab: (tab: DockTab) => void;
   onToggle: () => void;
   onSelectResource: (id: string) => void;
+  onCancel: () => void;
 }) {
+  const active = () => props.operation && ["queued", "running", "cancelling"].includes(props.operation.phase);
   return <section class="ziac-operation-dock" classList={{ collapsed: !props.open }} aria-label="Operational dock">
     <header>
       <div class="ziac-dock-tabs">
-        <DockTabButton value="deployments" label="Deployments" count={props.deploying ? 1 : props.model.operationCounts.create} tab={props.tab} onSelect={props.onTab} />
+        <DockTabButton value="deployments" label="Deployments" count={active() ? 1 : props.model.operationCounts.create} tab={props.tab} onSelect={props.onTab} />
         <DockTabButton value="logs" label="Live logs" count={props.session?.logs?.length ?? 0} tab={props.tab} onSelect={props.onTab} live />
         <DockTabButton value="agents" label="Agent runs" count={props.session?.agent ? 1 : 0} tab={props.tab} onSelect={props.onTab} />
       </div>
@@ -628,14 +721,11 @@ function DeploymentDock(props: {
       <div class="ziac-dock-body">
         <Show when={props.tab === "deployments"}>
           <div class="ziac-deployment-run">
-            <div class="ziac-deploy-progress ziac-dock-run-state" classList={{ running: props.deploying }}><Play size={13} /><span><strong>{props.deploying ? "Deploying global-api" : "Plan ready"}</strong><small>{props.model.operationCounts.create} create · {props.model.resources.length} resources</small></span><em>{props.deploying ? "35%" : "validated"}</em></div>
-            <div class="ziac-progress-track"><i style={{ width: props.deploying ? "35%" : "100%" }} /></div>
+            <div class="ziac-deploy-progress ziac-dock-run-state" classList={{ running: Boolean(active()) }}><Play size={13} /><span><strong>{props.operation ? `${props.operation.stack} / ${props.operation.stage}` : "Plan ready"}</strong><small>{props.operation ? props.operation.operation_id : `${props.model.operationCounts.create} create · ${props.model.resources.length} resources`}</small></span><em>{props.operation?.phase ?? "validated"}</em><Show when={props.operation?.phase === "queued" || props.operation?.phase === "running"}><button type="button" class="ziac-operation-cancel" title="Cancel deployment" onClick={props.onCancel}><X size={13} /></button></Show></div>
+            <div class="ziac-progress-track" classList={{ active: Boolean(active()), terminal: Boolean(props.operation && !active()) }}><i /></div>
           </div>
           <div class="ziac-deploy-events ziac-dock-stepper">
-            <DockEvent time="12:22:31" tone="plan" title="Plan" detail="Comptime graph validated" />
-            <DockEvent time="12:22:34" tone="build" title="Build" detail="OCI image available" />
-            <DockEvent time="12:22:38" tone="revision" title="Revision" detail="Cloud Run rollout staged" />
-            <DockEvent time="12:22:41" tone="traffic" title="Traffic" detail="Awaiting regional health" />
+            <For each={(props.session?.logs ?? []).slice(-4)} fallback={<DockEvent time="--:--:--" tone="plan" title="Evidence" detail={props.operation?.diagnostic ?? "No deployment events retained yet"} />}>{(event) => <DockEvent time={new Date(event.timestamp_millis).toLocaleTimeString()} tone={event.source} title={event.source} detail={event.message} />}</For>
           </div>
         </Show>
         <Show when={props.tab === "logs"}>

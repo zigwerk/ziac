@@ -165,6 +165,27 @@ Status: pending
 - Gate: a new user completes the documented journey without repository-local
   fixtures or maintainer intervention.
 
+## Milestone 9: Market The Installed Agent Kit
+
+Status: complete
+
+- Add homepage proof that one Ziac installation carries the local agent
+  development kit, knowledge baseline, MCP server, and dashboard.
+- Update `/how-it-works` to show the actual generated project files, three
+  harness skill trees, read-only GCP researcher, and operator-owned credentials.
+- Extend SEO and source-level UI contracts with evidence-backed install claims.
+- Gate: site tests, strict typecheck, static production build, and desktop/mobile
+  browser captures pass before merge to `master`.
+
+Evidence: the homepage now presents the relocatable local compiler, dashboard,
+MCP server, reference docs, harness-native skills, and read-only GCP Developer
+Researcher as one installed kit. `/how-it-works` uses the real `ziac init --yes`
+flow and generated paths, distinguishes bundled capability from user-owned
+credentials and apply authority, and publishes matching route and application
+SEO metadata. The marketing suite passed 41 tests with 346 assertions, strict
+typecheck and static prerender passed, and focused desktop plus 390px browser
+checks found no horizontal overflow or console diagnostics.
+
 ## Verification Matrix
 
 | Surface | Deterministic evidence | Live evidence |

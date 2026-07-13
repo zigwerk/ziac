@@ -4,6 +4,8 @@ const cloud_build_provider = @import("cloud_build_provider.zig");
 const compute_provider = @import("compute_provider.zig");
 const dns_provider = @import("dns_provider.zig");
 const network_provider = @import("network_provider.zig");
+const kms_provider = @import("kms_provider.zig");
+const scheduler_provider = @import("scheduler_provider.zig");
 const operation = @import("operation.zig");
 const run_provider = @import("run_provider.zig");
 const storage_provider = @import("storage_provider.zig");
@@ -69,6 +71,8 @@ pub const LiveProvider = struct {
         if (dns_provider.supports(node)) return self.dnsHandler().read(context, node, null);
         if (storage_provider.supports(node)) return self.storageHandler().read(context, node, null);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().read(context, node, null);
+        if (kms_provider.supports(node)) return self.kmsHandler().read(context, node, null);
+        if (scheduler_provider.supports(node)) return self.schedulerHandler().read(context, node, null);
         return error.InvalidConfiguration;
     }
 
@@ -86,6 +90,8 @@ pub const LiveProvider = struct {
         if (dns_provider.supports(node)) return dns_provider.Handler.diff(context, node, observed);
         if (storage_provider.supports(node)) return storage_provider.Handler.diff(context, node, observed);
         if (cloud_build_provider.supports(node)) return cloud_build_provider.Handler.diff(context, node, observed);
+        if (kms_provider.supports(node)) return kms_provider.Handler.diff(context, node, observed);
+        if (scheduler_provider.supports(node)) return scheduler_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else if (isType(node, artifact_repository_type))
@@ -117,6 +123,8 @@ pub const LiveProvider = struct {
         if (dns_provider.supports(node)) return self.dnsHandler().create(context, node);
         if (storage_provider.supports(node)) return self.storageHandler().create(context, node);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().create(context, node);
+        if (kms_provider.supports(node)) return self.kmsHandler().create(context, node);
+        if (scheduler_provider.supports(node)) return self.schedulerHandler().create(context, node);
         return error.InvalidConfiguration;
     }
 
@@ -137,6 +145,8 @@ pub const LiveProvider = struct {
         if (dns_provider.supports(node)) return self.dnsHandler().update(context, node, observed.physical_id);
         if (storage_provider.supports(node)) return self.storageHandler().update(context, node, observed.physical_id);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().update(context, node, observed.physical_id);
+        if (kms_provider.supports(node)) return self.kmsHandler().update(context, node, observed.physical_id);
+        if (scheduler_provider.supports(node)) return self.schedulerHandler().update(context, node, observed.physical_id);
         return error.InvalidConfiguration;
     }
 
@@ -158,6 +168,8 @@ pub const LiveProvider = struct {
         if (dns_provider.supports(node)) return self.dnsHandler().delete(context, node, physical_id);
         if (storage_provider.supports(node)) return self.storageHandler().delete(context, node, physical_id);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().delete(context, node, physical_id);
+        if (kms_provider.supports(node)) return self.kmsHandler().delete(context, node, physical_id);
+        if (scheduler_provider.supports(node)) return self.schedulerHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
             removed.deinit();
@@ -264,6 +276,20 @@ pub const LiveProvider = struct {
         }
         if (cloud_build_provider.supports(node)) {
             const result = try self.cloudBuildHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (kms_provider.supports(node)) {
+            const result = try self.kmsHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (scheduler_provider.supports(node)) {
+            const result = try self.schedulerHandler().read(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -896,6 +922,14 @@ pub const LiveProvider = struct {
             .failure_reporter = self.cloud_build_failure_reporter,
         };
     }
+
+    fn kmsHandler(self: *LiveProvider) kms_provider.Handler {
+        return .{ .client = self.client };
+    }
+
+    fn schedulerHandler(self: *LiveProvider) scheduler_provider.Handler {
+        return .{ .client = self.client };
+    }
 };
 
 fn projectServiceResult(
@@ -1306,7 +1340,7 @@ fn isType(node: resource.ResourceNode, expected: []const u8) bool {
     return std.mem.eql(u8, node.type_name, expected);
 }
 
-fn isSupported(node: resource.ResourceNode) bool {
+pub fn supports(node: resource.ResourceNode) bool {
     return isType(node, project_service_type) or
         isType(node, service_account_type) or
         isType(node, project_member_type) or
@@ -1319,5 +1353,11 @@ fn isSupported(node: resource.ResourceNode) bool {
         compute_provider.supports(node) or
         dns_provider.supports(node) or
         storage_provider.supports(node) or
-        cloud_build_provider.supports(node);
+        cloud_build_provider.supports(node) or
+        kms_provider.supports(node) or
+        scheduler_provider.supports(node);
+}
+
+fn isSupported(node: resource.ResourceNode) bool {
+    return supports(node);
 }

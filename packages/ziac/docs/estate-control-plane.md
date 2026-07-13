@@ -42,6 +42,9 @@ credential envelope are configured.
 - Application Default Credentials, supplied by Cloud Run metadata in GCP;
 - optional `PORT`, defaulting to `8080`.
 
+Cloud Run startup and liveness probes use unauthenticated `GET /health/startup`
+and `GET /health/live`. Product operations remain POST-only and authenticated.
+
 Run `migrations/001_estate_control_plane.sql` before starting the service. The
 process creates and atomically consumes ten-minute PKCE challenges, exchanges
 the callback with Google, stores the encrypted refresh credential, and returns a

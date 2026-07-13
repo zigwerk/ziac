@@ -2912,6 +2912,32 @@ select {
   transition: height 140ms ease;
 }
 
+.ziac-progress-track.active i {
+  width: 34%;
+  animation: ziac-operation-progress 1.2s ease-in-out infinite;
+}
+
+.ziac-progress-track.terminal i {
+  width: 100%;
+}
+
+.ziac-operation-cancel {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d8dde3;
+  border-radius: 4px;
+  background: #fff;
+  color: #5f6368;
+  cursor: pointer;
+}
+
+@keyframes ziac-operation-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(300%); }
+}
+
 .ziac-operation-dock.collapsed {
   height: 30px;
   grid-template-rows: 30px;
@@ -3560,6 +3586,70 @@ select {
   .ziac-resource-fallback {
     display: none;
   }
+}
+
+.ziac-plan-approval {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(20 28 40 / 28%);
+  backdrop-filter: blur(2px);
+}
+
+.ziac-plan-approval-body {
+  width: min(420px, 100%);
+  padding: 20px;
+  border: 1px solid var(--ziac-border-strong);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 18px 56px rgb(23 35 56 / 22%);
+}
+
+.ziac-plan-approval-body > span {
+  display: block;
+  color: var(--ziac-blue);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ziac-plan-approval-body > strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.ziac-plan-approval-body p,
+.ziac-plan-approval-body code {
+  display: block;
+  margin: 10px 0 0;
+  color: var(--ziac-text-muted);
+}
+
+.ziac-plan-approval-body > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.ziac-plan-approval-body button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--ziac-border-strong);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ziac-text);
+  font-weight: 650;
+}
+
+.ziac-plan-approval-body button:last-child {
+  border-color: var(--ziac-blue);
+  background: var(--ziac-blue);
+  color: #fff;
 }
 
 * {

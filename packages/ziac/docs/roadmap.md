@@ -161,7 +161,7 @@ secret plaintext in state or artifacts.
 - `ziac.gcp.global.ZigService`: complete.
 - Typed app environment wiring into the global service: complete, including
   provider/project validation for Secret Manager references.
-- Generated Zig 0.15.2 musl recipe: verified for amd64 and arm64 in pinned
+- Generated Zig 0.16.0 musl recipe: verified for amd64 and arm64 in pinned
   distroless nonroot containers with startup and liveness probes.
 
 Remaining gate: authenticated source deployment must take a clean Zig source
@@ -499,13 +499,20 @@ Production blockers retained for M26-M28:
   not implemented.
 - The dashboard access action is not yet connected to the hosted OAuth flow.
 
-M23 cost intelligence is in active implementation. The shared cost contract now
+M23 cost intelligence has completed its credential-free provider and attribution
+gate. The shared cost contract now
 distinguishes configuration estimates, projected month-end cost and actual
 billed cost at the type level. Estimates require explicit SKU, region, unit and
 usage assumptions; actuals include exported credits; projections can derive only
 from actual billing data; and missing usage returns unavailable rather than a
-fabricated range. Catalog pagination, BigQuery ingestion, visual-artifact
-projection and replacement of dashboard fixture guesses remain open.
+fabricated range. The authenticated adapter now paginates Cloud Billing Catalog
+SKUs, preserves every tier, currency and effective time, submits and resumes
+BigQuery jobs, parses integer micros without floating-point loss, and emits exact
+attributed and unattributed totals with coverage basis points. The dashboard no
+longer invents type-based price ranges; absent billing telemetry is explicitly
+unavailable. A Cockroach migration owns billing sources, runs and attributed
+resource costs. Scheduling and the first authenticated customer export remain a
+live qualification item.
 
 No milestone is described as externally qualified until its authenticated live
 gate has produced a complete redacted evidence bundle. Credential-free code
@@ -528,9 +535,26 @@ estate snapshots, honest cost intelligence, customer and internal admin portals,
 Ziac's typed self-host bootstrap and production stacks, organization features,
 reports and adoption, unified authenticated qualification, and private beta.
 
-The immediate client-install gate is complete. M26 production blocker closure,
-M27 hosted GCP connection lifecycle, M29 realtime canvas updates, and M35 the
-first self-host project are the next executable slices. M39 remains the decisive
+The immediate client-install gate is complete. M35-M36 now have a typed
+credential-free self-host implementation: `ziac init --preset ziac-cloud`
+creates independent bootstrap, Cockroach data, control-plane and billing
+projects, all four compile through the installed CLI, and one root dashboard
+merges them. Bootstrap
+owns required APIs, retained GCS state, retained Cloud KMS resources and deployer
+IAM, a retained Artifact Registry repository, and credential containers. The data project owns the Cockroach database,
+SQL user, grants, generated Secret Manager connection version, and ordered
+control-plane/billing migrations. The control plane compiles as a global Cloud
+Run service and billing as a private authenticated service with its own native
+worker, exact global-name attribution, Cockroach run persistence, and an hourly
+Cloud Scheduler OIDC trigger. The qualification builds both hosted Linux images
+in Cloud Build and resolves immutable Artifact Registry digests. The authenticated
+qualification script applies bootstrap from local state, migrates it to GCS,
+deploys data and both hosted services, probes health, queries the configured
+detailed export, forces the managed scheduler, and requires a successful worker
+attempt. Missing credentials produce exit 77 and an explicit skip receipt.
+
+M26 production blocker closure and M27 hosted GCP connection lifecycle remain
+the next hosted-service hardening slices. M39 remains the decisive
 end-to-end gate: a clean external project signs in, scans, edits, watches the
 local canvas update, deploys globally, reads and writes Cockroach, receives honest
 cost data, revokes access, and cleans up while Ziac's own hosted plane is deployed
@@ -563,7 +587,75 @@ receive the same monorepo-aware skill at both project and Git roots. The install
 client E2E creates two nested projects and compiles them into one workspace
 artifact without a source-checkout escape hatch.
 
-This milestone does not claim the sub-250 ms incremental patch gate from M29.
-The current host recompiles through Zig's cache on bounded WebUI polling and
-preserves the last complete artifact on failure. Filesystem-triggered affected-
-project compilation and revision patches remain M29 work.
+The workspace compiler now hashes only each manifest and its declared source
+roots, caches project artifacts by target-aware revision, recompiles only changed
+projects, and preserves the last known good child artifact on a failed compile.
+The native host now checks declared input revisions on a bounded local interval;
+the browser no longer polls complete artifacts. Changed input triggers the
+target-aware affected-project compiler and emits a monotonic
+`ziac.workspace-patch.v1` containing only complete changed project slices,
+removals, ordering and links. Stale bases fall back to one snapshot reload.
+OS-specific FSEvents/inotify adapters remain an optional latency optimization;
+they no longer require a protocol or frontend redesign.
+
+## M47-M52: Ziac Cloud Bootstrap Completion
+
+Status: Credential-free implementation complete; authenticated qualification
+pending operator credentials. The authoritative design and execution record are:
+
+- `docs/superpowers/specs/2026-07-12-ziac-cloud-bootstrap-completion-design.md`
+- `docs/superpowers/plans/2026-07-12-ziac-cloud-bootstrap-completion.md`
+
+The local dashboard now invokes fixed-argv Ziac plans through the native host,
+saves plans beneath the workspace, displays exact operation counts and digest,
+and requires explicit digest approval before apply. Browser requests cannot
+choose an executable, working directory, plan path or shell command. Live watch
+deploys are now host-supervised asynchronous operations with opaque IDs, real
+phase projection, bounded redacted output, status lookup, and capability-scoped
+cancellation. The deployment dock renders only those phases and retained causal
+events; the removed timer and percentage demonstration is no longer presented
+as evidence.
+
+The completion gate is `zig build self-host-gate`. The live gate is
+`packages/ziac/scripts/qualify-ziac-cloud.sh`; it cannot be marked passed until
+run against the intended GCP project, Cockroach cluster, DNS zone and detailed
+billing export.
+
+## M53-M54: Official GCP Research And Realtime Agent Loop
+
+Status: Complete at the credential-free local product gate.
+
+`ziac init` now scaffolds one consistent `gcp-developer-research` skill and a
+read-only `gcp-developer-researcher` for Codex, Claude Code, and Gemini. Project
+and root-safe harness configuration targets Google's official Developer
+Knowledge MCP endpoint with `search_documents` and `get_documents` only. The
+API key is referenced through `DEVELOPERKNOWLEDGE_API_KEY` and never generated,
+persisted, logged, or embedded. The research protocol ranks exact references,
+guides, release notes, and concepts; reports Ziac implications and confidence;
+and labels inference. Public Preview availability is explicit.
+
+The local agent loop now has one truthful path from save to canvas and deploy:
+declared-input revision detection, affected-project compilation, monotonic
+project patches, stale snapshot recovery, saved-plan approval, asynchronous
+watch execution, compact status polling, causal event rendering, and scoped
+cancellation. Deterministic tests cover scaffold consistency, root safety,
+patch replacement/removal/staleness, browser validation, real child-process
+supervision, and source revision changes. Live GCP behavior remains governed by
+the authenticated M39 qualification rather than inferred from local proof.
+
+## M55: Relocatable Agent Development Kit
+
+Status: Complete at the credential-free install gate.
+
+The installed Ziac prefix now carries the CLI, MCP server, dashboard host and
+assets, required package sources, protobuf and provider contracts, examples,
+scripts, and the complete Ziac documentation tree. Generated skills resolve the
+Ziac dependency from `build.zig.zon` and use that relocatable package directory
+as their local implementation knowledge root. They never depend on the original
+source checkout or an author-specific path.
+
+Local documentation defines the behavior shipped in the installed Ziac version.
+The GCP researcher compares that baseline with current official Developer
+Knowledge before recommending provider changes. API keys, ADC, cloud authority,
+and paid-service entitlements remain operator-owned inputs and are not bundled
+or persisted by the installer.

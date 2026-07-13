@@ -1445,9 +1445,13 @@ fn primaryRegion(regions: []const client_mod.Region) client_mod.Region {
     return regions[0];
 }
 
-fn isSupported(node: resource.ResourceNode) bool {
+pub fn supports(node: resource.ResourceNode) bool {
     return isType(node, cluster_type) or isType(node, existing_cluster_type) or isType(node, sql_user_type) or
         isType(node, authorized_network_type) or isPrivateEndpointType(node) or sql_provider.supports(node);
+}
+
+fn isSupported(node: resource.ResourceNode) bool {
+    return supports(node);
 }
 
 fn isPrivateEndpointType(node: resource.ResourceNode) bool {

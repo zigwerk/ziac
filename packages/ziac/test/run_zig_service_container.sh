@@ -46,16 +46,16 @@ probe_platform() {
   port="$(docker port "$container" 8080/tcp | sed 's/.*://')"
   local response=""
   for _ in $(seq 1 50); do
-    if response="$(curl -fsS "http://127.0.0.1:$port/health/startup")"; then
+    if response="$(curl --max-time 2 -fsS "http://127.0.0.1:$port/health/startup")"; then
       break
     fi
     sleep 0.2
   done
 
   test "$response" = '{"status":"ok"}'
-  test "$(curl -fsS "http://127.0.0.1:$port/health/live")" = '{"status":"ok"}'
-  test "$(curl -fsS "http://127.0.0.1:$port/")" = '{"status":"ok"}'
-  test "$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/missing")" = "404"
+  test "$(curl --max-time 2 -fsS "http://127.0.0.1:$port/health/live")" = '{"status":"ok"}'
+  test "$(curl --max-time 2 -fsS "http://127.0.0.1:$port/")" = '{"status":"ok"}'
+  test "$(curl --max-time 2 -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/missing")" = "404"
 
   docker rm -f "$container" >/dev/null
   containers=("${containers[@]:0:${#containers[@]}-1}")

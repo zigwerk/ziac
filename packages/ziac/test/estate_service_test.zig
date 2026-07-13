@@ -1,6 +1,24 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
+test "Estate control plane exposes bounded health probes without a session" {
+    var store = ziac.estate_service.MemoryStore.init(std.testing.allocator);
+    defer store.deinit();
+    var service = ziac.estate_service.Service.init(store.repository());
+
+    inline for (.{ "/health/startup", "/health/live" }) |path| {
+        var response = try service.handleAlloc(std.testing.allocator, .{
+            .method = "GET",
+            .path = path,
+            .body = "",
+            .now_millis = 1,
+        });
+        defer response.deinit();
+        try std.testing.expectEqual(@as(u16, 200), response.status);
+        try std.testing.expect(std.mem.indexOf(u8, response.body, "ready") != null);
+    }
+}
+
 test "Estate Pro service authenticates ownership, resolves access, audits, and revokes" {
     var store = ziac.estate_service.MemoryStore.init(std.testing.allocator);
     defer store.deinit();

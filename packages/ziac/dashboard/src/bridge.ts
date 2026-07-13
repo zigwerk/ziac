@@ -45,6 +45,48 @@ export type ZiacDashboardPayload = {
   session: ZiacSession | null;
 };
 
+export type ZiacOperationRequest = {
+  schema: "ziac.dashboard-operation-request.v1";
+  operation: "plan" | "apply" | "watch";
+  project: string;
+  stack: string;
+  stage: string;
+  provider: "fake" | "gcp";
+  plan_digest?: string;
+  confirm_destructive?: boolean;
+};
+
+export type ZiacOperationPhase = "queued" | "running" | "cancelling" | "cancelled" | "succeeded" | "failed";
+
+export type ZiacDashboardOperation = {
+  schema: "ziac.dashboard-operation.v1";
+  operation_id: string;
+  kind: "apply" | "watch";
+  phase: ZiacOperationPhase;
+  project: string;
+  stack: string;
+  stage: string;
+  started_at_millis: number;
+  finished_at_millis?: number;
+  exit_code?: number;
+  diagnostic?: string;
+};
+
+export type ZiacCommandReceipt = {
+  schema: "ziac.command.v2";
+  command: string;
+  status: "success";
+  stack: string;
+  stage: string;
+  create: number;
+  update: number;
+  delete: number;
+  noop: number;
+  plan_digest: string | null;
+  plan_path: string | null;
+  approval_required: boolean;
+};
+
 type WebuiApi = {
   call?: (name: string, ...args: unknown[]) => string | Promise<string>;
   isConnected?: () => boolean;
@@ -57,9 +99,134 @@ export type ZiacBridgeWindow = {
   ziac_load_log_snapshot?: () => string | Promise<string>;
   ziac_scan_estate?: () => string | Promise<string>;
   ziac_request_estate_access?: (reason: ZiacEstateAccessState["reason"]) => string | Promise<string>;
+  ziac_operation_plan?: (request: string) => string | Promise<string>;
+  ziac_operation_apply?: (request: string) => string | Promise<string>;
+  ziac_operation_watch?: (request: string) => string | Promise<string>;
+  ziac_operation_status?: (request: string) => string | Promise<string>;
+  ziac_operation_cancel?: (request: string) => string | Promise<string>;
 };
 
-type BridgeFunctionName = "ziac_load_artifact" | "ziac_load_session" | "ziac_load_log_snapshot" | "ziac_scan_estate";
+type BridgeFunctionName = "ziac_load_artifact" | "ziac_load_session" | "ziac_load_log_snapshot" | "ziac_scan_estate" | "ziac_operation_plan" | "ziac_operation_apply" | "ziac_operation_watch" | "ziac_operation_status" | "ziac_operation_cancel";
+
+export async function runDashboardOperation(request: ZiacOperationRequest, bridge: ZiacBridgeWindow = window as ZiacBridgeWindow): Promise<ZiacCommandReceipt> {
+  if (request.operation === "watch") throw new Error("Use startDashboardWatch for asynchronous deploys");
+  const name = request.operation === "plan" ? "ziac_operation_plan" : "ziac_operation_apply";
+  const payload = await callBridgeFunction(bridge, name, JSON.stringify(request));
+  if (payload === null || payload.length === 0 || payload.length > 2 * 1024 * 1024 || containsCredentialMaterial(payload)) throw new Error("Ziac operation host is unavailable");
+  const value: unknown = JSON.parse(payload);
+  if (!isRecord(value) || value.schema !== "ziac.command.v2" || value.status !== "success") {
+    const code = isRecord(value) && typeof value.code === "string" ? value.code : "invalid_receipt";
+    throw new Error(`Ziac operation failed: ${code}`);
+  }
+  for (const key of ["create", "update", "delete", "noop"] as const) if (!Number.isSafeInteger(value[key]) || Number(value[key]) < 0) throw new Error("Invalid Ziac operation receipt");
+  if (typeof value.command !== "string" || typeof value.stack !== "string" || typeof value.stage !== "string" ||
+      (value.plan_digest !== null && typeof value.plan_digest !== "string") || (value.plan_path !== null && typeof value.plan_path !== "string") ||
+      typeof value.approval_required !== "boolean") throw new Error("Invalid Ziac operation receipt");
+  return value as ZiacCommandReceipt;
+}
+
+export async function startDashboardWatch(request: ZiacOperationRequest & { operation: "watch" }, bridge: ZiacBridgeWindow = window as ZiacBridgeWindow): Promise<ZiacDashboardOperation> {
+  return callOperationProjection(bridge, "ziac_operation_watch", request);
+}
+
+export async function loadDashboardOperation(operationId: string, bridge: ZiacBridgeWindow = window as ZiacBridgeWindow): Promise<ZiacDashboardOperation> {
+  return callOperationProjection(bridge, "ziac_operation_status", {
+    schema: "ziac.dashboard-operation-control.v1",
+    operation_id: operationId,
+  });
+}
+
+export async function cancelDashboardOperation(operationId: string, bridge: ZiacBridgeWindow = window as ZiacBridgeWindow): Promise<ZiacDashboardOperation> {
+  return callOperationProjection(bridge, "ziac_operation_cancel", {
+    schema: "ziac.dashboard-operation-control.v1",
+    operation_id: operationId,
+  });
+}
+
+async function callOperationProjection(bridge: ZiacBridgeWindow, name: "ziac_operation_watch" | "ziac_operation_status" | "ziac_operation_cancel", request: unknown): Promise<ZiacDashboardOperation> {
+  const payload = await callBridgeFunction(bridge, name, JSON.stringify(request));
+  if (payload === null || payload.length === 0 || payload.length > 2 * 1024 * 1024 || containsCredentialMaterial(payload)) throw new Error("Ziac operation host is unavailable");
+  let value: unknown;
+  try {
+    value = JSON.parse(payload);
+  } catch {
+    throw new Error("Invalid Ziac operation projection");
+  }
+  if (!isRecord(value) || value.schema !== "ziac.dashboard-operation.v1" || containsCredentialKey(value)) {
+    const code = isRecord(value) && typeof value.code === "string" ? value.code : "invalid_projection";
+    throw new Error(`Ziac operation failed: ${code}`);
+  }
+  const phases: ZiacOperationPhase[] = ["queued", "running", "cancelling", "cancelled", "succeeded", "failed"];
+  if (typeof value.operation_id !== "string" || !/^op-[0-9]{8,}$/.test(value.operation_id) ||
+      (value.kind !== "apply" && value.kind !== "watch") || !phases.includes(value.phase as ZiacOperationPhase) ||
+      typeof value.project !== "string" || typeof value.stack !== "string" || typeof value.stage !== "string" ||
+      !Number.isSafeInteger(value.started_at_millis) || Number(value.started_at_millis) < 0 ||
+      (value.finished_at_millis !== undefined && (!Number.isSafeInteger(value.finished_at_millis) || Number(value.finished_at_millis) < 0)) ||
+      (value.exit_code !== undefined && (!Number.isSafeInteger(value.exit_code) || Number(value.exit_code) < 0 || Number(value.exit_code) > 255)) ||
+      (value.diagnostic !== undefined && typeof value.diagnostic !== "string")) throw new Error("Invalid Ziac operation projection");
+  return value as ZiacDashboardOperation;
+}
+
+export function applyWorkspacePatch(currentJson: string, patchJson: string): string | null {
+  if (currentJson.length === 0 || patchJson.length === 0 || currentJson.length > 16 * 1024 * 1024 || patchJson.length > 16 * 1024 * 1024 ||
+      containsCredentialMaterial(currentJson) || containsCredentialMaterial(patchJson)) return null;
+  try {
+    const current: unknown = JSON.parse(currentJson);
+    const patch: unknown = JSON.parse(patchJson);
+    if (!isRecord(current) || !isRecord(patch) || containsCredentialKey(current) || containsCredentialKey(patch) ||
+        current.schema !== "ziac.workspace-visual.v1" || patch.schema !== "ziac.workspace-patch.v1" ||
+        !isDigest(current.revision) || !isDigest(patch.base_revision) || !isDigest(patch.revision) || current.revision !== patch.base_revision ||
+        typeof current.workspace !== "string" || patch.workspace !== current.workspace || !Number.isSafeInteger(patch.created_at_millis) || Number(patch.created_at_millis) < 0 ||
+        !Array.isArray(current.projects) || !Array.isArray(patch.changed_projects) || !Array.isArray(patch.removed_project_ids) ||
+        !Array.isArray(patch.project_order) || !Array.isArray(patch.links)) return null;
+
+    const projects = new Map<string, Record<string, unknown>>();
+    for (const project of current.projects) {
+      if (!isVisualProject(project) || projects.has(project.project)) return null;
+      projects.set(project.project, project);
+    }
+    for (const id of patch.removed_project_ids) {
+      if (typeof id !== "string") return null;
+      projects.delete(id);
+    }
+    for (const project of patch.changed_projects) {
+      if (!isVisualProject(project)) return null;
+      projects.set(project.project, project);
+    }
+    const order = patch.project_order;
+    if (new Set(order).size !== order.length || order.some((id) => typeof id !== "string" || !projects.has(id))) return null;
+    if (order.length !== projects.size) return null;
+    return JSON.stringify({
+      schema: "ziac.workspace-visual.v1",
+      format_version: 1,
+      workspace: current.workspace,
+      created_at_millis: Number(patch.created_at_millis),
+      revision: patch.revision,
+      projects: order.map((id) => projects.get(id as string)),
+      links: patch.links,
+    });
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeWorkspacePatches(onPatch: (patchJson: string) => void, target: EventTarget = window): () => void {
+  const listener: EventListener = (event) => {
+    const detail = (event as CustomEvent<unknown>).detail;
+    if (typeof detail === "string") onPatch(detail);
+  };
+  target.addEventListener("ziac-workspace-patch", listener);
+  return () => target.removeEventListener("ziac-workspace-patch", listener);
+}
+
+function isVisualProject(value: unknown): value is Record<string, unknown> & { project: string } {
+  return isRecord(value) && typeof value.project === "string" && value.project.length > 0 && typeof value.path === "string" &&
+    typeof value.stack === "string" && typeof value.stage === "string" && isRecord(value.artifact);
+}
+
+function isDigest(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
 
 export async function loadDashboardPayload(): Promise<ZiacDashboardPayload> {
   const bridge = window as ZiacBridgeWindow;
@@ -249,10 +416,10 @@ function parseSession(payload: string | null): ZiacSession | null {
   }
 }
 
-async function callBridgeFunction(bridge: ZiacBridgeWindow, name: BridgeFunctionName): Promise<string | null> {
-  if (typeof bridge.webui?.call === "function") return bridge.webui.call(name);
+async function callBridgeFunction(bridge: ZiacBridgeWindow, name: BridgeFunctionName, ...args: unknown[]): Promise<string | null> {
+  if (typeof bridge.webui?.call === "function") return bridge.webui.call(name, ...args);
   const direct = bridge[name];
-  return typeof direct === "function" ? direct() : null;
+  return typeof direct === "function" ? direct(...args as [string]) : null;
 }
 
 async function loadSampleArtifact(sampleName: string): Promise<string> {

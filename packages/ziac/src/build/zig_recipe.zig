@@ -3,9 +3,9 @@ const std = @import("std");
 pub const default_cloud_builder = "gcr.io/cloud-builders/docker@sha256:6c9b879570fe1c63a78af0b575ca5ac52f6c2c7e25f76f91ae1f2d6cb2a872ee";
 pub const default_build_image = "docker.io/library/debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df";
 pub const default_final_image = "gcr.io/distroless/static-debian12:nonroot@sha256:b7bb25d9f7c31d2bdd1982feb4dafcaf137703c7075dbe2febb41c24212b946f";
-pub const default_zig_version = "0.15.2";
-pub const default_zig_x86_64_sha256 = "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239";
-pub const default_zig_aarch64_sha256 = "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f";
+pub const default_zig_version = "0.16.0";
+pub const default_zig_x86_64_sha256 = "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00";
+pub const default_zig_aarch64_sha256 = "ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17";
 
 pub const Error = std.mem.Allocator.Error || error{
     InvalidChecksum,

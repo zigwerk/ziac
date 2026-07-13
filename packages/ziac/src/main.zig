@@ -373,6 +373,7 @@ fn runWorkspaceDashboard(
     defer project_artifacts.deinit(allocator);
     var resource_count: usize = 0;
     const created_at_millis: u64 = @intCast(std.Io.Clock.real.now(io).toMilliseconds());
+    try root.createDirPath(io, ".ziac/dashboard/cache");
 
     for (discovery.projects) |project| {
         if (selected_project) |selected| {
@@ -388,20 +389,54 @@ fn runWorkspaceDashboard(
         const compiler = contract.program orelse return error.WorkspaceProjectCompilerMissing;
         const project_path = try std.fs.path.join(allocator, &.{ root_path, project.path });
         defer allocator.free(project_path);
-        var runner = ziac.project_program.NativeRunner{ .io = io, .cwd_path = project_path };
+        var project_dir = try std.Io.Dir.openDirAbsolute(io, project_path, .{ .iterate = true });
+        defer project_dir.close(io);
         const target = ziac.program_format.Target{
             .stack = stack_override orelse project.stack,
             .stage = stage_override orelse project.stage,
         };
-        var program = try ziac.project_program.loadAlloc(allocator, compiler, runner.runner(), target);
-        defer program.deinit();
-        var artifact = try ziac.visual_artifact.serializeAlloc(allocator, &program.graph, null, .{
-            .stack = target.stack,
-            .stage = target.stage,
-            .created_at_millis = created_at_millis,
-        });
+        const source_revision = try ziac.workspace.projectRevision(allocator, io, project_dir, manifest, contract.source_roots);
+        const revision = workspaceTargetRevision(source_revision, target);
+        const revision_hex = std.fmt.bytesToHex(revision, .lower);
+        const cache_revision_path = try std.fmt.allocPrint(allocator, ".ziac/dashboard/cache/{s}.revision", .{project.id});
+        defer allocator.free(cache_revision_path);
+        const cache_artifact_path = try std.fmt.allocPrint(allocator, ".ziac/dashboard/cache/{s}.json", .{project.id});
+        defer allocator.free(cache_artifact_path);
+        const cached_revision = root.readFileAlloc(io, cache_revision_path, allocator, .limited(64)) catch null;
+        defer if (cached_revision) |bytes| allocator.free(bytes);
+        var cached_artifact: ?[]u8 = root.readFileAlloc(io, cache_artifact_path, allocator, .limited(ziac.dashboard_host.max_artifact_bytes)) catch null;
+        defer if (cached_artifact) |bytes| allocator.free(bytes);
+        const cache_hit = cached_revision != null and cached_artifact != null and std.mem.eql(u8, cached_revision.?, &revision_hex);
+        var artifact: ziac.visual_artifact.SerializedArtifact = undefined;
+        if (cache_hit) {
+            const bytes = cached_artifact.?;
+            cached_artifact = null;
+            var digest: [32]u8 = undefined;
+            std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
+            artifact = .{ .allocator = allocator, .bytes = bytes, .digest = digest };
+        } else compile: {
+            var runner = ziac.project_program.NativeRunner{ .io = io, .cwd_path = project_path };
+            var program = ziac.project_program.loadAlloc(allocator, compiler, runner.runner(), target) catch |err| {
+                if (cached_artifact) |bytes| {
+                    cached_artifact = null;
+                    var digest: [32]u8 = undefined;
+                    std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
+                    artifact = .{ .allocator = allocator, .bytes = bytes, .digest = digest };
+                    break :compile;
+                }
+                return err;
+            };
+            defer program.deinit();
+            artifact = try ziac.visual_artifact.serializeAlloc(allocator, &program.graph, null, .{
+                .stack = target.stack,
+                .stage = target.stage,
+                .created_at_millis = created_at_millis,
+            });
+            try writeAtomicFile(allocator, io, root, cache_artifact_path, artifact.bytes);
+            try writeAtomicFile(allocator, io, root, cache_revision_path, &revision_hex);
+        }
+        resource_count += try visualResourceCount(allocator, artifact.bytes);
         errdefer artifact.deinit();
-        resource_count += program.graph.resources.items.len;
         try serialized.append(allocator, artifact);
         const stored = &serialized.items[serialized.items.len - 1];
         try project_artifacts.append(allocator, .{
@@ -497,6 +532,27 @@ fn writeAtomicFile(
     };
 }
 
+fn workspaceTargetRevision(source_revision: [32]u8, target: ziac.program_format.Target) [32]u8 {
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    hasher.update(&source_revision);
+    hasher.update(target.stack);
+    hasher.update(target.stage);
+    var digest: [32]u8 = undefined;
+    hasher.final(&digest);
+    return digest;
+}
+
+fn visualResourceCount(allocator: std.mem.Allocator, bytes: []const u8) !usize {
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
+    defer parsed.deinit();
+    if (parsed.value != .object) return error.InvalidWorkspaceVisualArtifact;
+    const resources = parsed.value.object.get("resources") orelse return error.InvalidWorkspaceVisualArtifact;
+    return switch (resources) {
+        .array => |items| items.items.len,
+        else => error.InvalidWorkspaceVisualArtifact,
+    };
+}
+
 fn workspaceRootAlloc(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -532,6 +588,10 @@ fn runInit(
     cwd: std.Io.Dir,
     args: []const []const u8,
 ) !u8 {
+    if (optionValue(args, "--preset")) |preset| {
+        if (!std.mem.eql(u8, preset, "ziac-cloud")) return error.UnknownInitPreset;
+        return runZiacCloudInit(allocator, io, cwd, args);
+    }
     const explicit_name = if (args.len > 0 and !std.mem.startsWith(u8, args[0], "--")) args[0] else null;
     const options = if (explicit_name == null) args else args[1..];
     const current_path = try cwd.realPathFileAlloc(io, ".", allocator);
@@ -586,6 +646,72 @@ fn runInit(
     return ziac.cli.Exit.success;
 }
 
+fn runZiacCloudInit(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: std.Io.Dir,
+    args: []const []const u8,
+) !u8 {
+    const target = optionValue(args, "--dir") orelse ".";
+    const force = hasFlag(args, "--force");
+    const package_path = if (optionValue(args, "--ziac-path")) |path|
+        try allocator.dupe(u8, path)
+    else
+        try defaultPackagePathAlloc(allocator, io);
+    defer allocator.free(package_path);
+    try cwd.createDirPath(io, target);
+    const target_path = try cwd.realPathFileAlloc(io, target, allocator);
+    defer allocator.free(target_path);
+    const package_absolute = if (std.fs.path.isAbsolute(package_path))
+        try std.Io.Dir.realPathFileAbsoluteAlloc(io, package_path, allocator)
+    else
+        try cwd.realPathFileAlloc(io, package_path, allocator);
+    defer allocator.free(package_absolute);
+    var workspace_dir = try std.Io.Dir.openDirAbsolute(io, target_path, .{});
+    defer workspace_dir.close(io);
+    const projects = [_]struct { path: []const u8, name: []const u8, kind: ziac.scaffold.SelfHostProject }{
+        .{ .path = "platform/bootstrap", .name = "ziac-cloud-bootstrap", .kind = .bootstrap },
+        .{ .path = "platform/data", .name = "ziac-cloud-data", .kind = .data },
+        .{ .path = "platform/control-plane", .name = "ziac-cloud-control-plane", .kind = .control_plane },
+        .{ .path = "platform/billing", .name = "ziac-cloud-billing", .kind = .billing },
+    };
+    var wrote_skills = false;
+    for (projects) |project| {
+        try workspace_dir.createDirPath(io, project.path);
+        const project_path = try std.fs.path.join(allocator, &.{ target_path, project.path });
+        defer allocator.free(project_path);
+        const dependency_path = try std.fs.path.relative(allocator, ".", null, project_path, package_absolute);
+        defer allocator.free(dependency_path);
+        var rendered = try ziac.scaffold.renderSelfHostAlloc(allocator, .{ .project_name = project.name, .ziac_path = dependency_path }, project.kind);
+        defer rendered.deinit();
+        var project_dir = try workspace_dir.openDir(io, project.path, .{});
+        defer project_dir.close(io);
+        try ziac.scaffold.write(project_dir, io, rendered, force);
+        if (!wrote_skills) {
+            try ziac.scaffold.writeWorkspaceAgentFiles(workspace_dir, io, rendered);
+            wrote_skills = true;
+        }
+    }
+    try workspace_dir.writeFile(io, .{ .sub_path = "README.md", .data = self_host_readme });
+    try std.Io.File.stdout().writeStreamingAll(io, "Created Ziac Cloud workspace in ");
+    try std.Io.File.stdout().writeStreamingAll(io, target);
+    try std.Io.File.stdout().writeStreamingAll(io, "\n");
+    return ziac.cli.Exit.success;
+}
+
+const self_host_readme =
+    \\# Ziac Cloud
+    \\
+    \\This workspace deploys Ziac with Ziac. Start with `platform/bootstrap` using local state, migrate that state into the emitted GCS bucket, then deploy `platform/data`, `platform/control-plane`, and `platform/billing` with the remote backend.
+    \\
+    \\The bootstrap owns Artifact Registry and Cloud Build. `scripts/qualify-ziac-cloud.sh` builds immutable control-plane and billing-worker images when image refs are not supplied, deploys all four projects, and proves the hourly billing scheduler.
+    \\
+    \\Populate explicit Secret Manager versions for the Cockroach admin URL and Google OAuth client credentials before the authenticated qualification. Secret values never belong in this repository or a Ziac artifact.
+    \\
+    \\Run `ziac dashboard` at this repository root to compile and visualize all four projects together.
+    \\
+;
+
 fn shouldPromptForInit(io: std.Io) !bool {
     return std.Io.File.stdin().isTty(io) catch false;
 }
@@ -599,7 +725,7 @@ fn confirmInit(io: std.Io, name: []const u8, target: []const u8, workspace_root:
         \\  Workspace      {s}
         \\  Template       Global Zig service on GCP
         \\  Dashboard      global-api / dev
-        \\  Agent skills   Codex, Claude Code, Gemini
+        \\  Agent skills   Ziac + GCP researcher for Codex, Claude, Gemini
         \\
         \\Create project? [Y/n]
     , .{ name, target, workspace_root });

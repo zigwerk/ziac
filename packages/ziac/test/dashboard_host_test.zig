@@ -20,7 +20,76 @@ test "dashboard host requires an explicit artifact and owns Ziac bridge names" {
     try std.testing.expectEqualStrings(".ziac/dashboard/session.json", options.session_path.?);
     try std.testing.expectEqualStrings(".ziac/logs/events.jsonl", options.log_path.?);
     try std.testing.expectEqualStrings("ziac_load_artifact", ziac.dashboard_host.bridge_names.load_artifact);
+    try std.testing.expectEqualStrings("ziac_operation_watch", ziac.dashboard_host.bridge_names.operation_watch);
+    try std.testing.expectEqualStrings("ziac_operation_status", ziac.dashboard_host.bridge_names.operation_status);
+    try std.testing.expectEqualStrings("ziac_operation_cancel", ziac.dashboard_host.bridge_names.operation_cancel);
     try std.testing.expect(ziac.dashboard_host.parseLaunchArgs(&.{"ziac-dashboard-host"}) == null);
+}
+
+test "dashboard host supervises a watch child and returns terminal status by operation id" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(std.testing.io, "platform");
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "platform/ziac.project.json",
+        .data = "{\"schema\":\"ziac.project.v1\",\"project\":\"api\",\"dashboard\":{\"stack\":\"api\",\"stage\":\"prod\"}}",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "artifact.json", .data = "{\"schema\":\"ziac.visual.v1\"}" });
+    const root_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(root_path);
+    var host = ziac.dashboard_host.Host.init(std.testing.allocator, std.testing.io, tmp.dir, .{
+        .artifact_path = "artifact.json",
+        .refresh_executable = "/usr/bin/true",
+        .refresh_root = root_path,
+        .refresh_out = "artifact.json",
+    });
+    defer host.deinit();
+    const started = try host.startWatchAlloc(
+        "{\"schema\":\"ziac.dashboard-operation-request.v1\",\"operation\":\"watch\",\"project\":\"api\",\"stack\":\"api\",\"stage\":\"prod\",\"provider\":\"fake\",\"plan_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+    );
+    defer std.testing.allocator.free(started);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, started, .{});
+    defer parsed.deinit();
+    const operation_id = parsed.value.object.get("operation_id").?.string;
+    const control = try std.fmt.allocPrint(std.testing.allocator, "{{\"schema\":\"ziac.dashboard-operation-control.v1\",\"operation_id\":\"{s}\"}}", .{operation_id});
+    defer std.testing.allocator.free(control);
+    var terminal: ?[]u8 = null;
+    defer if (terminal) |value| std.testing.allocator.free(value);
+    for (0..10_000) |_| {
+        const status = try host.operationStatusAlloc(control);
+        if (std.mem.indexOf(u8, status, "\"phase\":\"succeeded\"") != null) {
+            terminal = status;
+            break;
+        }
+        std.testing.allocator.free(status);
+        std.Thread.yield() catch {};
+    }
+    try std.testing.expect(terminal != null);
+    try std.testing.expect(std.mem.indexOf(u8, terminal.?, "\"exit_code\":0") != null);
+}
+
+test "dashboard host source revision follows declared project inputs" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(std.testing.io, "platform/src");
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "platform/ziac.project.json",
+        .data =
+        \\{"schema":"ziac.project.v1","project":"api","source_roots":["src"],"components":[],"requirements":[],"acceptance_checks":[],"environments":[],"adaptations":[],"scenarios":[],"dashboard":{"stack":"api","stage":"dev"},"authority":{"read":true,"plan":true,"apply":false,"delete":false,"secret_read":false,"live_network":false}}
+        ,
+    });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "platform/src/main.zig", .data = "pub fn main() void {}" });
+    const root_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(root_path);
+    var host = ziac.dashboard_host.Host.init(std.testing.allocator, std.testing.io, tmp.dir, .{
+        .artifact_path = "artifact.json",
+        .refresh_root = root_path,
+    });
+    defer host.deinit();
+    const first = try host.workspaceSourceRevision();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "platform/src/main.zig", .data = "pub fn main() void { @panic(\"changed\"); }" });
+    const second = try host.workspaceSourceRevision();
+    try std.testing.expect(!std.mem.eql(u8, &first, &second));
 }
 
 test "dashboard host reads bounded live files and generates an honest session" {

@@ -1,6 +1,7 @@
 import ArrowRight from "lucide-solid/icons/arrow-right";
 import Binary from "lucide-solid/icons/binary";
 import Bot from "lucide-solid/icons/bot";
+import BookOpen from "lucide-solid/icons/book-open";
 import Boxes from "lucide-solid/icons/boxes";
 import Braces from "lucide-solid/icons/braces";
 import Check from "lucide-solid/icons/check";
@@ -15,6 +16,7 @@ import Network from "lucide-solid/icons/network";
 import Rocket from "lucide-solid/icons/rocket";
 import Search from "lucide-solid/icons/search";
 import ShieldCheck from "lucide-solid/icons/shield-check";
+import SquareTerminal from "lucide-solid/icons/square-terminal";
 import X from "lucide-solid/icons/x";
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { HeroTopology } from "./HeroTopology";
@@ -292,6 +294,33 @@ export function ProductLanding() {
                 </div>
               )}
             </Show>
+          </div>
+        </section>
+
+        <section class="agent-kit-section" id="agent-kit" aria-labelledby="agent-kit-title">
+          <div class="agent-kit-copy" data-reveal>
+            <p class="eyebrow">One install. Every agent equipped.</p>
+            <h2 id="agent-kit-title">The development platform arrives with the CLI.</h2>
+            <p>Install Ziac once, then scaffold a project with the local compiler, dashboard, Ziac MCP server, reference documentation, and harness-native skills needed to build it. The generated kit resolves through the project dependency, so agents do not need a Ziac source checkout beside your application.</p>
+            <div class="agent-kit-principles" aria-label="Installed agent development kit principles">
+              <span><Boxes size={18} /><strong>Relocatable by design</strong><small>Package sources, dashboard assets, and docs resolve from <code>build.zig.zon</code>.</small></span>
+              <span><Bot size={18} /><strong>Harness-native</strong><small>Codex, Claude Code, and Gemini receive the same project-aware operating model.</small></span>
+              <span><BookOpen size={18} /><strong>Current GCP research</strong><small>The GCP Developer Researcher compares the shipped baseline with official documentation.</small></span>
+            </div>
+            <a class="editorial-link" href="/how-it-works#scaffold">See what <code>ziac init</code> installs <ArrowRight size={16} /></a>
+          </div>
+
+          <div class="agent-kit-manifest" data-reveal style={{ "--reveal-delay": "90ms" }}>
+            <div class="agent-kit-manifest-header">
+              <span><SquareTerminal size={15} /><code>$ ziac init --yes</code></span>
+              <strong><i /> local kit ready</strong>
+            </div>
+            <div class="agent-kit-manifest-row"><span><Braces size={17} /></span><div><code>ziac</code><small>CLI and infrastructure compiler</small></div><strong>bundled</strong></div>
+            <div class="agent-kit-manifest-row"><span><GitBranch size={17} /></span><div><code>ziac-mcp</code><small>Ziac MCP server</small></div><strong>bundled</strong></div>
+            <div class="agent-kit-manifest-row"><span><Network size={17} /></span><div><code>ziac-dashboard-host</code><small>Local visual control surface</small></div><strong>bundled</strong></div>
+            <div class="agent-kit-manifest-row"><span><Bot size={17} /></span><div><code>.agents · .claude · .gemini</code><small>Harness-native skills and researcher agents</small></div><strong>generated</strong></div>
+            <div class="agent-kit-manifest-row"><span><BookOpen size={17} /></span><div><code>gcp-developer-researcher</code><small>GCP Developer Researcher</small></div><strong>read only</strong></div>
+            <div class="agent-kit-manifest-footer"><span>User-owned credential</span><code>DEVELOPERKNOWLEDGE_API_KEY</code></div>
           </div>
         </section>
 

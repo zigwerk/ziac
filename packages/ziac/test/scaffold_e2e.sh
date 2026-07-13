@@ -9,6 +9,12 @@ workspace="$(mktemp -d "${TMPDIR:-/tmp}/ziac-scaffold-e2e.XXXXXX")"
 trap 'rm -rf "${workspace}"' EXIT
 
 test -f "$(dirname "${ziac_bin}")/../share/ziac/build.zig.zon"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/Dockerfile.self-host"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/cloudbuild.self-host.yaml"
+test -x "$(dirname "${ziac_bin}")/../share/ziac/scripts/qualify-ziac-cloud.sh"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/agent-development-kit.md"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-developer-research.md"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/dashboard/dist/index.html"
 test -f "$(dirname "${ziac_bin}")/../share/zigeffect/src/zigeffect.zig"
 mkdir -p "${workspace}/global-api"
 cd "${workspace}/global-api"
@@ -19,9 +25,26 @@ test -f .git/HEAD
 test -f .agents/skills/ziac/SKILL.md
 test -f .claude/skills/ziac/SKILL.md
 test -f .gemini/skills/ziac/SKILL.md
+test -f .agents/skills/gcp-developer-research/SKILL.md
+test -f .claude/skills/gcp-developer-research/SKILL.md
+test -f .gemini/skills/gcp-developer-research/SKILL.md
+test -f .codex/agents/gcp-developer-researcher.toml
+test -f .claude/agents/gcp-developer-researcher.md
+test -f .gemini/agents/gcp-developer-researcher.md
+test -f .env.example
 grep -Fq 'name: ziac' .agents/skills/ziac/SKILL.md
+grep -Fq 'build.zig.zon' .agents/skills/ziac/SKILL.md
+grep -Fq 'docs/agent-development-kit.md' .agents/skills/ziac/SKILL.md
+grep -Fq 'docs/gcp-specialization.md' .agents/skills/gcp-developer-research/SKILL.md
 cmp .agents/skills/ziac/SKILL.md .claude/skills/ziac/SKILL.md
 cmp .agents/skills/ziac/SKILL.md .gemini/skills/ziac/SKILL.md
+cmp .agents/skills/gcp-developer-research/SKILL.md .claude/skills/gcp-developer-research/SKILL.md
+cmp .agents/skills/gcp-developer-research/SKILL.md .gemini/skills/gcp-developer-research/SKILL.md
+grep -Fq 'https://developerknowledge.googleapis.com/mcp' .mcp.json
+grep -Fq 'DEVELOPERKNOWLEDGE_API_KEY' .codex/config.toml
+grep -Fq 'search_documents' .gemini/settings.json
+grep -Fq 'permissionMode: plan' .claude/agents/gcp-developer-researcher.md
+test "$(cat .env.example)" = 'DEVELOPERKNOWLEDGE_API_KEY='
 zig build test --summary failures
 zig build ziac-program -- --stack global-api --stage dev > "${workspace}/program.json"
 grep -Fq '"schema":"ziac.program.v1"' "${workspace}/program.json"
@@ -80,6 +103,15 @@ git init -q
 test -f .agents/skills/ziac/SKILL.md
 test -f .claude/skills/ziac/SKILL.md
 test -f .gemini/skills/ziac/SKILL.md
+test -f .agents/skills/gcp-developer-research/SKILL.md
+test -f .claude/agents/gcp-developer-researcher.md
+test -f .gemini/agents/gcp-developer-researcher.md
+test -f .codex/agents/gcp-developer-researcher.toml
+grep -Fq 'google-developer-knowledge' .mcp.json
+if grep -Fq 'ziac.project.json' .mcp.json; then
+  echo 'workspace root MCP configuration points at a child project' >&2
+  exit 1
+fi
 grep -Fq 'merged canvas' .agents/skills/ziac/SKILL.md
 grep -Fq '"dashboard": { "stack": "global-api", "stage": "dev" }' platform/ziac.project.json
 "${ziac_bin}" dashboard --artifact-only --out "${workspace}/workspace-dashboard.json" > "${workspace}/workspace-dashboard-receipt.json"
@@ -88,3 +120,44 @@ grep -Fq '"projects":2' "${workspace}/workspace-dashboard-receipt.json"
 grep -Fq '"schema":"ziac.workspace-visual.v1"' "${workspace}/workspace-dashboard.json"
 grep -Fq '"project":"payments"' "${workspace}/workspace-dashboard.json"
 grep -Fq '"project":"platform"' "${workspace}/workspace-dashboard.json"
+
+mkdir -p "${workspace}/self-host"
+cd "${workspace}/self-host"
+git init -q
+"${ziac_bin}" init --preset ziac-cloud --yes
+test -f platform/bootstrap/ziac.project.json
+test -f platform/data/ziac.project.json
+test -f platform/control-plane/ziac.project.json
+test -f platform/billing/ziac.project.json
+test -f .agents/skills/gcp-developer-research/SKILL.md
+test -f .claude/agents/gcp-developer-researcher.md
+test -f .gemini/agents/gcp-developer-researcher.md
+grep -Fq 'google-developer-knowledge' .mcp.json
+grep -Fq 'buildBootstrap' platform/bootstrap/ziac.stack.zig
+grep -Fq 'buildData' platform/data/ziac.stack.zig
+grep -Fq 'buildControlPlane' platform/control-plane/ziac.stack.zig
+grep -Fq 'buildBilling' platform/billing/ziac.stack.zig
+grep -Fq 'all four projects' README.md
+(
+  cd platform/bootstrap
+  "${ziac_bin}" check --stack bootstrap --stage prod --json > "${workspace}/self-host-bootstrap-check.json"
+)
+(
+  cd platform/data
+  "${ziac_bin}" check --stack data --stage prod --json > "${workspace}/self-host-data-check.json"
+)
+(
+  cd platform/control-plane
+  "${ziac_bin}" check --stack control-plane --stage prod --json > "${workspace}/self-host-control-check.json"
+)
+(
+  cd platform/billing
+  "${ziac_bin}" check --stack billing --stage prod --json > "${workspace}/self-host-billing-check.json"
+)
+grep -Fq '"status":"valid"' "${workspace}/self-host-bootstrap-check.json"
+grep -Fq '"status":"valid"' "${workspace}/self-host-data-check.json"
+grep -Fq '"status":"valid"' "${workspace}/self-host-control-check.json"
+grep -Fq '"status":"valid"' "${workspace}/self-host-billing-check.json"
+"${ziac_bin}" dashboard --artifact-only --out "${workspace}/self-host-dashboard.json" > "${workspace}/self-host-dashboard-receipt.json"
+grep -Fq '"projects":4' "${workspace}/self-host-dashboard-receipt.json"
+grep -Fq '"schema":"ziac.workspace-visual.v1"' "${workspace}/self-host-dashboard.json"

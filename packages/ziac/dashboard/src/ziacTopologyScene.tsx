@@ -111,7 +111,7 @@ export function ZiacTopologyScene(props: {
               <span class={`health-${hover().data.health}`}>{hover().data.health}</span>
             </header>
             <dl>
-              <div><dt>Monthly estimate</dt><dd>{hover().data.forecastMonthly}</dd></div>
+              <div><dt>Cost</dt><dd>{hover().data.forecastMonthly}</dd></div>
               <div><dt>Uptime</dt><dd>{hover().data.uptime}</dd></div>
               <div><dt>Scope</dt><dd>{hover().data.scope}</dd></div>
               <div><dt>Operation</dt><dd>{hover().data.operation}</dd></div>
@@ -119,7 +119,7 @@ export function ZiacTopologyScene(props: {
               <div><dt>Provider</dt><dd>{hover().data.provider}</dd></div>
             </dl>
             <code>{hover().data.canonicalId}</code>
-            <p>Cost is estimated from configured capacity. Connect billing telemetry for observed spend.</p>
+            <p>Actual spend appears only from an authorized detailed Cloud Billing export.</p>
           </aside>
         )}
       </Show>

@@ -15,9 +15,15 @@ const chromeSource = await source("./MarketingChrome.tsx");
 describe("Ziac how-it-works journey", () => {
   test("starts with an honest private-beta scaffold flow", () => {
     expect(pageSource).toContain("Private beta CLI flow");
-    expect(pageSource).toContain("ziac init global-api --template gcp-global");
+    expect(pageSource).toContain("ziac init --yes");
     expect(pageSource).toContain("ziac.project.json");
-    expect(pageSource).toContain("GCP, Ziac, and Zig skills");
+    expect(pageSource).toContain("ziac.stack.zig");
+    expect(pageSource).toContain("GCP Developer Researcher");
+    expect(pageSource).toContain("build.zig.zon");
+    expect(pageSource).toContain("DEVELOPERKNOWLEDGE_API_KEY");
+    expect(pageSource).not.toContain("--template gcp-global");
+    expect(pageSource).not.toContain("infra/main.zig");
+    expect(pageSource).not.toContain(".ziac/scenarios/");
   });
 
   test("supports any major agent harness through one kernel", () => {
