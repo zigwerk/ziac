@@ -186,3 +186,47 @@ test "Pub/Sub REST bindings expand canonical resource names and query fields" {
         try rpc.selectTransport(rpc.pubsub_v1.get_topic, .{ .rest_json = true }, .{}),
     );
 }
+
+test "Cloud Tasks and Eventarc RPC descriptors retain AIP lifecycle semantics" {
+    try std.testing.expectEqualStrings("cloudtasks.googleapis.com", rpc.cloud_tasks_v2.create_queue.default_host);
+    try std.testing.expectEqual(rpc.HttpMethod.post, rpc.cloud_tasks_v2.create_queue.rest.?.method);
+    try std.testing.expectEqualStrings("/v2/{parent=projects/*/locations/*}/queues", rpc.cloud_tasks_v2.create_queue.rest.?.path_template);
+    try std.testing.expect(rpc.cloud_tasks_v2.update_queue.semantics.update_mask);
+    try std.testing.expectEqualStrings("queue.name", rpc.cloud_tasks_v2.update_queue.routing_field.?);
+
+    try std.testing.expectEqualStrings("eventarc.googleapis.com", rpc.eventarc_v1.create_trigger.default_host);
+    try std.testing.expectEqualStrings("google.longrunning.Operation", rpc.eventarc_v1.create_trigger.response_type);
+    try std.testing.expectEqualStrings("google.cloud.eventarc.v1.Trigger", rpc.eventarc_v1.create_trigger.long_running.?.response_type);
+    try std.testing.expect(rpc.eventarc_v1.create_trigger.semantics.validate_only);
+    try std.testing.expect(rpc.eventarc_v1.update_trigger.semantics.update_mask);
+    try std.testing.expect(rpc.eventarc_v1.update_trigger.semantics.etag);
+    try std.testing.expect(rpc.eventarc_v1.delete_trigger.semantics.etag);
+}
+
+test "Cloud Tasks and Eventarc REST bindings expand canonical paths and masks" {
+    const queue_path = try rpc.restPathAlloc(
+        std.testing.allocator,
+        rpc.cloud_tasks_v2.update_queue,
+        &.{.{ .field = "queue.name", .value = "projects/ziac-dev/locations/europe-west1/queues/invoice-worker" }},
+        &.{.{ .field = "update_mask", .value = "rateLimits,retryConfig" }},
+    );
+    defer std.testing.allocator.free(queue_path);
+    try std.testing.expectEqualStrings(
+        "/v2/projects/ziac-dev/locations/europe-west1/queues/invoice-worker?updateMask=rateLimits,retryConfig",
+        queue_path,
+    );
+    const trigger_path = try rpc.restPathAlloc(
+        std.testing.allocator,
+        rpc.eventarc_v1.create_trigger,
+        &.{.{ .field = "parent", .value = "projects/ziac-dev/locations/europe-west1" }},
+        &.{
+            .{ .field = "trigger_id", .value = "orders-created" },
+            .{ .field = "validate_only", .value = "true" },
+        },
+    );
+    defer std.testing.allocator.free(trigger_path);
+    try std.testing.expectEqualStrings(
+        "/v1/projects/ziac-dev/locations/europe-west1/triggers?triggerId=orders-created&validateOnly=true",
+        trigger_path,
+    );
+}

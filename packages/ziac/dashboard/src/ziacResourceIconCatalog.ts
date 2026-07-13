@@ -26,6 +26,12 @@ export function resourceVisualIdentity(resource: Pick<ZiacVisualResource, "provi
   if (resource.type.startsWith("gcp.pubsub.")) {
     return { family: "gcp.pubsub", label: "Pub/Sub", iconPath: `${gcpIconRoot}/pubsub.png`, official: true };
   }
+  if (resource.type.startsWith("gcp.tasks.")) {
+    return { family: "gcp.tasks", label: "Cloud Tasks", iconPath: `${gcpIconRoot}/serverless.png`, official: true };
+  }
+  if (resource.type.startsWith("gcp.eventarc.")) {
+    return { family: "gcp.eventarc", label: "Eventarc", iconPath: `${gcpIconRoot}/serverless.png`, official: true };
+  }
   if (isNetworkingType(resource.type)) {
     return { family: "gcp.networking", label: "Networking", iconPath: `${gcpIconRoot}/networking.png`, official: true };
   }
@@ -35,7 +41,7 @@ export function resourceVisualIdentity(resource: Pick<ZiacVisualResource, "provi
   if (resource.type.startsWith("gcp.sql.") || resource.type.startsWith("gcp.spanner.") || resource.type.startsWith("gcp.firestore.")) {
     return { family: "gcp.databases", label: "Databases", iconPath: `${gcpIconRoot}/databases.png`, official: true };
   }
-  if (resource.type.startsWith("gcp.functions.") || resource.type.startsWith("gcp.scheduler.") || resource.type.startsWith("gcp.tasks.")) {
+  if (resource.type.startsWith("gcp.functions.") || resource.type.startsWith("gcp.scheduler.")) {
     return { family: "gcp.serverless", label: "Serverless", iconPath: `${gcpIconRoot}/serverless.png`, official: true };
   }
   return { family: "gcp.compute", label: "Google Cloud", iconPath: `${gcpIconRoot}/compute.png`, official: true };

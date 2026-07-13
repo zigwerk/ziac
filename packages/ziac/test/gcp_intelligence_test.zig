@@ -57,6 +57,49 @@ test "ZigSubscriber graph synthesizes Pub/Sub Run IAM and identity preflight" {
     try std.testing.expect(requirements.hasPermission("iam.serviceAccounts.create"));
 }
 
+test "async delivery graph synthesizes Cloud Tasks Eventarc and act-as preflight" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    var queue = try ziac.gcp.tasks.Queue.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{ .name = "invoice-worker" });
+    defer queue.deinit(std.testing.allocator);
+    var queue_member = try ziac.gcp.tasks.QueueIamMember.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{
+        .name = "invoice-enqueuer",
+        .queue = queue.name,
+        .role = "roles/cloudtasks.enqueuer",
+        .member = "serviceAccount:api@ziac-dev.iam.gserviceaccount.com",
+    });
+    defer queue_member.deinit(std.testing.allocator);
+    var trigger = try ziac.gcp.eventarc.Trigger.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{
+        .name = "orders-created",
+        .event_filters = &.{.{ .attribute = "type", .value = "google.cloud.pubsub.topic.v1.messagePublished" }},
+        .service_account = "orders-events@ziac-dev.iam.gserviceaccount.com",
+        .destination = .{ .cloud_run = .{ .service = "orders-worker", .region = "europe-west1" } },
+    });
+    defer trigger.deinit(std.testing.allocator);
+    try graph.addResource(queue.node);
+    try graph.addResource(queue_member.node);
+    try graph.addResource(trigger.node);
+
+    var requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &graph);
+    defer requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(requirements.apis, "cloudtasks.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "eventarc.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "iam.googleapis.com"));
+    try std.testing.expect(requirements.hasPermission("cloudtasks.queues.create"));
+    try std.testing.expect(requirements.hasPermission("cloudtasks.queues.setIamPolicy"));
+    try std.testing.expect(requirements.hasPermission("eventarc.triggers.create"));
+    try std.testing.expect(requirements.hasPermission("iam.serviceAccounts.actAs"));
+}
+
 test "topology advice respects residency and Cockroach locality without mutating policy" {
     const intelligence = ziac.gcp.intelligence;
     var advice = try intelligence.adviseTopology(std.testing.allocator, .{

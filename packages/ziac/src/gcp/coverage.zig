@@ -134,7 +134,7 @@ pub const resources = [_]Resource{
     managed("gcp.compute.UrlMap", .compute, .global, .google_discovery, "M5", full),
     managed("gcp.dns.ManagedZone", .dns, .global, .google_discovery, "M5", full),
     managed("gcp.dns.RecordSet", .dns, .global, .google_discovery, "M5", full),
-    plannedResource("gcp.eventarc.Trigger", .eventarc, .location, .googleapis_proto, "M59"),
+    managed("gcp.eventarc.Trigger", .eventarc, .location, .googleapis_proto, "M59", withProduct(full)),
     plannedResource("gcp.iam.ProjectBinding", .iam, .project, .google_rest, "M61"),
     managed("gcp.iam.ProjectMember", .iam, .project, .google_rest, "M4", additive_iam),
     plannedResource("gcp.iam.ProjectPolicy", .iam, .project, .google_rest, "M61"),
@@ -164,7 +164,8 @@ pub const resources = [_]Resource{
     managed("gcp.storage.BuildBucket", .storage, .global, .google_discovery, "M8", retained),
     managed("gcp.storage.Object", .storage, .global, .google_discovery, "M57", withProduct(replaceable)),
     managed("gcp.storage.SourceObject", .storage, .global, .google_discovery, "M8", retained_replaceable),
-    plannedResource("gcp.tasks.Queue", .tasks, .location, .googleapis_proto, "M59"),
+    managed("gcp.tasks.Queue", .tasks, .location, .googleapis_proto, "M59", withProduct(full)),
+    managed("gcp.tasks.QueueIamMember", .tasks, .location, .google_rest, "M59", withVisual(additive_iam)),
 };
 
 pub const ValidationError = error{

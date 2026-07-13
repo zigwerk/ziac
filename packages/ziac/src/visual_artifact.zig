@@ -177,6 +177,7 @@ fn appendResource(output: *std.ArrayList(u8), allocator: std.mem.Allocator, item
     try appendNamedString(output, allocator, "health", "unknown", true);
     try appendStorageDetails(output, allocator, item.node);
     try appendPubsubDetails(output, allocator, item.node);
+    try appendAsyncDeliveryDetails(output, allocator, item.node);
     try output.appendSlice(allocator, ",\"inputs\":");
     try appendSafeValue(output, allocator, item.node.inputs, null);
     try output.appendSlice(allocator, ",\"lifecycle\":{");
@@ -261,7 +262,10 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
     if (objectField(node.inputs, "region")) |region| {
         if (region == .string) return region.string;
     }
-    if (std.mem.eql(u8, node.type_name, "gcp.storage.Bucket")) {
+    if (std.mem.eql(u8, node.type_name, "gcp.storage.Bucket") or
+        std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.eventarc."))
+    {
         const location = objectField(node.inputs, "location") orelse return null;
         return if (location == .string) location.string else null;
     }
@@ -330,6 +334,33 @@ fn appendPubsubDetails(
     try output.append(allocator, '}');
 }
 
+fn appendAsyncDeliveryDetails(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    if (!std.mem.startsWith(u8, node.type_name, "gcp.tasks.") and
+        !std.mem.startsWith(u8, node.type_name, "gcp.eventarc.")) return;
+    try output.appendSlice(allocator, ",\"async_delivery\":{");
+    if (std.mem.eql(u8, node.type_name, "gcp.tasks.Queue")) {
+        try appendNamedString(output, allocator, "kind", "queue", false);
+        try appendOptionalStorageString(output, allocator, node, "max_dispatches_per_second", "max_dispatches_per_second");
+        try appendOptionalStorageInteger(output, allocator, node, "max_concurrent_dispatches", "max_concurrent_dispatches");
+        try appendOptionalStorageInteger(output, allocator, node, "max_attempts", "max_attempts");
+        try appendOptionalStorageString(output, allocator, node, "authorization_kind", "authorization_kind");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.tasks.QueueIamMember")) {
+        try appendNamedString(output, allocator, "kind", "queue_iam_member", false);
+        try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
+        try appendOptionalStorageString(output, allocator, node, "member", "iam_member");
+    } else {
+        try appendNamedString(output, allocator, "kind", "trigger", false);
+        try appendStorageListCount(output, allocator, node, "event_filters", "event_filter_count");
+        try appendOptionalStorageString(output, allocator, node, "destination_kind", "destination_kind");
+        try appendOptionalStorageString(output, allocator, node, "channel", "channel");
+    }
+    try output.append(allocator, '}');
+}
+
 fn appendOptionalStorageString(
     output: *std.ArrayList(u8),
     allocator: std.mem.Allocator,
@@ -394,6 +425,10 @@ fn isGlobalType(type_name: []const u8) bool {
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
     if (std.mem.eql(u8, from_type, "gcp.pubsub.Subscription") and std.mem.eql(u8, to_type, "gcp.pubsub.Topic")) return "event";
+    if (std.mem.eql(u8, from_type, "gcp.eventarc.Trigger") and
+        (std.mem.eql(u8, to_type, "gcp.pubsub.Topic") or std.mem.eql(u8, to_type, "gcp.run.Service"))) return "event";
+    if (std.mem.startsWith(u8, from_type, "gcp.tasks.Queue") and std.mem.eql(u8, to_type, "gcp.run.Service")) return "event";
+    if (std.mem.indexOf(u8, from_type, "IamMember") != null) return "iam";
     if (from_node) |node| if (containsOutputReference(node.inputs, to_id)) return "output";
     if (isTrafficPair(from_type, to_type)) return "traffic";
     if (std.mem.startsWith(u8, from_type, "cockroach.") != std.mem.startsWith(u8, to_type, "cockroach.")) {

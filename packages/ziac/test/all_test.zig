@@ -67,6 +67,12 @@ comptime {
     _ = @import("gcp_kms_vault_test.zig");
     _ = @import("gcp_kms_test.zig");
     _ = @import("gcp_scheduler_test.zig");
+    _ = @import("gcp_tasks_test.zig");
+    _ = @import("gcp_eventarc_test.zig");
+    _ = @import("gcp_async_components_test.zig");
+    _ = @import("gcp_delivery_policy_test.zig");
+    _ = @import("gcp_tasks_live_provider_test.zig");
+    _ = @import("gcp_eventarc_live_provider_test.zig");
     _ = @import("gcp_pubsub_test.zig");
     _ = @import("gcp_pubsub_components_test.zig");
     _ = @import("gcp_pubsub_live_provider_test.zig");

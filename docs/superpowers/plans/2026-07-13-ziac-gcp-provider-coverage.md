@@ -108,13 +108,25 @@ delivery and dead-letter behavior.
 
 ## M59: Cloud Tasks And Eventarc
 
-- [ ] Cloud Tasks Queue CRUD/import with rate, retry and routing controls.
-- [ ] Eventarc Trigger CRUD/import with event filters, channels, destinations,
+- [x] Cloud Tasks Queue CRUD/import with rate, retry and routing controls.
+- [x] Eventarc Trigger CRUD/import with event filters, channels, destinations,
   service identity and transport topic ownership.
-- [ ] OIDC/OAuth target identity and least-privilege IAM synthesis.
-- [ ] `ZigTaskWorker` and `EventPipeline` components.
-- [ ] Deterministic retry, duplicate-delivery and cancellation scenarios.
+- [x] OIDC/OAuth target identity and least-privilege IAM synthesis.
+- [x] `ZigTaskWorker` and `EventPipeline` components.
+- [x] Deterministic retry, duplicate-delivery and cancellation scenarios.
 - [ ] Authenticated enqueue/event delivery and cleanup qualification.
+
+M59 local evidence: 45 managed resources now include Cloud Tasks Queue, exact
+Queue IAM and Eventarc Trigger. Deterministic lifecycle tests cover create,
+normalized read/diff, update, import, etag-safe IAM mutation, resumable Eventarc
+operations and explicit deletion. Cost, Cloud Asset, canvas, RPC and permission
+synthesis contracts are synchronized with `ZigTaskWorker` and `EventPipeline`.
+The authenticated gate remains open because no disposable billing-enabled GCP
+project or ADC is available in this environment.
+
+Latest local gate: the Testing v2 `ziac-tests` receipt is complete with 538
+discovered and executed tests, 537 passed, one credential-gated skip, and zero
+failures, pending tests, leaks or logged errors.
 
 Gate: asynchronous HTTP work and Google-originated events can be provisioned,
 observed and debugged without manual IAM assembly.

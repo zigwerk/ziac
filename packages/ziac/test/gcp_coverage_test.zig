@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 42), managed_count);
+    try std.testing.expectEqual(@as(usize, 45), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {

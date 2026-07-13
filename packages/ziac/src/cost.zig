@@ -75,6 +75,26 @@ pub const PubsubEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const TasksEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    operations_sku_id: []const u8,
+    egress_sku_id: []const u8,
+    billable_operations: u64,
+    egress_gib: u64,
+    observed_at_millis: u64,
+};
+
+pub const EventarcEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    events_sku_id: []const u8,
+    transport_sku_id: []const u8,
+    chargeable_events: u64,
+    transport_gib: u64,
+    observed_at_millis: u64,
+};
+
 pub const BillingRow = struct {
     resource_id: []const u8,
     cost_micros: i64,
@@ -271,6 +291,44 @@ pub fn pubsubConfigurationEstimate(
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }
 
+pub fn tasksConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: TasksEstimateInput,
+) !ResourceCost {
+    var usage: [2]UsageAssumption = undefined;
+    var count: usize = 0;
+    if (input.billable_operations > 0) {
+        if (input.operations_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.operations_sku_id, .region = input.region, .quantity = input.billable_operations };
+        count += 1;
+    }
+    if (input.egress_gib > 0) {
+        if (input.egress_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.egress_sku_id, .region = input.region, .quantity = input.egress_gib };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn eventarcConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: EventarcEstimateInput,
+) !ResourceCost {
+    var usage: [2]UsageAssumption = undefined;
+    var count: usize = 0;
+    if (input.chargeable_events > 0) {
+        if (input.events_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.events_sku_id, .region = input.region, .quantity = input.chargeable_events };
+        count += 1;
+    }
+    if (input.transport_gib > 0) {
+        if (input.transport_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.transport_sku_id, .region = input.region, .quantity = input.transport_gib };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
 pub fn attributeActualAlloc(
     allocator: std.mem.Allocator,
     rows: []const BillingRow,
@@ -384,6 +442,9 @@ pub fn projectMonthEnd(actual: ResourceCost, elapsed_days: u8, month_days: u8, o
 fn findPrice(prices: []const SkuPrice, sku_id: []const u8, region: []const u8) ?SkuPrice {
     for (prices) |price| {
         if (std.mem.eql(u8, price.sku_id, sku_id) and std.mem.eql(u8, price.region, region)) return price;
+    }
+    for (prices) |price| {
+        if (std.mem.eql(u8, price.sku_id, sku_id) and std.mem.eql(u8, price.region, "global")) return price;
     }
     return null;
 }

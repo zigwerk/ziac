@@ -82,6 +82,42 @@ test "Pub/Sub estimates keep throughput retention and transfer assumptions expli
     try std.testing.expect(estimate.provenance.is_catalog_price);
 }
 
+test "Cloud Tasks estimates separate billable operations from network transfer" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "tasks-operations", .region = "global", .unit = "operation", .unit_quantity = 1_000_000, .unit_price_micros = 400_000 },
+        .{ .sku_id = "tasks-egress", .region = "europe-west1", .unit = "GiBy", .unit_quantity = 1, .unit_price_micros = 120_000 },
+    };
+    const estimate = try ziac.cost.tasksConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.tasks.Queue.europe-west1.invoice-worker",
+        .region = "europe-west1",
+        .operations_sku_id = "tasks-operations",
+        .egress_sku_id = "tasks-egress",
+        .billable_operations = 2_500_000,
+        .egress_gib = 4,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 1_480_000), estimate.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
+}
+
+test "Eventarc estimates separate chargeable events from Pub/Sub transport" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "eventarc-events", .region = "global", .unit = "event", .unit_quantity = 1_000_000, .unit_price_micros = 1_000_000 },
+        .{ .sku_id = "pubsub-throughput", .region = "global", .unit = "GiBy", .unit_quantity = 1, .unit_price_micros = 40_000 },
+    };
+    const estimate = try ziac.cost.eventarcConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.eventarc.Trigger.europe-west1.orders-created",
+        .region = "global",
+        .events_sku_id = "eventarc-events",
+        .transport_sku_id = "pubsub-throughput",
+        .chargeable_events = 2_000_000,
+        .transport_gib = 10,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 2_400_000), estimate.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
+}
+
 test "Cloud Billing adapters parse catalog prices and normalized detailed export rows" {
     var catalog = try ziac.cost.parseCatalogPageAlloc(std.testing.allocator, "{\"skus\":[{\"skuId\":\"run-cpu\",\"serviceRegions\":[\"europe-west1\"],\"pricingInfo\":[{\"pricingExpression\":{\"usageUnit\":\"vCPU-second\",\"baseUnitConversionFactor\":1,\"tieredRates\":[{\"unitPrice\":{\"units\":\"0\",\"nanos\":24000}}]}}]}],\"nextPageToken\":\"next-1\"}");
     defer catalog.deinit();

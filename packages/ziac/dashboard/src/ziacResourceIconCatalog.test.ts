@@ -22,6 +22,18 @@ test("provider icon catalogue uses official GCP core-product artwork", () => {
     iconPath: "/provider-icons/gcp/pubsub.png",
     official: true,
   });
+  expect(resourceVisualIdentity(resource("gcp.tasks.Queue"))).toMatchObject({
+    family: "gcp.tasks",
+    label: "Cloud Tasks",
+    iconPath: "/provider-icons/gcp/serverless.png",
+    official: true,
+  });
+  expect(resourceVisualIdentity(resource("gcp.eventarc.Trigger"))).toMatchObject({
+    family: "gcp.eventarc",
+    label: "Eventarc",
+    iconPath: "/provider-icons/gcp/serverless.png",
+    official: true,
+  });
 });
 
 test("provider icon catalogue groups GCP primitives into stable product families", () => {

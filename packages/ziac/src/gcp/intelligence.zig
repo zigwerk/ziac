@@ -243,6 +243,17 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "SchemaService.CreateSchema", .permission = "pubsub.schemas.create" },
         .{ .suffix = "SchemaService.CommitSchema", .permission = "pubsub.schemas.commit" },
         .{ .suffix = "SchemaService.DeleteSchema", .permission = "pubsub.schemas.delete" },
+        .{ .suffix = "CloudTasks.GetQueue", .permission = "cloudtasks.queues.get" },
+        .{ .suffix = "CloudTasks.CreateQueue", .permission = "cloudtasks.queues.create" },
+        .{ .suffix = "CloudTasks.UpdateQueue", .permission = "cloudtasks.queues.update" },
+        .{ .suffix = "CloudTasks.DeleteQueue", .permission = "cloudtasks.queues.delete" },
+        .{ .suffix = "CloudTasks.GetIamPolicy", .permission = "cloudtasks.queues.getIamPolicy" },
+        .{ .suffix = "CloudTasks.SetIamPolicy", .permission = "cloudtasks.queues.setIamPolicy" },
+        .{ .suffix = "Eventarc.GetTrigger", .permission = "eventarc.triggers.get" },
+        .{ .suffix = "Eventarc.CreateTrigger", .permission = "eventarc.triggers.create" },
+        .{ .suffix = "Eventarc.UpdateTrigger", .permission = "eventarc.triggers.update" },
+        .{ .suffix = "Eventarc.DeleteTrigger", .permission = "eventarc.triggers.delete" },
+        .{ .suffix = "ServiceAccounts.ActAs", .permission = "iam.serviceAccounts.actAs" },
         .{ .suffix = "IAM.GetServiceAccount", .permission = "iam.serviceAccounts.get" },
         .{ .suffix = "IAM.CreateServiceAccount", .permission = "iam.serviceAccounts.create" },
         .{ .suffix = "IAM.PatchServiceAccount", .permission = "iam.serviceAccounts.update" },
@@ -304,6 +315,24 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.SchemaService.CommitSchema" },
         .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.SchemaService.DeleteSchema" },
     };
+    const tasks_queue = [_]RpcUsage{
+        .{ .service = "cloudtasks.googleapis.com", .method = "google.cloud.tasks.v2.CloudTasks.GetQueue" },
+        .{ .service = "cloudtasks.googleapis.com", .method = "google.cloud.tasks.v2.CloudTasks.CreateQueue" },
+        .{ .service = "cloudtasks.googleapis.com", .method = "google.cloud.tasks.v2.CloudTasks.UpdateQueue" },
+        .{ .service = "cloudtasks.googleapis.com", .method = "google.cloud.tasks.v2.CloudTasks.DeleteQueue" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
+    const tasks_queue_iam = [_]RpcUsage{
+        .{ .service = "cloudtasks.googleapis.com", .method = "google.cloud.tasks.v2.CloudTasks.GetIamPolicy" },
+        .{ .service = "cloudtasks.googleapis.com", .method = "google.cloud.tasks.v2.CloudTasks.SetIamPolicy" },
+    };
+    const eventarc_trigger = [_]RpcUsage{
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.Eventarc.GetTrigger" },
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.Eventarc.CreateTrigger" },
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.Eventarc.UpdateTrigger" },
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.Eventarc.DeleteTrigger" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
     const compute_backend = [_]RpcUsage{
         .{ .service = "compute.googleapis.com", .method = "compute.backendServices.get" },
         .{ .service = "compute.googleapis.com", .method = "compute.backendServices.insert" },
@@ -326,6 +355,9 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.pubsub.SubscriptionIamMember")) return &pubsub_subscription_iam;
     if (std.mem.eql(u8, type_name, "gcp.pubsub.Snapshot")) return &pubsub_snapshot;
     if (std.mem.eql(u8, type_name, "gcp.pubsub.Schema")) return &pubsub_schema;
+    if (std.mem.eql(u8, type_name, "gcp.tasks.Queue")) return &tasks_queue;
+    if (std.mem.eql(u8, type_name, "gcp.tasks.QueueIamMember")) return &tasks_queue_iam;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.Trigger")) return &eventarc_trigger;
     if (std.mem.eql(u8, type_name, "gcp.compute.BackendService")) return &compute_backend;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionServerlessNeg")) return &compute_neg;
     if (std.mem.startsWith(u8, type_name, "gcp.compute.")) return &compute_generic;

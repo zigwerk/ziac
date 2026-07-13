@@ -713,3 +713,14 @@ service-agent forwarding access and explicit publisher members into one graph.
 Permission synthesis, Cloud Asset identity, event edges, inspector metadata,
 official icons and configuration-based cost assumptions are synchronized. See
 `docs/gcp-pubsub.md` for the contract and its custom-audience limitation.
+
+M59 is locally complete and awaiting authenticated enqueue, event delivery and
+cleanup qualification. Cloud Tasks queues now cover dispatch, retry, routing,
+logging and queue-level OIDC/OAuth identity with exact etag-safe IAM. Eventarc
+triggers cover filters, channels, service identity, transport ownership and all
+supported writable destination families through resumable long-running
+operations. Remote responses are normalized for drift, including output-backed
+transport topics. `ZigTaskWorker` and `EventPipeline`, graph-derived act-as and
+product permissions, Cloud Asset identity, canvas metadata, deterministic
+delivery decisions and explicit Tasks/Eventarc cost assumptions pass the local
+gate. See `docs/gcp-tasks-eventarc.md`.

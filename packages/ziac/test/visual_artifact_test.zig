@@ -137,6 +137,49 @@ test "visual artifact projects Pub/Sub inspector metadata and event edges" {
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"regions\":[\"europe-west1\",\"europe-west4\"]") != null);
 }
 
+test "visual artifact projects Cloud Tasks and Eventarc delivery metadata" {
+    const provider = ziac.gcp.ProviderConfig{ .project_id = "ziac-prod", .primary_region = "europe-west1" };
+    var queue = try ziac.gcp.tasks.Queue.build(std.testing.allocator, provider, .{
+        .name = "invoice-worker",
+        .rate_limits = .{ .max_dispatches_per_second = 25, .max_concurrent_dispatches = 50 },
+        .retry_config = .{ .max_attempts = 8 },
+        .http_target = .{
+            .uri_override = .{ .scheme = .https, .host = "invoice.example.run.app" },
+            .authorization = .{ .oidc = .{
+                .service_account_email = "tasks@ziac-prod.iam.gserviceaccount.com",
+                .audience = "https://invoice.example.run.app",
+            } },
+        },
+    });
+    defer queue.deinit(std.testing.allocator);
+    var trigger = try ziac.gcp.eventarc.Trigger.build(std.testing.allocator, provider, .{
+        .name = "orders-created",
+        .event_filters = &.{.{ .attribute = "type", .value = "google.cloud.pubsub.topic.v1.messagePublished" }},
+        .service_account = "events@ziac-prod.iam.gserviceaccount.com",
+        .destination = .{ .cloud_run = .{ .service = "orders-worker", .region = "europe-west1" } },
+        .transport_topic = ziac.PublicOutput([]const u8).known("projects/ziac-prod/topics/orders"),
+    });
+    defer trigger.deinit(std.testing.allocator);
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try graph.addResource(queue.node);
+    try graph.addResource(trigger.node);
+
+    var artifact = try ziac.visual_artifact.serializeAlloc(std.testing.allocator, &graph, null, .{
+        .stack = "async",
+        .stage = "prod",
+        .created_at_millis = 7,
+    });
+    defer artifact.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"async_delivery\":{\"kind\":\"queue\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"max_concurrent_dispatches\":50") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"authorization_kind\":\"oidc\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"async_delivery\":{\"kind\":\"trigger\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"event_filter_count\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"destination_kind\":\"cloud_run\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"region\":\"europe-west1\"") != null);
+}
+
 fn fixtureGraph() !ziac.ResourceGraph {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     errdefer graph.deinit();

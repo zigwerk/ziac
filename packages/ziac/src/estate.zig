@@ -296,6 +296,10 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.pubsub.Topic"
     else if (std.mem.eql(u8, asset_type, "pubsub.googleapis.com/Subscription"))
         "gcp.pubsub.Subscription"
+    else if (std.mem.eql(u8, asset_type, "cloudtasks.googleapis.com/Queue"))
+        "gcp.tasks.Queue"
+    else if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/Trigger"))
+        "gcp.eventarc.Trigger"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -321,6 +325,16 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         std.mem.eql(u8, asset_type, "pubsub.googleapis.com/Subscription"))
     {
         const prefix = "//pubsub.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "cloudtasks.googleapis.com/Queue")) {
+        const prefix = "//cloudtasks.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/Trigger")) {
+        const prefix = "//eventarc.googleapis.com/";
         if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
         return allocator.dupe(u8, name[prefix.len..]);
     }

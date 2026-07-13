@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 42 managed GCP resource types.
+The current deterministic provider gate contains 45 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -129,6 +129,27 @@ official Pub/Sub mark, and costs remain explicit configuration estimates.
 See `gcp-pubsub.md` for examples, lifecycle semantics and the authenticated
 qualification boundary.
 
+### Cloud Tasks and Eventarc
+
+- `gcp.tasks.Queue`
+- `gcp.tasks.QueueIamMember`
+- `gcp.eventarc.Trigger`
+
+Cloud Tasks queues include normalized rate, retry, routing, logging and
+queue-level OIDC/OAuth controls. Exact queue IAM preserves unrelated policy and
+uses version 3, etags and bounded conflict retries. Eventarc triggers include
+filters, channels, service identity, transport ownership and Cloud Run, GKE,
+Workflow or private HTTP destinations with resumable long-running operations.
+
+`ZigTaskWorker` and `EventPipeline` compile the runtime identities, exact Run
+invoker and publisher/enqueuer access, queue or trigger and optional transport
+resources. Permission synthesis includes both product permissions and service
+account act-as. Cloud Asset Inventory identity, regional canvas metadata,
+delivery edges and explicit operation/event cost assumptions are synchronized.
+
+See `gcp-tasks-eventarc.md` for lifecycle, deletion tombstone, delivery and
+qualification semantics.
+
 ### Networking and global delivery
 
 - `gcp.compute.Network`
@@ -162,10 +183,9 @@ M56-M62 adds the provider catalog and generation spine, then completes:
 
 1. general Cloud Storage;
 2. authenticated Pub/Sub delivery qualification;
-3. Cloud Tasks queues and Eventarc triggers;
-4. Cloud Run jobs and worker pools;
-5. general additive and authoritative IAM semantics;
-6. one integrated authenticated application-platform qualification.
+3. Cloud Run jobs and worker pools;
+4. general additive and authoritative IAM semantics;
+5. one integrated authenticated application-platform qualification.
 
 The subsequent waves cover BigQuery, Firestore, Cloud SQL, Spanner,
 Memorystore, Compute Engine, GKE, broader networking, Cloud Armor, Certificate

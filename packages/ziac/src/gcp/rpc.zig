@@ -603,3 +603,175 @@ pub const pubsub_v1 = struct {
         .{},
     );
 };
+
+const cloud_tasks_transport = TransportSupport{
+    .grpc = true,
+    .rest_transcoding = true,
+};
+const cloud_tasks_update_query = [_]QueryField{
+    .{ .request_field = "update_mask", .wire_name = "updateMask" },
+};
+const cloud_tasks_iam_get_query = [_]QueryField{
+    .{ .request_field = "requested_policy_version", .wire_name = "options.requestedPolicyVersion" },
+};
+
+fn cloudTasksMethod(
+    method: []const u8,
+    request_type: []const u8,
+    response_type: []const u8,
+    rest: RestBinding,
+    routing_field: []const u8,
+    semantics: Semantics,
+) Method {
+    return .{
+        .package = "google.cloud.tasks.v2",
+        .service = "google.cloud.tasks.v2.CloudTasks",
+        .method = method,
+        .default_host = "cloudtasks.googleapis.com",
+        .request_type = request_type,
+        .response_type = response_type,
+        .rest = rest,
+        .routing_field = routing_field,
+        .transports = cloud_tasks_transport,
+        .semantics = semantics,
+    };
+}
+
+/// Cloud Tasks v2 queue methods pinned to `googleapis_revision`.
+pub const cloud_tasks_v2 = struct {
+    pub const create_queue = cloudTasksMethod(
+        "CreateQueue",
+        "google.cloud.tasks.v2.CreateQueueRequest",
+        "google.cloud.tasks.v2.Queue",
+        .{ .method = .post, .path_template = "/v2/{parent=projects/*/locations/*}/queues", .body = "queue" },
+        "parent",
+        .{},
+    );
+    pub const get_queue = cloudTasksMethod(
+        "GetQueue",
+        "google.cloud.tasks.v2.GetQueueRequest",
+        "google.cloud.tasks.v2.Queue",
+        .{ .method = .get, .path_template = "/v2/{name=projects/*/locations/*/queues/*}" },
+        "name",
+        .{},
+    );
+    pub const update_queue = cloudTasksMethod(
+        "UpdateQueue",
+        "google.cloud.tasks.v2.UpdateQueueRequest",
+        "google.cloud.tasks.v2.Queue",
+        .{ .method = .patch, .path_template = "/v2/{queue.name=projects/*/locations/*/queues/*}", .body = "queue", .query_fields = &cloud_tasks_update_query },
+        "queue.name",
+        .{ .update_mask = true },
+    );
+    pub const delete_queue = cloudTasksMethod(
+        "DeleteQueue",
+        "google.cloud.tasks.v2.DeleteQueueRequest",
+        "google.protobuf.Empty",
+        .{ .method = .delete, .path_template = "/v2/{name=projects/*/locations/*/queues/*}" },
+        "name",
+        .{},
+    );
+    pub const get_queue_iam_policy = cloudTasksMethod(
+        "GetIamPolicy",
+        "google.iam.v1.GetIamPolicyRequest",
+        "google.iam.v1.Policy",
+        .{ .method = .get, .path_template = "/v2/{resource=projects/*/locations/*/queues/*}:getIamPolicy", .query_fields = &cloud_tasks_iam_get_query },
+        "resource",
+        .{ .etag = true },
+    );
+    pub const set_queue_iam_policy = cloudTasksMethod(
+        "SetIamPolicy",
+        "google.iam.v1.SetIamPolicyRequest",
+        "google.iam.v1.Policy",
+        .{ .method = .post, .path_template = "/v2/{resource=projects/*/locations/*/queues/*}:setIamPolicy", .body = "*" },
+        "resource",
+        .{ .etag = true },
+    );
+};
+
+const eventarc_transport = TransportSupport{
+    .grpc = true,
+    .rest_transcoding = true,
+};
+const eventarc_create_query = [_]QueryField{
+    .{ .request_field = "trigger_id", .wire_name = "triggerId" },
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+};
+const eventarc_update_query = [_]QueryField{
+    .{ .request_field = "update_mask", .wire_name = "updateMask" },
+    .{ .request_field = "allow_missing", .wire_name = "allowMissing" },
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+};
+const eventarc_delete_query = [_]QueryField{
+    .{ .request_field = "etag", .wire_name = "etag" },
+    .{ .request_field = "allow_missing", .wire_name = "allowMissing" },
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+};
+const eventarc_lro = LongRunning{
+    .response_type = "google.cloud.eventarc.v1.Trigger",
+    .metadata_type = "google.cloud.eventarc.v1.OperationMetadata",
+};
+
+fn eventarcMethod(
+    method: []const u8,
+    request_type: []const u8,
+    response_type: []const u8,
+    rest: RestBinding,
+    routing_field: []const u8,
+    long_running: ?LongRunning,
+    semantics: Semantics,
+) Method {
+    return .{
+        .package = "google.cloud.eventarc.v1",
+        .service = "google.cloud.eventarc.v1.Eventarc",
+        .method = method,
+        .default_host = "eventarc.googleapis.com",
+        .request_type = request_type,
+        .response_type = response_type,
+        .rest = rest,
+        .routing_field = routing_field,
+        .long_running = long_running,
+        .transports = eventarc_transport,
+        .semantics = semantics,
+    };
+}
+
+/// Eventarc v1 trigger methods pinned to `googleapis_revision`.
+pub const eventarc_v1 = struct {
+    pub const create_trigger = eventarcMethod(
+        "CreateTrigger",
+        "google.cloud.eventarc.v1.CreateTriggerRequest",
+        "google.longrunning.Operation",
+        .{ .method = .post, .path_template = "/v1/{parent=projects/*/locations/*}/triggers", .body = "trigger", .query_fields = &eventarc_create_query },
+        "parent",
+        eventarc_lro,
+        .{ .validate_only = true },
+    );
+    pub const get_trigger = eventarcMethod(
+        "GetTrigger",
+        "google.cloud.eventarc.v1.GetTriggerRequest",
+        "google.cloud.eventarc.v1.Trigger",
+        .{ .method = .get, .path_template = "/v1/{name=projects/*/locations/*/triggers/*}" },
+        "name",
+        null,
+        .{ .etag = true },
+    );
+    pub const update_trigger = eventarcMethod(
+        "UpdateTrigger",
+        "google.cloud.eventarc.v1.UpdateTriggerRequest",
+        "google.longrunning.Operation",
+        .{ .method = .patch, .path_template = "/v1/{trigger.name=projects/*/locations/*/triggers/*}", .body = "trigger", .query_fields = &eventarc_update_query },
+        "trigger.name",
+        eventarc_lro,
+        .{ .validate_only = true, .update_mask = true, .etag = true },
+    );
+    pub const delete_trigger = eventarcMethod(
+        "DeleteTrigger",
+        "google.cloud.eventarc.v1.DeleteTriggerRequest",
+        "google.longrunning.Operation",
+        .{ .method = .delete, .path_template = "/v1/{name=projects/*/locations/*/triggers/*}", .query_fields = &eventarc_delete_query },
+        "name",
+        eventarc_lro,
+        .{ .validate_only = true, .etag = true },
+    );
+};

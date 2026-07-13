@@ -78,3 +78,26 @@ test "estate scan maps Pub/Sub topics subscriptions and event relationships" {
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.pubsub.Subscription") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "projects/acme-prod/topics/orders") != null);
 }
+
+test "estate scan maps Cloud Tasks queues and Eventarc triggers to managed identities" {
+    var client = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer client.deinit();
+    try client.addPage(
+        \\{"results":[
+        \\{"name":"//cloudtasks.googleapis.com/projects/acme-prod/locations/europe-west1/queues/invoice-worker","assetType":"cloudtasks.googleapis.com/Queue","project":"projects/123","location":"europe-west1","displayName":"invoice-worker"},
+        \\{"name":"//eventarc.googleapis.com/projects/acme-prod/locations/europe-west1/triggers/orders-created","assetType":"eventarc.googleapis.com/Trigger","project":"projects/123","location":"europe-west1","displayName":"orders-created","relationships":{"EVENTARC_TRIGGER_TO_DESTINATION":{"relatedResources":["//run.googleapis.com/projects/acme-prod/locations/europe-west1/services/orders-worker"]}}}
+        \\]}
+    );
+    var scan = try ziac.estate.scanAlloc(std.testing.allocator, client.client(), .{
+        .identity = .{ .provider = .google, .verified = true, .subject = "subject" },
+        .entitlement = .pro,
+        .connection = .{ .status = .connected, .project_id = "acme-prod" },
+        .observed_at_millis = 1_783_764_000_000,
+    });
+    defer scan.deinit();
+    try std.testing.expectEqual(@as(usize, 2), scan.resource_count);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.tasks.Queue") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.eventarc.Trigger") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/queues/invoice-worker\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/triggers/orders-created\"") != null);
+}
