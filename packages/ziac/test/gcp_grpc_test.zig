@@ -32,6 +32,6 @@ test "gRPC capability audit blocks unqualified HTTP2 adapters and parses trailer
         .{ .name = "grpc-status", .value = "8" },
         .{ .name = "grpc-message", .value = "quota%20exceeded" },
     });
-    try std.testing.expectEqual(@as(u8, 8), status.code);
+    try std.testing.expectEqual(grpc.Code.resource_exhausted, status.code);
     try std.testing.expectEqualStrings("quota%20exceeded", status.message);
 }

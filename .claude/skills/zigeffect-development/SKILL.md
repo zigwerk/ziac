@@ -57,6 +57,46 @@ Before editing application behavior:
   terminal scrollback in manifests, facts, receipts, fixtures, snapshots, or
   Workbench payloads.
 
+## Build gRPC and Cloud Run services
+
+For canonical Yachdee backend communication, use `zigeffect-grpc` through the
+`zigeffect_std.Grpc` facade. Native gRPC is the trusted service-to-service
+boundary. SolidJS applications use generated Connect/Protobuf clients with
+TanStack Solid Query; browser code never receives native service credentials.
+
+1. Begin with the checked-in `.proto` contract. Preserve published field
+   numbers and regenerate both Zig and Protobuf-ES outputs. Never treat generated
+   files as independent schemas.
+2. Run `zig build gen-proto`, `zig build schema-compatibility-test`, and
+   `bunx @bufbuild/buf generate` from `packages/zigeffect-grpc` when the contract
+   changes. Buf breaking compatibility must include the immutable baseline and
+   negative fixture.
+3. Implement typed handlers through generated service bindings, effects,
+   layers, scoped resources and typed errors. Use a scoped persistent channel or
+   bounded channel pool for long-lived service clients.
+4. Declare connection, stream, header, message, queue, deadline, retry,
+   keepalive and shutdown limits. Transparent retry is legal only before HTTP/2
+   response commitment. Use incremental streaming when production flow control
+   and backpressure matter.
+5. Emit redacted causal facts for resolve, connect, pick, attempt, stream,
+   handler and drain. Export trace context, OTLP histograms, attempt/connection
+   instruments, propagation links and exemplars without payloads or credentials.
+6. Use `VirtualWorld`, `FaultMatrix` and `Schedules` for retry, GOAWAY, RST,
+   partition, certificate rotation, streaming and shutdown behavior. Run the
+   applicable official gRPC and Connect conformance lanes and preserve explicit
+   unsupported cases.
+7. For Cloud Run, bind `0.0.0.0:$PORT` using h2c behind platform TLS, install
+   health/reflection/Channelz before readiness, use audience-bound service
+   identity, and drain on SIGTERM.
+
+`zigeffect-grpc` remains `production_candidate` until a schema-v2 receipt from
+committed source includes native Linux amd64, the complete 24-hour mixed-shape
+bounded-memory campaign, and deployed GCP service-to-service qualification. A
+workflow definition, local-only container result, unsupported case, stale
+receipt, or uncommitted source must never be promoted into release evidence.
+Read `packages/zigeffect/docs/grpc-cloud-run.md` and
+`packages/zigeffect-grpc/README.md` for the current architecture and gates.
+
 ## Specify behavior with `zstd.Testing`
 
 ZigEffect has two complementary Testing v2 layers:
