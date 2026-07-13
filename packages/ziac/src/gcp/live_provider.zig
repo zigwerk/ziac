@@ -6,8 +6,10 @@ const dns_provider = @import("dns_provider.zig");
 const network_provider = @import("network_provider.zig");
 const kms_provider = @import("kms_provider.zig");
 const scheduler_provider = @import("scheduler_provider.zig");
+const pubsub_provider = @import("pubsub_provider.zig");
 const operation = @import("operation.zig");
 const run_provider = @import("run_provider.zig");
+const run_iam_provider = @import("run_iam_provider.zig");
 const storage_provider = @import("storage_provider.zig");
 const provider_mod = @import("../provider.zig");
 const resource = @import("../resource.zig");
@@ -52,7 +54,14 @@ pub const managed_type_names = [_][]const u8{
     "gcp.kms.CryptoKey",
     "gcp.kms.KeyRing",
     "gcp.project.Service",
+    "gcp.pubsub.Schema",
+    "gcp.pubsub.Snapshot",
+    "gcp.pubsub.Subscription",
+    "gcp.pubsub.SubscriptionIamMember",
+    "gcp.pubsub.Topic",
+    "gcp.pubsub.TopicIamMember",
     "gcp.run.Service",
+    "gcp.run.ServiceIamMember",
     "gcp.scheduler.Job",
     "gcp.secret.Secret",
     "gcp.secret.SecretIamMember",
@@ -104,6 +113,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
         if (isType(node, secret_iam_member_type)) return self.readSecretIamMember(context, node);
         if (isType(node, cloud_run_service_type)) return self.runHandler().read(context, node, null);
+        if (run_iam_provider.supports(node)) return self.runIamHandler().read(context, node, null);
         if (network_provider.supports(node)) return self.networkHandler().read(context, node, null);
         if (compute_provider.supports(node)) return self.computeHandler().read(context, node, null);
         if (dns_provider.supports(node)) return self.dnsHandler().read(context, node, null);
@@ -111,6 +121,7 @@ pub const LiveProvider = struct {
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().read(context, node, null);
         if (kms_provider.supports(node)) return self.kmsHandler().read(context, node, null);
         if (scheduler_provider.supports(node)) return self.schedulerHandler().read(context, node, null);
+        if (pubsub_provider.supports(node)) return self.pubsubHandler().read(context, node, null);
         return error.InvalidConfiguration;
     }
 
@@ -123,6 +134,7 @@ pub const LiveProvider = struct {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
         if (isType(node, cloud_run_service_type)) return run_provider.Handler.diff(context, node, observed);
+        if (run_iam_provider.supports(node)) return run_iam_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (compute_provider.supports(node)) return compute_provider.Handler.diff(context, node, observed);
         if (dns_provider.supports(node)) return dns_provider.Handler.diff(context, node, observed);
@@ -130,6 +142,7 @@ pub const LiveProvider = struct {
         if (cloud_build_provider.supports(node)) return cloud_build_provider.Handler.diff(context, node, observed);
         if (kms_provider.supports(node)) return kms_provider.Handler.diff(context, node, observed);
         if (scheduler_provider.supports(node)) return scheduler_provider.Handler.diff(context, node, observed);
+        if (pubsub_provider.supports(node)) return pubsub_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else if (isType(node, artifact_repository_type))
@@ -156,6 +169,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
         if (isType(node, secret_iam_member_type)) return self.ensureSecretIamMember(context, node, true);
         if (isType(node, cloud_run_service_type)) return self.runHandler().create(context, node);
+        if (run_iam_provider.supports(node)) return self.runIamHandler().create(context, node);
         if (network_provider.supports(node)) return self.networkHandler().create(context, node);
         if (compute_provider.supports(node)) return self.computeHandler().create(context, node);
         if (dns_provider.supports(node)) return self.dnsHandler().create(context, node);
@@ -163,6 +177,7 @@ pub const LiveProvider = struct {
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().create(context, node);
         if (kms_provider.supports(node)) return self.kmsHandler().create(context, node);
         if (scheduler_provider.supports(node)) return self.schedulerHandler().create(context, node);
+        if (pubsub_provider.supports(node)) return self.pubsubHandler().create(context, node);
         return error.InvalidConfiguration;
     }
 
@@ -178,6 +193,7 @@ pub const LiveProvider = struct {
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed.physical_id);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed);
+        if (run_iam_provider.supports(node)) return self.runIamHandler().update(context, node, observed.physical_id);
         if (network_provider.supports(node)) return self.networkHandler().update(context, node, observed.physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().update(context, node, observed.physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().update(context, node, observed.physical_id);
@@ -185,6 +201,7 @@ pub const LiveProvider = struct {
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().update(context, node, observed.physical_id);
         if (kms_provider.supports(node)) return self.kmsHandler().update(context, node, observed.physical_id);
         if (scheduler_provider.supports(node)) return self.schedulerHandler().update(context, node, observed.physical_id);
+        if (pubsub_provider.supports(node)) return self.pubsubHandler().update(context, node, observed.physical_id);
         return error.InvalidConfiguration;
     }
 
@@ -201,6 +218,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.destroySecretVersion(context, physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().delete(context, physical_id);
+        if (run_iam_provider.supports(node)) return self.runIamHandler().delete(context, node, physical_id);
         if (network_provider.supports(node)) return self.networkHandler().delete(context, node, physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().delete(context, node, physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().delete(context, node, physical_id);
@@ -208,6 +226,7 @@ pub const LiveProvider = struct {
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().delete(context, node, physical_id);
         if (kms_provider.supports(node)) return self.kmsHandler().delete(context, node, physical_id);
         if (scheduler_provider.supports(node)) return self.schedulerHandler().delete(context, node, physical_id);
+        if (pubsub_provider.supports(node)) return self.pubsubHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
             removed.deinit();
@@ -284,6 +303,13 @@ pub const LiveProvider = struct {
                 .present => |present| present,
             };
         }
+        if (run_iam_provider.supports(node)) {
+            const result = try self.runIamHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
         if (network_provider.supports(node)) {
             const result = try self.networkHandler().read(context, node, physical_id);
             return switch (result) {
@@ -328,6 +354,13 @@ pub const LiveProvider = struct {
         }
         if (scheduler_provider.supports(node)) {
             const result = try self.schedulerHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (pubsub_provider.supports(node)) {
+            const result = try self.pubsubHandler().read(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -929,6 +962,10 @@ pub const LiveProvider = struct {
         return .{ .client = self.client, .operation_policy = self.operation_policy };
     }
 
+    fn runIamHandler(self: *LiveProvider) run_iam_provider.Handler {
+        return .{ .client = self.client, .conflict_retries = self.iam_conflict_retries };
+    }
+
     fn computeHandler(self: *LiveProvider) compute_provider.Handler {
         return .{
             .client = self.client,
@@ -971,6 +1008,10 @@ pub const LiveProvider = struct {
 
     fn schedulerHandler(self: *LiveProvider) scheduler_provider.Handler {
         return .{ .client = self.client };
+    }
+
+    fn pubsubHandler(self: *LiveProvider) pubsub_provider.Handler {
+        return .{ .client = self.client, .iam_conflict_retries = self.iam_conflict_retries };
     }
 };
 

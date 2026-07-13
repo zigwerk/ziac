@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 35 managed GCP resource types.
+The current deterministic provider gate contains 42 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -46,6 +46,7 @@ silently diverge.
 ### Cloud Run and builds
 
 - `gcp.run.Service`
+- `gcp.run.ServiceIamMember`
 - `gcp.cloudbuild.ZigImage`
 - `gcp.storage.BuildBucket`
 - `gcp.storage.SourceObject`
@@ -103,6 +104,31 @@ and [conditional bucket IAM](https://cloud.google.com/storage/docs/json_api/v1/b
 Authenticated disposable-project qualification remains the final open M57
 evidence item.
 
+### Pub/Sub
+
+- `gcp.pubsub.Schema`
+- `gcp.pubsub.Topic`
+- `gcp.pubsub.TopicIamMember`
+- `gcp.pubsub.Subscription`
+- `gcp.pubsub.SubscriptionIamMember`
+- `gcp.pubsub.Snapshot`
+
+The typed surface covers schema revisions, topic schema policy, CMEK, retention,
+persistence regions, pull and authenticated push delivery, expiration,
+ordering, filtering, exactly-once delivery, retry, dead-letter policy and
+snapshots. Exact optional conditional IAM uses policy version 3 and preserves
+unrelated bindings.
+
+`ZigSubscriber` composes these primitives around an existing Cloud Run service.
+It creates a dedicated OIDC identity and grants only resource-scoped Run
+invoker, dead-letter forwarding and explicitly requested publisher access. The
+graph preflight synthesizes Pub/Sub, Cloud Run and IAM API permissions. Estate
+scans map topic/subscription identity, the canvas renders event edges with the
+official Pub/Sub mark, and costs remain explicit configuration estimates.
+
+See `gcp-pubsub.md` for examples, lifecycle semantics and the authenticated
+qualification boundary.
+
 ### Networking and global delivery
 
 - `gcp.compute.Network`
@@ -135,7 +161,7 @@ evidence item.
 M56-M62 adds the provider catalog and generation spine, then completes:
 
 1. general Cloud Storage;
-2. Pub/Sub topics, schemas, subscriptions, snapshots and IAM;
+2. authenticated Pub/Sub delivery qualification;
 3. Cloud Tasks queues and Eventarc triggers;
 4. Cloud Run jobs and worker pools;
 5. general additive and authoritative IAM semantics;

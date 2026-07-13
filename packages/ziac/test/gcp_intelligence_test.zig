@@ -29,6 +29,34 @@ test "GCP intelligence synthesizes exact API and IAM preflight requirements" {
     try std.testing.expect(report.hasFinding(.permission_denied));
 }
 
+test "ZigSubscriber graph synthesizes Pub/Sub Run IAM and identity preflight" {
+    var subscriber = try ziac.gcp.ZigSubscriber.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{
+        .name = "orders",
+        .project_number = "123456789012",
+        .service = ziac.PublicOutput([]const u8).known("projects/ziac-dev/locations/europe-west1/services/orders-worker"),
+        .push_endpoint = "https://orders-worker.example.run.app/events/orders",
+        .oidc_audience = "https://orders-worker.example.run.app",
+        .publishers = &.{"serviceAccount:orders-api@ziac-dev.iam.gserviceaccount.com"},
+    });
+    defer subscriber.deinit();
+
+    var requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &subscriber.graph);
+    defer requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(requirements.apis, "pubsub.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "run.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "iam.googleapis.com"));
+    try std.testing.expect(requirements.hasPermission("pubsub.topics.create"));
+    try std.testing.expect(requirements.hasPermission("pubsub.topics.setIamPolicy"));
+    try std.testing.expect(requirements.hasPermission("pubsub.subscriptions.create"));
+    try std.testing.expect(requirements.hasPermission("pubsub.subscriptions.setIamPolicy"));
+    try std.testing.expect(requirements.hasPermission("run.services.getIamPolicy"));
+    try std.testing.expect(requirements.hasPermission("run.services.setIamPolicy"));
+    try std.testing.expect(requirements.hasPermission("iam.serviceAccounts.create"));
+}
+
 test "topology advice respects residency and Cockroach locality without mutating policy" {
     const intelligence = ziac.gcp.intelligence;
     var advice = try intelligence.adviseTopology(std.testing.allocator, .{
@@ -43,4 +71,9 @@ test "topology advice respects residency and Cockroach locality without mutating
     try std.testing.expect(advice.hasFinding(.residency_violation));
     try std.testing.expect(advice.hasFinding(.database_locality_gap));
     try std.testing.expectEqual(@as(usize, 3), advice.declared_regions.len);
+}
+
+fn contains(values: []const []const u8, expected: []const u8) bool {
+    for (values) |value| if (std.mem.eql(u8, value, expected)) return true;
+    return false;
 }

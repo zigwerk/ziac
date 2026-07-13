@@ -23,6 +23,9 @@ export function resourceVisualIdentity(resource: Pick<ZiacVisualResource, "provi
   if (resource.type.startsWith("gcp.storage.")) {
     return { family: "gcp.storage", label: "Cloud Storage", iconPath: `${gcpIconRoot}/cloud-storage.png`, official: true };
   }
+  if (resource.type.startsWith("gcp.pubsub.")) {
+    return { family: "gcp.pubsub", label: "Pub/Sub", iconPath: `${gcpIconRoot}/pubsub.png`, official: true };
+  }
   if (isNetworkingType(resource.type)) {
     return { family: "gcp.networking", label: "Networking", iconPath: `${gcpIconRoot}/networking.png`, official: true };
   }

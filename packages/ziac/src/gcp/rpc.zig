@@ -83,6 +83,7 @@ fn typeNameMatches(generated: []const u8, declared: []const u8) bool {
 pub const HttpMethod = enum {
     get,
     post,
+    put,
     patch,
     delete,
 
@@ -90,6 +91,7 @@ pub const HttpMethod = enum {
         return switch (self) {
             .get => "GET",
             .post => "POST",
+            .put => "PUT",
             .patch => "PATCH",
             .delete => "DELETE",
         };
@@ -260,6 +262,9 @@ const delete_query = [_]QueryField{
     .{ .request_field = "validate_only", .wire_name = "validateOnly" },
     .{ .request_field = "etag", .wire_name = "etag" },
 };
+const cloud_run_iam_get_query = [_]QueryField{
+    .{ .request_field = "requested_policy_version", .wire_name = "options.requestedPolicyVersion" },
+};
 const service_lro = LongRunning{
     .response_type = "google.cloud.run.v2.Service",
     .metadata_type = "google.cloud.run.v2.Service",
@@ -334,4 +339,267 @@ pub const cloud_run_v2 = struct {
         .transports = cloud_run_transport,
         .semantics = .{ .validate_only = true, .etag = true, .reconciling = true },
     };
+
+    pub const get_service_iam_policy = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Services",
+        .method = "GetIamPolicy",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.iam.v1.GetIamPolicyRequest",
+        .response_type = "google.iam.v1.Policy",
+        .rest = .{
+            .method = .get,
+            .path_template = "/v2/{resource=projects/*/locations/*/services/*}:getIamPolicy",
+            .query_fields = &cloud_run_iam_get_query,
+        },
+        .routing_field = "resource",
+        .transports = cloud_run_transport,
+        .semantics = .{ .etag = true },
+    };
+
+    pub const set_service_iam_policy = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Services",
+        .method = "SetIamPolicy",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.iam.v1.SetIamPolicyRequest",
+        .response_type = "google.iam.v1.Policy",
+        .rest = .{
+            .method = .post,
+            .path_template = "/v2/{resource=projects/*/locations/*/services/*}:setIamPolicy",
+            .body = "*",
+        },
+        .routing_field = "resource",
+        .transports = cloud_run_transport,
+        .semantics = .{ .etag = true },
+    };
+};
+
+const pubsub_transport = TransportSupport{
+    .grpc = true,
+    .rest_transcoding = true,
+};
+const pubsub_schema_create_query = [_]QueryField{
+    .{ .request_field = "schema_id", .wire_name = "schemaId" },
+};
+const pubsub_update_query = [_]QueryField{
+    .{ .request_field = "update_mask", .wire_name = "updateMask" },
+};
+const pubsub_schema_get_query = [_]QueryField{
+    .{ .request_field = "view", .wire_name = "view" },
+};
+const pubsub_iam_get_query = [_]QueryField{
+    .{ .request_field = "requested_policy_version", .wire_name = "options.requestedPolicyVersion" },
+};
+
+fn pubsubMethod(
+    service: []const u8,
+    method: []const u8,
+    request_type: []const u8,
+    response_type: []const u8,
+    rest: RestBinding,
+    routing_field: []const u8,
+    semantics: Semantics,
+) Method {
+    return .{
+        .package = "google.pubsub.v1",
+        .service = service,
+        .method = method,
+        .default_host = "pubsub.googleapis.com",
+        .request_type = request_type,
+        .response_type = response_type,
+        .rest = rest,
+        .routing_field = routing_field,
+        .transports = pubsub_transport,
+        .semantics = semantics,
+    };
+}
+
+/// Pub/Sub v1 method metadata pinned to `googleapis_revision`.
+/// The embedded descriptor lock currently covers Cloud Run; these declarations
+/// are still tested against Google's canonical HTTP transcoding surface.
+pub const pubsub_v1 = struct {
+    pub const create_topic = pubsubMethod(
+        "google.pubsub.v1.Publisher",
+        "CreateTopic",
+        "google.pubsub.v1.Topic",
+        "google.pubsub.v1.Topic",
+        .{ .method = .put, .path_template = "/v1/{name=projects/*/topics/*}", .body = "*" },
+        "name",
+        .{},
+    );
+    pub const get_topic = pubsubMethod(
+        "google.pubsub.v1.Publisher",
+        "GetTopic",
+        "google.pubsub.v1.GetTopicRequest",
+        "google.pubsub.v1.Topic",
+        .{ .method = .get, .path_template = "/v1/{topic=projects/*/topics/*}" },
+        "topic",
+        .{},
+    );
+    pub const update_topic = pubsubMethod(
+        "google.pubsub.v1.Publisher",
+        "UpdateTopic",
+        "google.pubsub.v1.UpdateTopicRequest",
+        "google.pubsub.v1.Topic",
+        .{ .method = .patch, .path_template = "/v1/{topic.name=projects/*/topics/*}", .body = "topic", .query_fields = &pubsub_update_query },
+        "topic.name",
+        .{ .update_mask = true },
+    );
+    pub const delete_topic = pubsubMethod(
+        "google.pubsub.v1.Publisher",
+        "DeleteTopic",
+        "google.pubsub.v1.DeleteTopicRequest",
+        "google.protobuf.Empty",
+        .{ .method = .delete, .path_template = "/v1/{topic=projects/*/topics/*}" },
+        "topic",
+        .{},
+    );
+    pub const get_topic_iam_policy = pubsubMethod(
+        "google.pubsub.v1.Publisher",
+        "GetIamPolicy",
+        "google.iam.v1.GetIamPolicyRequest",
+        "google.iam.v1.Policy",
+        .{ .method = .get, .path_template = "/v1/{resource=projects/*/topics/*}:getIamPolicy", .query_fields = &pubsub_iam_get_query },
+        "resource",
+        .{ .etag = true },
+    );
+    pub const set_topic_iam_policy = pubsubMethod(
+        "google.pubsub.v1.Publisher",
+        "SetIamPolicy",
+        "google.iam.v1.SetIamPolicyRequest",
+        "google.iam.v1.Policy",
+        .{ .method = .post, .path_template = "/v1/{resource=projects/*/topics/*}:setIamPolicy", .body = "*" },
+        "resource",
+        .{ .etag = true },
+    );
+
+    pub const create_schema = pubsubMethod(
+        "google.pubsub.v1.SchemaService",
+        "CreateSchema",
+        "google.pubsub.v1.CreateSchemaRequest",
+        "google.pubsub.v1.Schema",
+        .{ .method = .post, .path_template = "/v1/{parent=projects/*}/schemas", .body = "schema", .query_fields = &pubsub_schema_create_query },
+        "parent",
+        .{},
+    );
+    pub const get_schema = pubsubMethod(
+        "google.pubsub.v1.SchemaService",
+        "GetSchema",
+        "google.pubsub.v1.GetSchemaRequest",
+        "google.pubsub.v1.Schema",
+        .{ .method = .get, .path_template = "/v1/{name=projects/*/schemas/*}", .query_fields = &pubsub_schema_get_query },
+        "name",
+        .{},
+    );
+    pub const commit_schema = pubsubMethod(
+        "google.pubsub.v1.SchemaService",
+        "CommitSchema",
+        "google.pubsub.v1.CommitSchemaRequest",
+        "google.pubsub.v1.Schema",
+        .{ .method = .post, .path_template = "/v1/{name=projects/*/schemas/*}:commit", .body = "*" },
+        "name",
+        .{},
+    );
+    pub const delete_schema = pubsubMethod(
+        "google.pubsub.v1.SchemaService",
+        "DeleteSchema",
+        "google.pubsub.v1.DeleteSchemaRequest",
+        "google.protobuf.Empty",
+        .{ .method = .delete, .path_template = "/v1/{name=projects/*/schemas/*}" },
+        "name",
+        .{},
+    );
+
+    pub const create_subscription = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "CreateSubscription",
+        "google.pubsub.v1.Subscription",
+        "google.pubsub.v1.Subscription",
+        .{ .method = .put, .path_template = "/v1/{name=projects/*/subscriptions/*}", .body = "*" },
+        "name",
+        .{},
+    );
+    pub const get_subscription = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "GetSubscription",
+        "google.pubsub.v1.GetSubscriptionRequest",
+        "google.pubsub.v1.Subscription",
+        .{ .method = .get, .path_template = "/v1/{subscription=projects/*/subscriptions/*}" },
+        "subscription",
+        .{},
+    );
+    pub const update_subscription = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "UpdateSubscription",
+        "google.pubsub.v1.UpdateSubscriptionRequest",
+        "google.pubsub.v1.Subscription",
+        .{ .method = .patch, .path_template = "/v1/{subscription.name=projects/*/subscriptions/*}", .body = "subscription", .query_fields = &pubsub_update_query },
+        "subscription.name",
+        .{ .update_mask = true },
+    );
+    pub const delete_subscription = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "DeleteSubscription",
+        "google.pubsub.v1.DeleteSubscriptionRequest",
+        "google.protobuf.Empty",
+        .{ .method = .delete, .path_template = "/v1/{subscription=projects/*/subscriptions/*}" },
+        "subscription",
+        .{},
+    );
+    pub const get_subscription_iam_policy = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "GetIamPolicy",
+        "google.iam.v1.GetIamPolicyRequest",
+        "google.iam.v1.Policy",
+        .{ .method = .get, .path_template = "/v1/{resource=projects/*/subscriptions/*}:getIamPolicy", .query_fields = &pubsub_iam_get_query },
+        "resource",
+        .{ .etag = true },
+    );
+    pub const set_subscription_iam_policy = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "SetIamPolicy",
+        "google.iam.v1.SetIamPolicyRequest",
+        "google.iam.v1.Policy",
+        .{ .method = .post, .path_template = "/v1/{resource=projects/*/subscriptions/*}:setIamPolicy", .body = "*" },
+        "resource",
+        .{ .etag = true },
+    );
+
+    pub const create_snapshot = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "CreateSnapshot",
+        "google.pubsub.v1.Snapshot",
+        "google.pubsub.v1.Snapshot",
+        .{ .method = .put, .path_template = "/v1/{name=projects/*/snapshots/*}", .body = "*" },
+        "name",
+        .{},
+    );
+    pub const get_snapshot = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "GetSnapshot",
+        "google.pubsub.v1.GetSnapshotRequest",
+        "google.pubsub.v1.Snapshot",
+        .{ .method = .get, .path_template = "/v1/{snapshot=projects/*/snapshots/*}" },
+        "snapshot",
+        .{},
+    );
+    pub const update_snapshot = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "UpdateSnapshot",
+        "google.pubsub.v1.UpdateSnapshotRequest",
+        "google.pubsub.v1.Snapshot",
+        .{ .method = .patch, .path_template = "/v1/{snapshot.name=projects/*/snapshots/*}", .body = "snapshot", .query_fields = &pubsub_update_query },
+        "snapshot.name",
+        .{ .update_mask = true },
+    );
+    pub const delete_snapshot = pubsubMethod(
+        "google.pubsub.v1.Subscriber",
+        "DeleteSnapshot",
+        "google.pubsub.v1.DeleteSnapshotRequest",
+        "google.protobuf.Empty",
+        .{ .method = .delete, .path_template = "/v1/{snapshot=projects/*/snapshots/*}" },
+        "snapshot",
+        .{},
+    );
 };

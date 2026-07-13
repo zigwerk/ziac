@@ -63,6 +63,18 @@ pub const StorageEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const PubsubEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    throughput_sku_id: []const u8,
+    storage_sku_id: []const u8,
+    egress_sku_id: []const u8,
+    throughput_gib: u64,
+    retained_gib_month: u64,
+    egress_gib: u64,
+    observed_at_millis: u64,
+};
+
 pub const BillingRow = struct {
     resource_id: []const u8,
     cost_micros: i64,
@@ -225,6 +237,30 @@ pub fn storageConfigurationEstimate(
     if (input.operations > 0) {
         if (input.operations_sku_id.len == 0) return error.InvalidPricing;
         usage[count] = .{ .sku_id = input.operations_sku_id, .region = input.region, .quantity = input.operations };
+        count += 1;
+    }
+    if (input.egress_gib > 0) {
+        if (input.egress_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.egress_sku_id, .region = input.region, .quantity = input.egress_gib };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn pubsubConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: PubsubEstimateInput,
+) !ResourceCost {
+    var usage: [3]UsageAssumption = undefined;
+    var count: usize = 0;
+    if (input.throughput_gib > 0) {
+        if (input.throughput_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.throughput_sku_id, .region = input.region, .quantity = input.throughput_gib };
+        count += 1;
+    }
+    if (input.retained_gib_month > 0) {
+        if (input.storage_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.storage_sku_id, .region = input.region, .quantity = input.retained_gib_month };
         count += 1;
     }
     if (input.egress_gib > 0) {

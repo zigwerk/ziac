@@ -81,16 +81,27 @@ without using the build-bucket abstraction or causing unrelated IAM drift.
 
 ## M58: Pub/Sub
 
-- [ ] Topic CRUD/import with labels, KMS and retention.
-- [ ] Schema CRUD/import and topic schema settings.
-- [ ] Subscription CRUD/import for pull and push, including ack deadline,
+- [x] Topic CRUD/import with labels, KMS and retention.
+- [x] Schema CRUD/import and topic schema settings.
+- [x] Subscription CRUD/import for pull and push, including ack deadline,
   retention, expiration, ordering, filter, retry and dead-letter policy.
-- [ ] Snapshot CRUD/import.
-- [ ] Topic/subscription additive IAM and service-agent permission preflight.
-- [ ] Pub/Sub cost assumptions, estate mapping, topology and event edges.
-- [ ] `ZigSubscriber` component with Cloud Run OIDC push, dead-letter topic,
+- [x] Snapshot CRUD/import.
+- [x] Topic/subscription additive IAM and service-agent permission preflight.
+- [x] Pub/Sub cost assumptions, estate mapping, topology and event edges.
+- [x] `ZigSubscriber` component with Cloud Run OIDC push, dead-letter topic,
   runtime identity and exact invoker/publisher permissions.
 - [ ] Authenticated publish, delivery, retry and cleanup qualification.
+
+M58 local evidence: typed resources, the Pub/Sub and Cloud Run IAM lifecycle
+adapters, `ZigSubscriber`, graph-derived preflight, estate/cost/visual mappings
+and official icon packaging pass deterministic tests. `gcp.run.ServiceIamMember`
+uses v2 service IAM with policy version 3, etags and bounded conflict retries.
+The remaining item requires ADC and a disposable billing-enabled GCP project;
+local evidence is not promoted to authenticated delivery proof.
+
+Latest local gate: the Testing v2 `ziac-tests` receipt is complete with 518
+discovered and executed tests, 517 passed, one credential-gated skip, and zero
+failures, pending tests, leaks or logged errors.
 
 Gate: one typed component deploys a Zig event consumer and proves authenticated
 delivery and dead-letter behavior.

@@ -104,6 +104,39 @@ test "visual artifact projects Cloud Storage inspector details and location" {
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"iam_role\":\"roles/storage.objectViewer\"") != null);
 }
 
+test "visual artifact projects Pub/Sub inspector metadata and event edges" {
+    const provider = ziac.gcp.ProviderConfig{ .project_id = "ziac-prod", .primary_region = "europe-west1" };
+    var topic = try ziac.gcp.pubsub.Topic.build(std.testing.allocator, provider, .{
+        .name = "orders",
+        .message_retention_seconds = 86_400,
+        .allowed_persistence_regions = &.{ "europe-west1", "europe-west4" },
+    });
+    defer topic.deinit(std.testing.allocator);
+    var subscription = try ziac.gcp.pubsub.Subscription.build(std.testing.allocator, provider, .{
+        .name = "orders-worker",
+        .topic = topic.name,
+        .delivery = .pull,
+        .ack_deadline_seconds = 30,
+    });
+    defer subscription.deinit(std.testing.allocator);
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try graph.addResource(topic.node);
+    try graph.addResource(subscription.node);
+
+    var artifact = try ziac.visual_artifact.serializeAlloc(std.testing.allocator, &graph, null, .{
+        .stack = "events",
+        .stage = "prod",
+        .created_at_millis = 7,
+    });
+    defer artifact.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"pubsub\":{\"kind\":\"topic\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"message_retention_seconds\":86400") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"delivery_kind\":\"pull\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"kind\":\"event\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"regions\":[\"europe-west1\",\"europe-west4\"]") != null);
+}
+
 fn fixtureGraph() !ziac.ResourceGraph {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     errdefer graph.deinit();

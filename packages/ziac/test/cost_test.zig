@@ -60,6 +60,28 @@ test "Cloud Storage estimates keep capacity operations and egress assumptions ex
     try std.testing.expect(estimate.provenance.is_catalog_price);
 }
 
+test "Pub/Sub estimates keep throughput retention and transfer assumptions explicit" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "pubsub-throughput", .region = "global", .unit = "GiBy", .unit_quantity = 1, .unit_price_micros = 40_000 },
+        .{ .sku_id = "pubsub-retained", .region = "global", .unit = "GiBy.mo", .unit_quantity = 1, .unit_price_micros = 27_000 },
+        .{ .sku_id = "pubsub-transfer", .region = "global", .unit = "GiBy", .unit_quantity = 1, .unit_price_micros = 120_000 },
+    };
+    const estimate = try ziac.cost.pubsubConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.pubsub.Subscription.orders-worker",
+        .region = "global",
+        .throughput_sku_id = "pubsub-throughput",
+        .storage_sku_id = "pubsub-retained",
+        .egress_sku_id = "pubsub-transfer",
+        .throughput_gib = 100,
+        .retained_gib_month = 20,
+        .egress_gib = 10,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 5_740_000), estimate.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
+    try std.testing.expect(estimate.provenance.is_catalog_price);
+}
+
 test "Cloud Billing adapters parse catalog prices and normalized detailed export rows" {
     var catalog = try ziac.cost.parseCatalogPageAlloc(std.testing.allocator, "{\"skus\":[{\"skuId\":\"run-cpu\",\"serviceRegions\":[\"europe-west1\"],\"pricingInfo\":[{\"pricingExpression\":{\"usageUnit\":\"vCPU-second\",\"baseUnitConversionFactor\":1,\"tieredRates\":[{\"unitPrice\":{\"units\":\"0\",\"nanos\":24000}}]}}]}],\"nextPageToken\":\"next-1\"}");
     defer catalog.deinit();

@@ -176,6 +176,7 @@ fn appendResource(output: *std.ArrayList(u8), allocator: std.mem.Allocator, item
     try appendNamedString(output, allocator, "operation", if (item.operation) |kind| @tagName(kind) else "none", true);
     try appendNamedString(output, allocator, "health", "unknown", true);
     try appendStorageDetails(output, allocator, item.node);
+    try appendPubsubDetails(output, allocator, item.node);
     try output.appendSlice(allocator, ",\"inputs\":");
     try appendSafeValue(output, allocator, item.node.inputs, null);
     try output.appendSlice(allocator, ",\"lifecycle\":{");
@@ -242,14 +243,17 @@ fn appendNodeRegions(
     node: resource.ResourceNode,
 ) !void {
     if (directRegion(node)) |region| try appendUniqueString(allocator, regions, region);
-    const region_value = objectField(node.inputs, "regions") orelse return;
-    if (region_value != .list) return;
-    for (region_value.list) |entry| switch (entry) {
-        .string => |region| try appendUniqueString(allocator, regions, region),
-        .object => |fields| if (objectFieldFromFields(fields, "name")) |name| {
-            if (name == .string) try appendUniqueString(allocator, regions, name.string);
-        },
-        else => {},
+    if (objectField(node.inputs, "regions")) |region_value| if (region_value == .list) {
+        for (region_value.list) |entry| switch (entry) {
+            .string => |region| try appendUniqueString(allocator, regions, region),
+            .object => |fields| if (objectFieldFromFields(fields, "name")) |name| {
+                if (name == .string) try appendUniqueString(allocator, regions, name.string);
+            },
+            else => {},
+        };
+    };
+    if (objectField(node.inputs, "allowed_persistence_regions")) |region_value| if (region_value == .list) {
+        for (region_value.list) |entry| if (entry == .string) try appendUniqueString(allocator, regions, entry.string);
     };
 }
 
@@ -292,6 +296,36 @@ fn appendStorageDetails(
         try appendOptionalStorageString(output, allocator, node, "object_name", "object_name");
         try appendOptionalStorageString(output, allocator, node, "content_type", "content_type");
         try appendOptionalStorageInteger(output, allocator, node, "size", "size_bytes");
+    }
+    try output.append(allocator, '}');
+}
+
+fn appendPubsubDetails(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    if (!std.mem.startsWith(u8, node.type_name, "gcp.pubsub.")) return;
+    try output.appendSlice(allocator, ",\"pubsub\":{");
+    if (std.mem.eql(u8, node.type_name, "gcp.pubsub.Topic")) {
+        try appendNamedString(output, allocator, "kind", "topic", false);
+        try appendOptionalStorageInteger(output, allocator, node, "message_retention_seconds", "message_retention_seconds");
+        try appendOptionalStorageString(output, allocator, node, "kms_key_name", "kms_key_name");
+        try appendStorageListCount(output, allocator, node, "allowed_persistence_regions", "persistence_region_count");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.pubsub.Subscription")) {
+        try appendNamedString(output, allocator, "kind", "subscription", false);
+        try appendOptionalStorageString(output, allocator, node, "delivery_kind", "delivery_kind");
+        try appendOptionalStorageInteger(output, allocator, node, "ack_deadline_seconds", "ack_deadline_seconds");
+        try appendOptionalStorageInteger(output, allocator, node, "message_retention_seconds", "message_retention_seconds");
+        try appendOptionalStorageInteger(output, allocator, node, "max_delivery_attempts", "max_delivery_attempts");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.pubsub.Schema")) {
+        try appendNamedString(output, allocator, "kind", "schema", false);
+        try appendOptionalStorageString(output, allocator, node, "schema_type", "schema_type");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.pubsub.Snapshot")) {
+        try appendNamedString(output, allocator, "kind", "snapshot", false);
+    } else {
+        try appendNamedString(output, allocator, "kind", "iam_member", false);
+        try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
     }
     try output.append(allocator, '}');
 }
@@ -359,6 +393,7 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.pubsub.Subscription") and std.mem.eql(u8, to_type, "gcp.pubsub.Topic")) return "event";
     if (from_node) |node| if (containsOutputReference(node.inputs, to_id)) return "output";
     if (isTrafficPair(from_type, to_type)) return "traffic";
     if (std.mem.startsWith(u8, from_type, "cockroach.") != std.mem.startsWith(u8, to_type, "cockroach.")) {

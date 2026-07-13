@@ -244,6 +244,7 @@ fn pendingResult(
         .{ .name = "previous_image_ref", .value = previous_image },
         .{ .name = "ready", .value = .{ .boolean = false } },
         .{ .name = "etag", .value = .{ .unknown_reason = "Cloud Run operation pending" } },
+        .{ .name = "name", .value = .{ .string = physical_id } },
     };
     var result = try provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, handle);
     result.completed = false;
@@ -298,6 +299,7 @@ fn resultFromServiceJson(
         .{ .name = "previous_image_ref", .value = previous_image },
         .{ .name = "ready", .value = .{ .boolean = true } },
         .{ .name = "etag", .value = if (etag) |present| .{ .string = present } else .{ .unknown_reason = "Cloud Run response omitted etag" } },
+        .{ .name = "name", .value = .{ .string = physical_id } },
     };
     return provider_mod.ResourceResult.init(allocator, physical_id, observed, &outputs, null);
 }

@@ -16,6 +16,12 @@ test("provider icon catalogue uses official GCP core-product artwork", () => {
     iconPath: "/provider-icons/gcp/cloud-storage.png",
     official: true,
   });
+  expect(resourceVisualIdentity(resource("gcp.pubsub.Topic"))).toMatchObject({
+    family: "gcp.pubsub",
+    label: "Pub/Sub",
+    iconPath: "/provider-icons/gcp/pubsub.png",
+    official: true,
+  });
 });
 
 test("provider icon catalogue groups GCP primitives into stable product families", () => {

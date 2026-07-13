@@ -28,6 +28,15 @@ test "Cloud Run RPC descriptors retain the pinned Google API contract" {
     try std.testing.expect(update.semantics.update_mask);
     try std.testing.expect(update.semantics.etag);
     try std.testing.expect(update.semantics.reconciling);
+
+    const get_policy = rpc.cloud_run_v2.get_service_iam_policy;
+    try std.testing.expectEqual(rpc.HttpMethod.get, get_policy.rest.?.method);
+    try std.testing.expectEqualStrings("/v2/{resource=projects/*/locations/*/services/*}:getIamPolicy", get_policy.rest.?.path_template);
+    try std.testing.expectEqualStrings("resource", get_policy.routing_field.?);
+    const set_policy = rpc.cloud_run_v2.set_service_iam_policy;
+    try std.testing.expectEqual(rpc.HttpMethod.post, set_policy.rest.?.method);
+    try std.testing.expectEqualStrings("/v2/{resource=projects/*/locations/*/services/*}:setIamPolicy", set_policy.rest.?.path_template);
+    try std.testing.expectEqualStrings("*", set_policy.rest.?.body.?);
 }
 
 test "RPC REST binding expands validated resource names and query fields" {
@@ -110,4 +119,70 @@ test "RPC transport advertises gRPC only after the complete capability audit" {
         incomplete,
         .{},
     ));
+}
+
+test "Pub/Sub RPC descriptors retain the pinned v1 transcoding contract" {
+    const create_topic = rpc.pubsub_v1.create_topic;
+    try std.testing.expectEqual(rpc.HttpMethod.put, create_topic.rest.?.method);
+    try std.testing.expectEqualStrings("pubsub.googleapis.com", create_topic.default_host);
+    try std.testing.expectEqualStrings("google.pubsub.v1.Publisher", create_topic.service);
+    try std.testing.expectEqualStrings("/v1/{name=projects/*/topics/*}", create_topic.rest.?.path_template);
+    try std.testing.expectEqualStrings("*", create_topic.rest.?.body.?);
+    try std.testing.expectEqualStrings("name", create_topic.routing_field.?);
+
+    const create_schema = rpc.pubsub_v1.create_schema;
+    try std.testing.expectEqual(rpc.HttpMethod.post, create_schema.rest.?.method);
+    try std.testing.expectEqualStrings("/v1/{parent=projects/*}/schemas", create_schema.rest.?.path_template);
+    try std.testing.expectEqualStrings("schema", create_schema.rest.?.body.?);
+
+    const create_subscription = rpc.pubsub_v1.create_subscription;
+    try std.testing.expectEqual(rpc.HttpMethod.put, create_subscription.rest.?.method);
+    try std.testing.expectEqualStrings("/v1/{name=projects/*/subscriptions/*}", create_subscription.rest.?.path_template);
+
+    const create_snapshot = rpc.pubsub_v1.create_snapshot;
+    try std.testing.expectEqual(rpc.HttpMethod.put, create_snapshot.rest.?.method);
+    try std.testing.expectEqualStrings("/v1/{name=projects/*/snapshots/*}", create_snapshot.rest.?.path_template);
+}
+
+test "Pub/Sub REST bindings expand canonical resource names and query fields" {
+    const topic_path = try rpc.restPathAlloc(
+        std.testing.allocator,
+        rpc.pubsub_v1.create_topic,
+        &.{.{ .field = "name", .value = "projects/ziac-dev/topics/orders" }},
+        &.{},
+    );
+    defer std.testing.allocator.free(topic_path);
+    try std.testing.expectEqualStrings("/v1/projects/ziac-dev/topics/orders", topic_path);
+
+    const schema_path = try rpc.restPathAlloc(
+        std.testing.allocator,
+        rpc.pubsub_v1.create_schema,
+        &.{.{ .field = "parent", .value = "projects/ziac-dev" }},
+        &.{.{ .field = "schema_id", .value = "orders-v1" }},
+    );
+    defer std.testing.allocator.free(schema_path);
+    try std.testing.expectEqualStrings("/v1/projects/ziac-dev/schemas?schemaId=orders-v1", schema_path);
+
+    const update_path = try rpc.restPathAlloc(
+        std.testing.allocator,
+        rpc.pubsub_v1.update_subscription,
+        &.{.{ .field = "subscription.name", .value = "projects/ziac-dev/subscriptions/orders-worker" }},
+        &.{.{ .field = "update_mask", .value = "ackDeadlineSeconds,retryPolicy" }},
+    );
+    defer std.testing.allocator.free(update_path);
+    try std.testing.expectEqualStrings(
+        "/v1/projects/ziac-dev/subscriptions/orders-worker?updateMask=ackDeadlineSeconds,retryPolicy",
+        update_path,
+    );
+
+    try std.testing.expectError(error.InvalidResourceName, rpc.restPathAlloc(
+        std.testing.allocator,
+        rpc.pubsub_v1.get_topic,
+        &.{.{ .field = "topic", .value = "projects/ziac-dev/subscriptions/orders" }},
+        &.{},
+    ));
+    try std.testing.expectEqual(
+        rpc.Transport.rest_transcoding,
+        try rpc.selectTransport(rpc.pubsub_v1.get_topic, .{ .rest_json = true }, .{}),
+    );
 }

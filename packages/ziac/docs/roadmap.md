@@ -702,3 +702,14 @@ Generation-pinned immutable objects, estate identity, storage inspector facts,
 explicit capacity/operation/egress estimates and `AssetBucket`, `UploadBucket`
 and `StaticAssetBucket` components are covered by deterministic provider tests.
 The installed current-state reference is `docs/gcp-provider-coverage.md`.
+
+M58 is locally complete and awaiting authenticated publish/delivery/retry and
+cleanup qualification. Topics, schemas, subscriptions, snapshots and exact
+conditional topic/subscription IAM now have full deterministic lifecycle and
+import coverage. `gcp.run.ServiceIamMember` adds resource-scoped, etag-safe
+Cloud Run IAM. `ZigSubscriber` compiles a dedicated OIDC identity, source and
+dead-letter topics, push subscription, exact Run invoker access, Pub/Sub
+service-agent forwarding access and explicit publisher members into one graph.
+Permission synthesis, Cloud Asset identity, event edges, inspector metadata,
+official icons and configuration-based cost assumptions are synchronized. See
+`docs/gcp-pubsub.md` for the contract and its custom-audience limitation.

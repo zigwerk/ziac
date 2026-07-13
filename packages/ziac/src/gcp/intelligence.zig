@@ -220,7 +220,33 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Services.ListServices", .permission = "run.services.list" },
         .{ .suffix = "Services.UpdateService", .permission = "run.services.update" },
         .{ .suffix = "Services.DeleteService", .permission = "run.services.delete" },
+        .{ .suffix = "Services.GetIamPolicy", .permission = "run.services.getIamPolicy" },
+        .{ .suffix = "Services.SetIamPolicy", .permission = "run.services.setIamPolicy" },
         .{ .suffix = "Services.TestIamPermissions", .permission = "run.services.getIamPolicy" },
+        .{ .suffix = "Publisher.GetTopic", .permission = "pubsub.topics.get" },
+        .{ .suffix = "Publisher.CreateTopic", .permission = "pubsub.topics.create" },
+        .{ .suffix = "Publisher.UpdateTopic", .permission = "pubsub.topics.update" },
+        .{ .suffix = "Publisher.DeleteTopic", .permission = "pubsub.topics.delete" },
+        .{ .suffix = "Publisher.GetIamPolicy", .permission = "pubsub.topics.getIamPolicy" },
+        .{ .suffix = "Publisher.SetIamPolicy", .permission = "pubsub.topics.setIamPolicy" },
+        .{ .suffix = "Subscriber.GetSubscription", .permission = "pubsub.subscriptions.get" },
+        .{ .suffix = "Subscriber.CreateSubscription", .permission = "pubsub.subscriptions.create" },
+        .{ .suffix = "Subscriber.UpdateSubscription", .permission = "pubsub.subscriptions.update" },
+        .{ .suffix = "Subscriber.DeleteSubscription", .permission = "pubsub.subscriptions.delete" },
+        .{ .suffix = "Subscriber.GetIamPolicy", .permission = "pubsub.subscriptions.getIamPolicy" },
+        .{ .suffix = "Subscriber.SetIamPolicy", .permission = "pubsub.subscriptions.setIamPolicy" },
+        .{ .suffix = "Subscriber.GetSnapshot", .permission = "pubsub.snapshots.get" },
+        .{ .suffix = "Subscriber.CreateSnapshot", .permission = "pubsub.snapshots.create" },
+        .{ .suffix = "Subscriber.UpdateSnapshot", .permission = "pubsub.snapshots.update" },
+        .{ .suffix = "Subscriber.DeleteSnapshot", .permission = "pubsub.snapshots.delete" },
+        .{ .suffix = "SchemaService.GetSchema", .permission = "pubsub.schemas.get" },
+        .{ .suffix = "SchemaService.CreateSchema", .permission = "pubsub.schemas.create" },
+        .{ .suffix = "SchemaService.CommitSchema", .permission = "pubsub.schemas.commit" },
+        .{ .suffix = "SchemaService.DeleteSchema", .permission = "pubsub.schemas.delete" },
+        .{ .suffix = "IAM.GetServiceAccount", .permission = "iam.serviceAccounts.get" },
+        .{ .suffix = "IAM.CreateServiceAccount", .permission = "iam.serviceAccounts.create" },
+        .{ .suffix = "IAM.PatchServiceAccount", .permission = "iam.serviceAccounts.update" },
+        .{ .suffix = "IAM.DeleteServiceAccount", .permission = "iam.serviceAccounts.delete" },
         .{ .suffix = "backendServices.insert", .permission = "compute.backendServices.create" },
         .{ .suffix = "backendServices.get", .permission = "compute.backendServices.get" },
         .{ .suffix = "networkEndpointGroups.insert", .permission = "compute.networkEndpointGroups.create" },
@@ -236,6 +262,48 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.UpdateService" },
         .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.DeleteService" },
     };
+    const run_iam = [_]RpcUsage{
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.GetIamPolicy" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.SetIamPolicy" },
+    };
+    const iam_service_account = [_]RpcUsage{
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.GetServiceAccount" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.CreateServiceAccount" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.PatchServiceAccount" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.DeleteServiceAccount" },
+    };
+    const pubsub_topic = [_]RpcUsage{
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Publisher.GetTopic" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Publisher.CreateTopic" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Publisher.UpdateTopic" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Publisher.DeleteTopic" },
+    };
+    const pubsub_topic_iam = [_]RpcUsage{
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Publisher.GetIamPolicy" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Publisher.SetIamPolicy" },
+    };
+    const pubsub_subscription = [_]RpcUsage{
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.GetSubscription" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.CreateSubscription" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.UpdateSubscription" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.DeleteSubscription" },
+    };
+    const pubsub_subscription_iam = [_]RpcUsage{
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.GetIamPolicy" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.SetIamPolicy" },
+    };
+    const pubsub_snapshot = [_]RpcUsage{
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.GetSnapshot" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.CreateSnapshot" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.UpdateSnapshot" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Subscriber.DeleteSnapshot" },
+    };
+    const pubsub_schema = [_]RpcUsage{
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.SchemaService.GetSchema" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.SchemaService.CreateSchema" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.SchemaService.CommitSchema" },
+        .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.SchemaService.DeleteSchema" },
+    };
     const compute_backend = [_]RpcUsage{
         .{ .service = "compute.googleapis.com", .method = "compute.backendServices.get" },
         .{ .service = "compute.googleapis.com", .method = "compute.backendServices.insert" },
@@ -250,6 +318,14 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
     if (std.mem.eql(u8, type_name, "gcp.run.Service")) return &run;
+    if (std.mem.eql(u8, type_name, "gcp.run.ServiceIamMember")) return &run_iam;
+    if (std.mem.eql(u8, type_name, "gcp.iam.ServiceAccount")) return &iam_service_account;
+    if (std.mem.eql(u8, type_name, "gcp.pubsub.Topic")) return &pubsub_topic;
+    if (std.mem.eql(u8, type_name, "gcp.pubsub.TopicIamMember")) return &pubsub_topic_iam;
+    if (std.mem.eql(u8, type_name, "gcp.pubsub.Subscription")) return &pubsub_subscription;
+    if (std.mem.eql(u8, type_name, "gcp.pubsub.SubscriptionIamMember")) return &pubsub_subscription_iam;
+    if (std.mem.eql(u8, type_name, "gcp.pubsub.Snapshot")) return &pubsub_snapshot;
+    if (std.mem.eql(u8, type_name, "gcp.pubsub.Schema")) return &pubsub_schema;
     if (std.mem.eql(u8, type_name, "gcp.compute.BackendService")) return &compute_backend;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionServerlessNeg")) return &compute_neg;
     if (std.mem.startsWith(u8, type_name, "gcp.compute.")) return &compute_generic;

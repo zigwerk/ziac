@@ -55,3 +55,26 @@ test "estate scan fails closed before provider access" {
     ));
     try std.testing.expectEqual(@as(usize, 0), client.call_count);
 }
+
+test "estate scan maps Pub/Sub topics subscriptions and event relationships" {
+    var client = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer client.deinit();
+    try client.addPage(
+        \\{"results":[
+        \\{"name":"//pubsub.googleapis.com/projects/acme-prod/topics/orders","assetType":"pubsub.googleapis.com/Topic","project":"projects/123","location":"global","displayName":"orders"},
+        \\{"name":"//pubsub.googleapis.com/projects/acme-prod/subscriptions/orders-worker","assetType":"pubsub.googleapis.com/Subscription","project":"projects/123","location":"global","displayName":"orders-worker","relationships":{"PUBSUB_SUBSCRIPTION_TO_TOPIC":{"relatedResources":["//pubsub.googleapis.com/projects/acme-prod/topics/orders"]}}}
+        \\]}
+    );
+    var scan = try ziac.estate.scanAlloc(std.testing.allocator, client.client(), .{
+        .identity = .{ .provider = .google, .verified = true, .subject = "subject" },
+        .entitlement = .pro,
+        .connection = .{ .status = .connected, .project_id = "acme-prod" },
+        .observed_at_millis = 1_783_764_000_000,
+    });
+    defer scan.deinit();
+    try std.testing.expectEqual(@as(usize, 2), scan.resource_count);
+    try std.testing.expectEqual(@as(usize, 1), scan.edge_count);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.pubsub.Topic") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.pubsub.Subscription") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "projects/acme-prod/topics/orders") != null);
+}

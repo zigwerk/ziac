@@ -15,6 +15,10 @@ pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || 
     InvalidProbe,
     InvalidVpcAccess,
     InvalidSecretVolume,
+    InvalidIamCondition,
+    InvalidMember,
+    InvalidResourceName,
+    InvalidRole,
     OutputNotKnown,
     DuplicateRegion,
 };
@@ -108,6 +112,7 @@ pub const ServiceArgs = struct {
 
 pub const Service = struct {
     pub const Outputs = struct {
+        pub const Name = output.Descriptor("name", []const u8, .public);
         pub const ServiceUrl = output.Descriptor("service_url", []const u8, .public);
         pub const ServiceAccount = output.Descriptor("service_account", []const u8, .public);
         pub const LatestRevision = output.Descriptor("latest_revision", []const u8, .public);
@@ -118,6 +123,7 @@ pub const Service = struct {
         pub const Etag = output.Descriptor("etag", []const u8, .public);
 
         pub fn field(comptime name: []const u8) type {
+            if (std.mem.eql(u8, name, "name")) return Name;
             if (std.mem.eql(u8, name, "service_url")) return ServiceUrl;
             if (std.mem.eql(u8, name, "service_account")) return ServiceAccount;
             if (std.mem.eql(u8, name, "latest_revision")) return LatestRevision;
@@ -131,6 +137,7 @@ pub const Service = struct {
     };
 
     node: resource.ResourceNode,
+    name: Outputs.Name.OutputType,
     service_url: Outputs.ServiceUrl.OutputType,
     service_account: Outputs.ServiceAccount.OutputType,
     latest_revision: Outputs.LatestRevision.OutputType,
@@ -217,6 +224,7 @@ pub const Service = struct {
 
         return .{
             .node = node,
+            .name = Outputs.Name.fromResource(node.id),
             .service_url = Outputs.ServiceUrl.fromResource(node.id),
             .service_account = Outputs.ServiceAccount.fromResource(node.id),
             .latest_revision = Outputs.LatestRevision.fromResource(node.id),
@@ -233,6 +241,120 @@ pub const Service = struct {
         self.* = undefined;
     }
 };
+
+pub const IamCondition = struct {
+    title: []const u8,
+    description: []const u8 = "",
+    expression: []const u8,
+};
+
+pub const ServiceIamMemberArgs = struct {
+    name: []const u8,
+    service: output.Output([]const u8, .public),
+    role: []const u8,
+    member: []const u8,
+    condition: ?IamCondition = null,
+};
+
+pub const ServiceIamMember = struct {
+    pub const Outputs = struct {
+        pub const BindingId = output.Descriptor("binding_id", []const u8, .public);
+    };
+
+    node: resource.ResourceNode,
+    binding_id: Outputs.BindingId.OutputType,
+
+    pub fn build(
+        allocator: std.mem.Allocator,
+        provider: config_mod.ProviderConfig,
+        args: ServiceIamMemberArgs,
+    ) BuildError!ServiceIamMember {
+        try provider.validate();
+        if (!validIamResourceId(args.name)) return error.MissingName;
+        if (!std.mem.startsWith(u8, args.role, "roles/run.") or args.role.len <= "roles/run.".len or !validIamText(args.role)) {
+            return error.InvalidRole;
+        }
+        if (!validIamMember(args.member)) return error.InvalidMember;
+        if (args.condition) |condition| try validateIamCondition(args.member, condition);
+        const fields = [_]value.Field{
+            .{ .name = "condition_description", .value = .{ .string = if (args.condition) |condition| condition.description else "" } },
+            .{ .name = "condition_expression", .value = .{ .string = if (args.condition) |condition| condition.expression else "" } },
+            .{ .name = "condition_title", .value = .{ .string = if (args.condition) |condition| condition.title else "" } },
+            .{ .name = "member", .value = .{ .string = args.member } },
+            .{ .name = "name", .value = .{ .string = args.name } },
+            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
+            .{ .name = "resource", .value = try serviceResourceValue(args.service, provider.project_id) },
+            .{ .name = "role", .value = .{ .string = args.role } },
+        };
+        const id = try std.fmt.allocPrint(allocator, "gcp.run.ServiceIamMember.{s}", .{args.name});
+        defer allocator.free(id);
+        const node = resource.ResourceNode.initOwned(allocator, .{
+            .id = id,
+            .provider = .gcp,
+            .type_name = "gcp.run.ServiceIamMember",
+            .logical_id = args.name,
+            .inputs = .{ .object = &fields },
+            .lifecycle = .{ .operation_timeout_millis = 15 * 60 * 1000 },
+        }) catch |err| switch (err) {
+            error.DuplicateField => return error.DuplicateField,
+            error.OutOfMemory => return error.OutOfMemory,
+            error.DuplicateResource, error.MissingResource, error.DependencyCycle => unreachable,
+        };
+        return .{
+            .node = node,
+            .binding_id = Outputs.BindingId.fromResource(node.id),
+        };
+    }
+
+    pub fn deinit(self: *ServiceIamMember, allocator: std.mem.Allocator) void {
+        self.node.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+fn serviceResourceValue(
+    service: output.Output([]const u8, .public),
+    project_id: []const u8,
+) BuildError!value.Value {
+    return switch (service) {
+        .value => |known| if (validServiceResourceName(known, project_id)) .{ .string = known } else error.InvalidResourceName,
+        .resource_ref => |reference| .{ .output_ref = .{ .resource_id = reference.resource_id, .field = reference.field } },
+        .unknown_reason => error.OutputNotKnown,
+    };
+}
+
+fn validServiceResourceName(name: []const u8, project_id: []const u8) bool {
+    var parts = std.mem.splitScalar(u8, name, '/');
+    return std.mem.eql(u8, parts.next() orelse return false, "projects") and
+        std.mem.eql(u8, parts.next() orelse return false, project_id) and
+        std.mem.eql(u8, parts.next() orelse return false, "locations") and
+        validIamResourceId(parts.next() orelse return false) and
+        std.mem.eql(u8, parts.next() orelse return false, "services") and
+        validIamResourceId(parts.next() orelse return false) and
+        parts.next() == null;
+}
+
+fn validIamResourceId(name: []const u8) bool {
+    if (name.len == 0 or name.len > 255 or std.mem.indexOfAny(u8, name, "\x00\r\n /?#") != null) return false;
+    return true;
+}
+
+fn validIamMember(member: []const u8) bool {
+    return (std.mem.eql(u8, member, "allUsers") or
+        std.mem.eql(u8, member, "allAuthenticatedUsers") or
+        std.mem.indexOfScalar(u8, member, ':') != null) and
+        std.mem.indexOfAny(u8, member, "\x00\r\n ") == null;
+}
+
+fn validateIamCondition(member: []const u8, condition: IamCondition) BuildError!void {
+    if (std.mem.eql(u8, member, "allUsers") or std.mem.eql(u8, member, "allAuthenticatedUsers")) return error.InvalidIamCondition;
+    if (!validIamText(condition.title) or condition.title.len > 100 or !validIamText(condition.expression)) return error.InvalidIamCondition;
+    if (condition.description.len > 0 and !validIamText(condition.description)) return error.InvalidIamCondition;
+}
+
+fn validIamText(text: []const u8) bool {
+    return text.len > 0 and std.mem.indexOfScalar(u8, text, 0) == null;
+}
 
 fn validate(provider: config_mod.ProviderConfig, args: ServiceArgs) BuildError!void {
     try provider.validate();

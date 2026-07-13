@@ -67,6 +67,9 @@ comptime {
     _ = @import("gcp_kms_vault_test.zig");
     _ = @import("gcp_kms_test.zig");
     _ = @import("gcp_scheduler_test.zig");
+    _ = @import("gcp_pubsub_test.zig");
+    _ = @import("gcp_pubsub_components_test.zig");
+    _ = @import("gcp_pubsub_live_provider_test.zig");
     _ = @import("gcp_watch_runtime_test.zig");
     _ = @import("gcp_rpc_test.zig");
     _ = @import("gcp_proto_contract_test.zig");
@@ -101,6 +104,7 @@ comptime {
     _ = @import("gcp_secret_live_provider_test.zig");
     _ = @import("gcp_secret_access_test.zig");
     _ = @import("gcp_cloud_run_live_provider_test.zig");
+    _ = @import("gcp_run_iam_live_provider_test.zig");
     _ = @import("gcp_compute_test.zig");
     _ = @import("gcp_psc_test.zig");
     _ = @import("gcp_psc_live_provider_test.zig");

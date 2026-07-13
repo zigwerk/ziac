@@ -145,14 +145,15 @@ pub const resources = [_]Resource{
     managed("gcp.kms.CryptoKey", .kms, .location, .google_rest, "M26", retained),
     managed("gcp.kms.KeyRing", .kms, .location, .google_rest, "M26", retained_replaceable),
     managed("gcp.project.Service", .service_usage, .project, .googleapis_proto, "M4", replaceable),
-    plannedResource("gcp.pubsub.Schema", .pubsub, .project, .googleapis_proto, "M58"),
-    plannedResource("gcp.pubsub.Snapshot", .pubsub, .project, .googleapis_proto, "M58"),
-    plannedResource("gcp.pubsub.Subscription", .pubsub, .project, .googleapis_proto, "M58"),
-    plannedResource("gcp.pubsub.SubscriptionIamMember", .pubsub, .project, .google_rest, "M58"),
-    plannedResource("gcp.pubsub.Topic", .pubsub, .project, .googleapis_proto, "M58"),
-    plannedResource("gcp.pubsub.TopicIamMember", .pubsub, .project, .google_rest, "M58"),
+    managed("gcp.pubsub.Schema", .pubsub, .project, .googleapis_proto, "M58", withVisual(full)),
+    managed("gcp.pubsub.Snapshot", .pubsub, .project, .googleapis_proto, "M58", withVisualCost(full)),
+    managed("gcp.pubsub.Subscription", .pubsub, .project, .googleapis_proto, "M58", withProduct(full)),
+    managed("gcp.pubsub.SubscriptionIamMember", .pubsub, .project, .google_rest, "M58", withVisual(additive_iam)),
+    managed("gcp.pubsub.Topic", .pubsub, .project, .googleapis_proto, "M58", withProduct(full)),
+    managed("gcp.pubsub.TopicIamMember", .pubsub, .project, .google_rest, "M58", withVisual(additive_iam)),
     plannedResource("gcp.run.Job", .cloud_run, .region, .googleapis_proto, "M60"),
     managed("gcp.run.Service", .cloud_run, .region, .googleapis_proto, "M4", withProduct(full)),
+    managed("gcp.run.ServiceIamMember", .cloud_run, .region, .googleapis_proto, "M58", withVisual(additive_iam)),
     plannedResource("gcp.run.WorkerPool", .cloud_run, .region, .googleapis_proto, "M60"),
     managed("gcp.scheduler.Job", .scheduler, .region, .googleapis_proto, "M36", full),
     managed("gcp.secret.Secret", .iam, .project, .googleapis_proto, "M4", full),
@@ -327,6 +328,18 @@ fn withProduct(capabilities: Capabilities) Capabilities {
     var result = capabilities;
     result.estate = true;
     result.visual = true;
+    result.cost = true;
+    return result;
+}
+
+fn withVisual(capabilities: Capabilities) Capabilities {
+    var result = capabilities;
+    result.visual = true;
+    return result;
+}
+
+fn withVisualCost(capabilities: Capabilities) Capabilities {
+    var result = withVisual(capabilities);
     result.cost = true;
     return result;
 }
