@@ -2,9 +2,11 @@ const std = @import("std");
 const provider_mod = @import("provider.zig");
 const resource = @import("resource.zig");
 const state = @import("state.zig");
+const gcp_iam = @import("gcp/iam.zig");
 
 pub const PlanError = error{
     DependencyCycle,
+    IamOwnershipConflict,
     ProtectedResource,
     OutOfMemory,
 };
@@ -180,6 +182,7 @@ fn validateGraph(graph: *const resource.ResourceGraph) PlanError!void {
         error.OutOfMemory => return error.OutOfMemory,
         error.DuplicateResource, error.DuplicateField, error.MissingResource => unreachable,
     };
+    gcp_iam.validateGraphOwnership(graph) catch return error.IamOwnershipConflict;
 }
 
 fn appendRemovedResources(

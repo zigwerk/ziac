@@ -157,16 +157,23 @@ while preserving workload-specific lifecycle semantics.
 
 ## M61: General IAM Foundation
 
-- [ ] Add explicit additive member, authoritative binding and authoritative
+- [x] Add explicit additive member, authoritative binding and authoritative
   policy resource families.
-- [ ] Add IAM conditions and canonical principal validation.
-- [ ] Add project, folder, organization, service-account and common resource IAM.
-- [ ] Add custom roles and Workload Identity Federation pools/providers.
-- [ ] Derive deployer and runtime permission sets from graph operations.
-- [ ] Preflight `testIamPermissions`, service agents, organization policy and VPC
+- [x] Add IAM conditions and canonical principal validation.
+- [x] Add project, folder, organization, service-account and common resource IAM.
+- [x] Add custom roles and Workload Identity Federation pools/providers.
+- [x] Derive deployer and runtime permission sets from graph operations.
+- [x] Preflight `testIamPermissions`, service agents, organization policy and VPC
   Service Controls where available.
-- [ ] Render permission edges and ownership mode in the canvas.
-- [ ] Qualify concurrent unrelated IAM edits without policy loss.
+- [x] Render permission edges and ownership mode in the canvas.
+- [x] Qualify concurrent unrelated IAM edits without policy loss in deterministic
+  concurrent transport tests.
+
+M61 is locally complete with 62 managed resources. IAM authority is explicit at
+member, binding or policy scope; custom roles and workload federation recover
+from Google soft deletion; permission plans separate deployer and runtime
+authority; and Cloud Asset identities plus workbench blast-radius metadata are
+synchronized. Project/folder/organization live qualification remains external.
 
 Gate: Ziac plans make IAM ownership explicit and cannot silently overwrite an
 unowned member or binding.
@@ -174,14 +181,26 @@ unowned member or binding.
 ## M62: First-Tranche Integrated Qualification
 
 - [ ] Provision all required APIs and service agents in a fresh project.
-- [ ] Deploy upload bucket, topic/subscription, task queue, event trigger,
-  scheduled Zig job and Cloud Run subscriber/worker.
-- [ ] Verify application Env/resource bindings at comptime.
+- [x] Compile upload bucket, topic/subscription, task queue, event trigger,
+  scheduled Zig job and Cloud Run subscriber/worker as one owned graph.
+- [x] Verify application Env/resource bindings at comptime.
 - [ ] Exercise uploads, events, retries, job execution and logs.
-- [ ] Import the full graph into a second state and require a no-op plan.
-- [ ] Render managed and observed topology with cost provenance.
-- [ ] Delete under a bounded capability and prove retained resources remain.
-- [ ] Publish redacted qualification receipt and latency/cost summary.
+- [x] Import the full graph into a second deterministic state and require a
+  refreshed no-op plan.
+- [x] Render managed topology with IAM edges and configuration-estimate cost
+  provenance.
+- [x] Delete under explicit destructive authority and prove retained resources
+  remain at the provider boundary.
+- [x] Publish a redacted local qualification receipt and a fail-closed remote
+  qualification runner.
+
+M62 local evidence composes more than twenty resources through the public
+high-level component boundary, then applies, imports, refreshes, plans and
+destroys the graph under the testing allocator. The local receipt is always
+`authenticated=false`; the remote runner emits a structured skip when ADC,
+tools or disposable-project configuration is absent. The two unchecked items
+require a real billing-enabled project and application image that records the
+delivery probe IDs.
 
 Gate: the first tranche works together as one real application platform, not as
 isolated serializer tests.

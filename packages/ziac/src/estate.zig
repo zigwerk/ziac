@@ -121,7 +121,7 @@ pub fn scanAlloc(allocator: std.mem.Allocator, client: Client, input: ScanInput)
                 .display_name = try a.dupe(u8, display_name),
                 .related_resources = related,
                 .id = try observedIdAlloc(a, name),
-                .ziac_type = try mappedTypeAlloc(a, asset_type, location),
+                .ziac_type = try mappedTypeAlloc(a, asset_type, location, name),
                 .physical_id = try managedPhysicalIdAlloc(a, asset_type, name),
             });
         };
@@ -285,7 +285,7 @@ fn observedIdAlloc(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "observed.{s}", .{hex[0..20]});
 }
 
-fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, location: []const u8) ![]const u8 {
+fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, location: []const u8, name: []const u8) ![]const u8 {
     const mapped = if (std.mem.eql(u8, asset_type, "run.googleapis.com/Service"))
         "gcp.run.Service"
     else if (std.mem.eql(u8, asset_type, "run.googleapis.com/Job"))
@@ -304,6 +304,14 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.tasks.Queue"
     else if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/Trigger"))
         "gcp.eventarc.Trigger"
+    else if (std.mem.eql(u8, asset_type, "iam.googleapis.com/ServiceAccount"))
+        "gcp.iam.ServiceAccount"
+    else if (std.mem.eql(u8, asset_type, "iam.googleapis.com/Role"))
+        if (std.mem.indexOf(u8, name, "/organizations/") != null) "gcp.iam.OrganizationCustomRole" else "gcp.iam.ProjectCustomRole"
+    else if (std.mem.eql(u8, asset_type, "iam.googleapis.com/WorkloadIdentityPool"))
+        "gcp.iam.WorkloadIdentityPool"
+    else if (std.mem.eql(u8, asset_type, "iam.googleapis.com/WorkloadIdentityPoolProvider"))
+        "gcp.iam.WorkloadIdentityPoolProvider"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -347,6 +355,15 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
     }
     if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/Trigger")) {
         const prefix = "//eventarc.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "iam.googleapis.com/ServiceAccount") or
+        std.mem.eql(u8, asset_type, "iam.googleapis.com/Role") or
+        std.mem.eql(u8, asset_type, "iam.googleapis.com/WorkloadIdentityPool") or
+        std.mem.eql(u8, asset_type, "iam.googleapis.com/WorkloadIdentityPoolProvider"))
+    {
+        const prefix = "//iam.googleapis.com/";
         if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
         return allocator.dupe(u8, name[prefix.len..]);
     }

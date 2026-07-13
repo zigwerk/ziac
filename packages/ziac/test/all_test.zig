@@ -77,6 +77,7 @@ comptime {
     _ = @import("gcp_run_workloads_live_provider_test.zig");
     _ = @import("gcp_run_actions_test.zig");
     _ = @import("gcp_run_components_test.zig");
+    _ = @import("gcp_application_platform_test.zig");
     _ = @import("gcp_pubsub_test.zig");
     _ = @import("gcp_pubsub_components_test.zig");
     _ = @import("gcp_pubsub_live_provider_test.zig");
@@ -110,6 +111,9 @@ comptime {
     _ = @import("cockroach_private_service_connect_test.zig");
     _ = @import("cockroach_psql_executor_test.zig");
     _ = @import("gcp_project_iam_test.zig");
+    _ = @import("gcp_general_iam_live_provider_test.zig");
+    _ = @import("gcp_iam_admin_live_provider_test.zig");
+    _ = @import("gcp_permission_preflight_test.zig");
     _ = @import("gcp_secret_manager_test.zig");
     _ = @import("gcp_secret_live_provider_test.zig");
     _ = @import("gcp_secret_access_test.zig");

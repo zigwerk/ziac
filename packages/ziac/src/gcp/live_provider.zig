@@ -9,6 +9,8 @@ const scheduler_provider = @import("scheduler_provider.zig");
 const pubsub_provider = @import("pubsub_provider.zig");
 const tasks_provider = @import("tasks_provider.zig");
 const eventarc_provider = @import("eventarc_provider.zig");
+const iam_admin_provider = @import("iam_admin_provider.zig");
+const iam_provider = @import("iam_provider.zig");
 const operation = @import("operation.zig");
 const run_provider = @import("run_provider.zig");
 const run_workloads_provider = @import("run_workloads_provider.zig");
@@ -53,8 +55,22 @@ pub const managed_type_names = [_][]const u8{
     "gcp.dns.ManagedZone",
     "gcp.dns.RecordSet",
     "gcp.eventarc.Trigger",
+    "gcp.iam.FolderBinding",
+    "gcp.iam.FolderMember",
+    "gcp.iam.FolderPolicy",
+    "gcp.iam.OrganizationBinding",
+    "gcp.iam.OrganizationCustomRole",
+    "gcp.iam.OrganizationMember",
+    "gcp.iam.OrganizationPolicy",
+    "gcp.iam.ProjectBinding",
+    "gcp.iam.ProjectCustomRole",
     "gcp.iam.ProjectMember",
+    "gcp.iam.ProjectPolicy",
     "gcp.iam.ServiceAccount",
+    "gcp.iam.ServiceAccountIamBinding",
+    "gcp.iam.ServiceAccountIamMember",
+    "gcp.iam.WorkloadIdentityPool",
+    "gcp.iam.WorkloadIdentityPoolProvider",
     "gcp.kms.CryptoKey",
     "gcp.kms.KeyRing",
     "gcp.project.Service",
@@ -116,7 +132,8 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, project_service_type)) return self.readProjectService(context, node);
         if (isType(node, service_account_type)) return self.readServiceAccount(context, node, null);
-        if (isType(node, project_member_type)) return self.readProjectMember(context, node);
+        if (iam_provider.supports(node)) return self.iamHandler().read(context, node, null);
+        if (iam_admin_provider.supports(node)) return self.iamAdminHandler().read(context, node, null);
         if (isType(node, artifact_repository_type)) return self.readArtifactRepository(context, node, null);
         if (isType(node, secret_type)) return self.readSecret(context, node, null);
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
@@ -148,6 +165,8 @@ pub const LiveProvider = struct {
         if (isType(node, cloud_run_service_type)) return run_provider.Handler.diff(context, node, observed);
         if (run_workloads_provider.supports(node)) return run_workloads_provider.Handler.diff(context, node, observed);
         if (run_iam_provider.supports(node)) return run_iam_provider.Handler.diff(context, node, observed);
+        if (iam_provider.supports(node)) return iam_provider.Handler.diff(context, node, observed);
+        if (iam_admin_provider.supports(node)) return iam_admin_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (compute_provider.supports(node)) return compute_provider.Handler.diff(context, node, observed);
         if (dns_provider.supports(node)) return dns_provider.Handler.diff(context, node, observed);
@@ -178,7 +197,8 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, project_service_type)) return self.enableProjectService(context, node);
         if (isType(node, service_account_type)) return self.createServiceAccount(context, node);
-        if (isType(node, project_member_type)) return self.ensureProjectMember(context, node, true);
+        if (iam_provider.supports(node)) return self.iamHandler().create(context, node);
+        if (iam_admin_provider.supports(node)) return self.iamAdminHandler().create(context, node);
         if (isType(node, artifact_repository_type)) return self.createArtifactRepository(context, node);
         if (isType(node, secret_type)) return self.createSecret(context, node);
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
@@ -207,7 +227,8 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, service_account_type)) return self.updateServiceAccount(context, node, observed.physical_id);
-        if (isType(node, project_member_type)) return self.ensureProjectMember(context, node, true);
+        if (iam_provider.supports(node)) return self.iamHandler().update(context, node, observed.physical_id);
+        if (iam_admin_provider.supports(node)) return self.iamAdminHandler().update(context, node, observed);
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed.physical_id);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed);
@@ -235,6 +256,8 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, project_service_type)) return self.disableProjectService(context, physical_id);
         if (isType(node, service_account_type)) return self.deleteServiceAccount(context, physical_id);
+        if (iam_provider.supports(node)) return self.iamHandler().delete(context, node, physical_id);
+        if (iam_admin_provider.supports(node)) return self.iamAdminHandler().delete(context, node, physical_id);
         if (isType(node, artifact_repository_type)) return self.deleteArtifactRepository(context, physical_id);
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.destroySecretVersion(context, physical_id);
@@ -253,11 +276,6 @@ pub const LiveProvider = struct {
         if (eventarc_provider.supports(node)) return self.eventarcHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
-            removed.deinit();
-            return;
-        }
-        if (isType(node, project_member_type)) {
-            var removed = try self.ensureProjectMember(context, node, false);
             removed.deinit();
             return;
         }
@@ -286,7 +304,21 @@ pub const LiveProvider = struct {
             };
         }
         if (isType(node, project_member_type)) {
-            const result = try self.readProjectMember(context, node);
+            const result = try self.iamHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (iam_provider.supports(node)) {
+            const result = try self.iamHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (iam_admin_provider.supports(node)) {
+            const result = try self.iamAdminHandler().read(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -1013,6 +1045,14 @@ pub const LiveProvider = struct {
 
     fn runIamHandler(self: *LiveProvider) run_iam_provider.Handler {
         return .{ .client = self.client, .conflict_retries = self.iam_conflict_retries };
+    }
+
+    fn iamHandler(self: *LiveProvider) iam_provider.Handler {
+        return .{ .client = self.client, .conflict_retries = self.iam_conflict_retries };
+    }
+
+    fn iamAdminHandler(self: *LiveProvider) iam_admin_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
     }
 
     fn computeHandler(self: *LiveProvider) compute_provider.Handler {

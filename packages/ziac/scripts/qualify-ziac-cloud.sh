@@ -53,7 +53,7 @@ unset ZIAC_STATE_BUCKET
 receipt="$("${ziac_bin}" plan --stack bootstrap --stage prod --provider gcp --allow-live --out .ziac/bootstrap.plan.json --json)"
 digest="$(printf '%s' "${receipt}" | sed -n 's/.*"plan_digest":"\([0-9a-f]\{64\}\)".*/\1/p')"
 test -n "${digest}"
-"${ziac_bin}" deploy --stack bootstrap --stage prod --provider gcp --allow-live --plan .ziac/bootstrap.plan.json --approval "${digest}" --json
+  "${ziac_bin}" deploy --stack bootstrap --stage prod --provider gcp --allow-live --plan .ziac/bootstrap.plan.json --approve "${digest}" --json
 
 export ZIAC_STATE_BUCKET="${state_bucket}"
 "${ziac_bin}" state-migrate --stack bootstrap --stage prod --json
@@ -84,7 +84,7 @@ for project in data control-plane billing; do
   receipt="$("${ziac_bin}" plan --stack "${project}" --stage prod --provider gcp --allow-live --out "${plan_path}" --json)"
   digest="$(printf '%s' "${receipt}" | sed -n 's/.*"plan_digest":"\([0-9a-f]\{64\}\)".*/\1/p')"
   test -n "${digest}"
-  "${ziac_bin}" deploy --stack "${project}" --stage prod --provider gcp --allow-live --plan "${plan_path}" --approval "${digest}" --json
+  "${ziac_bin}" deploy --stack "${project}" --stage prod --provider gcp --allow-live --plan "${plan_path}" --approve "${digest}" --json
 done
 
 control_plane_ready=false

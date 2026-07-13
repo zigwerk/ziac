@@ -637,8 +637,17 @@ function ResourceInspector(props: {
               </>}</Show>
             </dl>
           </InspectorSection>
-          <InspectorSection title="Dependencies" count={dependencies().length}><For each={dependencies()}>{(edge) => <InspectorLink id={edge.to} kind={edge.kind} onSelect={props.onSelect} />}</For></InspectorSection>
-          <InspectorSection title="Consumers" count={consumers().length}><For each={consumers()}>{(edge) => <InspectorLink id={edge.from} kind={edge.kind} onSelect={props.onSelect} />}</For></InspectorSection>
+          <Show when={resource().iam}>{(iam) => <InspectorSection title="IAM authority" count={iam().principal_count}>
+            <dl class="ziac-inspector-grid">
+              <dt>Authority</dt><dd><strong>{iam().ownership}</strong></dd>
+              <dt>Target</dt><dd><code>{iam().target}</code></dd>
+              <Show when={iam().role}>{(role) => <><dt>Role</dt><dd><code>{role()}</code></dd></>}</Show>
+              <Show when={iam().condition_title}>{(condition) => <><dt>Condition</dt><dd>{condition()}</dd></>}</Show>
+              <dt>Blast radius</dt><dd>{iamBlastRadius(iam().ownership)}</dd>
+            </dl>
+          </InspectorSection>}</Show>
+          <InspectorSection title="Dependencies" count={dependencies().length}><For each={dependencies()}>{(edge) => <InspectorLink id={edge.to} kind={edge.kind} access={edge.access} permissions={edge.permissions} onSelect={props.onSelect} />}</For></InspectorSection>
+          <InspectorSection title="Consumers" count={consumers().length}><For each={consumers()}>{(edge) => <InspectorLink id={edge.from} kind={edge.kind} access={edge.access} permissions={edge.permissions} onSelect={props.onSelect} />}</For></InspectorSection>
           <Show when={resource().ownership === "managed"} fallback={<InspectorSection title="Read-only observation" count={0}><div class="ziac-readonly-observation"><LockKeyhole size={14} /><span>Not owned by this Ziac stack</span></div></InspectorSection>}>
             <InspectorSection title="Lifecycle" count={0}><div class="ziac-lifecycle-list"><span>Protect <strong>{resource().lifecycle.protect ? "on" : "off"}</strong></span><span>Retain <strong>{resource().lifecycle.retain_on_delete ? "on" : "off"}</strong></span><span>Replace first <strong>{resource().lifecycle.replace_before_delete ? "on" : "off"}</strong></span></div></InspectorSection>
           </Show>
@@ -657,6 +666,12 @@ function ResourceInspector(props: {
   </aside>;
 }
 
+function iamBlastRadius(ownership: "member" | "binding" | "policy") {
+  if (ownership === "member") return "One principal grant";
+  if (ownership === "binding") return "Complete role member set";
+  return "Complete allow policy";
+}
+
 function InspectorTabButton(props: { value: InspectorTab; label: string; tab: InspectorTab; onSelect: (tab: InspectorTab) => void }) {
   return <button type="button" classList={{ active: props.tab === props.value }} onClick={() => props.onSelect(props.value)}>{props.label}</button>;
 }
@@ -669,8 +684,9 @@ function InspectorSection(props: { title: string; count: number; children: unkno
   return <section class="ziac-inspector-section"><header><h3>{props.title}</h3>{props.count > 0 && <span>{props.count}</span>}</header>{props.children as never}</section>;
 }
 
-function InspectorLink(props: { id: string; kind: string; onSelect: (id: string) => void }) {
-  return <button type="button" class="ziac-inspector-link" onClick={() => props.onSelect(props.id)}><span>{props.kind}</span><code>{props.id}</code><ChevronRight size={13} /></button>;
+function InspectorLink(props: { id: string; kind: string; access?: string; permissions?: string[]; onSelect: (id: string) => void }) {
+  const authority = () => [props.kind, props.access, ...(props.permissions ?? [])].filter(Boolean).join(" · ");
+  return <button type="button" class="ziac-inspector-link" title={authority()} onClick={() => props.onSelect(props.id)}><span>{props.access ? `${props.kind} ${props.access}` : props.kind}</span><code>{props.id}</code><ChevronRight size={13} /></button>;
 }
 
 function resourceService(resource: ZiacVisualResource) {

@@ -214,6 +214,7 @@ pub fn build(b: *std.Build) void {
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "cockroach-private-service-connect", "examples/cockroach_private_service_connect.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "production-global-service", "examples/production_global_service.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "gcp-specialization", "examples/gcp_specialization.zig");
+    addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "application-platform", "examples/application_platform.zig");
 
     const visual_sample_module = b.createModule(.{
         .root_source_file = b.path("examples/visual_artifact.zig"),

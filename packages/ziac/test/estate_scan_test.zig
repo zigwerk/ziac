@@ -125,3 +125,32 @@ test "estate scan maps Cloud Run Jobs and Worker Pools to adoptable identities" 
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/jobs/nightly-report\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/workerPools/events\"") != null);
 }
+
+test "estate scan maps IAM identities roles and workload federation to managed identities" {
+    var client = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer client.deinit();
+    try client.addPage(
+        \\{"results":[
+        \\{"name":"//iam.googleapis.com/projects/acme-prod/serviceAccounts/runtime@acme-prod.iam.gserviceaccount.com","assetType":"iam.googleapis.com/ServiceAccount","project":"projects/123","location":"global","displayName":"runtime"},
+        \\{"name":"//iam.googleapis.com/projects/acme-prod/roles/ziacDeployer","assetType":"iam.googleapis.com/Role","project":"projects/123","location":"global","displayName":"ziacDeployer"},
+        \\{"name":"//iam.googleapis.com/organizations/456/roles/ziacAuditor","assetType":"iam.googleapis.com/Role","project":"projects/123","location":"global","displayName":"ziacAuditor"},
+        \\{"name":"//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/github","assetType":"iam.googleapis.com/WorkloadIdentityPool","project":"projects/123","location":"global","displayName":"github"},
+        \\{"name":"//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/github/providers/actions","assetType":"iam.googleapis.com/WorkloadIdentityPoolProvider","project":"projects/123","location":"global","displayName":"actions"}
+        \\]}
+    );
+    var scan = try ziac.estate.scanAlloc(std.testing.allocator, client.client(), .{
+        .identity = .{ .provider = .google, .verified = true, .subject = "subject" },
+        .entitlement = .pro,
+        .connection = .{ .status = .connected, .project_id = "acme-prod" },
+        .observed_at_millis = 1_783_764_000_000,
+    });
+    defer scan.deinit();
+
+    try std.testing.expectEqual(@as(usize, 5), scan.resource_count);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.iam.ServiceAccount") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.iam.ProjectCustomRole") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.iam.OrganizationCustomRole") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.iam.WorkloadIdentityPool") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.iam.WorkloadIdentityPoolProvider") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/123/locations/global/workloadIdentityPools/github/providers/actions\"") != null);
+}

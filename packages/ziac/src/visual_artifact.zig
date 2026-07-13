@@ -78,7 +78,7 @@ pub fn serializeAlloc(
     try output.appendSlice(allocator, ",\"resources\":[");
     for (resources, 0..) |item, index| {
         if (index != 0) try output.append(allocator, ',');
-        try appendResource(&output, allocator, item);
+        try appendResource(&output, allocator, item, target.created_at_millis);
     }
     try output.appendSlice(allocator, "],\"edges\":[");
     for (edges, 0..) |edge, index| {
@@ -157,7 +157,12 @@ fn usedRegionsAlloc(allocator: std.mem.Allocator, resources: []const VisualResou
     return regions;
 }
 
-fn appendResource(output: *std.ArrayList(u8), allocator: std.mem.Allocator, item: VisualResource) !void {
+fn appendResource(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    item: VisualResource,
+    observed_at_millis: u64,
+) !void {
     var regions = std.ArrayList([]const u8).empty;
     defer regions.deinit(allocator);
     try appendNodeRegions(allocator, &regions, item.node);
@@ -179,6 +184,8 @@ fn appendResource(output: *std.ArrayList(u8), allocator: std.mem.Allocator, item
     try appendPubsubDetails(output, allocator, item.node);
     try appendAsyncDeliveryDetails(output, allocator, item.node);
     try appendRunWorkloadDetails(output, allocator, item.node);
+    try appendIamDetails(output, allocator, item.node);
+    try appendConfigurationCost(output, allocator, observed_at_millis);
     try output.appendSlice(allocator, ",\"inputs\":");
     try appendSafeValue(output, allocator, item.node.inputs, null);
     try output.appendSlice(allocator, ",\"lifecycle\":{");
@@ -188,6 +195,22 @@ fn appendResource(output: *std.ArrayList(u8), allocator: std.mem.Allocator, item
     try output.append(allocator, '}');
     try output.appendSlice(allocator, ",\"reasons\":");
     try appendStringArray(output, allocator, item.reasons);
+    try output.append(allocator, '}');
+}
+
+fn appendConfigurationCost(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    observed_at_millis: u64,
+) !void {
+    try output.appendSlice(allocator, ",\"cost\":{");
+    try appendNamedString(output, allocator, "schema", "ziac.resource-cost.v1", false);
+    try appendNamedString(output, allocator, "origin", "configuration_estimate", true);
+    try appendNamedString(output, allocator, "currency", "USD", true);
+    try output.appendSlice(allocator, ",\"amount_micros\":null");
+    try appendNamedString(output, allocator, "confidence", "explicit_usage", true);
+    try appendNamedUnsigned(output, allocator, "observed_at_millis", observed_at_millis, true);
+    try appendNamedBool(output, allocator, "is_billing_export", false, true);
     try output.append(allocator, '}');
 }
 
@@ -208,7 +231,39 @@ fn appendEdge(
     try appendNamedString(output, allocator, "from", edge.from, true);
     try appendNamedString(output, allocator, "to", edge.to, true);
     try appendNamedString(output, allocator, "kind", kind, true);
+    if (std.mem.eql(u8, kind, "iam")) if (from_resource) |item| {
+        if (objectString(item.node, "role")) |role| if (iamEdgeDetails(role)) |details| {
+            try appendNamedString(output, allocator, "access", details.access, true);
+            try output.appendSlice(allocator, ",\"permissions\":[");
+            try appendJsonString(output, allocator, details.permission);
+            try output.append(allocator, ']');
+        };
+    };
     try output.append(allocator, '}');
+}
+
+const IamEdgeDetails = struct {
+    access: []const u8,
+    permission: []const u8,
+};
+
+fn iamEdgeDetails(role: []const u8) ?IamEdgeDetails {
+    const mappings = [_]struct { role: []const u8, access: []const u8, permission: []const u8 }{
+        .{ .role = "roles/artifactregistry.reader", .access = "read", .permission = "artifactregistry.repositories.downloadArtifacts" },
+        .{ .role = "roles/cloudtasks.enqueuer", .access = "write", .permission = "cloudtasks.tasks.create" },
+        .{ .role = "roles/iam.workloadIdentityUser", .access = "invoke", .permission = "iam.serviceAccounts.getAccessToken" },
+        .{ .role = "roles/pubsub.publisher", .access = "write", .permission = "pubsub.topics.publish" },
+        .{ .role = "roles/pubsub.subscriber", .access = "read", .permission = "pubsub.subscriptions.consume" },
+        .{ .role = "roles/run.invoker", .access = "invoke", .permission = "run.routes.invoke" },
+        .{ .role = "roles/secretmanager.secretAccessor", .access = "read", .permission = "secretmanager.versions.access" },
+        .{ .role = "roles/storage.objectUser", .access = "read_write", .permission = "storage.objects.create" },
+        .{ .role = "roles/storage.objectViewer", .access = "read", .permission = "storage.objects.get" },
+    };
+    for (mappings) |mapping| if (std.mem.eql(u8, role, mapping.role)) return .{
+        .access = mapping.access,
+        .permission = mapping.permission,
+    };
+    return null;
 }
 
 fn appendGlobalRoutes(output: *std.ArrayList(u8), allocator: std.mem.Allocator, resources: []const VisualResource) !void {
@@ -393,6 +448,50 @@ fn appendRunWorkloadDetails(
     try output.append(allocator, '}');
 }
 
+fn appendIamDetails(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    const ownership_value = objectField(node.inputs, "ownership_mode") orelse return;
+    if (ownership_value != .string) return;
+    try output.appendSlice(allocator, ",\"iam\":{");
+    try appendNamedString(output, allocator, "ownership", ownership_value.string, false);
+    try appendOptionalStorageString(output, allocator, node, "resource_name", "target");
+    try appendOptionalStorageString(output, allocator, node, "role", "role");
+    try appendOptionalStorageString(output, allocator, node, "condition_title", "condition_title");
+    try appendNamedUnsigned(output, allocator, "principal_count", try iamPrincipalCount(allocator, node), true);
+    try output.append(allocator, '}');
+}
+
+fn iamPrincipalCount(allocator: std.mem.Allocator, node: resource.ResourceNode) !usize {
+    const ownership = objectField(node.inputs, "ownership_mode") orelse return 0;
+    if (ownership != .string) return 0;
+    if (std.mem.eql(u8, ownership.string, "member")) return 1;
+    if (std.mem.eql(u8, ownership.string, "binding")) {
+        const members = objectField(node.inputs, "members") orelse return 0;
+        return if (members == .list) members.list.len else 0;
+    }
+    const bindings_json = objectField(node.inputs, "bindings_json") orelse return 0;
+    if (bindings_json != .string) return 0;
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, bindings_json.string, .{}) catch return 0;
+    defer parsed.deinit();
+    const bindings = switch (parsed.value) {
+        .array => |array| array.items,
+        else => return 0,
+    };
+    var count: usize = 0;
+    for (bindings) |binding_value| {
+        const binding = switch (binding_value) {
+            .object => |object| object,
+            else => continue,
+        };
+        const members_value = binding.get("members") orelse continue;
+        if (members_value == .array) count += members_value.array.items.len;
+    }
+    return count;
+}
+
 fn appendOptionalStorageString(
     output: *std.ArrayList(u8),
     allocator: std.mem.Allocator,
@@ -460,7 +559,10 @@ fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []c
     if (std.mem.eql(u8, from_type, "gcp.eventarc.Trigger") and
         (std.mem.eql(u8, to_type, "gcp.pubsub.Topic") or std.mem.eql(u8, to_type, "gcp.run.Service"))) return "event";
     if (std.mem.startsWith(u8, from_type, "gcp.tasks.Queue") and std.mem.eql(u8, to_type, "gcp.run.Service")) return "event";
-    if (std.mem.indexOf(u8, from_type, "IamMember") != null) return "iam";
+    if (std.mem.indexOf(u8, from_type, "IamMember") != null or
+        std.mem.indexOf(u8, from_type, "IamBinding") != null or
+        std.mem.indexOf(u8, from_type, "IamPolicy") != null or
+        std.mem.startsWith(u8, from_type, "gcp.iam.")) return "iam";
     if (from_node) |node| if (containsOutputReference(node.inputs, to_id)) return "output";
     if (isTrafficPair(from_type, to_type)) return "traffic";
     if (std.mem.startsWith(u8, from_type, "cockroach.") != std.mem.startsWith(u8, to_type, "cockroach.")) {
@@ -565,6 +667,14 @@ fn indexOfIgnoreCase(haystack: []const u8, needle: []const u8) ?usize {
 fn objectField(node_inputs: value_mod.Value, name: []const u8) ?value_mod.Value {
     return switch (node_inputs) {
         .object => |fields| objectFieldFromFields(fields, name),
+        else => null,
+    };
+}
+
+fn objectString(node: resource.ResourceNode, name: []const u8) ?[]const u8 {
+    const field = objectField(node.inputs, name) orelse return null;
+    return switch (field) {
+        .string => |text| text,
         else => null,
     };
 }

@@ -102,6 +102,7 @@ test "visual artifact projects Cloud Storage inspector details and location" {
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"retention_period_seconds\":86400") != null);
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"soft_delete_retention_seconds\":604800") != null);
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"iam_role\":\"roles/storage.objectViewer\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"kind\":\"iam\",\"access\":\"read\",\"permissions\":[\"storage.objects.get\"]") != null);
 }
 
 test "visual artifact projects Pub/Sub inspector metadata and event edges" {
@@ -227,6 +228,40 @@ test "visual artifact projects Cloud Run Job Worker Pool and workload IAM metada
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"instance_split_count\":1") != null);
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"run_workload\":{\"kind\":\"job_iam_member\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"iam_role\":\"roles/run.invoker\"") != null);
+}
+
+test "visual artifact exposes IAM authority and blast radius" {
+    var binding = try ziac.gcp.iam.ProjectBinding.build(std.testing.allocator, .{
+        .project_id = "ziac-prod",
+        .primary_region = "europe-west1",
+    }, .{
+        .name = "artifact-readers",
+        .role = "roles/artifactregistry.reader",
+        .members = &.{
+            "group:platform@example.com",
+            "serviceAccount:api@ziac-prod.iam.gserviceaccount.com",
+        },
+        .condition = .{
+            .title = "production-window",
+            .expression = "request.time < timestamp('2027-01-01T00:00:00Z')",
+        },
+    });
+    defer binding.deinit(std.testing.allocator);
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try graph.addResource(binding.node);
+
+    var artifact = try ziac.visual_artifact.serializeAlloc(std.testing.allocator, &graph, null, .{
+        .stack = "global-api",
+        .stage = "prod",
+        .created_at_millis = 42,
+    });
+    defer artifact.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"iam\":{\"ownership\":\"binding\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"target\":\"projects/ziac-prod\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"role\":\"roles/artifactregistry.reader\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"condition_title\":\"production-window\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"principal_count\":2") != null);
 }
 
 fn fixtureGraph() !ziac.ResourceGraph {

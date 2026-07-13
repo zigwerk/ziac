@@ -57,6 +57,36 @@ test "ZigSubscriber graph synthesizes Pub/Sub Run IAM and identity preflight" {
     try std.testing.expect(requirements.hasPermission("iam.serviceAccounts.create"));
 }
 
+test "general storage graph synthesizes bucket object and IAM preflight" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    var bucket = try ziac.gcp.storage.Bucket.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{ .name = "ziac-assets", .location = "EU" });
+    defer bucket.deinit(std.testing.allocator);
+    var member = try ziac.gcp.storage.BucketIamMember.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{
+        .name = "api-reader",
+        .bucket = bucket.name,
+        .role = "roles/storage.objectViewer",
+        .member = "serviceAccount:api@ziac-dev.iam.gserviceaccount.com",
+    });
+    defer member.deinit(std.testing.allocator);
+    try graph.addResource(bucket.node);
+    try graph.addResource(member.node);
+
+    var requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &graph);
+    defer requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(requirements.apis, "storage.googleapis.com"));
+    try std.testing.expect(requirements.hasPermission("storage.buckets.create"));
+    try std.testing.expect(requirements.hasPermission("storage.buckets.update"));
+    try std.testing.expect(requirements.hasPermission("storage.buckets.getIamPolicy"));
+    try std.testing.expect(requirements.hasPermission("storage.buckets.setIamPolicy"));
+}
+
 test "async delivery graph synthesizes Cloud Tasks Eventarc and act-as preflight" {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     defer graph.deinit();
@@ -150,6 +180,72 @@ test "Cloud Run workload components synthesize lifecycle IAM scheduler and actio
     try std.testing.expect(action_requirements.hasPermission("run.jobs.run"));
     try std.testing.expect(action_requirements.hasPermission("run.executions.get"));
     try std.testing.expect(action_requirements.hasPermission("run.executions.cancel"));
+}
+
+test "permission plan separates deployer and runtime authority with provenance" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    var service = try ziac.gcp.cloud_run.Service.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{
+        .name = "api",
+        .image = "example.invalid/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+    defer service.deinit(std.testing.allocator);
+    var secret_access = try ziac.gcp.iam.ProjectMember.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{
+        .name = "api-secret-access",
+        .role = "roles/secretmanager.secretAccessor",
+        .member = "serviceAccount:api@ziac-dev.iam.gserviceaccount.com",
+    });
+    defer secret_access.deinit(std.testing.allocator);
+    try graph.addResource(service.node);
+    try graph.addResource(secret_access.node);
+
+    var permission_plan = try ziac.gcp.intelligence.synthesizePermissionPlan(std.testing.allocator, &graph);
+    defer permission_plan.deinit(std.testing.allocator);
+    try std.testing.expect(permission_plan.hasPermission(.deployer, "run.services.create"));
+    try std.testing.expect(permission_plan.hasPermission(.deployer, "resourcemanager.projects.setIamPolicy"));
+    try std.testing.expect(permission_plan.hasPermission(.runtime, "secretmanager.versions.access"));
+    var found_provenance = false;
+    for (permission_plan.entries) |entry| {
+        if (entry.audience == .runtime and std.mem.eql(u8, entry.permission, "secretmanager.versions.access")) {
+            found_provenance = std.mem.eql(u8, entry.resource_id, secret_access.node.id) and
+                std.mem.eql(u8, entry.operation, "roles/secretmanager.secretAccessor");
+        }
+    }
+    try std.testing.expect(found_provenance);
+
+    var proposal = try ziac.gcp.intelligence.proposeCustomRole(
+        std.testing.allocator,
+        permission_plan,
+        .deployer,
+        "ziacDeployer",
+    );
+    defer proposal.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("ziacDeployer", proposal.role_id);
+    try std.testing.expect(contains(proposal.permissions, "run.services.create"));
+    try std.testing.expect(contains(proposal.permissions, "resourcemanager.projects.setIamPolicy"));
+}
+
+test "preflight reports missing Google service agents separately from permissions" {
+    var requirements = try ziac.gcp.intelligence.synthesize(std.testing.allocator, &.{.{
+        .service = "eventarc.googleapis.com",
+        .method = "google.cloud.eventarc.v1.Eventarc.CreateTrigger",
+    }});
+    defer requirements.deinit(std.testing.allocator);
+    var report = try ziac.gcp.intelligence.evaluatePreflight(std.testing.allocator, requirements, .{
+        .enabled_apis = &.{"eventarc.googleapis.com"},
+        .granted_permissions = &.{"eventarc.triggers.create"},
+        .billing_enabled = true,
+        .required_service_agents = &.{"service-123456789012@gcp-sa-eventarc.iam.gserviceaccount.com"},
+        .available_service_agents = &.{},
+    });
+    defer report.deinit(std.testing.allocator);
+    try std.testing.expect(report.hasFinding(.service_agent_missing));
 }
 
 test "topology advice respects residency and Cockroach locality without mutating policy" {

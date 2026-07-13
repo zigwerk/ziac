@@ -107,6 +107,22 @@ test("parser accepts bounded permission metadata and rejects unknown access mode
   expect(() => parseZiacVisualArtifact(raw)).toThrow("edges[0].access");
 });
 
+test("parser preserves explicit IAM authority metadata", () => {
+  const raw = JSON.parse(sampleJson());
+  raw.resources[0].iam = {
+    ownership: "binding",
+    target: "projects/ziac-dev",
+    role: "roles/logging.viewer",
+    condition_title: "support-window",
+    principal_count: 2,
+  };
+  const parsed = parseZiacVisualArtifact(raw);
+  expect(parsed.resources[0]?.iam).toEqual(raw.resources[0].iam);
+
+  raw.resources[0].iam.ownership = "implicit";
+  expect(() => parseZiacVisualArtifact(raw)).toThrow("resources[0].iam.ownership");
+});
+
 test("estate ownership defaults to managed and filters existing infrastructure without dangling graph data", () => {
   const raw = JSON.parse(sampleJson());
   raw.resources.push({

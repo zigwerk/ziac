@@ -182,6 +182,29 @@ qualification semantics.
 - `gcp.dns.ManagedZone`
 - `gcp.dns.RecordSet`
 
+### General IAM and federation
+
+- project, folder and organization `Member`, `Binding` and `Policy` resources;
+- service-account IAM members and bindings;
+- project and organization custom roles;
+- Workload Identity Pools and OIDC Providers.
+
+These resources use explicit ownership modes, canonical principals and
+conditions, policy-version-3 conditional writes, etag conflict retries and
+graph-level overlap validation. Permission intelligence separates deployer from
+runtime authority with resource and operation provenance. The native
+`testIamPermissions` preflight supports project, folder, organization and
+service-account targets. Cloud Asset identity and workbench blast-radius
+metadata are synchronized. See `gcp-iam.md` for the safety and recovery model.
+
+### Integrated application platform
+
+`ziac.gcp.ApplicationPlatform` composes Cloud Run, Storage, Pub/Sub, Cloud
+Tasks, Eventarc, Scheduler and dedicated identities into one typed application
+slice. Its local qualification proves deterministic apply/import/no-op/cleanup;
+the separate disposable-project runner preserves the authenticated evidence
+boundary. See `gcp-application-platform.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`

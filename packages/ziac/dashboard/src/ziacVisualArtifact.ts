@@ -41,6 +41,14 @@ export type ZiacResourceCost = {
   is_billing_export: boolean;
 };
 
+export type ZiacIamDetails = {
+  ownership: "member" | "binding" | "policy";
+  target: string;
+  role?: string;
+  condition_title?: string;
+  principal_count: number;
+};
+
 export type ZiacVisualResource = {
   id: string;
   provider: ZiacProvider;
@@ -54,6 +62,7 @@ export type ZiacVisualResource = {
   ownership: ZiacOwnership;
   discovery?: ZiacResourceDiscovery;
   cost?: ZiacResourceCost;
+  iam?: ZiacIamDetails;
   inputs: Record<string, unknown>;
   lifecycle: {
     protect: boolean;
@@ -464,6 +473,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
     ? undefined
     : parseDiscovery(value.discovery, index);
   const cost = value.cost === undefined ? undefined : parseCost(value.cost, index);
+  const iam = value.iam === undefined ? undefined : parseIam(value.iam, index);
   if (ownership !== "managed" && discovery === undefined) {
     throw new Error(`resources[${index}].discovery is required for ${ownership} resources`);
   }
@@ -480,6 +490,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
     ownership,
     ...(discovery ? { discovery } : {}),
     ...(cost ? { cost } : {}),
+    ...(iam ? { iam } : {}),
     inputs,
     lifecycle: {
       protect: booleanValue(lifecycle.protect, "lifecycle.protect"),
@@ -487,6 +498,24 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
       replace_before_delete: booleanValue(lifecycle.replace_before_delete, "lifecycle.replace_before_delete"),
     },
     reasons: stringArray(value.reasons, `resources[${index}].reasons`),
+  };
+}
+
+function parseIam(raw: unknown, index: number): ZiacIamDetails {
+  const path = `resources[${index}].iam`;
+  const value = objectValue(raw, path);
+  const role = value.role === undefined ? undefined : nonEmptyString(value.role, `${path}.role`);
+  const conditionTitle = value.condition_title === undefined
+    ? undefined
+    : nonEmptyString(value.condition_title, `${path}.condition_title`);
+  const principalCount = integerValue(value.principal_count, `${path}.principal_count`);
+  if (principalCount < 0 || principalCount > 100_000) throw new Error(`${path}.principal_count is out of bounds`);
+  return {
+    ownership: enumValue(value.ownership, `${path}.ownership`, ["member", "binding", "policy"]),
+    target: nonEmptyString(value.target, `${path}.target`),
+    ...(role ? { role } : {}),
+    ...(conditionTitle ? { condition_title: conditionTitle } : {}),
+    principal_count: principalCount,
   };
 }
 

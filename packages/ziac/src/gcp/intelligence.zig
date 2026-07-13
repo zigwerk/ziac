@@ -7,6 +7,52 @@ pub const RpcUsage = struct {
     method: []const u8,
 };
 
+pub const PermissionAudience = enum { deployer, runtime };
+
+pub const PermissionRequirement = struct {
+    audience: PermissionAudience,
+    permission: []const u8,
+    resource_id: []const u8,
+    operation: []const u8,
+};
+
+pub const PermissionPlan = struct {
+    entries: []PermissionRequirement,
+    deployer_permissions: []const []const u8,
+    runtime_permissions: []const []const u8,
+
+    pub fn deinit(self: *PermissionPlan, allocator: std.mem.Allocator) void {
+        for (self.entries) |entry| {
+            allocator.free(entry.permission);
+            allocator.free(entry.resource_id);
+            allocator.free(entry.operation);
+        }
+        allocator.free(self.entries);
+        freeStrings(allocator, self.deployer_permissions);
+        freeStrings(allocator, self.runtime_permissions);
+        self.* = undefined;
+    }
+
+    pub fn hasPermission(self: PermissionPlan, audience: PermissionAudience, permission: []const u8) bool {
+        return contains(switch (audience) {
+            .deployer => self.deployer_permissions,
+            .runtime => self.runtime_permissions,
+        }, permission);
+    }
+};
+
+pub const CustomRoleProposal = struct {
+    role_id: []const u8,
+    audience: PermissionAudience,
+    permissions: []const []const u8,
+
+    pub fn deinit(self: *CustomRoleProposal, allocator: std.mem.Allocator) void {
+        allocator.free(self.role_id);
+        freeStrings(allocator, self.permissions);
+        self.* = undefined;
+    }
+};
+
 pub const Requirements = struct {
     apis: []const []const u8,
     methods: []const []const u8,
@@ -56,12 +102,65 @@ pub fn synthesizeGraph(allocator: std.mem.Allocator, graph: *const resource.Reso
     return synthesize(allocator, usages.items);
 }
 
+pub fn synthesizePermissionPlan(
+    allocator: std.mem.Allocator,
+    graph: *const resource.ResourceGraph,
+) std.mem.Allocator.Error!PermissionPlan {
+    var entries: std.ArrayList(PermissionRequirement) = .empty;
+    errdefer deinitPermissionEntries(allocator, &entries);
+    var deployer: std.ArrayList([]const u8) = .empty;
+    errdefer deinitList(allocator, &deployer);
+    var runtime: std.ArrayList([]const u8) = .empty;
+    errdefer deinitList(allocator, &runtime);
+    for (graph.resources.items) |node| {
+        for (rpcUsagesForType(node.type_name)) |usage| {
+            const permission = permissionForMethod(usage.method) orelse continue;
+            try appendPermissionEntry(allocator, &entries, .deployer, permission, node.id, usage.method);
+            try appendUnique(allocator, &deployer, permission);
+        }
+        if (inputString(node, "role")) |role| if (permissionForRuntimeRole(role)) |permission| {
+            try appendPermissionEntry(allocator, &entries, .runtime, permission, node.id, role);
+            try appendUnique(allocator, &runtime, permission);
+        };
+    }
+    std.mem.sort([]const u8, deployer.items, {}, lessThan);
+    std.mem.sort([]const u8, runtime.items, {}, lessThan);
+    std.mem.sort(PermissionRequirement, entries.items, {}, lessThanPermissionRequirement);
+    const owned_entries = try entries.toOwnedSlice(allocator);
+    errdefer freePermissionEntries(allocator, owned_entries);
+    const owned_deployer = try deployer.toOwnedSlice(allocator);
+    errdefer freeStrings(allocator, owned_deployer);
+    const owned_runtime = try runtime.toOwnedSlice(allocator);
+    return .{
+        .entries = owned_entries,
+        .deployer_permissions = owned_deployer,
+        .runtime_permissions = owned_runtime,
+    };
+}
+
+pub fn proposeCustomRole(
+    allocator: std.mem.Allocator,
+    permission_plan: PermissionPlan,
+    audience: PermissionAudience,
+    role_id: []const u8,
+) std.mem.Allocator.Error!CustomRoleProposal {
+    return .{
+        .role_id = try allocator.dupe(u8, role_id),
+        .audience = audience,
+        .permissions = try dupeStrings(allocator, switch (audience) {
+            .deployer => permission_plan.deployer_permissions,
+            .runtime => permission_plan.runtime_permissions,
+        }),
+    };
+}
+
 pub const FindingKind = enum {
     api_disabled,
     permission_denied,
     billing_disabled,
     region_unavailable,
     quota_insufficient,
+    service_agent_missing,
     org_policy_denied,
     vpc_service_controls_denied,
 };
@@ -77,6 +176,8 @@ pub const PreflightInventory = struct {
     billing_enabled: bool = false,
     available_regions: []const []const u8 = &.{},
     requested_regions: []const []const u8 = &.{},
+    required_service_agents: []const []const u8 = &.{},
+    available_service_agents: []const []const u8 = &.{},
     quota_sufficient: bool = true,
     org_policy_allows: bool = true,
     vpc_service_controls_allows: bool = true,
@@ -114,6 +215,9 @@ pub fn evaluatePreflight(
     if (!inventory.billing_enabled) try appendFinding(allocator, &findings, .billing_disabled, "billing");
     for (inventory.requested_regions) |region| if (!contains(inventory.available_regions, region)) {
         try appendFinding(allocator, &findings, .region_unavailable, region);
+    };
+    for (inventory.required_service_agents) |agent| if (!contains(inventory.available_service_agents, agent)) {
+        try appendFinding(allocator, &findings, .service_agent_missing, agent);
     };
     if (!inventory.quota_sufficient) try appendFinding(allocator, &findings, .quota_insufficient, "quota");
     if (!inventory.org_policy_allows) try appendFinding(allocator, &findings, .org_policy_denied, "org-policy");
@@ -238,6 +342,15 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "WorkerPools.ListWorkerPools", .permission = "run.workerpools.list" },
         .{ .suffix = "WorkerPools.UpdateWorkerPool", .permission = "run.workerpools.update" },
         .{ .suffix = "WorkerPools.DeleteWorkerPool", .permission = "run.workerpools.delete" },
+        .{ .suffix = "Buckets.GetBucket", .permission = "storage.buckets.get" },
+        .{ .suffix = "Buckets.CreateBucket", .permission = "storage.buckets.create" },
+        .{ .suffix = "Buckets.UpdateBucket", .permission = "storage.buckets.update" },
+        .{ .suffix = "Buckets.DeleteBucket", .permission = "storage.buckets.delete" },
+        .{ .suffix = "Buckets.GetIamPolicy", .permission = "storage.buckets.getIamPolicy" },
+        .{ .suffix = "Buckets.SetIamPolicy", .permission = "storage.buckets.setIamPolicy" },
+        .{ .suffix = "Objects.GetObject", .permission = "storage.objects.get" },
+        .{ .suffix = "Objects.CreateObject", .permission = "storage.objects.create" },
+        .{ .suffix = "Objects.DeleteObject", .permission = "storage.objects.delete" },
         .{ .suffix = "Publisher.GetTopic", .permission = "pubsub.topics.get" },
         .{ .suffix = "Publisher.CreateTopic", .permission = "pubsub.topics.create" },
         .{ .suffix = "Publisher.UpdateTopic", .permission = "pubsub.topics.update" },
@@ -277,6 +390,26 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "IAM.CreateServiceAccount", .permission = "iam.serviceAccounts.create" },
         .{ .suffix = "IAM.PatchServiceAccount", .permission = "iam.serviceAccounts.update" },
         .{ .suffix = "IAM.DeleteServiceAccount", .permission = "iam.serviceAccounts.delete" },
+        .{ .suffix = "Projects.GetIamPolicy", .permission = "resourcemanager.projects.getIamPolicy" },
+        .{ .suffix = "Projects.SetIamPolicy", .permission = "resourcemanager.projects.setIamPolicy" },
+        .{ .suffix = "Folders.GetIamPolicy", .permission = "resourcemanager.folders.getIamPolicy" },
+        .{ .suffix = "Folders.SetIamPolicy", .permission = "resourcemanager.folders.setIamPolicy" },
+        .{ .suffix = "Organizations.GetIamPolicy", .permission = "resourcemanager.organizations.getIamPolicy" },
+        .{ .suffix = "Organizations.SetIamPolicy", .permission = "resourcemanager.organizations.setIamPolicy" },
+        .{ .suffix = "ServiceAccounts.GetIamPolicy", .permission = "iam.serviceAccounts.getIamPolicy" },
+        .{ .suffix = "ServiceAccounts.SetIamPolicy", .permission = "iam.serviceAccounts.setIamPolicy" },
+        .{ .suffix = "Roles.GetRole", .permission = "iam.roles.get" },
+        .{ .suffix = "Roles.CreateRole", .permission = "iam.roles.create" },
+        .{ .suffix = "Roles.UpdateRole", .permission = "iam.roles.update" },
+        .{ .suffix = "Roles.DeleteRole", .permission = "iam.roles.delete" },
+        .{ .suffix = "WorkloadIdentityPools.GetWorkloadIdentityPool", .permission = "iam.workloadIdentityPools.get" },
+        .{ .suffix = "WorkloadIdentityPools.CreateWorkloadIdentityPool", .permission = "iam.workloadIdentityPools.create" },
+        .{ .suffix = "WorkloadIdentityPools.UpdateWorkloadIdentityPool", .permission = "iam.workloadIdentityPools.update" },
+        .{ .suffix = "WorkloadIdentityPools.DeleteWorkloadIdentityPool", .permission = "iam.workloadIdentityPools.delete" },
+        .{ .suffix = "WorkloadIdentityPoolProviders.GetWorkloadIdentityPoolProvider", .permission = "iam.workloadIdentityPoolProviders.get" },
+        .{ .suffix = "WorkloadIdentityPoolProviders.CreateWorkloadIdentityPoolProvider", .permission = "iam.workloadIdentityPoolProviders.create" },
+        .{ .suffix = "WorkloadIdentityPoolProviders.UpdateWorkloadIdentityPoolProvider", .permission = "iam.workloadIdentityPoolProviders.update" },
+        .{ .suffix = "WorkloadIdentityPoolProviders.DeleteWorkloadIdentityPoolProvider", .permission = "iam.workloadIdentityPoolProviders.delete" },
         .{ .suffix = "backendServices.insert", .permission = "compute.backendServices.create" },
         .{ .suffix = "backendServices.get", .permission = "compute.backendServices.get" },
         .{ .suffix = "networkEndpointGroups.insert", .permission = "compute.networkEndpointGroups.create" },
@@ -323,11 +456,60 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.WorkerPools.DeleteWorkerPool" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
     };
+    const storage_bucket = [_]RpcUsage{
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Buckets.GetBucket" },
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Buckets.CreateBucket" },
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Buckets.UpdateBucket" },
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Buckets.DeleteBucket" },
+    };
+    const storage_bucket_iam = [_]RpcUsage{
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Buckets.GetIamPolicy" },
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Buckets.SetIamPolicy" },
+    };
+    const storage_object = [_]RpcUsage{
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Objects.GetObject" },
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Objects.CreateObject" },
+        .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Objects.DeleteObject" },
+    };
     const iam_service_account = [_]RpcUsage{
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.GetServiceAccount" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.CreateServiceAccount" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.PatchServiceAccount" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.DeleteServiceAccount" },
+    };
+    const project_iam = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Projects.GetIamPolicy" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Projects.SetIamPolicy" },
+    };
+    const folder_iam = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Folders.GetIamPolicy" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Folders.SetIamPolicy" },
+    };
+    const organization_iam = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Organizations.GetIamPolicy" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Organizations.SetIamPolicy" },
+    };
+    const service_account_iam = [_]RpcUsage{
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.GetIamPolicy" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.SetIamPolicy" },
+    };
+    const custom_role = [_]RpcUsage{
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.Roles.GetRole" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.Roles.CreateRole" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.Roles.UpdateRole" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.Roles.DeleteRole" },
+    };
+    const workload_identity_pool = [_]RpcUsage{
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.WorkloadIdentityPools.GetWorkloadIdentityPool" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.WorkloadIdentityPools.CreateWorkloadIdentityPool" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.WorkloadIdentityPools.UpdateWorkloadIdentityPool" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.WorkloadIdentityPools.DeleteWorkloadIdentityPool" },
+    };
+    const workload_identity_pool_provider = [_]RpcUsage{
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.WorkloadIdentityPoolProviders.GetWorkloadIdentityPoolProvider" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.WorkloadIdentityPoolProviders.CreateWorkloadIdentityPoolProvider" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.WorkloadIdentityPoolProviders.UpdateWorkloadIdentityPoolProvider" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.WorkloadIdentityPoolProviders.DeleteWorkloadIdentityPoolProvider" },
     };
     const pubsub_topic = [_]RpcUsage{
         .{ .service = "pubsub.googleapis.com", .method = "google.pubsub.v1.Publisher.GetTopic" },
@@ -404,7 +586,20 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.run.Job")) return &run_job;
     if (std.mem.eql(u8, type_name, "gcp.run.JobIamMember")) return &run_job_iam;
     if (std.mem.eql(u8, type_name, "gcp.run.WorkerPool")) return &run_worker_pool;
+    if (std.mem.eql(u8, type_name, "gcp.storage.Bucket")) return &storage_bucket;
+    if (std.mem.eql(u8, type_name, "gcp.storage.BucketIamMember")) return &storage_bucket_iam;
+    if (std.mem.eql(u8, type_name, "gcp.storage.Object")) return &storage_object;
     if (std.mem.eql(u8, type_name, "gcp.iam.ServiceAccount")) return &iam_service_account;
+    if (std.mem.startsWith(u8, type_name, "gcp.iam.Project") and
+        !std.mem.eql(u8, type_name, "gcp.iam.ProjectCustomRole")) return &project_iam;
+    if (std.mem.startsWith(u8, type_name, "gcp.iam.Folder")) return &folder_iam;
+    if (std.mem.startsWith(u8, type_name, "gcp.iam.Organization") and
+        !std.mem.eql(u8, type_name, "gcp.iam.OrganizationCustomRole")) return &organization_iam;
+    if (std.mem.startsWith(u8, type_name, "gcp.iam.ServiceAccountIam")) return &service_account_iam;
+    if (std.mem.eql(u8, type_name, "gcp.iam.ProjectCustomRole") or
+        std.mem.eql(u8, type_name, "gcp.iam.OrganizationCustomRole")) return &custom_role;
+    if (std.mem.eql(u8, type_name, "gcp.iam.WorkloadIdentityPool")) return &workload_identity_pool;
+    if (std.mem.eql(u8, type_name, "gcp.iam.WorkloadIdentityPoolProvider")) return &workload_identity_pool_provider;
     if (std.mem.eql(u8, type_name, "gcp.pubsub.Topic")) return &pubsub_topic;
     if (std.mem.eql(u8, type_name, "gcp.pubsub.TopicIamMember")) return &pubsub_topic_iam;
     if (std.mem.eql(u8, type_name, "gcp.pubsub.Subscription")) return &pubsub_subscription;
@@ -420,6 +615,93 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.startsWith(u8, type_name, "gcp.compute.")) return &compute_generic;
     if (std.mem.eql(u8, type_name, "gcp.dns.RecordSet")) return &dns;
     return &.{};
+}
+
+fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
+    const mappings = [_]struct { role: []const u8, permission: []const u8 }{
+        .{ .role = "roles/artifactregistry.reader", .permission = "artifactregistry.repositories.downloadArtifacts" },
+        .{ .role = "roles/cloudtasks.enqueuer", .permission = "cloudtasks.tasks.create" },
+        .{ .role = "roles/iam.workloadIdentityUser", .permission = "iam.serviceAccounts.getAccessToken" },
+        .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },
+        .{ .role = "roles/pubsub.subscriber", .permission = "pubsub.subscriptions.consume" },
+        .{ .role = "roles/run.invoker", .permission = "run.routes.invoke" },
+        .{ .role = "roles/secretmanager.secretAccessor", .permission = "secretmanager.versions.access" },
+        .{ .role = "roles/storage.objectCreator", .permission = "storage.objects.create" },
+        .{ .role = "roles/storage.objectUser", .permission = "storage.objects.create" },
+        .{ .role = "roles/storage.objectViewer", .permission = "storage.objects.get" },
+    };
+    for (mappings) |mapping| if (std.mem.eql(u8, mapping.role, role)) return mapping.permission;
+    return null;
+}
+
+fn inputString(node: resource.ResourceNode, name: []const u8) ?[]const u8 {
+    const fields = switch (node.inputs) {
+        .object => |items| items,
+        else => return null,
+    };
+    for (fields) |field| {
+        if (!std.mem.eql(u8, field.name, name)) continue;
+        return switch (field.value) {
+            .string => |text| text,
+            else => null,
+        };
+    }
+    return null;
+}
+
+fn appendPermissionEntry(
+    allocator: std.mem.Allocator,
+    entries: *std.ArrayList(PermissionRequirement),
+    audience: PermissionAudience,
+    permission: []const u8,
+    resource_id: []const u8,
+    operation: []const u8,
+) std.mem.Allocator.Error!void {
+    for (entries.items) |entry| {
+        if (entry.audience == audience and
+            std.mem.eql(u8, entry.permission, permission) and
+            std.mem.eql(u8, entry.resource_id, resource_id) and
+            std.mem.eql(u8, entry.operation, operation)) return;
+    }
+    const owned_permission = try allocator.dupe(u8, permission);
+    errdefer allocator.free(owned_permission);
+    const owned_resource = try allocator.dupe(u8, resource_id);
+    errdefer allocator.free(owned_resource);
+    const owned_operation = try allocator.dupe(u8, operation);
+    errdefer allocator.free(owned_operation);
+    try entries.append(allocator, .{
+        .audience = audience,
+        .permission = owned_permission,
+        .resource_id = owned_resource,
+        .operation = owned_operation,
+    });
+}
+
+fn lessThanPermissionRequirement(_: void, left: PermissionRequirement, right: PermissionRequirement) bool {
+    if (left.audience != right.audience) return @intFromEnum(left.audience) < @intFromEnum(right.audience);
+    const permission = std.mem.order(u8, left.permission, right.permission);
+    if (permission != .eq) return permission == .lt;
+    const resource_id = std.mem.order(u8, left.resource_id, right.resource_id);
+    if (resource_id != .eq) return resource_id == .lt;
+    return std.mem.lessThan(u8, left.operation, right.operation);
+}
+
+fn deinitPermissionEntries(allocator: std.mem.Allocator, entries: *std.ArrayList(PermissionRequirement)) void {
+    for (entries.items) |entry| {
+        allocator.free(entry.permission);
+        allocator.free(entry.resource_id);
+        allocator.free(entry.operation);
+    }
+    entries.deinit(allocator);
+}
+
+fn freePermissionEntries(allocator: std.mem.Allocator, entries: []PermissionRequirement) void {
+    for (entries) |entry| {
+        allocator.free(entry.permission);
+        allocator.free(entry.resource_id);
+        allocator.free(entry.operation);
+    }
+    allocator.free(entries);
 }
 
 fn appendFinding(allocator: std.mem.Allocator, findings: *std.ArrayList(Finding), kind: FindingKind, subject: []const u8) !void {

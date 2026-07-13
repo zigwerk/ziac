@@ -690,7 +690,7 @@ or observed Cloud Asset kind alone does not count as provider coverage.
 
 M56 is complete. The installed `ziac provider resources` command introduced the
 versioned managed catalog and visible planned surface as deterministic JSON or
-Markdown. It now reports 48 managed types, with service filtering,
+Markdown. After M61 it reports 62 managed types, with service filtering,
 bidirectional dispatcher parity, pinned proto/Discovery provenance and semantic
 upgrade-diff artifacts. Generated skills point agents at the same installed
 reference.
@@ -740,3 +740,43 @@ The M60 local Testing v2 gate is complete with 564 discovered/executed tests,
 563 passed, one credential-gated skip, and zero failures, pending tests, leaks
 or logged errors. Dashboard tests, typecheck, production build and the Testing
 v2 migration guard also pass.
+
+M61 is locally complete and awaiting authenticated project, folder and
+organization qualification. Project, folder and organization
+member/binding/policy families, service-account IAM, custom roles and Workload
+Identity Federation pools and OIDC providers now have typed declarations,
+normalized import and conflict-safe lifecycles. Member, binding and policy
+ownership cannot overlap in one graph. Conditional policy uses version 3 and
+bounded etag retries; unrelated concurrent edits survive deterministic mutation
+tests. Soft-deleted roles and federation resources recover through Google's
+native undelete flow before reconciliation.
+
+Permission intelligence separates deployer and runtime authority with resource
+and operation provenance, emits custom-role proposals and calls native
+`testIamPermissions` endpoints. Cloud Asset discovery maps IAM identities to the
+same managed physical IDs. The workbench renders ownership, conditions, blast
+radius and permission-bearing IAM edges. See `docs/gcp-iam.md`.
+
+The M61 local Testing v2 gate is complete with 585 discovered and executed
+tests, 584 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. The provider catalog reports 62 managed resources.
+
+M62 is locally complete and awaiting the disposable-project service exercise.
+`ziac.gcp.ApplicationPlatform` now composes a private Cloud Run API, upload
+bucket, Pub/Sub push/dead-letter path, Cloud Tasks queue, Eventarc trigger,
+scheduled Job, Worker Pool and dedicated identities into one deterministic
+graph. A valid application binding fixture proves the compile-time boundary.
+The integrated lifecycle test applies the graph, imports every resource into an
+empty second state, refreshes to a no-op plan and destroys under explicit
+authority while retained resources remain present at the provider boundary.
+
+Visual artifacts attach configuration-estimate provenance and IAM permission
+edges without implying billing-export data. The local qualification receipt is
+always unauthenticated. `scripts/qualify-application-platform.sh` separately
+requires ADC, an immutable image and a project ending in `-ziac-disposable`, and
+otherwise emits a structured skip. See `docs/gcp-application-platform.md`.
+
+The M62 local Testing v2 gate is complete with 588 discovered and executed
+tests, 587 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. All public examples compile, including the integrated
+application-platform example.
