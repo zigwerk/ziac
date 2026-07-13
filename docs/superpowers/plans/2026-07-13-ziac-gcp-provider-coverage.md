@@ -48,19 +48,19 @@ fails when implementation, documentation and catalog disagree.
 - [x] Add typed `Bucket` arguments and outputs.
 - [x] Validate bucket names, location, storage class, retention, soft-delete,
   single delete TTL and KMS key names.
-- [ ] Add typed multi-rule lifecycle transitions and CORS policy.
+- [x] Add typed multi-rule lifecycle transitions and CORS policy.
 - [x] Keep identity fields immutable and ordinary policy fields updateable.
 - [x] Add explicit retain/delete lifecycle choices; default to retained.
 - [x] Add additive `BucketIamMember` without IAM conditions in the first slice.
-- [ ] Add optional IAM conditions to `BucketIamMember`.
-- [ ] Add a general immutable/uploaded `Object` after bucket lifecycle closure.
+- [x] Add optional IAM conditions to `BucketIamMember`.
+- [x] Add a general immutable/uploaded `Object` after bucket lifecycle closure.
 
 ### Live provider
 
 - [x] Create/read/update/delete general buckets through Cloud Storage JSON API.
 - [x] Normalize location casing and managed server defaults.
 - [x] Use metageneration preconditions for mutable bucket changes.
-- [ ] Fail deletion of non-empty buckets without force-cleanup authority.
+- [x] Fail deletion of non-empty buckets without force-cleanup authority.
 - [x] Implement import from `buckets/<name>` and `gs://<name>`.
 - [x] Implement etag-safe additive IAM policy updates without owning unrelated
   bindings or members.
@@ -68,12 +68,12 @@ fails when implementation, documentation and catalog disagree.
 
 ### Product integration
 
-- [ ] Map managed/observed bucket identities in estate reconciliation.
-- [ ] Add storage-class, region, retention, soft-delete and IAM details to the
+- [x] Map managed/observed bucket identities in estate reconciliation.
+- [x] Add storage-class, region, retention, soft-delete and IAM details to the
   visual artifact and inspector.
-- [ ] Add configuration-based storage/operations/egress cost assumptions.
-- [ ] Generate official-doc references and agent examples.
-- [ ] Add `AssetBucket`, `UploadBucket` and `StaticAssetBucket` components.
+- [x] Add configuration-based storage/operations/egress cost assumptions.
+- [x] Generate official-doc references and agent examples.
+- [x] Add `AssetBucket`, `UploadBucket` and `StaticAssetBucket` components.
 - [ ] Run authenticated create/update/import/no-op/delete qualification.
 
 Gate: a user can manage a normal application bucket and additive access policy

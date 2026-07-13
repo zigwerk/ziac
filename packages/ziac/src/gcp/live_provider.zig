@@ -60,6 +60,7 @@ pub const managed_type_names = [_][]const u8{
     "gcp.storage.Bucket",
     "gcp.storage.BucketIamMember",
     "gcp.storage.BuildBucket",
+    "gcp.storage.Object",
     "gcp.storage.SourceObject",
 };
 

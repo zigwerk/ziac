@@ -14,6 +14,7 @@ pub const ProviderError = error{
     ProviderCancelled,
     RemoteOperationFailed,
     DestructiveConfirmationRequired,
+    ResourceNotEmpty,
     ProviderBug,
     OutOfMemory,
 };
@@ -47,6 +48,7 @@ pub fn category(err: ProviderError) Category {
         error.ProviderCancelled => .cancelled,
         error.RemoteOperationFailed => .remote_operation,
         error.DestructiveConfirmationRequired => .invalid_configuration,
+        error.ResourceNotEmpty => .conflict,
         error.ProviderBug, error.OutOfMemory => .provider_bug,
     };
 }

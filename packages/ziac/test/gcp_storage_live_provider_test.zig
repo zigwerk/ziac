@@ -97,6 +97,145 @@ test "live GCP provider preserves unrelated bucket IAM members" {
     try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[6].body, "serviceAccount:api@ziac-dev.iam.gserviceaccount.com") == null);
 }
 
+test "live GCP provider serializes and normalizes multi-rule lifecycle and CORS" {
+    const advanced_json =
+        "{\"id\":\"ziac-user-assets\",\"name\":\"ziac-user-assets\",\"selfLink\":\"https://storage.googleapis.com/storage/v1/b/ziac-user-assets\",\"location\":\"EU\",\"storageClass\":\"STANDARD\",\"metageneration\":\"7\",\"iamConfiguration\":{\"uniformBucketLevelAccess\":{\"enabled\":true},\"publicAccessPrevention\":\"enforced\"},\"versioning\":{\"enabled\":true},\"softDeletePolicy\":{\"retentionDurationSeconds\":\"604800\"},\"lifecycle\":{\"rule\":[{\"action\":{\"type\":\"SetStorageClass\",\"storageClass\":\"NEARLINE\"},\"condition\":{\"age\":30,\"matchesPrefix\":[\"archive/\"],\"matchesStorageClass\":[\"STANDARD\"]}},{\"action\":{\"type\":\"Delete\"},\"condition\":{\"daysSinceNoncurrentTime\":14,\"isLive\":false,\"numNewerVersions\":2}}]},\"cors\":[{\"origin\":[\"https://app.example.com\"],\"method\":[\"GET\",\"HEAD\",\"PUT\"],\"responseHeader\":[\"content-type\"],\"maxAgeSeconds\":3600}],\"labels\":{}}";
+    const responses = [_]zstd.Http.Response{
+        notFound(),
+        .{ .status = 200, .body = advanced_json },
+        .{ .status = 200, .body = advanced_json },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var bucket = try advancedBucket();
+    defer bucket.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var absent = try live.readWithContext(&context, bucket.node);
+    defer absent.deinit();
+    var created = try live.createWithContext(&context, bucket.node);
+    defer created.deinit();
+    var present = try live.readWithContext(&context, bucket.node);
+    defer present.deinit();
+    var diff = try live.diffWithContext(&context, bucket.node, &present.present);
+    defer diff.deinit();
+    try std.testing.expectEqual(ziac.provider.DiffKind.noop, diff.kind);
+    const body = harness.transport.requests.items[1].body;
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"type\":\"SetStorageClass\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"matchesPrefix\":[\"archive/\"]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"daysSinceNoncurrentTime\":14") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"cors\":[{\"maxAgeSeconds\":3600") != null);
+}
+
+test "live GCP provider owns only the exact conditional bucket IAM member" {
+    const before = "{\"version\":3,\"etag\":\"BwA=\",\"bindings\":[{\"role\":\"roles/storage.objectCreator\",\"members\":[\"user:owner@example.com\"]},{\"role\":\"roles/storage.objectCreator\",\"members\":[\"serviceAccount:other@ziac-dev.iam.gserviceaccount.com\"],\"condition\":{\"title\":\"other-window\",\"description\":\"Other\",\"expression\":\"request.time < timestamp('2028-01-01T00:00:00Z')\"}}]}";
+    const with_target = "{\"version\":3,\"etag\":\"BwB=\",\"bindings\":[{\"role\":\"roles/storage.objectCreator\",\"members\":[\"user:owner@example.com\"]},{\"role\":\"roles/storage.objectCreator\",\"members\":[\"serviceAccount:other@ziac-dev.iam.gserviceaccount.com\"],\"condition\":{\"title\":\"other-window\",\"description\":\"Other\",\"expression\":\"request.time < timestamp('2028-01-01T00:00:00Z')\"}},{\"role\":\"roles/storage.objectCreator\",\"members\":[\"serviceAccount:uploader@ziac-dev.iam.gserviceaccount.com\"],\"condition\":{\"title\":\"upload-window\",\"description\":\"Temporary upload authority\",\"expression\":\"request.time < timestamp('2027-01-01T00:00:00Z')\"}}]}";
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = before },
+        .{ .status = 200, .body = with_target },
+        .{ .status = 200, .body = with_target },
+        .{ .status = 200, .body = before },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var member = try conditionalBucketIamMember();
+    defer member.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var created = try live.createWithContext(&context, member.node);
+    defer created.deinit();
+    try live.deleteWithContext(&context, member.node, created.physical_id);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[1].body, "\"version\":3") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[1].body, "\"title\":\"upload-window\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[1].body, "other-window") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[3].body, "upload-window") == null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[3].body, "other-window") != null);
+}
+
+test "live GCP provider uploads imports and generation-deletes a general object" {
+    const payload = "hello from Ziac";
+    const object_integrity = ziac.gcp.storage.integrity(payload);
+    const object_json = try generalObjectJsonAlloc(std.testing.allocator, object_integrity, "42");
+    defer std.testing.allocator.free(object_json);
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = object_json },
+        .{ .status = 200, .body = object_json },
+        .{ .status = 200, .body = object_json },
+        .{ .status = 204, .body = "" },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var source = FixedPayloadSource{ .bytes = payload, .expected_path = "site/index.html" };
+    harness.live.payload_source = source.payloadSource();
+    var object = try generalObject(object_integrity);
+    defer object.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var created = try live.createWithContext(&context, object.node);
+    defer created.deinit();
+    try std.testing.expectEqualStrings("gs://ziac-user-assets/public/index.html#42", created.physical_id);
+    var read = try live.readWithContext(&context, object.node);
+    defer read.deinit();
+    var imported = try live.importWithContext(&context, object.node, created.physical_id);
+    defer imported.deinit();
+    try live.deleteWithContext(&context, object.node, created.physical_id);
+    try std.testing.expectEqualStrings("text/html; charset=utf-8", harness.transport.requests.items[0].content_type.?);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].url, "ifGenerationMatch=0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[3].url, "generation=42") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[3].url, "ifGenerationMatch=42") != null);
+}
+
+test "live GCP provider requires explicit authority before cleaning a non-empty bucket" {
+    const non_empty = "{\"items\":[{\"name\":\"a.txt\",\"generation\":\"1\"},{\"name\":\"archive/b.txt\",\"generation\":\"2\"}]}";
+    var ordinary_harness: Harness = undefined;
+    ordinary_harness.init(&.{conflict()});
+    defer ordinary_harness.deinit();
+    var ordinary = try generalBucketWithoutRetention(30);
+    defer ordinary.deinit(std.testing.allocator);
+    var ordinary_context = ziac.provider.OperationContext.init(std.testing.allocator);
+    try std.testing.expectError(error.ResourceNotEmpty, ordinary_harness.live.provider().deleteWithContext(
+        &ordinary_context,
+        ordinary.node,
+        "buckets/ziac-user-uploads",
+    ));
+
+    var guarded_harness: Harness = undefined;
+    guarded_harness.init(&.{});
+    defer guarded_harness.deinit();
+    var forced = try forceDestroyBucket();
+    defer forced.deinit(std.testing.allocator);
+    var guarded_context = ziac.provider.OperationContext.init(std.testing.allocator);
+    try std.testing.expectError(error.DestructiveConfirmationRequired, guarded_harness.live.provider().deleteWithContext(
+        &guarded_context,
+        forced.node,
+        "buckets/ziac-user-uploads",
+    ));
+    try std.testing.expectEqual(@as(usize, 0), guarded_harness.transport.requests.items.len);
+
+    const cleanup_responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = non_empty },
+        .{ .status = 204, .body = "" },
+        .{ .status = 204, .body = "" },
+        .{ .status = 204, .body = "" },
+    };
+    var cleanup_harness: Harness = undefined;
+    cleanup_harness.init(&cleanup_responses);
+    defer cleanup_harness.deinit();
+    var cleanup_context = ziac.provider.OperationContext.init(std.testing.allocator);
+    cleanup_context.destructive_confirmation = true;
+    try cleanup_harness.live.provider().deleteWithContext(&cleanup_context, forced.node, "buckets/ziac-user-uploads");
+    try std.testing.expect(std.mem.indexOf(u8, cleanup_harness.transport.requests.items[0].url, "versions=true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, cleanup_harness.transport.requests.items[1].url, "a.txt?generation=1&ifGenerationMatch=1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, cleanup_harness.transport.requests.items[2].url, "archive%2Fb.txt?generation=2&ifGenerationMatch=2") != null);
+    try std.testing.expect(std.mem.endsWith(u8, cleanup_harness.transport.requests.items[3].url, "/storage/v1/b/ziac-user-uploads"));
+}
+
 test "live GCP provider manages a protected retained build bucket" {
     const responses = [_]zstd.Http.Response{
         notFound(),
@@ -344,6 +483,7 @@ const FixedTokenSource = struct {
 
 const FixedPayloadSource = struct {
     bytes: []const u8,
+    expected_path: []const u8 = ".ziac/build/api.tar.gz",
     resolves: usize = 0,
     deinits: usize = 0,
 
@@ -358,7 +498,7 @@ const FixedPayloadSource = struct {
         source_path: []const u8,
     ) ziac.provider.ProviderError!storage_provider.Payload {
         const self: *FixedPayloadSource = @ptrCast(@alignCast(raw));
-        if (!std.mem.eql(u8, source_path, ".ziac/build/api.tar.gz")) return error.NotFound;
+        if (!std.mem.eql(u8, source_path, self.expected_path)) return error.NotFound;
         self.resolves += 1;
         return storage_provider.Payload.initOwned(allocator, self.bytes, .{
             .ptr = self,
@@ -408,6 +548,28 @@ fn generalBucketWithoutRetention(delete_after_days: u32) !ziac.gcp.storage.Bucke
     });
 }
 
+fn advancedBucket() !ziac.gcp.storage.Bucket {
+    return ziac.gcp.storage.Bucket.build(std.testing.allocator, config(), .{
+        .name = "ziac-user-assets",
+        .location = "EU",
+        .versioning = true,
+        .lifecycle_rules = &.{
+            .{ .action = .{ .set_storage_class = .nearline }, .condition = .{ .age_days = 30, .matches_prefixes = &.{"archive/"}, .matches_storage_classes = &.{.standard} } },
+            .{ .action = .delete, .condition = .{ .days_since_noncurrent_time = 14, .is_live = false, .num_newer_versions = 2 } },
+        },
+        .cors = &.{.{ .origins = &.{"https://app.example.com"}, .methods = &.{ .get, .head, .put }, .response_headers = &.{"content-type"}, .max_age_seconds = 3600 }},
+    });
+}
+
+fn forceDestroyBucket() !ziac.gcp.storage.Bucket {
+    return ziac.gcp.storage.Bucket.build(std.testing.allocator, config(), .{
+        .name = "ziac-user-uploads",
+        .location = "EU",
+        .force_destroy = true,
+        .retain_on_delete = false,
+    });
+}
+
 fn bucketIamMember() !ziac.gcp.storage.BucketIamMember {
     return ziac.gcp.storage.BucketIamMember.build(std.testing.allocator, config(), .{
         .name = "api-object-viewer",
@@ -415,6 +577,42 @@ fn bucketIamMember() !ziac.gcp.storage.BucketIamMember {
         .role = "roles/storage.objectViewer",
         .member = "serviceAccount:api@ziac-dev.iam.gserviceaccount.com",
     });
+}
+
+fn conditionalBucketIamMember() !ziac.gcp.storage.BucketIamMember {
+    return ziac.gcp.storage.BucketIamMember.build(std.testing.allocator, config(), .{
+        .name = "temporary-uploader",
+        .bucket = .{ .value = "ziac-user-uploads" },
+        .role = "roles/storage.objectCreator",
+        .member = "serviceAccount:uploader@ziac-dev.iam.gserviceaccount.com",
+        .condition = .{
+            .title = "upload-window",
+            .description = "Temporary upload authority",
+            .expression = "request.time < timestamp('2027-01-01T00:00:00Z')",
+        },
+    });
+}
+
+fn generalObject(object_integrity: ziac.gcp.storage.Integrity) !ziac.gcp.storage.Object {
+    return ziac.gcp.storage.Object.build(std.testing.allocator, config(), .{
+        .name = "site-index",
+        .bucket = .{ .value = "ziac-user-assets" },
+        .object_name = "public/index.html",
+        .source_path = "site/index.html",
+        .source_digest = &object_integrity.sha256,
+        .size = object_integrity.size,
+        .crc32c = &object_integrity.crc32c,
+        .content_type = "text/html; charset=utf-8",
+        .retain_on_delete = false,
+    });
+}
+
+fn generalObjectJsonAlloc(allocator: std.mem.Allocator, object_integrity: ziac.gcp.storage.Integrity, generation: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "{{\"bucket\":\"ziac-user-assets\",\"name\":\"public/index.html\",\"generation\":\"{s}\",\"size\":\"{d}\",\"crc32c\":\"{s}\",\"contentType\":\"text/html; charset=utf-8\",\"selfLink\":\"https://storage.example/object\"}}",
+        .{ generation, object_integrity.size, object_integrity.crc32c },
+    );
 }
 
 fn objectJsonAlloc(

@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 34), managed_count);
+    try std.testing.expectEqual(@as(usize, 35), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -43,6 +43,12 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     try std.testing.expectEqual(ziac.gcp.coverage.Stage.managed, bucket.stage);
     try std.testing.expectEqualStrings("M57", bucket.milestone);
     try std.testing.expect(bucket.capabilities.create);
+
+    const object = ziac.gcp.coverage.find("gcp.storage.Object") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(ziac.gcp.coverage.Stage.managed, object.stage);
+    try std.testing.expect(object.capabilities.import_resource);
+    try std.testing.expect(object.capabilities.visual);
+    try std.testing.expect(object.capabilities.cost);
 
     const topic = ziac.gcp.coverage.find("gcp.pubsub.Topic") orelse return error.TestExpectedEqual;
     try std.testing.expectEqual(ziac.gcp.coverage.Stage.planned, topic.stage);

@@ -694,8 +694,11 @@ JSON or Markdown, with service filtering, bidirectional dispatcher parity,
 pinned proto/Discovery provenance and semantic upgrade-diff artifacts. Generated
 skills point agents at the same installed reference.
 
-M57's first slice adds a general Cloud Storage bucket and additive bucket IAM
-lifecycle with metageneration-safe updates, dual-form import and unrelated-policy
-preservation. Object, CORS, multi-rule lifecycle, IAM conditions, cost, canvas,
-component and authenticated qualification work remain open. The installed
-current-state reference is `docs/gcp-provider-coverage.md`.
+M57 is locally complete and awaiting only authenticated disposable-project
+qualification. General buckets now include typed multi-rule lifecycle, CORS,
+retention, soft delete, CMEK, metageneration-safe updates, dual-form import and
+explicit guarded cleanup. Exact conditional IAM preserves unrelated policy.
+Generation-pinned immutable objects, estate identity, storage inspector facts,
+explicit capacity/operation/egress estimates and `AssetBucket`, `UploadBucket`
+and `StaticAssetBucket` components are covered by deterministic provider tests.
+The installed current-state reference is `docs/gcp-provider-coverage.md`.

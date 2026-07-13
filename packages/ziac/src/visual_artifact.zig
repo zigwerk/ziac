@@ -175,6 +175,7 @@ fn appendResource(output: *std.ArrayList(u8), allocator: std.mem.Allocator, item
     try appendStringArray(output, allocator, regions.items);
     try appendNamedString(output, allocator, "operation", if (item.operation) |kind| @tagName(kind) else "none", true);
     try appendNamedString(output, allocator, "health", "unknown", true);
+    try appendStorageDetails(output, allocator, item.node);
     try output.appendSlice(allocator, ",\"inputs\":");
     try appendSafeValue(output, allocator, item.node.inputs, null);
     try output.appendSlice(allocator, ",\"lifecycle\":{");
@@ -253,8 +254,90 @@ fn appendNodeRegions(
 }
 
 fn directRegion(node: resource.ResourceNode) ?[]const u8 {
-    const region = objectField(node.inputs, "region") orelse return null;
-    return if (region == .string) region.string else null;
+    if (objectField(node.inputs, "region")) |region| {
+        if (region == .string) return region.string;
+    }
+    if (std.mem.eql(u8, node.type_name, "gcp.storage.Bucket")) {
+        const location = objectField(node.inputs, "location") orelse return null;
+        return if (location == .string) location.string else null;
+    }
+    return null;
+}
+
+fn appendStorageDetails(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    if (!std.mem.startsWith(u8, node.type_name, "gcp.storage.")) return;
+    try output.appendSlice(allocator, ",\"storage\":{");
+    if (std.mem.eql(u8, node.type_name, "gcp.storage.Bucket")) {
+        try appendNamedString(output, allocator, "kind", "bucket", false);
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageString(output, allocator, node, "storage_class", "storage_class");
+        try appendOptionalStorageInteger(output, allocator, node, "retention_period_seconds", "retention_period_seconds");
+        try appendOptionalStorageInteger(output, allocator, node, "soft_delete_retention_seconds", "soft_delete_retention_seconds");
+        try appendOptionalStorageString(output, allocator, node, "public_access_prevention", "public_access_prevention");
+        try appendOptionalStorageBool(output, allocator, node, "uniform_bucket_level_access", "uniform_bucket_level_access");
+        try appendOptionalStorageBool(output, allocator, node, "versioning", "versioning");
+        try appendStorageListCount(output, allocator, node, "lifecycle_rules", "lifecycle_rule_count");
+        try appendStorageListCount(output, allocator, node, "cors", "cors_rule_count");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.storage.BucketIamMember")) {
+        try appendNamedString(output, allocator, "kind", "iam_member", false);
+        try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
+        try appendOptionalStorageString(output, allocator, node, "member", "iam_member");
+        try appendOptionalStorageString(output, allocator, node, "condition_title", "iam_condition_title");
+    } else {
+        try appendNamedString(output, allocator, "kind", "object", false);
+        try appendOptionalStorageString(output, allocator, node, "object_name", "object_name");
+        try appendOptionalStorageString(output, allocator, node, "content_type", "content_type");
+        try appendOptionalStorageInteger(output, allocator, node, "size", "size_bytes");
+    }
+    try output.append(allocator, '}');
+}
+
+fn appendOptionalStorageString(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    input_name: []const u8,
+    output_name: []const u8,
+) !void {
+    const input = objectField(node.inputs, input_name) orelse return;
+    if (input == .string) try appendNamedString(output, allocator, output_name, input.string, true);
+}
+
+fn appendOptionalStorageInteger(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    input_name: []const u8,
+    output_name: []const u8,
+) !void {
+    const input = objectField(node.inputs, input_name) orelse return;
+    if (input == .integer) try appendNamedUnsigned(output, allocator, output_name, input.integer, true);
+}
+
+fn appendOptionalStorageBool(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    input_name: []const u8,
+    output_name: []const u8,
+) !void {
+    const input = objectField(node.inputs, input_name) orelse return;
+    if (input == .boolean) try appendNamedBool(output, allocator, output_name, input.boolean, true);
+}
+
+fn appendStorageListCount(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    input_name: []const u8,
+    output_name: []const u8,
+) !void {
+    const input = objectField(node.inputs, input_name) orelse return;
+    if (input == .list) try appendNamedUnsigned(output, allocator, output_name, input.list.len, true);
 }
 
 fn resourceScope(node: resource.ResourceNode, regions: []const []const u8) []const u8 {

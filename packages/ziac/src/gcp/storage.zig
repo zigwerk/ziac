@@ -5,11 +5,16 @@ const resource = @import("../resource.zig");
 const value = @import("../value.zig");
 
 pub const BuildError = config_mod.ValidationError || std.mem.Allocator.Error || error{
+    ConflictingLifecyclePolicy,
     DuplicateField,
     InvalidBucket,
+    InvalidContentType,
+    InvalidCorsOrigin,
     InvalidCrc32c,
     InvalidDigest,
+    InvalidIamCondition,
     InvalidLifecycleAge,
+    InvalidLifecycleRule,
     InvalidName,
     InvalidObjectName,
     InvalidKmsKey,
@@ -70,6 +75,57 @@ pub const PublicAccessPrevention = enum {
     }
 };
 
+pub const LifecycleAction = union(enum) {
+    delete,
+    set_storage_class: StorageClass,
+    abort_incomplete_multipart_upload,
+};
+
+pub const LifecycleCondition = struct {
+    age_days: u32 = 0,
+    created_before: ?[]const u8 = null,
+    days_since_noncurrent_time: u32 = 0,
+    is_live: ?bool = null,
+    matches_prefixes: []const []const u8 = &.{},
+    matches_suffixes: []const []const u8 = &.{},
+    matches_storage_classes: []const StorageClass = &.{},
+    num_newer_versions: u32 = 0,
+};
+
+pub const LifecycleRule = struct {
+    action: LifecycleAction,
+    condition: LifecycleCondition,
+};
+
+pub const CorsMethod = enum {
+    get,
+    head,
+    put,
+    post,
+    delete,
+    options,
+    any,
+
+    pub fn apiName(self: CorsMethod) []const u8 {
+        return switch (self) {
+            .get => "GET",
+            .head => "HEAD",
+            .put => "PUT",
+            .post => "POST",
+            .delete => "DELETE",
+            .options => "OPTIONS",
+            .any => "*",
+        };
+    }
+};
+
+pub const CorsRule = struct {
+    origins: []const []const u8,
+    methods: []const CorsMethod,
+    response_headers: []const []const u8 = &.{},
+    max_age_seconds: u32 = 3600,
+};
+
 pub const BucketArgs = struct {
     name: []const u8,
     location: []const u8,
@@ -80,7 +136,10 @@ pub const BucketArgs = struct {
     soft_delete_retention_seconds: u64 = 7 * 24 * 60 * 60,
     retention_period_seconds: u64 = 0,
     delete_after_days: u32 = 0,
+    lifecycle_rules: []const LifecycleRule = &.{},
+    cors: []const CorsRule = &.{},
     default_kms_key_name: ?[]const u8 = null,
+    force_destroy: bool = false,
     retain_on_delete: bool = true,
 };
 
@@ -117,15 +176,25 @@ pub const Bucket = struct {
         if (!isValidSoftDeleteRetention(args.soft_delete_retention_seconds)) return error.InvalidSoftDeleteRetention;
         if (args.retention_period_seconds > std.math.maxInt(i64)) return error.InvalidRetention;
         if (args.delete_after_days > 36_500) return error.InvalidLifecycleAge;
+        if (args.delete_after_days > 0 and args.lifecycle_rules.len > 0) return error.ConflictingLifecyclePolicy;
+        try validateLifecycleRules(args.lifecycle_rules);
+        try validateCorsRules(args.cors);
         const kms_key_name = args.default_kms_key_name orelse "";
         if (kms_key_name.len > 0 and !isKmsKeyName(kms_key_name)) return error.InvalidKmsKey;
 
         const labels = try labelValueAlloc(allocator, provider.labels);
         defer allocator.free(labels.object);
+        var lifecycle_rules = try lifecycleRulesValueAlloc(allocator, args.lifecycle_rules);
+        defer lifecycle_rules.deinit(allocator);
+        var cors = try corsRulesValueAlloc(allocator, args.cors);
+        defer cors.deinit(allocator);
         const fields = [_]value.Field{
+            .{ .name = "cors", .value = cors },
             .{ .name = "default_kms_key_name", .value = .{ .string = kms_key_name } },
             .{ .name = "delete_after_days", .value = .{ .integer = args.delete_after_days } },
+            .{ .name = "force_destroy", .value = .{ .boolean = args.force_destroy } },
             .{ .name = "labels", .value = labels },
+            .{ .name = "lifecycle_rules", .value = lifecycle_rules },
             .{ .name = "location", .value = .{ .string = args.location } },
             .{ .name = "name", .value = .{ .string = args.name } },
             .{ .name = "project_id", .value = .{ .string = provider.project_id } },
@@ -157,11 +226,18 @@ pub const Bucket = struct {
     }
 };
 
+pub const IamCondition = struct {
+    title: []const u8,
+    description: []const u8 = "",
+    expression: []const u8,
+};
+
 pub const BucketIamMemberArgs = struct {
     name: []const u8,
     bucket: output.Output([]const u8, .public),
     role: []const u8,
     member: []const u8,
+    condition: ?IamCondition = null,
 };
 
 pub const BucketIamMember = struct {
@@ -185,9 +261,16 @@ pub const BucketIamMember = struct {
         try provider.validate();
         try validateName(args.name);
         if (!std.mem.startsWith(u8, args.role, "roles/storage.") or args.role.len <= "roles/storage.".len) return error.InvalidRole;
-        if (std.mem.indexOfScalar(u8, args.member, ':') == null) return error.InvalidMember;
+        if (!isValidIamMember(args.member)) return error.InvalidMember;
+        if (args.condition) |condition| try validateIamCondition(args.member, condition);
+        const condition_title = if (args.condition) |condition| condition.title else "";
+        const condition_description = if (args.condition) |condition| condition.description else "";
+        const condition_expression = if (args.condition) |condition| condition.expression else "";
         const fields = [_]value.Field{
             .{ .name = "bucket", .value = try bucketValue(args.bucket) },
+            .{ .name = "condition_description", .value = .{ .string = condition_description } },
+            .{ .name = "condition_expression", .value = .{ .string = condition_expression } },
+            .{ .name = "condition_title", .value = .{ .string = condition_title } },
             .{ .name = "member", .value = .{ .string = args.member } },
             .{ .name = "name", .value = .{ .string = args.name } },
             .{ .name = "project_id", .value = .{ .string = provider.project_id } },
@@ -336,6 +419,88 @@ pub const SourceObject = struct {
     }
 };
 
+pub const ObjectArgs = struct {
+    name: []const u8,
+    bucket: output.Output([]const u8, .public),
+    object_name: []const u8,
+    source_path: []const u8,
+    source_digest: []const u8,
+    size: u64,
+    crc32c: []const u8,
+    content_type: []const u8 = "application/octet-stream",
+    retain_on_delete: bool = true,
+};
+
+pub const Object = struct {
+    pub const Outputs = struct {
+        pub const Bucket = output.Descriptor("bucket", []const u8, .public);
+        pub const ObjectName = output.Descriptor("object_name", []const u8, .public);
+        pub const Generation = output.Descriptor("generation", []const u8, .public);
+        pub const GsUri = output.Descriptor("gs_uri", []const u8, .public);
+        pub const SourceDigest = output.Descriptor("source_digest", []const u8, .public);
+
+        pub fn field(comptime name: []const u8) type {
+            if (std.mem.eql(u8, name, "bucket")) return @This().Bucket;
+            if (std.mem.eql(u8, name, "object_name")) return @This().ObjectName;
+            if (std.mem.eql(u8, name, "generation")) return @This().Generation;
+            if (std.mem.eql(u8, name, "gs_uri")) return @This().GsUri;
+            if (std.mem.eql(u8, name, "source_digest")) return @This().SourceDigest;
+            @compileError("ZIAC120 unknown gcp.storage.Object output field: " ++ name);
+        }
+    };
+
+    node: resource.ResourceNode,
+    bucket: Outputs.Bucket.OutputType,
+    object_name: Outputs.ObjectName.OutputType,
+    generation: Outputs.Generation.OutputType,
+    gs_uri: Outputs.GsUri.OutputType,
+    source_digest: Outputs.SourceDigest.OutputType,
+
+    pub fn build(
+        allocator: std.mem.Allocator,
+        provider: config_mod.ProviderConfig,
+        args: ObjectArgs,
+    ) BuildError!Object {
+        try provider.validate();
+        try validateName(args.name);
+        if (!isObjectName(args.object_name)) return error.InvalidObjectName;
+        if (!isRelativePath(args.source_path)) return error.InvalidSourcePath;
+        if (!isDigest(args.source_digest)) return error.InvalidDigest;
+        if (args.size > 5 * 1024 * 1024 * 1024 * 1024) return error.InvalidSize;
+        if (!isCrc32c(args.crc32c)) return error.InvalidCrc32c;
+        if (!isContentType(args.content_type)) return error.InvalidContentType;
+        const fields = [_]value.Field{
+            .{ .name = "bucket", .value = try bucketValue(args.bucket) },
+            .{ .name = "content_type", .value = .{ .string = args.content_type } },
+            .{ .name = "crc32c", .value = .{ .string = args.crc32c } },
+            .{ .name = "object_name", .value = .{ .string = args.object_name } },
+            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
+            .{ .name = "size", .value = .{ .integer = @intCast(args.size) } },
+            .{ .name = "source_digest", .value = .{ .string = args.source_digest } },
+            .{ .name = "source_path", .value = .{ .string = args.source_path } },
+        };
+        const id = try std.fmt.allocPrint(allocator, "gcp.storage.Object.{s}", .{args.name});
+        defer allocator.free(id);
+        const node = try buildNodeWithLifecycle(allocator, id, "gcp.storage.Object", args.name, &fields, .{
+            .retain_on_delete = args.retain_on_delete,
+            .operation_timeout_millis = 30 * 60 * 1000,
+        });
+        return .{
+            .node = node,
+            .bucket = Outputs.Bucket.fromResource(node.id),
+            .object_name = Outputs.ObjectName.fromResource(node.id),
+            .generation = Outputs.Generation.fromResource(node.id),
+            .gs_uri = Outputs.GsUri.fromResource(node.id),
+            .source_digest = Outputs.SourceDigest.fromResource(node.id),
+        };
+    }
+
+    pub fn deinit(self: *Object, allocator: std.mem.Allocator) void {
+        self.node.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
 fn buildNode(
     allocator: std.mem.Allocator,
     id: []const u8,
@@ -424,6 +589,162 @@ fn labelValueAlloc(allocator: std.mem.Allocator, labels: []const config_mod.Labe
     return .{ .object = fields };
 }
 
+const LifecycleRuleWire = struct {
+    action_type: []const u8,
+    storage_class: []const u8,
+    age_days: u32,
+    created_before: []const u8,
+    days_since_noncurrent_time: u32,
+    is_live: []const u8,
+    matches_prefixes: []const []const u8,
+    matches_suffixes: []const []const u8,
+    matches_storage_classes: []const []const u8,
+    num_newer_versions: u32,
+};
+
+fn lifecycleRulesValueAlloc(allocator: std.mem.Allocator, rules: []const LifecycleRule) BuildError!value.Value {
+    const wires = try allocator.alloc(LifecycleRuleWire, rules.len);
+    defer allocator.free(wires);
+    const class_lists = try allocator.alloc([]const []const u8, rules.len);
+    defer allocator.free(class_lists);
+
+    var initialized: usize = 0;
+    errdefer for (class_lists[0..initialized]) |classes| allocator.free(classes);
+    for (rules, 0..) |rule, index| {
+        const classes = try allocator.alloc([]const u8, rule.condition.matches_storage_classes.len);
+        class_lists[index] = classes;
+        initialized += 1;
+        for (rule.condition.matches_storage_classes, 0..) |class, class_index| {
+            classes[class_index] = class.apiName();
+        }
+        wires[index] = .{
+            .action_type = switch (rule.action) {
+                .delete => "Delete",
+                .set_storage_class => "SetStorageClass",
+                .abort_incomplete_multipart_upload => "AbortIncompleteMultipartUpload",
+            },
+            .storage_class = switch (rule.action) {
+                .set_storage_class => |class| class.apiName(),
+                else => "",
+            },
+            .age_days = rule.condition.age_days,
+            .created_before = rule.condition.created_before orelse "",
+            .days_since_noncurrent_time = rule.condition.days_since_noncurrent_time,
+            .is_live = if (rule.condition.is_live) |is_live| if (is_live) "true" else "false" else "any",
+            .matches_prefixes = rule.condition.matches_prefixes,
+            .matches_suffixes = rule.condition.matches_suffixes,
+            .matches_storage_classes = classes,
+            .num_newer_versions = rule.condition.num_newer_versions,
+        };
+    }
+    defer for (class_lists) |classes| allocator.free(classes);
+    return valueFromJsonAlloc(allocator, wires);
+}
+
+const CorsRuleWire = struct {
+    max_age_seconds: u32,
+    methods: []const []const u8,
+    origins: []const []const u8,
+    response_headers: []const []const u8,
+};
+
+fn corsRulesValueAlloc(allocator: std.mem.Allocator, rules: []const CorsRule) BuildError!value.Value {
+    const wires = try allocator.alloc(CorsRuleWire, rules.len);
+    defer allocator.free(wires);
+    const method_lists = try allocator.alloc([]const []const u8, rules.len);
+    defer allocator.free(method_lists);
+
+    var initialized: usize = 0;
+    errdefer for (method_lists[0..initialized]) |methods| allocator.free(methods);
+    for (rules, 0..) |rule, index| {
+        const methods = try allocator.alloc([]const u8, rule.methods.len);
+        method_lists[index] = methods;
+        initialized += 1;
+        for (rule.methods, 0..) |method, method_index| methods[method_index] = method.apiName();
+        wires[index] = .{
+            .max_age_seconds = rule.max_age_seconds,
+            .methods = methods,
+            .origins = rule.origins,
+            .response_headers = rule.response_headers,
+        };
+    }
+    defer for (method_lists) |methods| allocator.free(methods);
+    return valueFromJsonAlloc(allocator, wires);
+}
+
+fn valueFromJsonAlloc(allocator: std.mem.Allocator, source: anytype) BuildError!value.Value {
+    const encoded = std.json.Stringify.valueAlloc(allocator, source, .{}) catch return error.OutOfMemory;
+    defer allocator.free(encoded);
+    return value.Value.parseJsonAlloc(allocator, encoded) catch |err| switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.DuplicateField => error.DuplicateField,
+        error.InvalidJson, error.UnsupportedJsonValue => unreachable,
+    };
+}
+
+fn validateLifecycleRules(rules: []const LifecycleRule) BuildError!void {
+    for (rules) |rule| {
+        const condition = rule.condition;
+        if (condition.age_days > 36_500 or condition.days_since_noncurrent_time > 36_500) return error.InvalidLifecycleAge;
+        if (condition.created_before) |date| if (!isIsoDate(date)) return error.InvalidLifecycleRule;
+        if (condition.age_days == 0 and
+            condition.created_before == null and
+            condition.days_since_noncurrent_time == 0 and
+            condition.is_live == null and
+            condition.matches_prefixes.len == 0 and
+            condition.matches_suffixes.len == 0 and
+            condition.matches_storage_classes.len == 0 and
+            condition.num_newer_versions == 0) return error.InvalidLifecycleRule;
+        for (condition.matches_prefixes) |prefix| if (!isObjectToken(prefix)) return error.InvalidLifecycleRule;
+        for (condition.matches_suffixes) |suffix| if (!isObjectToken(suffix)) return error.InvalidLifecycleRule;
+    }
+}
+
+fn validateCorsRules(rules: []const CorsRule) BuildError!void {
+    for (rules) |rule| {
+        if (rule.origins.len == 0 or rule.methods.len == 0 or rule.max_age_seconds > std.math.maxInt(i32)) return error.InvalidCorsOrigin;
+        for (rule.origins) |origin| {
+            if (!std.mem.eql(u8, origin, "*") and
+                !std.mem.startsWith(u8, origin, "https://") and
+                !std.mem.startsWith(u8, origin, "http://")) return error.InvalidCorsOrigin;
+            if (!isTextValue(origin)) return error.InvalidCorsOrigin;
+        }
+        for (rule.response_headers) |header| if (!isTextValue(header)) return error.InvalidCorsOrigin;
+    }
+}
+
+fn isIsoDate(date: []const u8) bool {
+    if (date.len != 10 or date[4] != '-' or date[7] != '-') return false;
+    for (date, 0..) |character, index| {
+        if (index == 4 or index == 7) continue;
+        if (!std.ascii.isDigit(character)) return false;
+    }
+    return !std.mem.eql(u8, date[5..7], "00") and !std.mem.eql(u8, date[8..10], "00");
+}
+
+fn isObjectToken(token: []const u8) bool {
+    return token.len > 0 and std.mem.indexOfScalar(u8, token, 0) == null;
+}
+
+fn isTextValue(text: []const u8) bool {
+    return text.len > 0 and
+        std.mem.indexOfScalar(u8, text, 0) == null and
+        std.mem.indexOfScalar(u8, text, '\r') == null and
+        std.mem.indexOfScalar(u8, text, '\n') == null;
+}
+
+fn isValidIamMember(member: []const u8) bool {
+    return std.mem.eql(u8, member, "allUsers") or
+        std.mem.eql(u8, member, "allAuthenticatedUsers") or
+        std.mem.indexOfScalar(u8, member, ':') != null;
+}
+
+fn validateIamCondition(member: []const u8, condition: IamCondition) BuildError!void {
+    if (std.mem.eql(u8, member, "allUsers") or std.mem.eql(u8, member, "allAuthenticatedUsers")) return error.InvalidIamCondition;
+    if (!isTextValue(condition.title) or condition.title.len > 100 or !isTextValue(condition.expression)) return error.InvalidIamCondition;
+    if (condition.description.len > 0 and !isTextValue(condition.description)) return error.InvalidIamCondition;
+}
+
 fn validateName(name: []const u8) BuildError!void {
     if (name.len == 0 or name.len > 63 or !std.ascii.isLower(name[0])) return error.InvalidName;
     for (name) |character| {
@@ -449,6 +770,19 @@ fn isContentAddressedObject(name: []const u8, digest: []const u8) bool {
     return name[digest_start - 1] == '/' and
         std.mem.eql(u8, name[digest_start .. digest_start + digest.len], digest) and
         std.mem.endsWith(u8, name, ".tar.gz");
+}
+
+fn isObjectName(name: []const u8) bool {
+    if (name.len == 0 or name.len > 1024 or name[0] == '/' or std.mem.indexOfScalar(u8, name, 0) != null) return false;
+    var components = std.mem.splitScalar(u8, name, '/');
+    while (components.next()) |component| {
+        if (component.len == 0 or std.mem.eql(u8, component, ".") or std.mem.eql(u8, component, "..")) return false;
+    }
+    return true;
+}
+
+fn isContentType(content_type: []const u8) bool {
+    return isTextValue(content_type) and std.mem.indexOfScalar(u8, content_type, '/') != null;
 }
 
 fn isRelativePath(path: []const u8) bool {

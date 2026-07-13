@@ -65,6 +65,7 @@ const Asset = struct {
     related_resources: []const []const u8,
     id: []const u8,
     ziac_type: []const u8,
+    physical_id: []const u8,
 };
 
 pub fn scanAlloc(allocator: std.mem.Allocator, client: Client, input: ScanInput) !Scan {
@@ -121,6 +122,7 @@ pub fn scanAlloc(allocator: std.mem.Allocator, client: Client, input: ScanInput)
                 .related_resources = related,
                 .id = try observedIdAlloc(a, name),
                 .ziac_type = try mappedTypeAlloc(a, asset_type, location),
+                .physical_id = try managedPhysicalIdAlloc(a, asset_type, name),
             });
         };
         page_count += 1;
@@ -193,6 +195,7 @@ fn artifactJsonAlloc(
         var inputs: std.json.ObjectMap = .empty;
         try inputs.put(arena, "asset_type", .{ .string = asset.asset_type });
         try inputs.put(arena, "location", .{ .string = asset.location });
+        try inputs.put(arena, "physical_id", .{ .string = asset.physical_id });
         try object.put(arena, "inputs", .{ .object = inputs });
         var lifecycle: std.json.ObjectMap = .empty;
         try lifecycle.put(arena, "protect", .{ .bool = false });
@@ -302,6 +305,15 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
     else
         "gcp.asset.Resource";
     return allocator.dupe(u8, mapped);
+}
+
+fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, name: []const u8) ![]const u8 {
+    if (std.mem.eql(u8, asset_type, "storage.googleapis.com/Bucket")) {
+        const bucket_name = std.fs.path.basename(name);
+        if (bucket_name.len == 0) return error.InvalidCloudAssetResponse;
+        return std.fmt.allocPrint(allocator, "buckets/{s}", .{bucket_name});
+    }
+    return allocator.dupe(u8, name);
 }
 
 fn graphDigestAlloc(allocator: std.mem.Allocator, assets: []const Asset) ![]const u8 {

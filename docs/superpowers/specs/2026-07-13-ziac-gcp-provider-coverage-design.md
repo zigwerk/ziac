@@ -147,8 +147,9 @@ roughly thirty resource types across:
 
 At programme start the baseline lacked a general `gcp.storage.Bucket` and most
 messaging, data, compute, operations, security, organization and developer-
-platform resources. The first M57 slice now adds the general bucket lifecycle
-and additive bucket IAM while the remaining M57 product integrations stay open.
+platform resources. M57 now closes the local general Storage lifecycle,
+conditional IAM, immutable Object and product-integration surface; authenticated
+disposable-project evidence remains distinct from local managed support.
 Cloud Asset Inventory can observe more resource kinds than the live provider can
 manage; observation must not be presented as provisioning coverage.
 

@@ -12,7 +12,8 @@ test "paid Google estate scan consumes pages and emits mutation-isolated observe
     );
     try client.addPage(
         \\{"results":[
-        \\{"name":"//sqladmin.googleapis.com/projects/acme-prod/instances/orders","assetType":"sqladmin.googleapis.com/Instance","project":"projects/123","location":"europe-west1","displayName":"orders"}
+        \\{"name":"//sqladmin.googleapis.com/projects/acme-prod/instances/orders","assetType":"sqladmin.googleapis.com/Instance","project":"projects/123","location":"europe-west1","displayName":"orders"},
+        \\{"name":"//storage.googleapis.com/ziac-assets","assetType":"storage.googleapis.com/Bucket","project":"projects/123","location":"EU","displayName":"ziac-assets"}
         \\]}
     );
 
@@ -25,13 +26,15 @@ test "paid Google estate scan consumes pages and emits mutation-isolated observe
     defer scan.deinit();
 
     try std.testing.expectEqual(@as(usize, 2), client.call_count);
-    try std.testing.expectEqual(@as(usize, 3), scan.resource_count);
+    try std.testing.expectEqual(@as(usize, 4), scan.resource_count);
     try std.testing.expectEqual(@as(usize, 1), scan.edge_count);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"ownership\":\"observed\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"operation\":\"read\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.run.Service") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.sql.Instance") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.compute.Network") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.storage.Bucket") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"buckets/ziac-assets\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "cloud_asset_inventory") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "google-subject-42") == null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "access_token") == null);

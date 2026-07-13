@@ -161,7 +161,7 @@ pub const resources = [_]Resource{
     managed("gcp.storage.Bucket", .storage, .global, .google_discovery, "M57", withProduct(full)),
     managed("gcp.storage.BucketIamMember", .storage, .global, .google_rest, "M57", withProduct(additive_iam)),
     managed("gcp.storage.BuildBucket", .storage, .global, .google_discovery, "M8", retained),
-    plannedResource("gcp.storage.Object", .storage, .global, .google_discovery, "M57"),
+    managed("gcp.storage.Object", .storage, .global, .google_discovery, "M57", withProduct(replaceable)),
     managed("gcp.storage.SourceObject", .storage, .global, .google_discovery, "M8", retained_replaceable),
     plannedResource("gcp.tasks.Queue", .tasks, .location, .googleapis_proto, "M59"),
 };

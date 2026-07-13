@@ -63,6 +63,47 @@ test "visual artifact supports desired-only graphs and rejects unsafe targets" {
     ));
 }
 
+test "visual artifact projects Cloud Storage inspector details and location" {
+    const provider = ziac.gcp.config.ProviderConfig{
+        .project_id = "ziac-prod",
+        .primary_region = "europe-west1",
+        .service_regions = &.{"europe-west1"},
+    };
+    var bucket = try ziac.gcp.storage.Bucket.build(std.testing.allocator, provider, .{
+        .name = "ziac-assets",
+        .location = "europe-west1",
+        .storage_class = .nearline,
+        .retention_period_seconds = 86_400,
+        .soft_delete_retention_seconds = 604_800,
+        .lifecycle_rules = &.{.{ .action = .delete, .condition = .{ .age_days = 365 } }},
+    });
+    defer bucket.deinit(std.testing.allocator);
+    var member = try ziac.gcp.storage.BucketIamMember.build(std.testing.allocator, provider, .{
+        .name = "api-assets-reader",
+        .bucket = bucket.name,
+        .role = "roles/storage.objectViewer",
+        .member = "serviceAccount:api@ziac-prod.iam.gserviceaccount.com",
+    });
+    defer member.deinit(std.testing.allocator);
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try graph.addResource(bucket.node);
+    try graph.addResource(member.node);
+
+    var artifact = try ziac.visual_artifact.serializeAlloc(std.testing.allocator, &graph, null, .{
+        .stack = "assets",
+        .stage = "prod",
+        .created_at_millis = 7,
+    });
+    defer artifact.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"region\":\"europe-west1\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"storage\":{\"kind\":\"bucket\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"storage_class\":\"NEARLINE\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"retention_period_seconds\":86400") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"soft_delete_retention_seconds\":604800") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"iam_role\":\"roles/storage.objectViewer\"") != null);
+}
+
 fn fixtureGraph() !ziac.ResourceGraph {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     errdefer graph.deinit();

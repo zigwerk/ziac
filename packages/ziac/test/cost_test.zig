@@ -38,6 +38,28 @@ test "cost intelligence reports unavailable instead of inventing missing usage" 
     return error.ExpectedUnavailable;
 }
 
+test "Cloud Storage estimates keep capacity operations and egress assumptions explicit" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "storage-nearline", .region = "europe-west1", .unit = "GiBy.mo", .unit_quantity = 1, .unit_price_micros = 20 },
+        .{ .sku_id = "storage-class-a", .region = "europe-west1", .unit = "1k requests", .unit_quantity = 1000, .unit_price_micros = 5_000 },
+        .{ .sku_id = "storage-egress", .region = "europe-west1", .unit = "GiBy", .unit_quantity = 1, .unit_price_micros = 120_000 },
+    };
+    const estimate = try ziac.cost.storageConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.storage.Bucket.ziac-assets",
+        .region = "europe-west1",
+        .storage_sku_id = "storage-nearline",
+        .operations_sku_id = "storage-class-a",
+        .egress_sku_id = "storage-egress",
+        .stored_gib_month = 100,
+        .operations = 2_000,
+        .egress_gib = 10,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 1_212_000), estimate.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
+    try std.testing.expect(estimate.provenance.is_catalog_price);
+}
+
 test "Cloud Billing adapters parse catalog prices and normalized detailed export rows" {
     var catalog = try ziac.cost.parseCatalogPageAlloc(std.testing.allocator, "{\"skus\":[{\"skuId\":\"run-cpu\",\"serviceRegions\":[\"europe-west1\"],\"pricingInfo\":[{\"pricingExpression\":{\"usageUnit\":\"vCPU-second\",\"baseUnitConversionFactor\":1,\"tieredRates\":[{\"unitPrice\":{\"units\":\"0\",\"nanos\":24000}}]}}]}],\"nextPageToken\":\"next-1\"}");
     defer catalog.deinit();

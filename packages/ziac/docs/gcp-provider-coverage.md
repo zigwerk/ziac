@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 34 managed GCP resource types.
+The current deterministic provider gate contains 35 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -54,17 +54,54 @@ silently diverge.
 
 - `gcp.storage.Bucket`
 - `gcp.storage.BucketIamMember`
+- `gcp.storage.Object`
 
-`Bucket` currently covers location, storage class, uniform bucket-level access,
+`Bucket` covers location, storage class, uniform bucket-level access,
 public-access prevention, versioning, soft-delete retention, bucket retention,
-a single delete TTL, labels, default CMEK, retained/deletable lifecycle,
-metageneration-safe updates and `buckets/` or `gs://` import. `BucketIamMember`
-owns one additive role/member relationship and preserves unrelated policy
-bindings and members through etag-safe read-modify-write.
+typed multi-rule lifecycle transitions, CORS, labels, default CMEK and
+metageneration-safe updates. Import accepts `buckets/<name>` or `gs://<name>`.
+Buckets are retained by default. Deleting a non-empty bucket reports
+`ResourceNotEmpty`; recursive cleanup requires both `force_destroy = true` and
+the operation's explicit destructive confirmation.
 
-Multi-rule lifecycle policy, CORS, IAM conditions, general objects, cost
-attribution, visual detail and authenticated qualification remain open M57
-items. The specialized `BuildBucket` remains retained and content-addressed.
+`BucketIamMember` owns one exact role/member/condition identity. Its etag-safe
+read-modify-write preserves unrelated conditional and unconditional bindings,
+requests policy version 3 and raises the policy version when a condition is
+added. `Object` verifies source size, CRC32C and SHA-256 before immutable media
+upload, adopts only generation-pinned identities and uses generation
+preconditions for explicit deletion. The specialized `BuildBucket` and
+`SourceObject` remain retained and content-addressed.
+
+Estate scans emit the same `buckets/<name>` physical identity used by managed
+state. Visual artifacts include bucket location, class, retention, soft-delete,
+lifecycle, CORS and IAM inspector facts. Configuration estimates keep storage
+capacity, operation count and egress assumptions separate and label the result
+as a catalog-price estimate rather than billed cost.
+
+Three higher-level components compile common safe graphs:
+
+```zig
+var uploads = try ziac.gcp.UploadBucket.build(allocator, provider, .{
+    .name = "acme-uploads",
+    .location = "EU",
+    .writers = &.{"serviceAccount:api@acme.iam.gserviceaccount.com"},
+    .cors_origins = &.{"https://app.acme.example"},
+});
+defer uploads.deinit();
+```
+
+- `AssetBucket` creates a versioned private bucket plus exact readers.
+- `UploadBucket` adds object-creator bindings, upload CORS and typed transition
+  and deletion lifecycle rules.
+- `StaticAssetBucket` creates a versioned static bucket; public access is an
+  explicit opt-in that adds only `allUsers` object-viewer access.
+
+Official contracts: [Buckets](https://cloud.google.com/storage/docs/json_api/v1/buckets),
+[Objects: insert](https://cloud.google.com/storage/docs/json_api/v1/objects/insert),
+[request preconditions](https://cloud.google.com/storage/docs/request-preconditions),
+and [conditional bucket IAM](https://cloud.google.com/storage/docs/json_api/v1/buckets/setIamPolicy).
+Authenticated disposable-project qualification remains the final open M57
+evidence item.
 
 ### Networking and global delivery
 

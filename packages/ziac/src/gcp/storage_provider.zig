@@ -10,9 +10,10 @@ const ProviderError = provider_mod.ProviderError;
 const bucket_type = "gcp.storage.Bucket";
 const bucket_iam_member_type = "gcp.storage.BucketIamMember";
 const build_bucket_type = "gcp.storage.BuildBucket";
+const object_type = "gcp.storage.Object";
 const source_object_type = "gcp.storage.SourceObject";
 
-const Kind = enum { bucket, bucket_iam_member, build_bucket, source_object };
+const Kind = enum { bucket, bucket_iam_member, build_bucket, object, source_object };
 
 pub const PayloadDeinitObserver = struct {
     ptr: *anyopaque,
@@ -85,7 +86,7 @@ pub const Handler = struct {
         return switch (kind(node) orelse return error.InvalidConfiguration) {
             .bucket, .build_bucket => self.readBucket(context, node, physical_override),
             .bucket_iam_member => self.readBucketIamMember(context, node, physical_override),
-            .source_object => self.readSourceObject(context, node, physical_override),
+            .object, .source_object => self.readSourceObject(context, node, physical_override),
         };
     }
 
@@ -99,7 +100,7 @@ pub const Handler = struct {
         const diff_kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else switch (resource_kind) {
-            .bucket_iam_member, .source_object => .replace,
+            .bucket_iam_member, .object, .source_object => .replace,
             .bucket, .build_bucket => if (sameBucketIdentity(node.inputs, observed.observed_inputs)) .update else .replace,
         };
         const reasons: []const []const u8 = if (diff_kind == .noop) &.{} else &.{"Cloud Storage desired state differs from observed resource"};
@@ -114,7 +115,7 @@ pub const Handler = struct {
         return switch (kind(node) orelse return error.InvalidConfiguration) {
             .bucket, .build_bucket => self.createBucket(context, node),
             .bucket_iam_member => self.ensureBucketIamMember(context, node, true),
-            .source_object => self.createSourceObject(context, node),
+            .object, .source_object => self.createSourceObject(context, node),
         };
     }
 
@@ -160,21 +161,30 @@ pub const Handler = struct {
         const expected = switch (resource_kind) {
             .bucket, .build_bucket => try bucketPhysicalIdAlloc(context.allocator, node),
             .bucket_iam_member => try bucketIamPhysicalIdAlloc(context, node),
-            .source_object => try validateSourcePhysicalIdAlloc(context, node, physical_id),
+            .object, .source_object => try validateSourcePhysicalIdAlloc(context, node, physical_id),
         };
         defer context.allocator.free(expected);
         if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
         switch (resource_kind) {
             .build_bucket, .source_object => {},
+            .object => {
+                if (node.lifecycle.retain_on_delete) return;
+                try self.deleteObject(context, node, physical_id);
+            },
             .bucket => {
                 if (node.lifecycle.retain_on_delete) return;
                 const bucket = try requiredString(node.inputs, "name");
                 const encoded_bucket = try percentEncodeAlloc(context.allocator, bucket);
                 defer context.allocator.free(encoded_bucket);
+                if (try requiredBoolean(node.inputs, "force_destroy")) {
+                    if (!context.destructive_confirmation) return error.DestructiveConfirmationRequired;
+                    try self.deleteBucketObjects(context, encoded_bucket);
+                }
                 const path = try std.fmt.allocPrint(context.allocator, "/storage/v1/b/{s}", .{encoded_bucket});
                 defer context.allocator.free(path);
                 var response = self.request(context, .{ .api = .storage, .method = "DELETE", .path = path }) catch |err| {
                     if (err == error.NotFound) return;
+                    if (err == error.Conflict) return error.ResourceNotEmpty;
                     return err;
                 };
                 response.deinit(context.allocator);
@@ -183,6 +193,65 @@ pub const Handler = struct {
                 var removed = try self.ensureBucketIamMember(context, node, false);
                 removed.deinit();
             },
+        }
+    }
+
+    fn deleteBucketObjects(
+        self: Handler,
+        context: *provider_mod.OperationContext,
+        encoded_bucket: []const u8,
+    ) ProviderError!void {
+        var page_token: ?[]const u8 = null;
+        defer if (page_token) |token| context.allocator.free(token);
+        var deleted: usize = 0;
+        while (true) {
+            const path = if (page_token) |token| blk: {
+                const encoded_token = try percentEncodeAlloc(context.allocator, token);
+                defer context.allocator.free(encoded_token);
+                break :blk try std.fmt.allocPrint(
+                    context.allocator,
+                    "/storage/v1/b/{s}/o?versions=true&maxResults=1000&pageToken={s}",
+                    .{ encoded_bucket, encoded_token },
+                );
+            } else try std.fmt.allocPrint(
+                context.allocator,
+                "/storage/v1/b/{s}/o?versions=true&maxResults=1000",
+                .{encoded_bucket},
+            );
+            defer context.allocator.free(path);
+            var response = try self.request(context, .{ .api = .storage, .method = "GET", .path = path });
+            defer response.deinit(context.allocator);
+            var parsed = std.json.parseFromSlice(std.json.Value, context.allocator, response.body, .{}) catch return error.ProviderBug;
+            defer parsed.deinit();
+            const root = asObject(parsed.value) orelse return error.ProviderBug;
+            if (root.get("items")) |items_value| {
+                const items = asArray(items_value) orelse return error.ProviderBug;
+                for (items.items) |item_value| {
+                    deleted += 1;
+                    if (deleted > 10_000) return error.ResourceNotEmpty;
+                    const item = asObject(item_value) orelse return error.ProviderBug;
+                    const name = try requiredJsonString(item, "name");
+                    const generation = try requiredJsonString(item, "generation");
+                    if (!isGeneration(generation)) return error.ProviderBug;
+                    const encoded_name = try percentEncodeAlloc(context.allocator, name);
+                    defer context.allocator.free(encoded_name);
+                    const delete_path = try std.fmt.allocPrint(
+                        context.allocator,
+                        "/storage/v1/b/{s}/o/{s}?generation={s}&ifGenerationMatch={s}",
+                        .{ encoded_bucket, encoded_name, generation, generation },
+                    );
+                    defer context.allocator.free(delete_path);
+                    var deleted_response = self.request(context, .{ .api = .storage, .method = "DELETE", .path = delete_path }) catch |err| {
+                        if (err == error.NotFound) continue;
+                        return err;
+                    };
+                    deleted_response.deinit(context.allocator);
+                }
+            }
+            const next = jsonString(root.get("nextPageToken")) orelse break;
+            if (next.len == 0) break;
+            if (page_token) |token| context.allocator.free(token);
+            page_token = context.allocator.dupe(u8, next) catch return error.OutOfMemory;
         }
     }
 
@@ -256,9 +325,10 @@ pub const Handler = struct {
         }
         const role = try requiredString(node.inputs, "role");
         const member = try requiredString(node.inputs, "member");
+        const condition = try iamConditionFromNode(node);
         var policy = try self.getBucketPolicy(context, node);
         defer policy.deinit();
-        if (!policyHasMember(policy.value, role, member)) return .absent;
+        if (!policyHasMember(policy.value, role, member, condition)) return .absent;
         return .{ .present = try bucketIamMemberResult(context, node) };
     }
 
@@ -270,12 +340,13 @@ pub const Handler = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const role = try requiredString(node.inputs, "role");
         const member = try requiredString(node.inputs, "member");
+        const condition = try iamConditionFromNode(node);
         var conflicts: usize = 0;
         while (true) {
             try context.checkActive();
             var policy = try self.getBucketPolicy(context, node);
             defer policy.deinit();
-            const changed = try mutatePolicy(&policy, role, member, should_exist);
+            const changed = try mutatePolicy(&policy, role, member, condition, should_exist);
             if (!changed) return bucketIamMemberResult(context, node);
             self.setBucketPolicy(context, node, policy.value) catch |err| {
                 if (err == error.Conflict and conflicts < self.iam_conflict_retries) {
@@ -374,7 +445,7 @@ pub const Handler = struct {
             .method = "POST",
             .path = path,
             .body = payload.bytes,
-            .content_type = "application/gzip",
+            .content_type = if (kind(node) == .object) try requiredString(node.inputs, "content_type") else "application/gzip",
         }) catch |err| {
             if (err != error.Conflict) return err;
             const adopted = self.readSourceObject(context, node, null) catch |read_err| {
@@ -388,6 +459,32 @@ pub const Handler = struct {
         };
         defer response.deinit(context.allocator);
         return sourceObjectResultFromJson(context, node, response.body);
+    }
+
+    fn deleteObject(
+        self: Handler,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!void {
+        const identity = try sourceIdentity(context, node, physical_id);
+        defer identity.deinit(context.allocator);
+        const generation = identity.generation orelse return error.InvalidConfiguration;
+        const encoded_bucket = try percentEncodeAlloc(context.allocator, identity.bucket);
+        defer context.allocator.free(encoded_bucket);
+        const encoded_name = try percentEncodeAlloc(context.allocator, identity.object_name);
+        defer context.allocator.free(encoded_name);
+        const path = try std.fmt.allocPrint(
+            context.allocator,
+            "/storage/v1/b/{s}/o/{s}?generation={s}&ifGenerationMatch={s}",
+            .{ encoded_bucket, encoded_name, generation, generation },
+        );
+        defer context.allocator.free(path);
+        var response = self.request(context, .{ .api = .storage, .method = "DELETE", .path = path }) catch |err| {
+            if (err == error.NotFound) return;
+            return err;
+        };
+        response.deinit(context.allocator);
     }
 
     fn request(
@@ -409,6 +506,7 @@ fn kind(node: resource.ResourceNode) ?Kind {
     if (std.mem.eql(u8, node.type_name, bucket_type)) return .bucket;
     if (std.mem.eql(u8, node.type_name, bucket_iam_member_type)) return .bucket_iam_member;
     if (std.mem.eql(u8, node.type_name, build_bucket_type)) return .build_bucket;
+    if (std.mem.eql(u8, node.type_name, object_type)) return .object;
     if (std.mem.eql(u8, node.type_name, source_object_type)) return .source_object;
     return null;
 }
@@ -505,14 +603,25 @@ fn generalBucketResultFromJson(
         jsonString(settings.get("defaultKmsKeyName")) orelse ""
     else
         "";
-    const delete_after_days = lifecycleAge(remote) catch return error.ProviderBug;
+    const desired_lifecycle_rules = try requiredList(node.inputs, "lifecycle_rules");
+    const delete_after_days = if (desired_lifecycle_rules.len == 0) lifecycleAge(remote) catch return error.ProviderBug else 0;
+    var lifecycle_rules = if (desired_lifecycle_rules.len == 0)
+        (try requiredValue(node.inputs, "lifecycle_rules")).clone(context.allocator) catch return error.OutOfMemory
+    else
+        try normalizedLifecycleRulesValueAlloc(context.allocator, remote);
+    defer lifecycle_rules.deinit(context.allocator);
+    var cors = try normalizedCorsValueAlloc(context.allocator, remote);
+    defer cors.deinit(context.allocator);
     const label_object = asObject(remote.get("labels") orelse .{ .object = .empty }) orelse return error.ProviderBug;
     const label_fields = try jsonFieldsAlloc(context.allocator, label_object);
     defer context.allocator.free(label_fields);
     const fields = [_]value.Field{
+        .{ .name = "cors", .value = cors },
         .{ .name = "default_kms_key_name", .value = .{ .string = kms_key } },
         .{ .name = "delete_after_days", .value = .{ .integer = delete_after_days } },
+        .{ .name = "force_destroy", .value = .{ .boolean = try requiredBoolean(node.inputs, "force_destroy") } },
         .{ .name = "labels", .value = .{ .object = label_fields } },
+        .{ .name = "lifecycle_rules", .value = lifecycle_rules },
         .{ .name = "location", .value = .{ .string = location } },
         .{ .name = "name", .value = .{ .string = name } },
         .{ .name = "project_id", .value = .{ .string = try requiredString(node.inputs, "project_id") } },
@@ -575,6 +684,10 @@ fn sourceObjectResultFromJson(
         !std.mem.eql(u8, remote_crc, try requiredString(node.inputs, "crc32c")) or
         expected_size < 0 or remote_size != @as(u64, @intCast(expected_size)) or
         !isGeneration(generation)) return error.InvalidConfiguration;
+    if (kind(node) == .object) {
+        const remote_content_type = try requiredJsonString(remote, "contentType");
+        if (!std.mem.eql(u8, remote_content_type, try requiredString(node.inputs, "content_type"))) return error.InvalidConfiguration;
+    }
     const physical_id = try std.fmt.allocPrint(context.allocator, "gs://{s}/{s}#{s}", .{ bucket, object_name, generation });
     defer context.allocator.free(physical_id);
     const gs_uri = try std.fmt.allocPrint(context.allocator, "gs://{s}/{s}", .{ bucket, object_name });
@@ -658,21 +771,8 @@ fn generalBucketBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceN
         try root.put(arena, "retentionPolicy", .null);
     }
 
-    var rules = std.json.Array.init(arena);
-    const delete_after_days = try requiredInteger(node.inputs, "delete_after_days");
-    if (delete_after_days > 0) {
-        var action: std.json.ObjectMap = .empty;
-        try action.put(arena, "type", .{ .string = "Delete" });
-        var condition: std.json.ObjectMap = .empty;
-        try condition.put(arena, "age", .{ .integer = delete_after_days });
-        var rule: std.json.ObjectMap = .empty;
-        try rule.put(arena, "action", .{ .object = action });
-        try rule.put(arena, "condition", .{ .object = condition });
-        try rules.append(.{ .object = rule });
-    }
-    var lifecycle: std.json.ObjectMap = .empty;
-    try lifecycle.put(arena, "rule", .{ .array = rules });
-    try root.put(arena, "lifecycle", .{ .object = lifecycle });
+    try appendGeneralLifecycle(arena, &root, node);
+    try appendCors(arena, &root, node);
 
     const kms_key = try requiredString(node.inputs, "default_kms_key_name");
     if (kms_key.len > 0) {
@@ -699,6 +799,105 @@ fn generalBucketBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceN
     }
     try root.put(arena, "labels", .{ .object = label_object });
     return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = root }, .{}) catch return error.OutOfMemory;
+}
+
+fn appendGeneralLifecycle(
+    allocator: std.mem.Allocator,
+    root: *std.json.ObjectMap,
+    node: resource.ResourceNode,
+) ProviderError!void {
+    var rules = std.json.Array.init(allocator);
+    const desired_rules = try requiredList(node.inputs, "lifecycle_rules");
+    if (desired_rules.len == 0) {
+        const delete_after_days = try requiredInteger(node.inputs, "delete_after_days");
+        if (delete_after_days > 0) {
+            var action: std.json.ObjectMap = .empty;
+            try action.put(allocator, "type", .{ .string = "Delete" });
+            var condition: std.json.ObjectMap = .empty;
+            try condition.put(allocator, "age", .{ .integer = delete_after_days });
+            var rule: std.json.ObjectMap = .empty;
+            try rule.put(allocator, "action", .{ .object = action });
+            try rule.put(allocator, "condition", .{ .object = condition });
+            try rules.append(.{ .object = rule });
+        }
+    } else {
+        for (desired_rules) |desired_rule| {
+            const action_type = try requiredString(desired_rule, "action_type");
+            var action: std.json.ObjectMap = .empty;
+            try action.put(allocator, "type", .{ .string = action_type });
+            const storage_class = try requiredString(desired_rule, "storage_class");
+            if (storage_class.len > 0) try action.put(allocator, "storageClass", .{ .string = storage_class });
+
+            var condition: std.json.ObjectMap = .empty;
+            const age_days = try requiredInteger(desired_rule, "age_days");
+            if (age_days > 0) try condition.put(allocator, "age", .{ .integer = age_days });
+            const created_before = try requiredString(desired_rule, "created_before");
+            if (created_before.len > 0) try condition.put(allocator, "createdBefore", .{ .string = created_before });
+            const noncurrent_days = try requiredInteger(desired_rule, "days_since_noncurrent_time");
+            if (noncurrent_days > 0) try condition.put(allocator, "daysSinceNoncurrentTime", .{ .integer = noncurrent_days });
+            const is_live = try requiredString(desired_rule, "is_live");
+            if (std.mem.eql(u8, is_live, "true")) try condition.put(allocator, "isLive", .{ .bool = true });
+            if (std.mem.eql(u8, is_live, "false")) try condition.put(allocator, "isLive", .{ .bool = false });
+            try appendStringArrayField(allocator, &condition, "matchesPrefix", desired_rule, "matches_prefixes");
+            try appendStringArrayField(allocator, &condition, "matchesSuffix", desired_rule, "matches_suffixes");
+            try appendStringArrayField(allocator, &condition, "matchesStorageClass", desired_rule, "matches_storage_classes");
+            const newer_versions = try requiredInteger(desired_rule, "num_newer_versions");
+            if (newer_versions > 0) try condition.put(allocator, "numNewerVersions", .{ .integer = newer_versions });
+
+            var rule: std.json.ObjectMap = .empty;
+            try rule.put(allocator, "action", .{ .object = action });
+            try rule.put(allocator, "condition", .{ .object = condition });
+            try rules.append(.{ .object = rule });
+        }
+    }
+    var lifecycle: std.json.ObjectMap = .empty;
+    try lifecycle.put(allocator, "rule", .{ .array = rules });
+    try root.put(allocator, "lifecycle", .{ .object = lifecycle });
+}
+
+fn appendCors(
+    allocator: std.mem.Allocator,
+    root: *std.json.ObjectMap,
+    node: resource.ResourceNode,
+) ProviderError!void {
+    var cors_rules = std.json.Array.init(allocator);
+    for (try requiredList(node.inputs, "cors")) |desired_rule| {
+        var rule: std.json.ObjectMap = .empty;
+        try rule.put(allocator, "maxAgeSeconds", .{ .integer = try requiredInteger(desired_rule, "max_age_seconds") });
+        try putStringArray(allocator, &rule, "method", try requiredList(desired_rule, "methods"));
+        try putStringArray(allocator, &rule, "origin", try requiredList(desired_rule, "origins"));
+        try putStringArray(allocator, &rule, "responseHeader", try requiredList(desired_rule, "response_headers"));
+        try cors_rules.append(.{ .object = rule });
+    }
+    try root.put(allocator, "cors", .{ .array = cors_rules });
+}
+
+fn appendStringArrayField(
+    allocator: std.mem.Allocator,
+    object: *std.json.ObjectMap,
+    api_name: []const u8,
+    input: value.Value,
+    input_name: []const u8,
+) ProviderError!void {
+    const values = try requiredList(input, input_name);
+    if (values.len > 0) try putStringArray(allocator, object, api_name, values);
+}
+
+fn putStringArray(
+    allocator: std.mem.Allocator,
+    object: *std.json.ObjectMap,
+    name: []const u8,
+    values: []const value.Value,
+) ProviderError!void {
+    var array = std.json.Array.init(allocator);
+    for (values) |item| {
+        const text = switch (item) {
+            .string => |text| text,
+            else => return error.InvalidConfiguration,
+        };
+        try array.append(.{ .string = text });
+    }
+    try object.put(allocator, name, .{ .array = array });
 }
 
 fn verifyPayload(node: resource.ResourceNode, bytes: []const u8) ProviderError!void {
@@ -829,6 +1028,79 @@ fn lifecycleAge(remote: std.json.ObjectMap) !i64 {
     return 0;
 }
 
+fn normalizedLifecycleRulesValueAlloc(
+    allocator: std.mem.Allocator,
+    remote: std.json.ObjectMap,
+) ProviderError!value.Value {
+    var arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var normalized = std.json.Array.init(arena);
+    const lifecycle = asObject(remote.get("lifecycle") orelse return valueFromStdJsonAlloc(allocator, .{ .array = normalized })) orelse
+        return error.ProviderBug;
+    const remote_rules = asArray(lifecycle.get("rule") orelse return valueFromStdJsonAlloc(allocator, .{ .array = normalized })) orelse
+        return error.ProviderBug;
+    for (remote_rules.items) |remote_rule_value| {
+        const remote_rule = asObject(remote_rule_value) orelse return error.ProviderBug;
+        const action = asObject(remote_rule.get("action") orelse return error.ProviderBug) orelse return error.ProviderBug;
+        const condition = asObject(remote_rule.get("condition") orelse return error.ProviderBug) orelse return error.ProviderBug;
+        var rule: std.json.ObjectMap = .empty;
+        try rule.put(arena, "action_type", .{ .string = try requiredJsonString(action, "type") });
+        try rule.put(arena, "storage_class", .{ .string = jsonString(action.get("storageClass")) orelse "" });
+        try rule.put(arena, "age_days", .{ .integer = jsonInteger(condition.get("age")) orelse 0 });
+        try rule.put(arena, "created_before", .{ .string = jsonString(condition.get("createdBefore")) orelse "" });
+        try rule.put(arena, "days_since_noncurrent_time", .{ .integer = jsonInteger(condition.get("daysSinceNoncurrentTime")) orelse 0 });
+        const is_live = if (condition.get("isLive")) |present|
+            if (jsonBoolean(present)) |enabled| if (enabled) "true" else "false" else return error.ProviderBug
+        else
+            "any";
+        try rule.put(arena, "is_live", .{ .string = is_live });
+        try rule.put(arena, "matches_prefixes", .{ .array = try jsonStringArrayCopy(arena, condition.get("matchesPrefix")) });
+        try rule.put(arena, "matches_suffixes", .{ .array = try jsonStringArrayCopy(arena, condition.get("matchesSuffix")) });
+        try rule.put(arena, "matches_storage_classes", .{ .array = try jsonStringArrayCopy(arena, condition.get("matchesStorageClass")) });
+        try rule.put(arena, "num_newer_versions", .{ .integer = jsonInteger(condition.get("numNewerVersions")) orelse 0 });
+        try normalized.append(.{ .object = rule });
+    }
+    return valueFromStdJsonAlloc(allocator, .{ .array = normalized });
+}
+
+fn normalizedCorsValueAlloc(
+    allocator: std.mem.Allocator,
+    remote: std.json.ObjectMap,
+) ProviderError!value.Value {
+    var arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var normalized = std.json.Array.init(arena);
+    const remote_cors = asArray(remote.get("cors") orelse return valueFromStdJsonAlloc(allocator, .{ .array = normalized })) orelse
+        return error.ProviderBug;
+    for (remote_cors.items) |remote_rule_value| {
+        const remote_rule = asObject(remote_rule_value) orelse return error.ProviderBug;
+        var rule: std.json.ObjectMap = .empty;
+        try rule.put(arena, "max_age_seconds", .{ .integer = jsonInteger(remote_rule.get("maxAgeSeconds")) orelse 0 });
+        try rule.put(arena, "methods", .{ .array = try jsonStringArrayCopy(arena, remote_rule.get("method")) });
+        try rule.put(arena, "origins", .{ .array = try jsonStringArrayCopy(arena, remote_rule.get("origin")) });
+        try rule.put(arena, "response_headers", .{ .array = try jsonStringArrayCopy(arena, remote_rule.get("responseHeader")) });
+        try normalized.append(.{ .object = rule });
+    }
+    return valueFromStdJsonAlloc(allocator, .{ .array = normalized });
+}
+
+fn jsonStringArrayCopy(allocator: std.mem.Allocator, source: ?std.json.Value) ProviderError!std.json.Array {
+    var result = std.json.Array.init(allocator);
+    const source_value = source orelse return result;
+    const source_array = asArray(source_value) orelse return error.ProviderBug;
+    for (source_array.items) |item| try result.append(.{ .string = jsonString(item) orelse return error.ProviderBug });
+    return result;
+}
+
+fn valueFromStdJsonAlloc(allocator: std.mem.Allocator, source: std.json.Value) ProviderError!value.Value {
+    return value.Value.fromJsonValueAlloc(allocator, source) catch |err| switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.DuplicateField, error.UnsupportedJsonValue, error.InvalidJson => error.ProviderBug,
+    };
+}
+
 fn percentEncodeAlloc(allocator: std.mem.Allocator, input: []const u8) ProviderError![]const u8 {
     var result: std.ArrayList(u8) = .empty;
     errdefer result.deinit(allocator);
@@ -862,6 +1134,13 @@ fn requiredString(input: value.Value, name: []const u8) ProviderError![]const u8
 fn requiredInteger(input: value.Value, name: []const u8) ProviderError!i64 {
     return switch (try requiredValue(input, name)) {
         .integer => |integer| integer,
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn requiredList(input: value.Value, name: []const u8) ProviderError![]const value.Value {
+    return switch (try requiredValue(input, name)) {
+        .list => |list| list,
         else => error.InvalidConfiguration,
     };
 }
@@ -945,7 +1224,27 @@ fn jsonFieldsAlloc(allocator: std.mem.Allocator, object: std.json.ObjectMap) Pro
     return fields;
 }
 
-fn policyHasMember(policy: std.json.Value, role: []const u8, member: []const u8) bool {
+const IamBindingCondition = struct {
+    title: []const u8,
+    description: []const u8,
+    expression: []const u8,
+};
+
+fn iamConditionFromNode(node: resource.ResourceNode) ProviderError!?IamBindingCondition {
+    const title = try requiredString(node.inputs, "condition_title");
+    const description = try requiredString(node.inputs, "condition_description");
+    const expression = try requiredString(node.inputs, "condition_expression");
+    if (title.len == 0 and description.len == 0 and expression.len == 0) return null;
+    if (title.len == 0 or expression.len == 0) return error.InvalidConfiguration;
+    return .{ .title = title, .description = description, .expression = expression };
+}
+
+fn policyHasMember(
+    policy: std.json.Value,
+    role: []const u8,
+    member: []const u8,
+    expected_condition: ?IamBindingCondition,
+) bool {
     const object = asObject(policy) orelse return false;
     const bindings_value = object.get("bindings") orelse return false;
     const bindings = switch (bindings_value) {
@@ -954,9 +1253,8 @@ fn policyHasMember(policy: std.json.Value, role: []const u8, member: []const u8)
     };
     for (bindings) |binding_value| {
         const binding = asObject(binding_value) orelse continue;
-        if (binding.get("condition") != null) continue;
         const binding_role = jsonString(binding.get("role")) orelse continue;
-        if (!std.mem.eql(u8, binding_role, role)) continue;
+        if (!std.mem.eql(u8, binding_role, role) or !bindingConditionMatches(binding, expected_condition)) continue;
         const members_value = binding.get("members") orelse continue;
         const members = switch (members_value) {
             .array => |array| array.items,
@@ -970,10 +1268,23 @@ fn policyHasMember(policy: std.json.Value, role: []const u8, member: []const u8)
     return false;
 }
 
+fn bindingConditionMatches(binding: std.json.ObjectMap, expected: ?IamBindingCondition) bool {
+    const condition_value = binding.get("condition") orelse return expected == null;
+    const wanted = expected orelse return false;
+    const condition = asObject(condition_value) orelse return false;
+    const title = jsonString(condition.get("title")) orelse return false;
+    const description = jsonString(condition.get("description")) orelse "";
+    const expression = jsonString(condition.get("expression")) orelse return false;
+    return std.mem.eql(u8, title, wanted.title) and
+        std.mem.eql(u8, description, wanted.description) and
+        std.mem.eql(u8, expression, wanted.expression);
+}
+
 fn mutatePolicy(
     parsed: *std.json.Parsed(std.json.Value),
     role: []const u8,
     member: []const u8,
+    expected_condition: ?IamBindingCondition,
     should_exist: bool,
 ) ProviderError!bool {
     const allocator = parsed.arena.allocator();
@@ -981,6 +1292,9 @@ fn mutatePolicy(
         .object => |*object| object,
         else => return error.ProviderBug,
     };
+    if (should_exist and expected_condition != null and (jsonInteger(root.get("version")) orelse 0) < 3) {
+        try root.put(allocator, "version", .{ .integer = 3 });
+    }
     var bindings_value = root.getPtr("bindings");
     if (bindings_value == null) {
         if (!should_exist) return false;
@@ -997,9 +1311,8 @@ fn mutatePolicy(
             .object => |*object| object,
             else => continue,
         };
-        if (binding.get("condition") != null) continue;
         const binding_role = jsonString(binding.get("role")) orelse continue;
-        if (!std.mem.eql(u8, binding_role, role)) continue;
+        if (!std.mem.eql(u8, binding_role, role) or !bindingConditionMatches(binding.*, expected_condition)) continue;
         const members_value = binding.getPtr("members") orelse continue;
         const members = switch (members_value.*) {
             .array => |*array| array,
@@ -1024,6 +1337,13 @@ fn mutatePolicy(
     var binding: std.json.ObjectMap = .empty;
     try binding.put(allocator, "role", .{ .string = role });
     try binding.put(allocator, "members", .{ .array = members });
+    if (expected_condition) |expected| {
+        var condition: std.json.ObjectMap = .empty;
+        try condition.put(allocator, "title", .{ .string = expected.title });
+        if (expected.description.len > 0) try condition.put(allocator, "description", .{ .string = expected.description });
+        try condition.put(allocator, "expression", .{ .string = expected.expression });
+        try binding.put(allocator, "condition", .{ .object = condition });
+    }
     try bindings.append(.{ .object = binding });
     return true;
 }
