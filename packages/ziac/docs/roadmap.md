@@ -659,3 +659,39 @@ The GCP researcher compares that baseline with current official Developer
 Knowledge before recommending provider changes. API keys, ADC, cloud authority,
 and paid-service entitlements remain operator-owned inputs and are not bundled
 or persisted by the installer.
+
+## M56-M81+: Comprehensive GCP Provider Coverage
+
+Status: In progress. The authoritative architecture and giant execution roadmap
+are:
+
+- `docs/superpowers/specs/2026-07-13-ziac-gcp-provider-coverage-design.md`
+- `docs/superpowers/plans/2026-07-13-ziac-gcp-provider-coverage.md`
+
+Ziac's provider boundary is now broad practical Google Cloud coverage, not only
+Cloud Run and global load balancing. The programme combines generated Google
+resource primitives, hardened Ziac resources and opinionated architecture
+components. Every resource carries a machine-readable support stage and
+capability record, and managed support remains distinct from authenticated live
+qualification.
+
+M56-M62 is the application-platform tranche: provider catalog and generation
+spine, general Cloud Storage, Pub/Sub, Cloud Tasks, Eventarc, Cloud Run jobs and
+worker pools, general IAM semantics, and one integrated authenticated gate.
+M63-M80 then cover data services, compute, networking, GKE, operations, delivery,
+security, governance and organization resources. M81+ continues stable analytics,
+integration and AI resource expansion from pinned Google contracts and measured
+user demand.
+
+The definition of done includes typed declarations, full lifecycle and import,
+AIP-aware drift, IAM/preflight, estate mapping, canvas semantics, honest cost,
+agent documentation and authenticated disposable-project evidence. A serializer
+or observed Cloud Asset kind alone does not count as provider coverage.
+
+M56's first slice now ships the installed `gcp.coverage.resources` catalog with
+34 managed types and visible planned entries for the next tranche. M57's first
+slice adds a general Cloud Storage bucket and additive bucket IAM lifecycle with
+metageneration-safe updates, dual-form import and unrelated-policy preservation.
+The remaining M56 generation/CLI work and M57 object, CORS, lifecycle, cost,
+canvas, component and authenticated qualification work remain open. The
+installed current-state reference is `docs/gcp-provider-coverage.md`.

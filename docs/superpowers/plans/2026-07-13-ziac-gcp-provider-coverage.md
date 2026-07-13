@@ -1,0 +1,188 @@
+# Ziac Comprehensive GCP Provider Coverage Plan
+
+Date: 2026-07-13
+Design: `docs/superpowers/specs/2026-07-13-ziac-gcp-provider-coverage-design.md`
+
+## Delivery Rules
+
+- Implement one complete vertical slice before opening the next service family.
+- Add deterministic failing declaration and provider lifecycle tests first.
+- Reuse pinned Google proto or Discovery contracts; do not hand-copy API paths
+  when normalized descriptor metadata exists.
+- Keep low-level primitives public and build high-level components from them.
+- Never mark authenticated qualification complete without a disposable-project
+  receipt.
+- Keep generated code, provider catalog, estate mapping, visual mapping and
+  installed agent documentation synchronized.
+
+## M56: Provider Catalog And Generation Spine
+
+- [x] Audit current live provider dispatch and distinguish managed resources
+  from observed-only Cloud Asset kinds.
+- [x] Add `gcp/coverage.zig` with service family, scope, support stage,
+  capability flags, milestone and contract provenance.
+- [x] Register every currently managed GCP resource.
+- [x] Add planned entries for M57-M61 so agents can explain unsupported gaps.
+- [x] Reject duplicate type names and invalid capability/stage combinations.
+- [x] Verify every managed catalog entry is accepted by the live provider.
+- [ ] Add a reverse dispatcher-to-catalog generation check so an implemented
+  live type cannot be omitted from the catalog.
+- [ ] Emit deterministic JSON and Markdown reference artifacts.
+- [ ] Add `ziac provider resources [--service <name>] [--json]`.
+- [ ] Include the catalog in the relocatable installation and generated skills.
+- [ ] Add pinned proto/Discovery descriptor provenance and semantic diff output.
+
+Gate: installed Ziac reports the exact managed and planned GCP surface, and CI
+fails when implementation, documentation and catalog disagree.
+
+## M57: General Cloud Storage
+
+### Primitive declaration
+
+- [x] Add typed `Bucket` arguments and outputs.
+- [x] Validate bucket names, location, storage class, retention, soft-delete,
+  single delete TTL and KMS key names.
+- [ ] Add typed multi-rule lifecycle transitions and CORS policy.
+- [x] Keep identity fields immutable and ordinary policy fields updateable.
+- [x] Add explicit retain/delete lifecycle choices; default to retained.
+- [x] Add additive `BucketIamMember` without IAM conditions in the first slice.
+- [ ] Add optional IAM conditions to `BucketIamMember`.
+- [ ] Add a general immutable/uploaded `Object` after bucket lifecycle closure.
+
+### Live provider
+
+- [x] Create/read/update/delete general buckets through Cloud Storage JSON API.
+- [x] Normalize location casing and managed server defaults.
+- [x] Use metageneration preconditions for mutable bucket changes.
+- [ ] Fail deletion of non-empty buckets without force-cleanup authority.
+- [x] Implement import from `buckets/<name>` and `gs://<name>`.
+- [x] Implement etag-safe additive IAM policy updates without owning unrelated
+  bindings or members.
+- [x] Preserve the specialized retained `BuildBucket` behavior.
+
+### Product integration
+
+- [ ] Map managed/observed bucket identities in estate reconciliation.
+- [ ] Add storage-class, region, retention, soft-delete and IAM details to the
+  visual artifact and inspector.
+- [ ] Add configuration-based storage/operations/egress cost assumptions.
+- [ ] Generate official-doc references and agent examples.
+- [ ] Add `AssetBucket`, `UploadBucket` and `StaticAssetBucket` components.
+- [ ] Run authenticated create/update/import/no-op/delete qualification.
+
+Gate: a user can manage a normal application bucket and additive access policy
+without using the build-bucket abstraction or causing unrelated IAM drift.
+
+## M58: Pub/Sub
+
+- [ ] Topic CRUD/import with labels, KMS and retention.
+- [ ] Schema CRUD/import and topic schema settings.
+- [ ] Subscription CRUD/import for pull and push, including ack deadline,
+  retention, expiration, ordering, filter, retry and dead-letter policy.
+- [ ] Snapshot CRUD/import.
+- [ ] Topic/subscription additive IAM and service-agent permission preflight.
+- [ ] Pub/Sub cost assumptions, estate mapping, topology and event edges.
+- [ ] `ZigSubscriber` component with Cloud Run OIDC push, dead-letter topic,
+  runtime identity and exact invoker/publisher permissions.
+- [ ] Authenticated publish, delivery, retry and cleanup qualification.
+
+Gate: one typed component deploys a Zig event consumer and proves authenticated
+delivery and dead-letter behavior.
+
+## M59: Cloud Tasks And Eventarc
+
+- [ ] Cloud Tasks Queue CRUD/import with rate, retry and routing controls.
+- [ ] Eventarc Trigger CRUD/import with event filters, channels, destinations,
+  service identity and transport topic ownership.
+- [ ] OIDC/OAuth target identity and least-privilege IAM synthesis.
+- [ ] `ZigTaskWorker` and `EventPipeline` components.
+- [ ] Deterministic retry, duplicate-delivery and cancellation scenarios.
+- [ ] Authenticated enqueue/event delivery and cleanup qualification.
+
+Gate: asynchronous HTTP work and Google-originated events can be provisioned,
+observed and debugged without manual IAM assembly.
+
+## M60: Cloud Run Workload Completion
+
+- [ ] Job CRUD/import with containers, tasks, parallelism, retries, timeout,
+  VPC, secrets, volumes, service identity and GPU controls.
+- [ ] Governed job execution and cancellation actions with execution receipts.
+- [ ] WorkerPool CRUD/import with revision rollout and instance split semantics.
+- [ ] `ZigJob`, `ScheduledZigJob` and `ZigWorkerPool` components.
+- [ ] Workload-specific logs, cost models, canvas shapes and status.
+- [ ] Authenticated migration job, parallel job and worker rollout qualification.
+
+Gate: services, jobs and worker pools all use the shared typed Cloud Run contract
+while preserving workload-specific lifecycle semantics.
+
+## M61: General IAM Foundation
+
+- [ ] Add explicit additive member, authoritative binding and authoritative
+  policy resource families.
+- [ ] Add IAM conditions and canonical principal validation.
+- [ ] Add project, folder, organization, service-account and common resource IAM.
+- [ ] Add custom roles and Workload Identity Federation pools/providers.
+- [ ] Derive deployer and runtime permission sets from graph operations.
+- [ ] Preflight `testIamPermissions`, service agents, organization policy and VPC
+  Service Controls where available.
+- [ ] Render permission edges and ownership mode in the canvas.
+- [ ] Qualify concurrent unrelated IAM edits without policy loss.
+
+Gate: Ziac plans make IAM ownership explicit and cannot silently overwrite an
+unowned member or binding.
+
+## M62: First-Tranche Integrated Qualification
+
+- [ ] Provision all required APIs and service agents in a fresh project.
+- [ ] Deploy upload bucket, topic/subscription, task queue, event trigger,
+  scheduled Zig job and Cloud Run subscriber/worker.
+- [ ] Verify application Env/resource bindings at comptime.
+- [ ] Exercise uploads, events, retries, job execution and logs.
+- [ ] Import the full graph into a second state and require a no-op plan.
+- [ ] Render managed and observed topology with cost provenance.
+- [ ] Delete under a bounded capability and prove retained resources remain.
+- [ ] Publish redacted qualification receipt and latency/cost summary.
+
+Gate: the first tranche works together as one real application platform, not as
+isolated serializer tests.
+
+## M63-M67: Data And Application Services
+
+- [ ] M63 BigQuery: Dataset, Table, View, Routine, Connection, Reservation, IAM.
+- [ ] M64 Firestore: Database, Index, Field, BackupSchedule, IAM.
+- [ ] M65 Cloud SQL: Instance, Database, User, replica, private IP, SSL and IAM.
+- [ ] M66 Spanner and Memorystore primitives plus private connectivity.
+- [ ] M67 Workflows, API Gateway, Identity Platform and Parameter Manager.
+
+## M68-M72: Compute, Network And Container Platform
+
+- [ ] M68 Compute instance, disk, image, template and managed instance group.
+- [ ] M69 firewalls, routes, health checks, regional/internal load balancing.
+- [ ] M70 Cloud CDN, backend buckets, Cloud Armor and Certificate Manager.
+- [ ] M71 VPN, HA VPN, peering, Network Connectivity Center and service networking.
+- [ ] M72 GKE clusters, node pools, fleets, workload identity, Functions v2 and
+  Batch.
+
+## M73-M76: Operations And Delivery
+
+- [ ] M73 Monitoring alerts, uptime checks, channels, dashboards and SLOs.
+- [ ] M74 Logging sinks, buckets, views, exclusions and log metrics.
+- [ ] M75 Cloud Build triggers/connections/worker pools and Artifact policies.
+- [ ] M76 Cloud Deploy pipelines, targets and automation.
+
+## M77-M80: Security, Governance And Organization
+
+- [ ] M77 KMS IAM/version lifecycle, Secret Manager replication/rotation/IAM.
+- [ ] M78 folders, projects, billing association, service identities and liens.
+- [ ] M79 organization policy, tags, access policies and VPC Service Controls.
+- [ ] M80 Security Command Center, Binary Authorization and CA Service.
+
+## M81+: Analytics, Integration And AI
+
+- [ ] Prioritize stable provisioning resources from Dataflow, Dataproc, Dataform,
+  Eventarc Advanced, Integration Connectors and Vertex AI using estate telemetry
+  and user requests.
+- [ ] Keep preview resources opt-in and attach explicit migration policy.
+- [ ] Continue descriptor-driven expansion until every supported public GCP
+  resource is either managed, intentionally observed-only, or carries a visible
+  exclusion reason.

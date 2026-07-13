@@ -6,6 +6,97 @@ const auth = ziac.gcp.auth;
 const gclient = ziac.gcp.client;
 const storage_provider = ziac.gcp.storage_provider;
 
+test "live GCP provider manages a general bucket with metageneration-safe updates" {
+    const responses = [_]zstd.Http.Response{
+        notFound(),
+        .{ .status = 200, .body = generalBucketJson(2, 365) },
+        .{ .status = 200, .body = generalBucketJson(2, 365) },
+        .{ .status = 200, .body = generalBucketJson(2, 365) },
+        .{ .status = 200, .body = generalBucketWithoutRetentionJson(3, 30) },
+        .{ .status = 200, .body = generalBucketWithoutRetentionJson(3, 30) },
+        .{ .status = 204, .body = "" },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var bucket = try generalBucket(365);
+    defer bucket.deinit(std.testing.allocator);
+    var changed = try generalBucketWithoutRetention(30);
+    defer changed.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var before = try live.readWithContext(&context, bucket.node);
+    defer before.deinit();
+    try std.testing.expect(before == .absent);
+    var created = try live.createWithContext(&context, bucket.node);
+    defer created.deinit();
+    try std.testing.expectEqualStrings("buckets/ziac-user-uploads", created.physical_id);
+    try std.testing.expectEqualStrings("2", outputString(created, "metageneration"));
+    var present = try live.readWithContext(&context, bucket.node);
+    defer present.deinit();
+    var update_diff = try live.diffWithContext(&context, changed.node, &present.present);
+    defer update_diff.deinit();
+    try std.testing.expectEqual(ziac.provider.DiffKind.update, update_diff.kind);
+    var updated = try live.updateWithContext(&context, changed.node, &present.present);
+    defer updated.deinit();
+    try std.testing.expectEqualStrings("3", outputString(updated, "metageneration"));
+    var imported = try live.importWithContext(&context, changed.node, "gs://ziac-user-uploads");
+    defer imported.deinit();
+    try std.testing.expectEqual(changed.node.inputs_hash, imported.observed_hash);
+    try live.deleteWithContext(&context, changed.node, updated.physical_id);
+
+    try std.testing.expectEqualStrings("POST", harness.transport.requests.items[1].method);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[1].body, "\"softDeletePolicy\":{\"retentionDurationSeconds\":1209600}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[1].body, "\"defaultKmsKeyName\":\"projects/ziac-dev/") != null);
+    try std.testing.expectEqualStrings(
+        "https://storage.example.test/storage/v1/b/ziac-user-uploads?ifMetagenerationMatch=2",
+        harness.transport.requests.items[4].url,
+    );
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[4].body, "\"retentionPolicy\":null") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[4].body, "\"defaultKmsKeyName\":null") != null);
+    try std.testing.expectEqualStrings("DELETE", harness.transport.requests.items[6].method);
+}
+
+test "live GCP provider preserves unrelated bucket IAM members" {
+    const without_member = "{\"version\":3,\"etag\":\"BwA=\",\"bindings\":[{\"role\":\"roles/storage.objectViewer\",\"members\":[\"user:owner@example.com\"]}]}";
+    const with_member = "{\"version\":3,\"etag\":\"BwB=\",\"bindings\":[{\"role\":\"roles/storage.objectViewer\",\"members\":[\"user:owner@example.com\",\"serviceAccount:api@ziac-dev.iam.gserviceaccount.com\"]}]}";
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = without_member },
+        .{ .status = 200, .body = without_member },
+        .{ .status = 200, .body = with_member },
+        .{ .status = 200, .body = with_member },
+        .{ .status = 200, .body = with_member },
+        .{ .status = 200, .body = with_member },
+        .{ .status = 200, .body = without_member },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var member = try bucketIamMember();
+    defer member.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+
+    var before = try live.readWithContext(&context, member.node);
+    defer before.deinit();
+    try std.testing.expect(before == .absent);
+    var created = try live.createWithContext(&context, member.node);
+    defer created.deinit();
+    try std.testing.expectEqualStrings("buckets/ziac-user-uploads/iam/api-object-viewer", created.physical_id);
+    var present = try live.readWithContext(&context, member.node);
+    defer present.deinit();
+    try std.testing.expect(present == .present);
+    var imported = try live.importWithContext(&context, member.node, created.physical_id);
+    defer imported.deinit();
+    try live.deleteWithContext(&context, member.node, created.physical_id);
+
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[2].body, "user:owner@example.com") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[2].body, "serviceAccount:api@ziac-dev.iam.gserviceaccount.com") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[6].body, "user:owner@example.com") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[6].body, "serviceAccount:api@ziac-dev.iam.gserviceaccount.com") == null);
+}
+
 test "live GCP provider manages a protected retained build bucket" {
     const responses = [_]zstd.Http.Response{
         notFound(),
@@ -293,6 +384,39 @@ fn sourceObjectBuild(object_name: []const u8, integrity: ziac.gcp.storage.Integr
     });
 }
 
+fn generalBucket(delete_after_days: u32) !ziac.gcp.storage.Bucket {
+    return ziac.gcp.storage.Bucket.build(std.testing.allocator, config(), .{
+        .name = "ziac-user-uploads",
+        .location = "EU",
+        .versioning = true,
+        .soft_delete_retention_seconds = 14 * 24 * 60 * 60,
+        .retention_period_seconds = 24 * 60 * 60,
+        .delete_after_days = delete_after_days,
+        .default_kms_key_name = "projects/ziac-dev/locations/europe-west1/keyRings/app/cryptoKeys/storage",
+        .retain_on_delete = false,
+    });
+}
+
+fn generalBucketWithoutRetention(delete_after_days: u32) !ziac.gcp.storage.Bucket {
+    return ziac.gcp.storage.Bucket.build(std.testing.allocator, config(), .{
+        .name = "ziac-user-uploads",
+        .location = "EU",
+        .versioning = true,
+        .soft_delete_retention_seconds = 14 * 24 * 60 * 60,
+        .delete_after_days = delete_after_days,
+        .retain_on_delete = false,
+    });
+}
+
+fn bucketIamMember() !ziac.gcp.storage.BucketIamMember {
+    return ziac.gcp.storage.BucketIamMember.build(std.testing.allocator, config(), .{
+        .name = "api-object-viewer",
+        .bucket = .{ .value = "ziac-user-uploads" },
+        .role = "roles/storage.objectViewer",
+        .member = "serviceAccount:api@ziac-dev.iam.gserviceaccount.com",
+    });
+}
+
 fn objectJsonAlloc(
     allocator: std.mem.Allocator,
     object_name: []const u8,
@@ -337,5 +461,19 @@ fn bucketJson(comptime age: u32) []const u8 {
     return std.fmt.comptimePrint(
         "{{\"id\":\"ziac-dev-builds\",\"name\":\"ziac-dev-builds\",\"selfLink\":\"https://storage.googleapis.com/storage/v1/b/ziac-dev-builds\",\"location\":\"EUROPE-WEST1\",\"iamConfiguration\":{{\"uniformBucketLevelAccess\":{{\"enabled\":true}},\"publicAccessPrevention\":\"enforced\"}},\"versioning\":{{\"enabled\":true}},\"lifecycle\":{{\"rule\":[{{\"action\":{{\"type\":\"Delete\"}},\"condition\":{{\"age\":{d}}}}}]}}}}",
         .{age},
+    );
+}
+
+fn generalBucketJson(comptime metageneration: u32, comptime delete_after_days: u32) []const u8 {
+    return std.fmt.comptimePrint(
+        "{{\"id\":\"ziac-user-uploads\",\"name\":\"ziac-user-uploads\",\"selfLink\":\"https://storage.googleapis.com/storage/v1/b/ziac-user-uploads\",\"location\":\"EU\",\"storageClass\":\"STANDARD\",\"metageneration\":\"{d}\",\"iamConfiguration\":{{\"uniformBucketLevelAccess\":{{\"enabled\":true}},\"publicAccessPrevention\":\"enforced\"}},\"versioning\":{{\"enabled\":true}},\"softDeletePolicy\":{{\"retentionDurationSeconds\":\"1209600\"}},\"retentionPolicy\":{{\"retentionPeriod\":\"86400\"}},\"lifecycle\":{{\"rule\":[{{\"action\":{{\"type\":\"Delete\"}},\"condition\":{{\"age\":{d}}}}}]}},\"encryption\":{{\"defaultKmsKeyName\":\"projects/ziac-dev/locations/europe-west1/keyRings/app/cryptoKeys/storage\"}},\"labels\":{{}}}}",
+        .{ metageneration, delete_after_days },
+    );
+}
+
+fn generalBucketWithoutRetentionJson(comptime metageneration: u32, comptime delete_after_days: u32) []const u8 {
+    return std.fmt.comptimePrint(
+        "{{\"id\":\"ziac-user-uploads\",\"name\":\"ziac-user-uploads\",\"selfLink\":\"https://storage.googleapis.com/storage/v1/b/ziac-user-uploads\",\"location\":\"EU\",\"storageClass\":\"STANDARD\",\"metageneration\":\"{d}\",\"iamConfiguration\":{{\"uniformBucketLevelAccess\":{{\"enabled\":true}},\"publicAccessPrevention\":\"enforced\"}},\"versioning\":{{\"enabled\":true}},\"softDeletePolicy\":{{\"retentionDurationSeconds\":\"1209600\"}},\"lifecycle\":{{\"rule\":[{{\"action\":{{\"type\":\"Delete\"}},\"condition\":{{\"age\":{d}}}}}]}},\"labels\":{{}}}}",
+        .{ metageneration, delete_after_days },
     );
 }

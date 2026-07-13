@@ -912,7 +912,11 @@ pub const LiveProvider = struct {
     }
 
     fn storageHandler(self: *LiveProvider) storage_provider.Handler {
-        return .{ .client = self.client, .payload_source = self.payload_source };
+        return .{
+            .client = self.client,
+            .payload_source = self.payload_source,
+            .iam_conflict_retries = self.iam_conflict_retries,
+        };
     }
 
     fn cloudBuildHandler(self: *LiveProvider) cloud_build_provider.Handler {

@@ -53,6 +53,7 @@ comptime {
     _ = @import("source_archive_test.zig");
     _ = @import("zig_recipe_test.zig");
     _ = @import("gcp_config_test.zig");
+    _ = @import("gcp_coverage_test.zig");
     _ = @import("gcp_artifact_registry_test.zig");
     _ = @import("gcp_storage_test.zig");
     _ = @import("gcp_cloud_build_test.zig");

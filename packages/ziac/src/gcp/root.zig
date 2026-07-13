@@ -1,4 +1,5 @@
 pub const validation = @import("validation.zig");
+pub const coverage = @import("coverage.zig");
 pub const config = @import("config.zig");
 pub const artifact_registry = @import("artifact_registry.zig");
 pub const cloud_run = @import("cloud_run.zig");

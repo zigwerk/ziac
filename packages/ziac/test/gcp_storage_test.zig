@@ -1,6 +1,66 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
+test "general bucket declares application storage policy independently from build storage" {
+    var bucket = try ziac.gcp.storage.Bucket.build(std.testing.allocator, config, .{
+        .name = "ziac-user-uploads",
+        .location = "EU",
+        .storage_class = .standard,
+        .versioning = true,
+        .soft_delete_retention_seconds = 14 * 24 * 60 * 60,
+        .retention_period_seconds = 24 * 60 * 60,
+        .delete_after_days = 365,
+        .default_kms_key_name = "projects/ziac-dev/locations/europe-west1/keyRings/app/cryptoKeys/storage",
+        .retain_on_delete = false,
+    });
+    defer bucket.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("gcp.storage.Bucket.ziac-user-uploads", bucket.node.id);
+    try std.testing.expectEqualStrings("gcp.storage.Bucket", bucket.node.type_name);
+    try std.testing.expect(!bucket.node.lifecycle.retain_on_delete);
+    const json = try bucket.node.inputs.canonicalJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(json);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"location\":\"EU\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"storage_class\":\"STANDARD\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"soft_delete_retention_seconds\":1209600") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"delete_after_days\":365") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"default_kms_key_name\":\"projects/ziac-dev/") != null);
+}
+
+test "general bucket rejects invalid safety and encryption policy" {
+    try std.testing.expectError(error.InvalidSoftDeleteRetention, ziac.gcp.storage.Bucket.build(std.testing.allocator, config, .{
+        .name = "ziac-user-uploads",
+        .location = "EU",
+        .soft_delete_retention_seconds = 42,
+    }));
+    try std.testing.expectError(error.InvalidKmsKey, ziac.gcp.storage.Bucket.build(std.testing.allocator, config, .{
+        .name = "ziac-user-uploads",
+        .location = "EU",
+        .default_kms_key_name = "not-a-kms-resource-name",
+    }));
+}
+
+test "bucket IAM member accepts a bucket output dependency" {
+    var bucket = try ziac.gcp.storage.Bucket.build(std.testing.allocator, config, .{
+        .name = "ziac-user-uploads",
+        .location = "EU",
+    });
+    defer bucket.deinit(std.testing.allocator);
+    var member = try ziac.gcp.storage.BucketIamMember.build(std.testing.allocator, config, .{
+        .name = "api-object-viewer",
+        .bucket = bucket.name,
+        .role = "roles/storage.objectViewer",
+        .member = "serviceAccount:api@ziac-dev.iam.gserviceaccount.com",
+    });
+    defer member.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("gcp.storage.BucketIamMember", member.node.type_name);
+    const json = try member.node.inputs.canonicalJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(json);
+    try std.testing.expect(std.mem.indexOf(u8, json, "gcp.storage.Bucket.ziac-user-uploads") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "roles/storage.objectViewer") != null);
+}
+
 const config = ziac.gcp.config.ProviderConfig{
     .project_id = "ziac-dev",
     .primary_region = "europe-west1",

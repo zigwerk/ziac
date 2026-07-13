@@ -12,8 +12,14 @@ pub const BuildError = config_mod.ValidationError || std.mem.Allocator.Error || 
     InvalidLifecycleAge,
     InvalidName,
     InvalidObjectName,
+    InvalidKmsKey,
+    InvalidLocation,
+    InvalidMember,
     InvalidRegion,
+    InvalidRetention,
+    InvalidRole,
     InvalidSize,
+    InvalidSoftDeleteRetention,
     InvalidSourcePath,
     OutputNotKnown,
 };
@@ -38,6 +44,166 @@ pub fn integrity(bytes: []const u8) Integrity {
         .sha256 = std.fmt.bytesToHex(digest, .lower),
     };
 }
+
+pub const StorageClass = enum {
+    standard,
+    nearline,
+    coldline,
+    archive,
+
+    pub fn apiName(self: StorageClass) []const u8 {
+        return switch (self) {
+            .standard => "STANDARD",
+            .nearline => "NEARLINE",
+            .coldline => "COLDLINE",
+            .archive => "ARCHIVE",
+        };
+    }
+};
+
+pub const PublicAccessPrevention = enum {
+    inherited,
+    enforced,
+
+    pub fn apiName(self: PublicAccessPrevention) []const u8 {
+        return @tagName(self);
+    }
+};
+
+pub const BucketArgs = struct {
+    name: []const u8,
+    location: []const u8,
+    storage_class: StorageClass = .standard,
+    uniform_bucket_level_access: bool = true,
+    public_access_prevention: PublicAccessPrevention = .enforced,
+    versioning: bool = false,
+    soft_delete_retention_seconds: u64 = 7 * 24 * 60 * 60,
+    retention_period_seconds: u64 = 0,
+    delete_after_days: u32 = 0,
+    default_kms_key_name: ?[]const u8 = null,
+    retain_on_delete: bool = true,
+};
+
+pub const Bucket = struct {
+    pub const Outputs = struct {
+        pub const Name = output.Descriptor("name", []const u8, .public);
+        pub const SelfLink = output.Descriptor("self_link", []const u8, .public);
+        pub const Url = output.Descriptor("url", []const u8, .public);
+        pub const Metageneration = output.Descriptor("metageneration", []const u8, .public);
+
+        pub fn field(comptime name: []const u8) type {
+            if (std.mem.eql(u8, name, "name")) return Name;
+            if (std.mem.eql(u8, name, "self_link")) return SelfLink;
+            if (std.mem.eql(u8, name, "url")) return Url;
+            if (std.mem.eql(u8, name, "metageneration")) return Metageneration;
+            @compileError("ZIAC120 unknown gcp.storage.Bucket output field: " ++ name);
+        }
+    };
+
+    node: resource.ResourceNode,
+    name: Outputs.Name.OutputType,
+    self_link: Outputs.SelfLink.OutputType,
+    url: Outputs.Url.OutputType,
+    metageneration: Outputs.Metageneration.OutputType,
+
+    pub fn build(
+        allocator: std.mem.Allocator,
+        provider: config_mod.ProviderConfig,
+        args: BucketArgs,
+    ) BuildError!Bucket {
+        try provider.validate();
+        if (!isValidBucket(args.name)) return error.InvalidBucket;
+        if (!isValidLocation(args.location)) return error.InvalidLocation;
+        if (!isValidSoftDeleteRetention(args.soft_delete_retention_seconds)) return error.InvalidSoftDeleteRetention;
+        if (args.retention_period_seconds > std.math.maxInt(i64)) return error.InvalidRetention;
+        if (args.delete_after_days > 36_500) return error.InvalidLifecycleAge;
+        const kms_key_name = args.default_kms_key_name orelse "";
+        if (kms_key_name.len > 0 and !isKmsKeyName(kms_key_name)) return error.InvalidKmsKey;
+
+        const labels = try labelValueAlloc(allocator, provider.labels);
+        defer allocator.free(labels.object);
+        const fields = [_]value.Field{
+            .{ .name = "default_kms_key_name", .value = .{ .string = kms_key_name } },
+            .{ .name = "delete_after_days", .value = .{ .integer = args.delete_after_days } },
+            .{ .name = "labels", .value = labels },
+            .{ .name = "location", .value = .{ .string = args.location } },
+            .{ .name = "name", .value = .{ .string = args.name } },
+            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
+            .{ .name = "public_access_prevention", .value = .{ .string = args.public_access_prevention.apiName() } },
+            .{ .name = "retention_period_seconds", .value = .{ .integer = @intCast(args.retention_period_seconds) } },
+            .{ .name = "soft_delete_retention_seconds", .value = .{ .integer = @intCast(args.soft_delete_retention_seconds) } },
+            .{ .name = "storage_class", .value = .{ .string = args.storage_class.apiName() } },
+            .{ .name = "uniform_bucket_level_access", .value = .{ .boolean = args.uniform_bucket_level_access } },
+            .{ .name = "versioning", .value = .{ .boolean = args.versioning } },
+        };
+        const id = try std.fmt.allocPrint(allocator, "gcp.storage.Bucket.{s}", .{args.name});
+        defer allocator.free(id);
+        const node = try buildNodeWithLifecycle(allocator, id, "gcp.storage.Bucket", args.name, &fields, .{
+            .retain_on_delete = args.retain_on_delete,
+            .operation_timeout_millis = 30 * 60 * 1000,
+        });
+        return .{
+            .node = node,
+            .name = Outputs.Name.fromResource(node.id),
+            .self_link = Outputs.SelfLink.fromResource(node.id),
+            .url = Outputs.Url.fromResource(node.id),
+            .metageneration = Outputs.Metageneration.fromResource(node.id),
+        };
+    }
+
+    pub fn deinit(self: *Bucket, allocator: std.mem.Allocator) void {
+        self.node.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+pub const BucketIamMemberArgs = struct {
+    name: []const u8,
+    bucket: output.Output([]const u8, .public),
+    role: []const u8,
+    member: []const u8,
+};
+
+pub const BucketIamMember = struct {
+    pub const Outputs = struct {
+        pub const BindingId = output.Descriptor("binding_id", []const u8, .public);
+
+        pub fn field(comptime name: []const u8) type {
+            if (std.mem.eql(u8, name, "binding_id")) return BindingId;
+            @compileError("ZIAC120 unknown gcp.storage.BucketIamMember output field: " ++ name);
+        }
+    };
+
+    node: resource.ResourceNode,
+    binding_id: Outputs.BindingId.OutputType,
+
+    pub fn build(
+        allocator: std.mem.Allocator,
+        provider: config_mod.ProviderConfig,
+        args: BucketIamMemberArgs,
+    ) BuildError!BucketIamMember {
+        try provider.validate();
+        try validateName(args.name);
+        if (!std.mem.startsWith(u8, args.role, "roles/storage.") or args.role.len <= "roles/storage.".len) return error.InvalidRole;
+        if (std.mem.indexOfScalar(u8, args.member, ':') == null) return error.InvalidMember;
+        const fields = [_]value.Field{
+            .{ .name = "bucket", .value = try bucketValue(args.bucket) },
+            .{ .name = "member", .value = .{ .string = args.member } },
+            .{ .name = "name", .value = .{ .string = args.name } },
+            .{ .name = "project_id", .value = .{ .string = provider.project_id } },
+            .{ .name = "role", .value = .{ .string = args.role } },
+        };
+        const id = try std.fmt.allocPrint(allocator, "gcp.storage.BucketIamMember.{s}", .{args.name});
+        defer allocator.free(id);
+        const node = try buildNodeWithLifecycle(allocator, id, "gcp.storage.BucketIamMember", args.name, &fields, .{});
+        return .{ .node = node, .binding_id = Outputs.BindingId.fromResource(node.id) };
+    }
+
+    pub fn deinit(self: *BucketIamMember, allocator: std.mem.Allocator) void {
+        self.node.deinit(allocator);
+        self.* = undefined;
+    }
+};
 
 pub const BuildBucketArgs = struct {
     name: []const u8,
@@ -114,11 +280,11 @@ pub const SourceObject = struct {
         pub const SourceDigest = output.Descriptor("source_digest", []const u8, .public);
 
         pub fn field(comptime name: []const u8) type {
-            if (std.mem.eql(u8, name, "bucket")) return Bucket;
-            if (std.mem.eql(u8, name, "object_name")) return ObjectName;
-            if (std.mem.eql(u8, name, "generation")) return Generation;
-            if (std.mem.eql(u8, name, "gs_uri")) return GsUri;
-            if (std.mem.eql(u8, name, "source_digest")) return SourceDigest;
+            if (std.mem.eql(u8, name, "bucket")) return @This().Bucket;
+            if (std.mem.eql(u8, name, "object_name")) return @This().ObjectName;
+            if (std.mem.eql(u8, name, "generation")) return @This().Generation;
+            if (std.mem.eql(u8, name, "gs_uri")) return @This().GsUri;
+            if (std.mem.eql(u8, name, "source_digest")) return @This().SourceDigest;
             @compileError("ZIAC120 unknown gcp.storage.SourceObject output field: " ++ name);
         }
     };
@@ -177,13 +343,27 @@ fn buildNode(
     logical_id: []const u8,
     fields: []const value.Field,
 ) BuildError!resource.ResourceNode {
+    return buildNodeWithLifecycle(allocator, id, type_name, logical_id, fields, .{
+        .retain_on_delete = true,
+        .operation_timeout_millis = 30 * 60 * 1000,
+    });
+}
+
+fn buildNodeWithLifecycle(
+    allocator: std.mem.Allocator,
+    id: []const u8,
+    type_name: []const u8,
+    logical_id: []const u8,
+    fields: []const value.Field,
+    lifecycle: resource.Lifecycle,
+) BuildError!resource.ResourceNode {
     return resource.ResourceNode.initOwned(allocator, .{
         .id = id,
         .provider = .gcp,
         .type_name = type_name,
         .logical_id = logical_id,
         .inputs = .{ .object = fields },
-        .lifecycle = .{ .retain_on_delete = true, .operation_timeout_millis = 30 * 60 * 1000 },
+        .lifecycle = lifecycle,
     }) catch |err| switch (err) {
         error.DuplicateField => error.DuplicateField,
         error.OutOfMemory => error.OutOfMemory,
@@ -203,9 +383,45 @@ fn isValidBucket(name: []const u8) bool {
     if (name.len < 3 or name.len > 63 or !std.ascii.isLower(name[0]) or
         (!std.ascii.isLower(name[name.len - 1]) and !std.ascii.isDigit(name[name.len - 1]))) return false;
     for (name) |character| {
-        if (!std.ascii.isLower(character) and !std.ascii.isDigit(character) and character != '-') return false;
+        if (!std.ascii.isLower(character) and !std.ascii.isDigit(character) and character != '-' and character != '_' and character != '.') return false;
     }
-    return !std.mem.startsWith(u8, name, "goog") and std.mem.indexOf(u8, name, "google") == null;
+    return !std.mem.startsWith(u8, name, "goog") and
+        std.mem.indexOf(u8, name, "google") == null and
+        std.mem.indexOf(u8, name, "..") == null and
+        std.mem.indexOf(u8, name, ".-") == null and
+        std.mem.indexOf(u8, name, "-.") == null;
+}
+
+fn isValidLocation(location: []const u8) bool {
+    if (location.len == 0 or location.len > 63) return false;
+    for (location) |character| {
+        if (!std.ascii.isAlphanumeric(character) and character != '-') return false;
+    }
+    return true;
+}
+
+fn isValidSoftDeleteRetention(seconds: u64) bool {
+    return seconds == 0 or seconds >= 7 * 24 * 60 * 60 and seconds <= 90 * 24 * 60 * 60;
+}
+
+fn isKmsKeyName(name: []const u8) bool {
+    if (!std.mem.startsWith(u8, name, "projects/")) return false;
+    const markers = [_][]const u8{ "/locations/", "/keyRings/", "/cryptoKeys/" };
+    var offset: usize = "projects/".len;
+    for (markers) |marker| {
+        const index = std.mem.indexOfPos(u8, name, offset, marker) orelse return false;
+        if (index == offset) return false;
+        offset = index + marker.len;
+    }
+    return offset < name.len;
+}
+
+fn labelValueAlloc(allocator: std.mem.Allocator, labels: []const config_mod.Label) std.mem.Allocator.Error!value.Value {
+    const fields = try allocator.alloc(value.Field, labels.len);
+    for (labels, 0..) |label, index| {
+        fields[index] = .{ .name = label.key, .value = .{ .string = label.value } };
+    }
+    return .{ .object = fields };
 }
 
 fn validateName(name: []const u8) BuildError!void {
