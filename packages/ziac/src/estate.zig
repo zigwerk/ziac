@@ -312,6 +312,14 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.iam.WorkloadIdentityPool"
     else if (std.mem.eql(u8, asset_type, "iam.googleapis.com/WorkloadIdentityPoolProvider"))
         "gcp.iam.WorkloadIdentityPoolProvider"
+    else if (std.mem.eql(u8, asset_type, "bigquery.googleapis.com/Dataset"))
+        "gcp.bigquery.Dataset"
+    else if (std.mem.eql(u8, asset_type, "bigquery.googleapis.com/Table"))
+        "gcp.bigquery.Table"
+    else if (std.mem.eql(u8, asset_type, "bigquery.googleapis.com/Routine"))
+        "gcp.bigquery.Routine"
+    else if (std.mem.eql(u8, asset_type, "bigqueryreservation.googleapis.com/Reservation"))
+        "gcp.bigquery.Reservation"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -364,6 +372,19 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         std.mem.eql(u8, asset_type, "iam.googleapis.com/WorkloadIdentityPoolProvider"))
     {
         const prefix = "//iam.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "bigquery.googleapis.com/Dataset") or
+        std.mem.eql(u8, asset_type, "bigquery.googleapis.com/Table") or
+        std.mem.eql(u8, asset_type, "bigquery.googleapis.com/Routine"))
+    {
+        const prefix = "//bigquery.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "bigqueryreservation.googleapis.com/Reservation")) {
+        const prefix = "//bigqueryreservation.googleapis.com/";
         if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
         return allocator.dupe(u8, name[prefix.len..]);
     }

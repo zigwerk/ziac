@@ -1,4 +1,6 @@
 comptime {
+    _ = @import("gcp_bigquery_live_provider_test.zig");
+    _ = @import("gcp_bigquery_product_test.zig");
     _ = @import("smoke_test.zig");
     _ = @import("core_test.zig");
     _ = @import("value_test.zig");
@@ -78,6 +80,7 @@ comptime {
     _ = @import("gcp_run_actions_test.zig");
     _ = @import("gcp_run_components_test.zig");
     _ = @import("gcp_application_platform_test.zig");
+    _ = @import("gcp_bigquery_test.zig");
     _ = @import("gcp_pubsub_test.zig");
     _ = @import("gcp_pubsub_components_test.zig");
     _ = @import("gcp_pubsub_live_provider_test.zig");

@@ -351,6 +351,42 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Objects.GetObject", .permission = "storage.objects.get" },
         .{ .suffix = "Objects.CreateObject", .permission = "storage.objects.create" },
         .{ .suffix = "Objects.DeleteObject", .permission = "storage.objects.delete" },
+        .{ .suffix = "Datasets.GetDataset", .permission = "bigquery.datasets.get" },
+        .{ .suffix = "Datasets.CreateDataset", .permission = "bigquery.datasets.create" },
+        .{ .suffix = "Datasets.UpdateDataset", .permission = "bigquery.datasets.update" },
+        .{ .suffix = "Datasets.DeleteDataset", .permission = "bigquery.datasets.delete" },
+        .{ .suffix = "Datasets.GetIamPolicy", .permission = "bigquery.datasets.getIamPolicy" },
+        .{ .suffix = "Datasets.SetIamPolicy", .permission = "bigquery.datasets.setIamPolicy" },
+        .{ .suffix = "Tables.GetTable", .permission = "bigquery.tables.get" },
+        .{ .suffix = "Tables.CreateTable", .permission = "bigquery.tables.create" },
+        .{ .suffix = "Tables.UpdateTable", .permission = "bigquery.tables.update" },
+        .{ .suffix = "Tables.DeleteTable", .permission = "bigquery.tables.delete" },
+        .{ .suffix = "Tables.GetIamPolicy", .permission = "bigquery.tables.getIamPolicy" },
+        .{ .suffix = "Tables.SetIamPolicy", .permission = "bigquery.tables.setIamPolicy" },
+        .{ .suffix = "Routines.GetRoutine", .permission = "bigquery.routines.get" },
+        .{ .suffix = "Routines.CreateRoutine", .permission = "bigquery.routines.create" },
+        .{ .suffix = "Routines.UpdateRoutine", .permission = "bigquery.routines.update" },
+        .{ .suffix = "Routines.DeleteRoutine", .permission = "bigquery.routines.delete" },
+        .{ .suffix = "Routines.GetIamPolicy", .permission = "bigquery.routines.getIamPolicy" },
+        .{ .suffix = "Routines.SetIamPolicy", .permission = "bigquery.routines.setIamPolicy" },
+        .{ .suffix = "Connections.GetConnection", .permission = "bigquery.connections.get" },
+        .{ .suffix = "Connections.CreateConnection", .permission = "bigquery.connections.create" },
+        .{ .suffix = "Connections.UpdateConnection", .permission = "bigquery.connections.update" },
+        .{ .suffix = "Connections.DeleteConnection", .permission = "bigquery.connections.delete" },
+        .{ .suffix = "Connections.GetIamPolicy", .permission = "bigquery.connections.getIamPolicy" },
+        .{ .suffix = "Connections.SetIamPolicy", .permission = "bigquery.connections.setIamPolicy" },
+        .{ .suffix = "Reservations.GetReservation", .permission = "bigquery.reservations.get" },
+        .{ .suffix = "Reservations.CreateReservation", .permission = "bigquery.reservations.create" },
+        .{ .suffix = "Reservations.UpdateReservation", .permission = "bigquery.reservations.update" },
+        .{ .suffix = "Reservations.DeleteReservation", .permission = "bigquery.reservations.delete" },
+        .{ .suffix = "Reservations.GetIamPolicy", .permission = "bigquery.reservations.getIamPolicy" },
+        .{ .suffix = "Reservations.SetIamPolicy", .permission = "bigquery.reservations.setIamPolicy" },
+        .{ .suffix = "CapacityCommitments.GetCapacityCommitment", .permission = "bigquery.capacityCommitments.get" },
+        .{ .suffix = "CapacityCommitments.CreateCapacityCommitment", .permission = "bigquery.capacityCommitments.create" },
+        .{ .suffix = "CapacityCommitments.DeleteCapacityCommitment", .permission = "bigquery.capacityCommitments.delete" },
+        .{ .suffix = "Assignments.GetAssignment", .permission = "bigquery.reservationAssignments.get" },
+        .{ .suffix = "Assignments.CreateAssignment", .permission = "bigquery.reservationAssignments.create" },
+        .{ .suffix = "Assignments.DeleteAssignment", .permission = "bigquery.reservationAssignments.delete" },
         .{ .suffix = "Publisher.GetTopic", .permission = "pubsub.topics.get" },
         .{ .suffix = "Publisher.CreateTopic", .permission = "pubsub.topics.create" },
         .{ .suffix = "Publisher.UpdateTopic", .permission = "pubsub.topics.update" },
@@ -471,6 +507,66 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Objects.CreateObject" },
         .{ .service = "storage.googleapis.com", .method = "google.storage.v1.Objects.DeleteObject" },
     };
+    const bigquery_dataset = [_]RpcUsage{
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Datasets.GetDataset" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Datasets.CreateDataset" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Datasets.UpdateDataset" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Datasets.DeleteDataset" },
+    };
+    const bigquery_dataset_iam = [_]RpcUsage{
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Datasets.GetIamPolicy" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Datasets.SetIamPolicy" },
+    };
+    const bigquery_table = [_]RpcUsage{
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Tables.GetTable" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Tables.CreateTable" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Tables.UpdateTable" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Tables.DeleteTable" },
+    };
+    const bigquery_table_iam = [_]RpcUsage{
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Tables.GetIamPolicy" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Tables.SetIamPolicy" },
+    };
+    const bigquery_routine = [_]RpcUsage{
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Routines.GetRoutine" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Routines.CreateRoutine" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Routines.UpdateRoutine" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Routines.DeleteRoutine" },
+    };
+    const bigquery_routine_iam = [_]RpcUsage{
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Routines.GetIamPolicy" },
+        .{ .service = "bigquery.googleapis.com", .method = "google.cloud.bigquery.v2.Routines.SetIamPolicy" },
+    };
+    const bigquery_connection = [_]RpcUsage{
+        .{ .service = "bigqueryconnection.googleapis.com", .method = "google.cloud.bigquery.connection.v1.Connections.GetConnection" },
+        .{ .service = "bigqueryconnection.googleapis.com", .method = "google.cloud.bigquery.connection.v1.Connections.CreateConnection" },
+        .{ .service = "bigqueryconnection.googleapis.com", .method = "google.cloud.bigquery.connection.v1.Connections.UpdateConnection" },
+        .{ .service = "bigqueryconnection.googleapis.com", .method = "google.cloud.bigquery.connection.v1.Connections.DeleteConnection" },
+    };
+    const bigquery_connection_iam = [_]RpcUsage{
+        .{ .service = "bigqueryconnection.googleapis.com", .method = "google.cloud.bigquery.connection.v1.Connections.GetIamPolicy" },
+        .{ .service = "bigqueryconnection.googleapis.com", .method = "google.cloud.bigquery.connection.v1.Connections.SetIamPolicy" },
+    };
+    const bigquery_reservation = [_]RpcUsage{
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Reservations.GetReservation" },
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Reservations.CreateReservation" },
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Reservations.UpdateReservation" },
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Reservations.DeleteReservation" },
+    };
+    const bigquery_reservation_iam = [_]RpcUsage{
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Reservations.GetIamPolicy" },
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Reservations.SetIamPolicy" },
+    };
+    const bigquery_commitment = [_]RpcUsage{
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.CapacityCommitments.GetCapacityCommitment" },
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.CapacityCommitments.CreateCapacityCommitment" },
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.CapacityCommitments.DeleteCapacityCommitment" },
+    };
+    const bigquery_assignment = [_]RpcUsage{
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Assignments.GetAssignment" },
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Assignments.CreateAssignment" },
+        .{ .service = "bigqueryreservation.googleapis.com", .method = "google.cloud.bigquery.reservation.v1.Assignments.DeleteAssignment" },
+    };
     const iam_service_account = [_]RpcUsage{
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.GetServiceAccount" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.CreateServiceAccount" },
@@ -589,6 +685,18 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.storage.Bucket")) return &storage_bucket;
     if (std.mem.eql(u8, type_name, "gcp.storage.BucketIamMember")) return &storage_bucket_iam;
     if (std.mem.eql(u8, type_name, "gcp.storage.Object")) return &storage_object;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.Dataset")) return &bigquery_dataset;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.DatasetIamMember")) return &bigquery_dataset_iam;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.Table") or std.mem.eql(u8, type_name, "gcp.bigquery.View")) return &bigquery_table;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.TableIamMember")) return &bigquery_table_iam;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.Routine")) return &bigquery_routine;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.RoutineIamMember")) return &bigquery_routine_iam;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.Connection")) return &bigquery_connection;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.ConnectionIamMember")) return &bigquery_connection_iam;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.Reservation")) return &bigquery_reservation;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.ReservationIamMember")) return &bigquery_reservation_iam;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.CapacityCommitment")) return &bigquery_commitment;
+    if (std.mem.eql(u8, type_name, "gcp.bigquery.ReservationAssignment")) return &bigquery_assignment;
     if (std.mem.eql(u8, type_name, "gcp.iam.ServiceAccount")) return &iam_service_account;
     if (std.mem.startsWith(u8, type_name, "gcp.iam.Project") and
         !std.mem.eql(u8, type_name, "gcp.iam.ProjectCustomRole")) return &project_iam;
@@ -620,6 +728,10 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
 fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
     const mappings = [_]struct { role: []const u8, permission: []const u8 }{
         .{ .role = "roles/artifactregistry.reader", .permission = "artifactregistry.repositories.downloadArtifacts" },
+        .{ .role = "roles/bigquery.dataViewer", .permission = "bigquery.tables.getData" },
+        .{ .role = "roles/bigquery.dataEditor", .permission = "bigquery.tables.updateData" },
+        .{ .role = "roles/bigquery.jobUser", .permission = "bigquery.jobs.create" },
+        .{ .role = "roles/bigquery.connectionUser", .permission = "bigquery.connections.use" },
         .{ .role = "roles/cloudtasks.enqueuer", .permission = "cloudtasks.tasks.create" },
         .{ .role = "roles/iam.workloadIdentityUser", .permission = "iam.serviceAccounts.getAccessToken" },
         .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },

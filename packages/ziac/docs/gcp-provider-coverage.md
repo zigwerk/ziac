@@ -205,6 +205,19 @@ slice. Its local qualification proves deterministic apply/import/no-op/cleanup;
 the separate disposable-project runner preserves the authenticated evidence
 boundary. See `gcp-application-platform.md`.
 
+### BigQuery analytics platform
+
+M63 adds 13 managed BigQuery resources across BigQuery v2, Connection v1 and
+Reservation v1. `ziac.gcp.AnalyticsWarehouse` composes a retained dataset,
+typed tables, views, routines and additive readers/writers. Handwritten
+lifecycles provide canonical import, remote drift normalization, method-correct
+PATCH/PUT behavior, `If-Match`, field masks, retention guards and commitment
+protection.
+
+Permission synthesis separates deployer RPC authority from runtime data access.
+Cloud Asset identities, canvas metadata, IAM edge semantics and explicit query,
+storage and slot cost assumptions are synchronized. See `gcp-bigquery.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`
@@ -221,8 +234,8 @@ M56-M62 adds the provider catalog and generation spine, then completes:
 4. general additive and authoritative IAM semantics;
 5. one integrated authenticated application-platform qualification.
 
-The subsequent waves cover BigQuery, Firestore, Cloud SQL, Spanner,
-Memorystore, Compute Engine, GKE, broader networking, Cloud Armor, Certificate
+The subsequent waves cover Firestore, Cloud SQL, Spanner, Memorystore, Compute
+Engine, GKE, broader networking, Cloud Armor, Certificate
 Manager, Monitoring, Logging, Cloud Build/Deploy, organization governance,
 security, analytics, integration and stable Vertex AI resources.
 

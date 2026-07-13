@@ -126,6 +126,7 @@ pub const ObservedRequest = struct {
     content_type: ?[]const u8,
     accept: ?[]const u8,
     user_agent: ?[]const u8,
+    if_match: ?[]const u8,
 
     fn deinit(self: *ObservedRequest, allocator: std.mem.Allocator) void {
         allocator.free(self.method);
@@ -135,6 +136,7 @@ pub const ObservedRequest = struct {
         if (self.content_type) |value| allocator.free(value);
         if (self.accept) |value| allocator.free(value);
         if (self.user_agent) |value| allocator.free(value);
+        if (self.if_match) |value| allocator.free(value);
         self.* = undefined;
     }
 };
@@ -176,6 +178,7 @@ pub const RecordingTransport = struct {
             .content_type = try cloneHeader(self.allocator, request.headers, "content-type"),
             .accept = try cloneHeader(self.allocator, request.headers, "accept"),
             .user_agent = try cloneHeader(self.allocator, request.headers, "user-agent"),
+            .if_match = try cloneHeader(self.allocator, request.headers, "if-match"),
         };
         self.requests.append(self.allocator, observed) catch |err| {
             var mutable = observed;

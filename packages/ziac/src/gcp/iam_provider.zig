@@ -8,6 +8,11 @@ const value = @import("../value.zig");
 const ProviderError = provider_mod.ProviderError;
 
 const supported_types = [_][]const u8{
+    "gcp.bigquery.ConnectionIamMember",
+    "gcp.bigquery.DatasetIamMember",
+    "gcp.bigquery.ReservationIamMember",
+    "gcp.bigquery.RoutineIamMember",
+    "gcp.bigquery.TableIamMember",
     "gcp.iam.FolderBinding",
     "gcp.iam.FolderMember",
     "gcp.iam.FolderPolicy",
@@ -173,6 +178,9 @@ fn ownership(node: resource.ResourceNode) ProviderError!Ownership {
 }
 
 fn policyApi(node: resource.ResourceNode) client_mod.Api {
+    if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.Connection")) return .bigquery_connection;
+    if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.Reservation")) return .bigquery_reservation;
+    if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.")) return .bigquery;
     return if (std.mem.indexOf(u8, node.type_name, "ServiceAccount") != null) .iam else .resource_manager;
 }
 
@@ -182,6 +190,11 @@ fn policyPathAlloc(
     target: []const u8,
     get: bool,
 ) ProviderError![]const u8 {
+    if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.")) {
+        const version: []const u8 = if (std.mem.indexOf(u8, node.type_name, "Connection") != null or
+            std.mem.indexOf(u8, node.type_name, "Reservation") != null) "v1" else "bigquery/v2";
+        return std.fmt.allocPrint(allocator, "/{s}/{s}:{s}IamPolicy", .{ version, target, if (get) "get" else "set" }) catch error.OutOfMemory;
+    }
     const version: []const u8 = if (policyApi(node) == .iam) "v1" else "v3";
     return std.fmt.allocPrint(allocator, "/{s}/{s}:{s}IamPolicy", .{ version, target, if (get) "get" else "set" }) catch error.OutOfMemory;
 }

@@ -154,3 +154,29 @@ test "estate scan maps IAM identities roles and workload federation to managed i
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.iam.WorkloadIdentityPoolProvider") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/123/locations/global/workloadIdentityPools/github/providers/actions\"") != null);
 }
+
+test "estate scan maps BigQuery datasets tables routines and reservations to managed identities" {
+    var client = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer client.deinit();
+    try client.addPage(
+        \\{"results":[
+        \\{"name":"//bigquery.googleapis.com/projects/acme-prod/datasets/analytics","assetType":"bigquery.googleapis.com/Dataset","project":"projects/123","location":"EU","displayName":"analytics"},
+        \\{"name":"//bigquery.googleapis.com/projects/acme-prod/datasets/analytics/tables/events","assetType":"bigquery.googleapis.com/Table","project":"projects/123","location":"EU","displayName":"events"},
+        \\{"name":"//bigquery.googleapis.com/projects/acme-prod/datasets/analytics/routines/normalize","assetType":"bigquery.googleapis.com/Routine","project":"projects/123","location":"EU","displayName":"normalize"},
+        \\{"name":"//bigqueryreservation.googleapis.com/projects/acme-prod/locations/EU/reservations/analytics","assetType":"bigqueryreservation.googleapis.com/Reservation","project":"projects/123","location":"EU","displayName":"analytics-slots"}
+        \\]}
+    );
+    var scan = try ziac.estate.scanAlloc(std.testing.allocator, client.client(), .{
+        .identity = .{ .provider = .google, .verified = true, .subject = "subject" },
+        .entitlement = .pro,
+        .connection = .{ .status = .connected, .project_id = "acme-prod" },
+        .observed_at_millis = 1_783_764_000_000,
+    });
+    defer scan.deinit();
+    try std.testing.expectEqual(@as(usize, 4), scan.resource_count);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.bigquery.Dataset") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.bigquery.Table") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.bigquery.Routine") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.bigquery.Reservation") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/datasets/analytics/tables/events\"") != null);
+}

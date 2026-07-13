@@ -1,5 +1,6 @@
 const std = @import("std");
 const client_mod = @import("client.zig");
+const bigquery_provider = @import("bigquery_provider.zig");
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const compute_provider = @import("compute_provider.zig");
 const dns_provider = @import("dns_provider.zig");
@@ -35,6 +36,19 @@ const cloud_run_service_type = "gcp.run.Service";
 
 pub const managed_type_names = [_][]const u8{
     "gcp.artifact.Repository",
+    "gcp.bigquery.CapacityCommitment",
+    "gcp.bigquery.Connection",
+    "gcp.bigquery.ConnectionIamMember",
+    "gcp.bigquery.Dataset",
+    "gcp.bigquery.DatasetIamMember",
+    "gcp.bigquery.Reservation",
+    "gcp.bigquery.ReservationAssignment",
+    "gcp.bigquery.ReservationIamMember",
+    "gcp.bigquery.Routine",
+    "gcp.bigquery.RoutineIamMember",
+    "gcp.bigquery.Table",
+    "gcp.bigquery.TableIamMember",
+    "gcp.bigquery.View",
     "gcp.cloudbuild.ZigImage",
     "gcp.compute.BackendService",
     "gcp.compute.GlobalAddress",
@@ -151,6 +165,7 @@ pub const LiveProvider = struct {
         if (pubsub_provider.supports(node)) return self.pubsubHandler().read(context, node, null);
         if (tasks_provider.supports(node)) return self.tasksHandler().read(context, node, null);
         if (eventarc_provider.supports(node)) return self.eventarcHandler().read(context, node, null);
+        if (bigquery_provider.supports(node)) return self.bigqueryHandler().read(context, node, null);
         return error.InvalidConfiguration;
     }
 
@@ -177,6 +192,7 @@ pub const LiveProvider = struct {
         if (pubsub_provider.supports(node)) return pubsub_provider.Handler.diff(context, node, observed);
         if (tasks_provider.supports(node)) return tasks_provider.Handler.diff(context, node, observed);
         if (eventarc_provider.supports(node)) return eventarc_provider.Handler.diff(context, node, observed);
+        if (bigquery_provider.supports(node)) return bigquery_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else if (isType(node, artifact_repository_type))
@@ -216,6 +232,7 @@ pub const LiveProvider = struct {
         if (pubsub_provider.supports(node)) return self.pubsubHandler().create(context, node);
         if (tasks_provider.supports(node)) return self.tasksHandler().create(context, node);
         if (eventarc_provider.supports(node)) return self.eventarcHandler().create(context, node);
+        if (bigquery_provider.supports(node)) return self.bigqueryHandler().create(context, node);
         return error.InvalidConfiguration;
     }
 
@@ -244,6 +261,7 @@ pub const LiveProvider = struct {
         if (pubsub_provider.supports(node)) return self.pubsubHandler().update(context, node, observed.physical_id);
         if (tasks_provider.supports(node)) return self.tasksHandler().update(context, node, observed.physical_id);
         if (eventarc_provider.supports(node)) return self.eventarcHandler().update(context, node, observed);
+        if (bigquery_provider.supports(node)) return self.bigqueryHandler().update(context, node, observed);
         return error.InvalidConfiguration;
     }
 
@@ -274,6 +292,7 @@ pub const LiveProvider = struct {
         if (pubsub_provider.supports(node)) return self.pubsubHandler().delete(context, node, physical_id);
         if (tasks_provider.supports(node)) return self.tasksHandler().delete(context, node, physical_id);
         if (eventarc_provider.supports(node)) return self.eventarcHandler().delete(context, node, physical_id);
+        if (bigquery_provider.supports(node)) return self.bigqueryHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
             removed.deinit();
@@ -438,6 +457,13 @@ pub const LiveProvider = struct {
         }
         if (eventarc_provider.supports(node)) {
             const result = try self.eventarcHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (bigquery_provider.supports(node)) {
+            const result = try self.bigqueryHandler().read(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -1109,6 +1135,10 @@ pub const LiveProvider = struct {
 
     fn eventarcHandler(self: *LiveProvider) eventarc_provider.Handler {
         return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn bigqueryHandler(self: *LiveProvider) bigquery_provider.Handler {
+        return .{ .client = self.client };
     }
 };
 

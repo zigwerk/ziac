@@ -780,3 +780,26 @@ The M62 local Testing v2 gate is complete with 588 discovered and executed
 tests, 587 passed, one credential-gated skip, and zero failures, pending tests,
 leaks or logged errors. All public examples compile, including the integrated
 application-platform example.
+
+M63 is locally complete and awaiting authenticated BigQuery qualification.
+Thirteen managed resource types now cover datasets, tables, views, routines,
+connections, reservations, capacity commitments, assignments and scoped IAM.
+The handwritten adapter uses method-correct BigQuery v2 PATCH/PUT operations,
+`If-Match` preconditions, Connection/Reservation field masks, normalized import,
+remote semantic drift detection, retained data defaults and explicit destructive
+authority. Capacity commitments remain protected, retained and opt-in.
+
+`ziac.gcp.AnalyticsWarehouse` composes a governed dataset with tables, views,
+routines and least-privilege readers/writers. API and permission synthesis,
+Cloud Asset identity, observed/managed reconciliation, canvas metadata, IAM
+edge semantics and explicit query/storage/slot estimates are synchronized. The
+local qualification applies the graph, imports it into an empty state, refreshes
+to no-op and performs retention-aware cleanup. `scripts/qualify-bigquery.sh`
+requires ADC and a project ending in `-ziac-disposable`, rejects commitment
+purchases and emits exit 77 when credentials are absent. See
+`docs/gcp-bigquery.md`.
+
+The M63 local Testing v2 gate is complete with 602 discovered and executed
+tests, 601 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. The provider catalog reports 75 managed resources and
+the public analytics-warehouse example compiles.

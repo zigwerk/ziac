@@ -23,6 +23,8 @@ pub const Api = enum {
     cloud_kms,
     cloud_billing,
     bigquery,
+    bigquery_connection,
+    bigquery_reservation,
     cloud_scheduler,
     pubsub,
     cloud_tasks,
@@ -45,6 +47,8 @@ pub const Endpoints = struct {
     cloud_kms: []const u8 = "https://cloudkms.googleapis.com",
     cloud_billing: []const u8 = "https://cloudbilling.googleapis.com",
     bigquery: []const u8 = "https://bigquery.googleapis.com",
+    bigquery_connection: []const u8 = "https://bigqueryconnection.googleapis.com",
+    bigquery_reservation: []const u8 = "https://bigqueryreservation.googleapis.com",
     cloud_scheduler: []const u8 = "https://cloudscheduler.googleapis.com",
     pubsub: []const u8 = "https://pubsub.googleapis.com",
     cloud_tasks: []const u8 = "https://cloudtasks.googleapis.com",
@@ -67,6 +71,8 @@ pub const Endpoints = struct {
             .cloud_kms => self.cloud_kms,
             .cloud_billing => self.cloud_billing,
             .bigquery => self.bigquery,
+            .bigquery_connection => self.bigquery_connection,
+            .bigquery_reservation => self.bigquery_reservation,
             .cloud_scheduler => self.cloud_scheduler,
             .pubsub => self.pubsub,
             .cloud_tasks => self.cloud_tasks,
@@ -82,6 +88,7 @@ pub const Request = struct {
     body: []const u8 = "",
     content_type: []const u8 = "application/json",
     accept: []const u8 = "application/json",
+    headers: []const zstd.Http.Header = &.{},
     response_body_limit: usize = 1024 * 1024,
 };
 
@@ -166,13 +173,14 @@ pub const Client = struct {
         }
         const user_agent = std.fmt.allocPrint(context.allocator, "ziac/{s}", .{version}) catch return error.OutOfMemory;
         defer context.allocator.free(user_agent);
-        const headers = [_]zstd.Http.Header{
-            .{ .name = "authorization", .value = authorization },
-            .{ .name = "accept", .value = request.accept },
-            .{ .name = "content-type", .value = request.content_type },
-            .{ .name = "user-agent", .value = user_agent },
-            .{ .name = "x-goog-api-client", .value = user_agent },
-        };
+        const headers = context.allocator.alloc(zstd.Http.Header, 5 + request.headers.len) catch return error.OutOfMemory;
+        defer context.allocator.free(headers);
+        headers[0] = .{ .name = "authorization", .value = authorization };
+        headers[1] = .{ .name = "accept", .value = request.accept };
+        headers[2] = .{ .name = "content-type", .value = request.content_type };
+        headers[3] = .{ .name = "user-agent", .value = user_agent };
+        headers[4] = .{ .name = "x-goog-api-client", .value = user_agent };
+        @memcpy(headers[5..], request.headers);
         var send_options = zstd.Http.SendOptions{};
         send_options.response_body_limit = request.response_body_limit;
         if (context.cancellation) |cancellation| {
@@ -189,7 +197,7 @@ pub const Client = struct {
         var response = self.http.sendAlloc(context.allocator, .{
             .method = request.method,
             .url = owned_url,
-            .headers = &headers,
+            .headers = headers,
             .body = request.body,
         }, send_options) catch |err| return mapHttpError(err);
 

@@ -11,6 +11,7 @@ pub const Stage = enum {
 
 pub const Service = enum {
     artifact_registry,
+    bigquery,
     cloud_build,
     cloud_run,
     compute,
@@ -125,6 +126,19 @@ const planned = Capabilities{};
 
 pub const resources = [_]Resource{
     managed("gcp.artifact.Repository", .artifact_registry, .location, .google_rest, "M4", full),
+    managed("gcp.bigquery.CapacityCommitment", .bigquery, .location, .googleapis_proto, "M63", withVisualCost(retained_replaceable)),
+    managed("gcp.bigquery.Connection", .bigquery, .location, .googleapis_proto, "M63", withVisualCost(full)),
+    managed("gcp.bigquery.ConnectionIamMember", .bigquery, .location, .google_rest, "M63", withVisualCost(additive_iam)),
+    managed("gcp.bigquery.Dataset", .bigquery, .location, .google_rest, "M63", withProduct(full)),
+    managed("gcp.bigquery.DatasetIamMember", .bigquery, .location, .google_rest, "M63", withVisualCost(additive_iam)),
+    managed("gcp.bigquery.Reservation", .bigquery, .location, .googleapis_proto, "M63", withProduct(full)),
+    managed("gcp.bigquery.ReservationAssignment", .bigquery, .location, .googleapis_proto, "M63", withVisualCost(replaceable)),
+    managed("gcp.bigquery.ReservationIamMember", .bigquery, .location, .google_rest, "M63", withVisualCost(additive_iam)),
+    managed("gcp.bigquery.Routine", .bigquery, .location, .google_rest, "M63", withProduct(full)),
+    managed("gcp.bigquery.RoutineIamMember", .bigquery, .location, .google_rest, "M63", withVisualCost(additive_iam)),
+    managed("gcp.bigquery.Table", .bigquery, .location, .google_rest, "M63", withProduct(full)),
+    managed("gcp.bigquery.TableIamMember", .bigquery, .location, .google_rest, "M63", withVisualCost(additive_iam)),
+    managed("gcp.bigquery.View", .bigquery, .location, .google_rest, "M63", withVisualCost(full)),
     managed("gcp.cloudbuild.ZigImage", .cloud_build, .global, .google_rest, "M8", retained_replaceable),
     managed("gcp.compute.BackendService", .compute, .global, .google_discovery, "M5", full),
     managed("gcp.compute.GlobalAddress", .compute, .global, .google_discovery, "M5", full),

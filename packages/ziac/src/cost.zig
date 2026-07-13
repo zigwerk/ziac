@@ -95,6 +95,18 @@ pub const EventarcEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const BigqueryEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    query_sku_id: []const u8,
+    storage_sku_id: []const u8,
+    slot_sku_id: []const u8,
+    query_tib: u64,
+    stored_gib_month: u64,
+    reserved_slot_hours: u64,
+    observed_at_millis: u64,
+};
+
 pub const CloudRunJobEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8,
@@ -353,6 +365,30 @@ pub fn eventarcConfigurationEstimate(
     if (input.transport_gib > 0) {
         if (input.transport_sku_id.len == 0) return error.InvalidPricing;
         usage[count] = .{ .sku_id = input.transport_sku_id, .region = input.region, .quantity = input.transport_gib };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn bigqueryConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: BigqueryEstimateInput,
+) !ResourceCost {
+    var usage: [3]UsageAssumption = undefined;
+    var count: usize = 0;
+    if (input.query_tib > 0) {
+        if (input.query_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.query_sku_id, .region = input.region, .quantity = input.query_tib };
+        count += 1;
+    }
+    if (input.stored_gib_month > 0) {
+        if (input.storage_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.storage_sku_id, .region = input.region, .quantity = input.stored_gib_month };
+        count += 1;
+    }
+    if (input.reserved_slot_hours > 0) {
+        if (input.slot_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.slot_sku_id, .region = input.region, .quantity = input.reserved_slot_hours };
         count += 1;
     }
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);

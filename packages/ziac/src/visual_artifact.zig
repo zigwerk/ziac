@@ -184,6 +184,7 @@ fn appendResource(
     try appendPubsubDetails(output, allocator, item.node);
     try appendAsyncDeliveryDetails(output, allocator, item.node);
     try appendRunWorkloadDetails(output, allocator, item.node);
+    try appendBigqueryDetails(output, allocator, item.node);
     try appendIamDetails(output, allocator, item.node);
     try appendConfigurationCost(output, allocator, observed_at_millis);
     try output.appendSlice(allocator, ",\"inputs\":");
@@ -250,6 +251,9 @@ const IamEdgeDetails = struct {
 fn iamEdgeDetails(role: []const u8) ?IamEdgeDetails {
     const mappings = [_]struct { role: []const u8, access: []const u8, permission: []const u8 }{
         .{ .role = "roles/artifactregistry.reader", .access = "read", .permission = "artifactregistry.repositories.downloadArtifacts" },
+        .{ .role = "roles/bigquery.dataEditor", .access = "read_write", .permission = "bigquery.tables.updateData" },
+        .{ .role = "roles/bigquery.dataViewer", .access = "read", .permission = "bigquery.tables.getData" },
+        .{ .role = "roles/bigquery.jobUser", .access = "write", .permission = "bigquery.jobs.create" },
         .{ .role = "roles/cloudtasks.enqueuer", .access = "write", .permission = "cloudtasks.tasks.create" },
         .{ .role = "roles/iam.workloadIdentityUser", .access = "invoke", .permission = "iam.serviceAccounts.getAccessToken" },
         .{ .role = "roles/pubsub.publisher", .access = "write", .permission = "pubsub.topics.publish" },
@@ -319,6 +323,7 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         if (region == .string) return region.string;
     }
     if (std.mem.eql(u8, node.type_name, "gcp.storage.Bucket") or
+        std.mem.startsWith(u8, node.type_name, "gcp.bigquery.") or
         std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
         std.mem.startsWith(u8, node.type_name, "gcp.eventarc."))
     {
@@ -326,6 +331,74 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         return if (location == .string) location.string else null;
     }
     return null;
+}
+
+fn appendBigqueryDetails(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    if (!std.mem.startsWith(u8, node.type_name, "gcp.bigquery.")) return;
+    try output.appendSlice(allocator, ",\"bigquery\":{");
+    if (std.mem.eql(u8, node.type_name, "gcp.bigquery.Dataset")) {
+        try appendNamedString(output, allocator, "kind", "dataset", false);
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageString(output, allocator, node, "kms_key_name", "kms_key_name");
+        try appendOptionalStorageInteger(output, allocator, node, "default_table_expiration_ms", "default_table_expiration_ms");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.bigquery.Table")) {
+        try appendNamedString(output, allocator, "kind", "table", false);
+        try appendOptionalStorageString(output, allocator, node, "dataset_id", "dataset_id");
+        try appendSchemaFieldCount(output, allocator, node);
+        try appendOptionalStorageBool(output, allocator, node, "require_partition_filter", "require_partition_filter");
+        try appendStorageListCount(output, allocator, node, "clustering_fields", "clustering_field_count");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.bigquery.View")) {
+        try appendNamedString(output, allocator, "kind", "view", false);
+        try appendOptionalStorageString(output, allocator, node, "dataset_id", "dataset_id");
+        try appendOptionalStorageBool(output, allocator, node, "use_legacy_sql", "use_legacy_sql");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.bigquery.Routine")) {
+        try appendNamedString(output, allocator, "kind", "routine", false);
+        try appendOptionalStorageString(output, allocator, node, "dataset_id", "dataset_id");
+        try appendOptionalStorageString(output, allocator, node, "routine_type", "routine_type");
+        try appendOptionalStorageString(output, allocator, node, "language", "language");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.bigquery.Connection")) {
+        try appendNamedString(output, allocator, "kind", "connection", false);
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageString(output, allocator, node, "connection_kind", "connection_kind");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.bigquery.Reservation")) {
+        try appendNamedString(output, allocator, "kind", "reservation", false);
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageInteger(output, allocator, node, "slot_capacity", "slot_capacity");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.bigquery.CapacityCommitment")) {
+        try appendNamedString(output, allocator, "kind", "capacity_commitment", false);
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageInteger(output, allocator, node, "slot_count", "slot_count");
+        try appendOptionalStorageString(output, allocator, node, "plan", "plan");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.bigquery.ReservationAssignment")) {
+        try appendNamedString(output, allocator, "kind", "reservation_assignment", false);
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageString(output, allocator, node, "assignee", "assignee");
+    } else {
+        try appendNamedString(output, allocator, "kind", "iam_member", false);
+        try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
+        try appendOptionalStorageString(output, allocator, node, "member", "iam_member");
+    }
+    try output.append(allocator, '}');
+}
+
+fn appendSchemaFieldCount(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    const schema_json = objectField(node.inputs, "schema_json") orelse return;
+    if (schema_json != .string) return;
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, schema_json.string, .{}) catch return;
+    defer parsed.deinit();
+    const count = switch (parsed.value) {
+        .array => |array| array.items.len,
+        else => return,
+    };
+    try appendNamedUnsigned(output, allocator, "schema_field_count", count, true);
 }
 
 fn appendStorageDetails(
