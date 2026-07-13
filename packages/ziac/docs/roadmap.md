@@ -688,11 +688,12 @@ AIP-aware drift, IAM/preflight, estate mapping, canvas semantics, honest cost,
 agent documentation and authenticated disposable-project evidence. A serializer
 or observed Cloud Asset kind alone does not count as provider coverage.
 
-M56 is complete. The installed `ziac provider resources` command emits the
-versioned 34-type managed catalog and visible planned surface as deterministic
-JSON or Markdown, with service filtering, bidirectional dispatcher parity,
-pinned proto/Discovery provenance and semantic upgrade-diff artifacts. Generated
-skills point agents at the same installed reference.
+M56 is complete. The installed `ziac provider resources` command introduced the
+versioned managed catalog and visible planned surface as deterministic JSON or
+Markdown. It now reports 48 managed types, with service filtering,
+bidirectional dispatcher parity, pinned proto/Discovery provenance and semantic
+upgrade-diff artifacts. Generated skills point agents at the same installed
+reference.
 
 M57 is locally complete and awaiting only authenticated disposable-project
 qualification. General buckets now include typed multi-rule lifecycle, CORS,
@@ -724,3 +725,18 @@ transport topics. `ZigTaskWorker` and `EventPipeline`, graph-derived act-as and
 product permissions, Cloud Asset identity, canvas metadata, deterministic
 delivery decisions and explicit Tasks/Eventarc cost assumptions pass the local
 gate. See `docs/gcp-tasks-eventarc.md`.
+
+M60 is locally complete and awaiting authenticated migration Job, parallel Job,
+scheduled OAuth invocation, cancellation and Worker Pool rollout qualification.
+Jobs and Worker Pools now use typed multi-container declarations, normalized
+CRUD/import, resumable Cloud Run long-running operations, etag concurrency,
+governed execution receipts and dedicated high-level components. Exact Run,
+Scheduler and act-as preflight, Cloud Asset identity, distinct canvas groups and
+explicit compute-duration estimates are synchronized. Executions and revisions
+remain observed children rather than managed resources. See
+`docs/gcp-cloud-run-workloads.md`.
+
+The M60 local Testing v2 gate is complete with 564 discovered/executed tests,
+563 passed, one credential-gated skip, and zero failures, pending tests, leaks
+or logged errors. Dashboard tests, typecheck, production build and the Testing
+v2 migration guard also pass.

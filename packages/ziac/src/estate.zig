@@ -288,6 +288,10 @@ fn observedIdAlloc(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, location: []const u8) ![]const u8 {
     const mapped = if (std.mem.eql(u8, asset_type, "run.googleapis.com/Service"))
         "gcp.run.Service"
+    else if (std.mem.eql(u8, asset_type, "run.googleapis.com/Job"))
+        "gcp.run.Job"
+    else if (std.mem.eql(u8, asset_type, "run.googleapis.com/WorkerPool"))
+        "gcp.run.WorkerPool"
     else if (std.mem.eql(u8, asset_type, "sqladmin.googleapis.com/Instance"))
         "gcp.sql.Instance"
     else if (std.mem.eql(u8, asset_type, "storage.googleapis.com/Bucket"))
@@ -316,6 +320,14 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
 }
 
 fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, name: []const u8) ![]const u8 {
+    if (std.mem.eql(u8, asset_type, "run.googleapis.com/Service") or
+        std.mem.eql(u8, asset_type, "run.googleapis.com/Job") or
+        std.mem.eql(u8, asset_type, "run.googleapis.com/WorkerPool"))
+    {
+        const prefix = "//run.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
     if (std.mem.eql(u8, asset_type, "storage.googleapis.com/Bucket")) {
         const bucket_name = std.fs.path.basename(name);
         if (bucket_name.len == 0) return error.InvalidCloudAssetResponse;

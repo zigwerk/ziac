@@ -178,6 +178,7 @@ fn appendResource(output: *std.ArrayList(u8), allocator: std.mem.Allocator, item
     try appendStorageDetails(output, allocator, item.node);
     try appendPubsubDetails(output, allocator, item.node);
     try appendAsyncDeliveryDetails(output, allocator, item.node);
+    try appendRunWorkloadDetails(output, allocator, item.node);
     try output.appendSlice(allocator, ",\"inputs\":");
     try appendSafeValue(output, allocator, item.node.inputs, null);
     try output.appendSlice(allocator, ",\"lifecycle\":{");
@@ -357,6 +358,37 @@ fn appendAsyncDeliveryDetails(
         try appendStorageListCount(output, allocator, node, "event_filters", "event_filter_count");
         try appendOptionalStorageString(output, allocator, node, "destination_kind", "destination_kind");
         try appendOptionalStorageString(output, allocator, node, "channel", "channel");
+    }
+    try output.append(allocator, '}');
+}
+
+fn appendRunWorkloadDetails(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+) !void {
+    if (!std.mem.eql(u8, node.type_name, "gcp.run.Job") and
+        !std.mem.eql(u8, node.type_name, "gcp.run.JobIamMember") and
+        !std.mem.eql(u8, node.type_name, "gcp.run.WorkerPool")) return;
+    try output.appendSlice(allocator, ",\"run_workload\":{");
+    if (std.mem.eql(u8, node.type_name, "gcp.run.Job")) {
+        try appendNamedString(output, allocator, "kind", "job", false);
+        try appendStorageListCount(output, allocator, node, "containers", "container_count");
+        try appendOptionalStorageInteger(output, allocator, node, "task_count", "task_count");
+        try appendOptionalStorageInteger(output, allocator, node, "parallelism", "parallelism");
+        try appendOptionalStorageInteger(output, allocator, node, "max_retries", "max_retries");
+        try appendOptionalStorageInteger(output, allocator, node, "timeout_seconds", "timeout_seconds");
+        try appendOptionalStorageString(output, allocator, node, "service_account", "service_account");
+    } else if (std.mem.eql(u8, node.type_name, "gcp.run.WorkerPool")) {
+        try appendNamedString(output, allocator, "kind", "worker_pool", false);
+        try appendStorageListCount(output, allocator, node, "containers", "container_count");
+        try appendOptionalStorageInteger(output, allocator, node, "manual_instance_count", "manual_instance_count");
+        try appendStorageListCount(output, allocator, node, "instance_splits", "instance_split_count");
+        try appendOptionalStorageString(output, allocator, node, "service_account", "service_account");
+    } else {
+        try appendNamedString(output, allocator, "kind", "job_iam_member", false);
+        try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
+        try appendOptionalStorageString(output, allocator, node, "member", "iam_member");
     }
     try output.append(allocator, '}');
 }

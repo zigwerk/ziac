@@ -133,13 +133,24 @@ observed and debugged without manual IAM assembly.
 
 ## M60: Cloud Run Workload Completion
 
-- [ ] Job CRUD/import with containers, tasks, parallelism, retries, timeout,
+- [x] Job CRUD/import with containers, tasks, parallelism, retries, timeout,
   VPC, secrets, volumes, service identity and GPU controls.
-- [ ] Governed job execution and cancellation actions with execution receipts.
-- [ ] WorkerPool CRUD/import with revision rollout and instance split semantics.
-- [ ] `ZigJob`, `ScheduledZigJob` and `ZigWorkerPool` components.
-- [ ] Workload-specific logs, cost models, canvas shapes and status.
+- [x] Governed job execution and cancellation actions with execution receipts.
+- [x] WorkerPool CRUD/import with revision rollout and instance split semantics.
+- [x] `ZigJob`, `ScheduledZigJob` and `ZigWorkerPool` components.
+- [x] Workload-specific receipts, cost models, canvas shapes and status.
 - [ ] Authenticated migration job, parallel job and worker rollout qualification.
+
+M60 local implementation includes 48 managed catalog resources, pinned Cloud
+Run v2 RPC paths, resumable LROs, etag-safe Job IAM, OAuth Scheduler targets,
+explicit execution authority, graph-derived preflight, CAI identity, separate
+canvas groups and configuration estimates. The authenticated gate remains open
+because local scripted evidence is not live Google Cloud proof.
+
+Latest local gate: the Testing v2 `ziac-tests` receipt is complete with 564
+discovered and executed tests, 563 passed, one credential-gated skip, and zero
+failures, pending tests, leaks or logged errors. The dashboard's 54 tests,
+typecheck and production build also pass.
 
 Gate: services, jobs and worker pools all use the shared typed Cloud Run contract
 while preserving workload-specific lifecycle semantics.

@@ -230,3 +230,53 @@ test "Cloud Tasks and Eventarc REST bindings expand canonical paths and masks" {
         trigger_path,
     );
 }
+
+test "Cloud Run Job Execution and WorkerPool descriptors retain v2 workload contracts" {
+    try std.testing.expectEqualStrings("google.cloud.run.v2.Jobs", rpc.cloud_run_v2.create_job.service);
+    try std.testing.expectEqualStrings("/v2/{parent=projects/*/locations/*}/jobs", rpc.cloud_run_v2.create_job.rest.?.path_template);
+    try std.testing.expectEqualStrings("google.cloud.run.v2.Job", rpc.cloud_run_v2.create_job.long_running.?.response_type);
+    try std.testing.expect(!rpc.cloud_run_v2.update_job.semantics.update_mask);
+    try std.testing.expect(rpc.cloud_run_v2.update_job.semantics.etag);
+    try std.testing.expectEqualStrings("/v2/{name=projects/*/locations/*/jobs/*}:run", rpc.cloud_run_v2.run_job.rest.?.path_template);
+    try std.testing.expectEqualStrings("google.cloud.run.v2.Execution", rpc.cloud_run_v2.run_job.long_running.?.response_type);
+    try std.testing.expectEqualStrings("/v2/{name=projects/*/locations/*/jobs/*/executions/*}:cancel", rpc.cloud_run_v2.cancel_execution.rest.?.path_template);
+
+    try std.testing.expectEqualStrings("google.cloud.run.v2.WorkerPools", rpc.cloud_run_v2.create_worker_pool.service);
+    try std.testing.expectEqualStrings("/v2/{parent=projects/*/locations/*}/workerPools", rpc.cloud_run_v2.create_worker_pool.rest.?.path_template);
+    try std.testing.expectEqualStrings("google.cloud.run.v2.WorkerPool", rpc.cloud_run_v2.update_worker_pool.long_running.?.response_type);
+    try std.testing.expectEqualStrings("/v2/{resource=projects/*/locations/*/jobs/*}:getIamPolicy", rpc.cloud_run_v2.get_job_iam_policy.rest.?.path_template);
+    try std.testing.expectEqualStrings("/v2/{resource=projects/*/locations/*/jobs/*}:setIamPolicy", rpc.cloud_run_v2.set_job_iam_policy.rest.?.path_template);
+    try std.testing.expect(rpc.cloud_run_v2.update_worker_pool.semantics.update_mask);
+    try std.testing.expect(rpc.cloud_run_v2.update_worker_pool.semantics.etag);
+}
+
+test "Cloud Run workload REST bindings expand action and rollout query fields" {
+    const run_path = try rpc.restPathAlloc(
+        std.testing.allocator,
+        rpc.cloud_run_v2.run_job,
+        &.{.{ .field = "name", .value = "projects/ziac-dev/locations/europe-west1/jobs/migrate" }},
+        &.{
+            .{ .field = "validate_only", .value = "false" },
+            .{ .field = "etag", .value = "etag-1" },
+        },
+    );
+    defer std.testing.allocator.free(run_path);
+    try std.testing.expectEqualStrings(
+        "/v2/projects/ziac-dev/locations/europe-west1/jobs/migrate:run?validateOnly=false&etag=etag-1",
+        run_path,
+    );
+    const worker_path = try rpc.restPathAlloc(
+        std.testing.allocator,
+        rpc.cloud_run_v2.update_worker_pool,
+        &.{.{ .field = "worker_pool.name", .value = "projects/ziac-dev/locations/europe-west1/workerPools/events" }},
+        &.{
+            .{ .field = "update_mask", .value = "description,template,scaling,instanceSplits" },
+            .{ .field = "validate_only", .value = "false" },
+            .{ .field = "allow_missing", .value = "false" },
+            .{ .field = "force_new_revision", .value = "true" },
+        },
+    );
+    defer std.testing.allocator.free(worker_path);
+    try std.testing.expect(std.mem.indexOf(u8, worker_path, "forceNewRevision=true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, worker_path, "updateMask=description,template,scaling,instanceSplits") != null);
+}

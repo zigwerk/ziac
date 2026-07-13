@@ -10,6 +10,18 @@ test("provider icon catalogue uses official GCP core-product artwork", () => {
     iconPath: "/provider-icons/gcp/cloud-run.png",
     official: true,
   });
+  expect(resourceVisualIdentity(resource("gcp.run.Job"))).toMatchObject({
+    family: "gcp.run.job",
+    label: "Cloud Run Jobs",
+    iconPath: "/provider-icons/gcp/cloud-run.png",
+    official: true,
+  });
+  expect(resourceVisualIdentity(resource("gcp.run.WorkerPool"))).toMatchObject({
+    family: "gcp.run.worker-pool",
+    label: "Cloud Run Worker Pools",
+    iconPath: "/provider-icons/gcp/cloud-run.png",
+    official: true,
+  });
   expect(resourceVisualIdentity(resource("gcp.storage.Bucket"))).toMatchObject({
     family: "gcp.storage",
     label: "Cloud Storage",

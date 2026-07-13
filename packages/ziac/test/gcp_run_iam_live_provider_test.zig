@@ -70,6 +70,30 @@ test "Cloud Run IAM deletion is idempotent after the target service is gone" {
     try std.testing.expectEqual(@as(usize, 1), harness.transport.requests.items.len);
 }
 
+test "Cloud Run Job IAM uses the job-scoped Google policy endpoint" {
+    const policy = "{\"version\":3,\"etag\":\"BwJ=\",\"bindings\":[{\"role\":\"roles/run.invoker\",\"members\":[\"serviceAccount:nightly@ziac-dev.iam.gserviceaccount.com\"]}]}";
+    const responses = [_]zstd.Http.Response{ok(policy)};
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var member = try ziac.gcp.run_workloads.JobIamMember.build(std.testing.allocator, providerConfig(), .{
+        .name = "nightly-invoker",
+        .job = ziac.PublicOutput([]const u8).known("projects/ziac-dev/locations/europe-west1/jobs/nightly"),
+        .role = "roles/run.invoker",
+        .member = "serviceAccount:nightly@ziac-dev.iam.gserviceaccount.com",
+    });
+    defer member.deinit(std.testing.allocator);
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    var read = try harness.live.provider().readWithContext(&context, member.node);
+    defer read.deinit();
+
+    try std.testing.expect(read == .present);
+    try std.testing.expectEqualStrings(
+        "https://run.example.test/v2/projects/ziac-dev/locations/europe-west1/jobs/nightly:getIamPolicy?options.requestedPolicyVersion=3",
+        harness.transport.requests.items[0].url,
+    );
+}
+
 const Harness = struct {
     token_source: FixedTokenSource,
     cache: auth.TokenCache,

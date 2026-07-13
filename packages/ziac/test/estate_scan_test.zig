@@ -101,3 +101,27 @@ test "estate scan maps Cloud Tasks queues and Eventarc triggers to managed ident
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/queues/invoice-worker\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/triggers/orders-created\"") != null);
 }
+
+test "estate scan maps Cloud Run Jobs and Worker Pools to adoptable identities" {
+    var client = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer client.deinit();
+    try client.addPage(
+        \\{"results":[
+        \\{"name":"//run.googleapis.com/projects/acme-prod/locations/europe-west1/jobs/nightly-report","assetType":"run.googleapis.com/Job","project":"projects/123","location":"europe-west1","displayName":"nightly-report"},
+        \\{"name":"//run.googleapis.com/projects/acme-prod/locations/europe-west1/workerPools/events","assetType":"run.googleapis.com/WorkerPool","project":"projects/123","location":"europe-west1","displayName":"events"}
+        \\]}
+    );
+    var scan = try ziac.estate.scanAlloc(std.testing.allocator, client.client(), .{
+        .identity = .{ .provider = .google, .verified = true, .subject = "subject" },
+        .entitlement = .pro,
+        .connection = .{ .status = .connected, .project_id = "acme-prod" },
+        .observed_at_millis = 1_783_764_000_000,
+    });
+    defer scan.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), scan.resource_count);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.run.Job") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.run.WorkerPool") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/jobs/nightly-report\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/workerPools/events\"") != null);
+}

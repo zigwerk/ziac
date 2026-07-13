@@ -11,6 +11,7 @@ const tasks_provider = @import("tasks_provider.zig");
 const eventarc_provider = @import("eventarc_provider.zig");
 const operation = @import("operation.zig");
 const run_provider = @import("run_provider.zig");
+const run_workloads_provider = @import("run_workloads_provider.zig");
 const run_iam_provider = @import("run_iam_provider.zig");
 const storage_provider = @import("storage_provider.zig");
 const provider_mod = @import("../provider.zig");
@@ -63,8 +64,11 @@ pub const managed_type_names = [_][]const u8{
     "gcp.pubsub.SubscriptionIamMember",
     "gcp.pubsub.Topic",
     "gcp.pubsub.TopicIamMember",
+    "gcp.run.Job",
+    "gcp.run.JobIamMember",
     "gcp.run.Service",
     "gcp.run.ServiceIamMember",
+    "gcp.run.WorkerPool",
     "gcp.scheduler.Job",
     "gcp.secret.Secret",
     "gcp.secret.SecretIamMember",
@@ -118,6 +122,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
         if (isType(node, secret_iam_member_type)) return self.readSecretIamMember(context, node);
         if (isType(node, cloud_run_service_type)) return self.runHandler().read(context, node, null);
+        if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().read(context, node, null);
         if (run_iam_provider.supports(node)) return self.runIamHandler().read(context, node, null);
         if (network_provider.supports(node)) return self.networkHandler().read(context, node, null);
         if (compute_provider.supports(node)) return self.computeHandler().read(context, node, null);
@@ -141,6 +146,7 @@ pub const LiveProvider = struct {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
         if (isType(node, cloud_run_service_type)) return run_provider.Handler.diff(context, node, observed);
+        if (run_workloads_provider.supports(node)) return run_workloads_provider.Handler.diff(context, node, observed);
         if (run_iam_provider.supports(node)) return run_iam_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (compute_provider.supports(node)) return compute_provider.Handler.diff(context, node, observed);
@@ -178,6 +184,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
         if (isType(node, secret_iam_member_type)) return self.ensureSecretIamMember(context, node, true);
         if (isType(node, cloud_run_service_type)) return self.runHandler().create(context, node);
+        if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().create(context, node);
         if (run_iam_provider.supports(node)) return self.runIamHandler().create(context, node);
         if (network_provider.supports(node)) return self.networkHandler().create(context, node);
         if (compute_provider.supports(node)) return self.computeHandler().create(context, node);
@@ -204,6 +211,7 @@ pub const LiveProvider = struct {
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed.physical_id);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed);
+        if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().update(context, node, observed);
         if (run_iam_provider.supports(node)) return self.runIamHandler().update(context, node, observed.physical_id);
         if (network_provider.supports(node)) return self.networkHandler().update(context, node, observed.physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().update(context, node, observed.physical_id);
@@ -231,6 +239,7 @@ pub const LiveProvider = struct {
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.destroySecretVersion(context, physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().delete(context, physical_id);
+        if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().delete(context, node, physical_id);
         if (run_iam_provider.supports(node)) return self.runIamHandler().delete(context, node, physical_id);
         if (network_provider.supports(node)) return self.networkHandler().delete(context, node, physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().delete(context, node, physical_id);
@@ -313,6 +322,13 @@ pub const LiveProvider = struct {
         }
         if (isType(node, cloud_run_service_type)) {
             const result = try self.runHandler().read(context, node, physical_id);
+            return switch (result) {
+                .absent => error.NotFound,
+                .present => |present| present,
+            };
+        }
+        if (run_workloads_provider.supports(node)) {
+            const result = try self.runWorkloadsHandler().read(context, node, physical_id);
             return switch (result) {
                 .absent => error.NotFound,
                 .present => |present| present,
@@ -988,6 +1004,10 @@ pub const LiveProvider = struct {
     }
 
     fn runHandler(self: *LiveProvider) run_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn runWorkloadsHandler(self: *LiveProvider) run_workloads_provider.Handler {
         return .{ .client = self.client, .operation_policy = self.operation_policy };
     }
 

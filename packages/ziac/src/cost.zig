@@ -95,6 +95,35 @@ pub const EventarcEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const CloudRunJobEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    cpu_sku_id: []const u8,
+    memory_sku_id: []const u8,
+    gpu_sku_id: []const u8 = "",
+    task_count: u64,
+    executions_per_month: u64,
+    average_task_seconds: u64,
+    vcpu_per_task: u64,
+    memory_gib_per_task: u64,
+    gpu_per_task: u64 = 0,
+    observed_at_millis: u64,
+};
+
+pub const CloudRunWorkerPoolEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    cpu_sku_id: []const u8,
+    memory_sku_id: []const u8,
+    gpu_sku_id: []const u8 = "",
+    instance_count: u64,
+    active_seconds_per_instance: u64,
+    vcpu_per_instance: u64,
+    memory_gib_per_instance: u64,
+    gpu_per_instance: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const BillingRow = struct {
     resource_id: []const u8,
     cost_micros: i64,
@@ -327,6 +356,99 @@ pub fn eventarcConfigurationEstimate(
         count += 1;
     }
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn cloudRunJobConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: CloudRunJobEstimateInput,
+) !ResourceCost {
+    if (input.task_count == 0 or input.executions_per_month == 0 or input.average_task_seconds == 0 or
+        input.vcpu_per_task == 0 or input.memory_gib_per_task == 0)
+    {
+        return error.InvalidUsageAssumption;
+    }
+    const task_seconds = try checkedProduct(&.{ input.task_count, input.executions_per_month, input.average_task_seconds });
+    return cloudRunComputeEstimate(prices, .{
+        .resource_id = input.resource_id,
+        .region = input.region,
+        .cpu_sku_id = input.cpu_sku_id,
+        .memory_sku_id = input.memory_sku_id,
+        .gpu_sku_id = input.gpu_sku_id,
+        .base_seconds = task_seconds,
+        .vcpu = input.vcpu_per_task,
+        .memory_gib = input.memory_gib_per_task,
+        .gpu = input.gpu_per_task,
+        .observed_at_millis = input.observed_at_millis,
+    });
+}
+
+pub fn cloudRunWorkerPoolConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: CloudRunWorkerPoolEstimateInput,
+) !ResourceCost {
+    if (input.instance_count == 0 or input.active_seconds_per_instance == 0 or
+        input.vcpu_per_instance == 0 or input.memory_gib_per_instance == 0)
+    {
+        return error.InvalidUsageAssumption;
+    }
+    const instance_seconds = try checkedProduct(&.{ input.instance_count, input.active_seconds_per_instance });
+    return cloudRunComputeEstimate(prices, .{
+        .resource_id = input.resource_id,
+        .region = input.region,
+        .cpu_sku_id = input.cpu_sku_id,
+        .memory_sku_id = input.memory_sku_id,
+        .gpu_sku_id = input.gpu_sku_id,
+        .base_seconds = instance_seconds,
+        .vcpu = input.vcpu_per_instance,
+        .memory_gib = input.memory_gib_per_instance,
+        .gpu = input.gpu_per_instance,
+        .observed_at_millis = input.observed_at_millis,
+    });
+}
+
+const CloudRunComputeEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    cpu_sku_id: []const u8,
+    memory_sku_id: []const u8,
+    gpu_sku_id: []const u8,
+    base_seconds: u64,
+    vcpu: u64,
+    memory_gib: u64,
+    gpu: u64,
+    observed_at_millis: u64,
+};
+
+fn cloudRunComputeEstimate(prices: []const SkuPrice, input: CloudRunComputeEstimateInput) !ResourceCost {
+    if (input.cpu_sku_id.len == 0 or input.memory_sku_id.len == 0) return error.InvalidPricing;
+    var usage: [3]UsageAssumption = undefined;
+    usage[0] = .{
+        .sku_id = input.cpu_sku_id,
+        .region = input.region,
+        .quantity = try checkedProduct(&.{ input.base_seconds, input.vcpu }),
+    };
+    usage[1] = .{
+        .sku_id = input.memory_sku_id,
+        .region = input.region,
+        .quantity = try checkedProduct(&.{ input.base_seconds, input.memory_gib }),
+    };
+    var count: usize = 2;
+    if (input.gpu > 0) {
+        if (input.gpu_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{
+            .sku_id = input.gpu_sku_id,
+            .region = input.region,
+            .quantity = try checkedProduct(&.{ input.base_seconds, input.gpu }),
+        };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+fn checkedProduct(factors: []const u64) !u64 {
+    var result: u64 = 1;
+    for (factors) |factor| result = std.math.mul(u64, result, factor) catch return error.CostOverflow;
+    return result;
 }
 
 pub fn attributeActualAlloc(

@@ -563,7 +563,7 @@ function ResourceNavigator(props: {
 
 function ResourceIcon(props: { resource: ZiacVisualResource }) {
   if (props.resource.provider === "cockroach") return <Database size={15} />;
-  if (props.resource.type === "gcp.run.Service") return <Cloud size={15} />;
+  if (isCloudRunWorkload(props.resource)) return <Cloud size={15} />;
   if (props.resource.type.includes("ForwardingRule") || props.resource.type.includes("BackendService")) return <Route size={15} />;
   if (props.resource.type.includes("SslCertificate")) return <ShieldCheck size={15} />;
   if (props.resource.type.includes("RecordSet")) return <Globe2 size={15} />;
@@ -573,7 +573,7 @@ function ResourceIcon(props: { resource: ZiacVisualResource }) {
 
 function resourceGroups(resources: ZiacVisualResource[]) {
   const definitions = [
-    ["compute", "Compute", (resource: ZiacVisualResource) => resource.type === "gcp.run.Service" || resource.type.includes("ServerlessNeg")],
+    ["compute", "Compute", (resource: ZiacVisualResource) => isCloudRunWorkload(resource) || resource.type.includes("ServerlessNeg")],
     ["network", "Networking", (resource: ZiacVisualResource) => resource.type.includes("compute.") && resource.type !== "gcp.run.Service" && !resource.type.includes("ServerlessNeg")],
     ["data", "Data", (resource: ZiacVisualResource) => resource.provider === "cockroach"],
     ["project", "Project services", (resource: ZiacVisualResource) => resource.scope === "project"],
@@ -675,9 +675,17 @@ function InspectorLink(props: { id: string; kind: string; onSelect: (id: string)
 
 function resourceService(resource: ZiacVisualResource) {
   if (resource.type === "gcp.run.Service") return "Cloud Run service";
+  if (resource.type === "gcp.run.Job") return "Cloud Run job";
+  if (resource.type === "gcp.run.WorkerPool") return "Cloud Run worker pool";
   if (resource.type.includes("GlobalForwardingRule")) return "Global load balancer";
   if (resource.provider === "cockroach") return "CockroachDB cluster";
   return resource.type.split(".").at(-1) ?? resource.type;
+}
+
+function isCloudRunWorkload(resource: ZiacVisualResource) {
+  return resource.type === "gcp.run.Service"
+    || resource.type === "gcp.run.Job"
+    || resource.type === "gcp.run.WorkerPool";
 }
 
 function resourceYaml(resource: ZiacVisualResource) {

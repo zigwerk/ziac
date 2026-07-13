@@ -8,6 +8,7 @@ const value = @import("../value.zig");
 
 const ProviderError = provider_mod.ProviderError;
 const service_iam_type = "gcp.run.ServiceIamMember";
+const job_iam_type = "gcp.run.JobIamMember";
 
 pub const Handler = struct {
     client: *client_mod.Client,
@@ -23,11 +24,11 @@ pub const Handler = struct {
         const physical = try physicalIdAlloc(context.allocator, node, target);
         defer context.allocator.free(physical);
         if (physical_override) |provided| if (!std.mem.eql(u8, provided, physical)) return error.InvalidConfiguration;
-        const path = try policyPathAlloc(context.allocator, rpc.cloud_run_v2.get_service_iam_policy, target, true);
+        const path = try policyPathAlloc(context.allocator, getPolicyMethod(node), target, true);
         defer context.allocator.free(path);
         var response = self.request(context, .{
             .api = .run,
-            .method = rpc.cloud_run_v2.get_service_iam_policy.rest.?.method.text(),
+            .method = getPolicyMethod(node).rest.?.method.text(),
             .path = path,
         }) catch |err| {
             if (err == error.NotFound) return .absent;
@@ -92,11 +93,11 @@ pub const Handler = struct {
         const target = try resolveString(context, try requiredValue(node.inputs, "resource"));
         var attempt: usize = 0;
         while (true) : (attempt += 1) {
-            const get_path = try policyPathAlloc(context.allocator, rpc.cloud_run_v2.get_service_iam_policy, target, true);
+            const get_path = try policyPathAlloc(context.allocator, getPolicyMethod(node), target, true);
             defer context.allocator.free(get_path);
             var current = self.request(context, .{
                 .api = .run,
-                .method = rpc.cloud_run_v2.get_service_iam_policy.rest.?.method.text(),
+                .method = getPolicyMethod(node).rest.?.method.text(),
                 .path = get_path,
             }) catch |err| {
                 if (err == error.NotFound and !should_exist) return memberResult(context, node, target);
@@ -109,11 +110,11 @@ pub const Handler = struct {
             if (!changed) return memberResult(context, node, target);
             const body = try policyBodyAlloc(context.allocator, parsed.value);
             defer context.allocator.free(body);
-            const set_path = try policyPathAlloc(context.allocator, rpc.cloud_run_v2.set_service_iam_policy, target, false);
+            const set_path = try policyPathAlloc(context.allocator, setPolicyMethod(node), target, false);
             defer context.allocator.free(set_path);
             var response = self.request(context, .{
                 .api = .run,
-                .method = rpc.cloud_run_v2.set_service_iam_policy.rest.?.method.text(),
+                .method = setPolicyMethod(node).rest.?.method.text(),
                 .path = set_path,
                 .body = body,
             }) catch |err| {
@@ -137,7 +138,15 @@ pub const Handler = struct {
 };
 
 pub fn supports(node: resource.ResourceNode) bool {
-    return std.mem.eql(u8, node.type_name, service_iam_type);
+    return std.mem.eql(u8, node.type_name, service_iam_type) or std.mem.eql(u8, node.type_name, job_iam_type);
+}
+
+fn getPolicyMethod(node: resource.ResourceNode) rpc.Method {
+    return if (std.mem.eql(u8, node.type_name, job_iam_type)) rpc.cloud_run_v2.get_job_iam_policy else rpc.cloud_run_v2.get_service_iam_policy;
+}
+
+fn setPolicyMethod(node: resource.ResourceNode) rpc.Method {
+    return if (std.mem.eql(u8, node.type_name, job_iam_type)) rpc.cloud_run_v2.set_job_iam_policy else rpc.cloud_run_v2.set_service_iam_policy;
 }
 
 fn policyPathAlloc(

@@ -118,6 +118,59 @@ test "Eventarc estimates separate chargeable events from Pub/Sub transport" {
     try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
 }
 
+test "Cloud Run Job estimates derive bounded compute usage from execution assumptions" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "run-job-cpu", .region = "europe-west1", .unit = "vCPU-second", .unit_quantity = 1, .unit_price_micros = 24 },
+        .{ .sku_id = "run-job-memory", .region = "europe-west1", .unit = "GiB-second", .unit_quantity = 1, .unit_price_micros = 3 },
+    };
+    const estimate = try ziac.cost.cloudRunJobConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.run.Job.europe-west1.nightly-report",
+        .region = "europe-west1",
+        .cpu_sku_id = "run-job-cpu",
+        .memory_sku_id = "run-job-memory",
+        .task_count = 10,
+        .executions_per_month = 30,
+        .average_task_seconds = 60,
+        .vcpu_per_task = 2,
+        .memory_gib_per_task = 4,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 1_080_000), estimate.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
+    try std.testing.expectEqual(ziac.cost.Confidence.explicit_usage, estimate.confidence);
+}
+
+test "Cloud Run Worker Pool estimates derive always-on capacity without inventing utilization" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "run-worker-cpu", .region = "europe-west1", .unit = "vCPU-second", .unit_quantity = 1, .unit_price_micros = 20 },
+        .{ .sku_id = "run-worker-memory", .region = "europe-west1", .unit = "GiB-second", .unit_quantity = 1, .unit_price_micros = 2 },
+    };
+    const estimate = try ziac.cost.cloudRunWorkerPoolConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.run.WorkerPool.europe-west1.events",
+        .region = "europe-west1",
+        .cpu_sku_id = "run-worker-cpu",
+        .memory_sku_id = "run-worker-memory",
+        .instance_count = 3,
+        .active_seconds_per_instance = 2_592_000,
+        .vcpu_per_instance = 2,
+        .memory_gib_per_instance = 4,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 373_248_000), estimate.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
+    try std.testing.expectError(error.InvalidUsageAssumption, ziac.cost.cloudRunWorkerPoolConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.run.WorkerPool.europe-west1.events",
+        .region = "europe-west1",
+        .cpu_sku_id = "run-worker-cpu",
+        .memory_sku_id = "run-worker-memory",
+        .instance_count = 0,
+        .active_seconds_per_instance = 2_592_000,
+        .vcpu_per_instance = 2,
+        .memory_gib_per_instance = 4,
+        .observed_at_millis = 1_000,
+    }));
+}
+
 test "Cloud Billing adapters parse catalog prices and normalized detailed export rows" {
     var catalog = try ziac.cost.parseCatalogPageAlloc(std.testing.allocator, "{\"skus\":[{\"skuId\":\"run-cpu\",\"serviceRegions\":[\"europe-west1\"],\"pricingInfo\":[{\"pricingExpression\":{\"usageUnit\":\"vCPU-second\",\"baseUnitConversionFactor\":1,\"tieredRates\":[{\"unitPrice\":{\"units\":\"0\",\"nanos\":24000}}]}}]}],\"nextPageToken\":\"next-1\"}");
     defer catalog.deinit();

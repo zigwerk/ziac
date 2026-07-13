@@ -874,7 +874,7 @@ function routeVisible(kind: ZiacEdgeKind, mode: ZiacTopologyMode): boolean {
 function resourceVisible(resource: ZiacVisualResource, mode: ZiacTopologyMode): boolean {
   if (mode === "dependencies") return true;
   if (mode === "vpc") {
-    return resource.type === "gcp.run.Service"
+    return isCloudRunWorkload(resource)
       || resource.type.includes("RegionServerlessNeg")
       || resource.provider === "cockroach";
   }
@@ -886,7 +886,7 @@ function resourceVisible(resource: ZiacVisualResource, mode: ZiacTopologyMode): 
       || resource.type.includes("GlobalAddress")
       || resource.provider === "cockroach";
   }
-  return resource.type === "gcp.run.Service"
+  return isCloudRunWorkload(resource)
     || resource.type.startsWith("gcp.storage.")
     || resource.type.startsWith("gcp.sql.")
     || resource.provider === "cockroach"
@@ -911,6 +911,8 @@ function resourceEmphasized(resource: ZiacVisualResource, mode: ZiacTopologyMode
 
 function resourceService(resource: ZiacVisualResource): string {
   if (resource.type === "gcp.run.Service") return "Cloud Run";
+  if (resource.type === "gcp.run.Job") return "Cloud Run Job";
+  if (resource.type === "gcp.run.WorkerPool") return "Cloud Run Worker Pool";
   if (resource.type.startsWith("gcp.storage.")) return "Cloud Storage";
   if (resource.type.startsWith("gcp.sql.")) return "Cloud SQL";
   if (resource.type.includes("GlobalForwardingRule")) return "Global HTTPS LB";
@@ -934,8 +936,14 @@ function resourceAccent(resource: ZiacVisualResource): string {
   if (resource.provider === "cockroach") return "#6f5bd3";
   if (resource.type.includes("ManagedSslCertificate")) return "#ea4335";
   if (resource.type.includes("RecordSet")) return "#34a853";
-  if (resource.type.includes("GlobalForwardingRule") || resource.type === "gcp.run.Service") return "#4285f4";
+  if (resource.type.includes("GlobalForwardingRule") || isCloudRunWorkload(resource)) return "#4285f4";
   return "#78909c";
+}
+
+function isCloudRunWorkload(resource: ZiacVisualResource): boolean {
+  return resource.type === "gcp.run.Service"
+    || resource.type === "gcp.run.Job"
+    || resource.type === "gcp.run.WorkerPool";
 }
 
 function routeAccent(kind: ZiacEdgeKind, access?: ZiacAccessMode): string {

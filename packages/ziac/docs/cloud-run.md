@@ -57,3 +57,7 @@ completion inside the provider because the delete vtable has no result handle.
 
 See `rollouts-recovery.md` for regional canary ordering, image history, guarded
 rollback, and quota diagnostics.
+
+Jobs, Executions, scheduled OAuth invocation and Worker Pools are documented in
+`gcp-cloud-run-workloads.md` because they deliberately use different lifecycle
+and authority semantics from request-driven Services.

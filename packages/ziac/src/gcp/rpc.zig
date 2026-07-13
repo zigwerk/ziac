@@ -269,6 +269,44 @@ const service_lro = LongRunning{
     .response_type = "google.cloud.run.v2.Service",
     .metadata_type = "google.cloud.run.v2.Service",
 };
+const job_create_query = [_]QueryField{
+    .{ .request_field = "job_id", .wire_name = "jobId" },
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+};
+const job_update_query = [_]QueryField{
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+    .{ .request_field = "allow_missing", .wire_name = "allowMissing" },
+};
+const run_job_query = [_]QueryField{
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+    .{ .request_field = "etag", .wire_name = "etag" },
+};
+const worker_pool_create_query = [_]QueryField{
+    .{ .request_field = "worker_pool_id", .wire_name = "workerPoolId" },
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+};
+const worker_pool_update_query = [_]QueryField{
+    .{ .request_field = "update_mask", .wire_name = "updateMask" },
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+    .{ .request_field = "allow_missing", .wire_name = "allowMissing" },
+    .{ .request_field = "force_new_revision", .wire_name = "forceNewRevision" },
+};
+const action_delete_query = [_]QueryField{
+    .{ .request_field = "validate_only", .wire_name = "validateOnly" },
+    .{ .request_field = "etag", .wire_name = "etag" },
+};
+const job_lro = LongRunning{
+    .response_type = "google.cloud.run.v2.Job",
+    .metadata_type = "google.cloud.run.v2.Job",
+};
+const execution_lro = LongRunning{
+    .response_type = "google.cloud.run.v2.Execution",
+    .metadata_type = "google.cloud.run.v2.Execution",
+};
+const worker_pool_lro = LongRunning{
+    .response_type = "google.cloud.run.v2.WorkerPool",
+    .metadata_type = "google.cloud.run.v2.WorkerPool",
+};
 
 pub const cloud_run_v2 = struct {
     pub const create_service = Method{
@@ -372,6 +410,172 @@ pub const cloud_run_v2 = struct {
         .routing_field = "resource",
         .transports = cloud_run_transport,
         .semantics = .{ .etag = true },
+    };
+
+    pub const create_job = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Jobs",
+        .method = "CreateJob",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.CreateJobRequest",
+        .response_type = "google.longrunning.Operation",
+        .rest = .{ .method = .post, .path_template = "/v2/{parent=projects/*/locations/*}/jobs", .body = "job", .query_fields = &job_create_query },
+        .routing_field = "parent",
+        .long_running = job_lro,
+        .transports = cloud_run_transport,
+        .semantics = .{ .validate_only = true, .etag = true, .reconciling = true },
+    };
+    pub const get_job = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Jobs",
+        .method = "GetJob",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.GetJobRequest",
+        .response_type = "google.cloud.run.v2.Job",
+        .rest = .{ .method = .get, .path_template = "/v2/{name=projects/*/locations/*/jobs/*}" },
+        .routing_field = "name",
+        .transports = cloud_run_transport,
+        .semantics = .{ .etag = true, .reconciling = true },
+    };
+    pub const update_job = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Jobs",
+        .method = "UpdateJob",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.UpdateJobRequest",
+        .response_type = "google.longrunning.Operation",
+        .rest = .{ .method = .patch, .path_template = "/v2/{job.name=projects/*/locations/*/jobs/*}", .body = "job", .query_fields = &job_update_query },
+        .routing_field = "job.name",
+        .long_running = job_lro,
+        .transports = cloud_run_transport,
+        .semantics = .{ .validate_only = true, .etag = true, .reconciling = true },
+    };
+    pub const delete_job = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Jobs",
+        .method = "DeleteJob",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.DeleteJobRequest",
+        .response_type = "google.longrunning.Operation",
+        .rest = .{ .method = .delete, .path_template = "/v2/{name=projects/*/locations/*/jobs/*}", .query_fields = &delete_query },
+        .routing_field = "name",
+        .long_running = job_lro,
+        .transports = cloud_run_transport,
+        .semantics = .{ .validate_only = true, .etag = true, .reconciling = true },
+    };
+    pub const run_job = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Jobs",
+        .method = "RunJob",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.RunJobRequest",
+        .response_type = "google.longrunning.Operation",
+        .rest = .{ .method = .post, .path_template = "/v2/{name=projects/*/locations/*/jobs/*}:run", .body = "*", .query_fields = &run_job_query },
+        .routing_field = "name",
+        .long_running = execution_lro,
+        .transports = cloud_run_transport,
+        .semantics = .{ .validate_only = true, .etag = true, .reconciling = true },
+    };
+    pub const get_job_iam_policy = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Jobs",
+        .method = "GetIamPolicy",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.iam.v1.GetIamPolicyRequest",
+        .response_type = "google.iam.v1.Policy",
+        .rest = .{ .method = .get, .path_template = "/v2/{resource=projects/*/locations/*/jobs/*}:getIamPolicy", .query_fields = &cloud_run_iam_get_query },
+        .routing_field = "resource",
+        .transports = cloud_run_transport,
+        .semantics = .{ .etag = true },
+    };
+    pub const set_job_iam_policy = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Jobs",
+        .method = "SetIamPolicy",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.iam.v1.SetIamPolicyRequest",
+        .response_type = "google.iam.v1.Policy",
+        .rest = .{ .method = .post, .path_template = "/v2/{resource=projects/*/locations/*/jobs/*}:setIamPolicy", .body = "*" },
+        .routing_field = "resource",
+        .transports = cloud_run_transport,
+        .semantics = .{ .etag = true },
+    };
+    pub const get_execution = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Executions",
+        .method = "GetExecution",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.GetExecutionRequest",
+        .response_type = "google.cloud.run.v2.Execution",
+        .rest = .{ .method = .get, .path_template = "/v2/{name=projects/*/locations/*/jobs/*/executions/*}" },
+        .routing_field = "name",
+        .transports = cloud_run_transport,
+        .semantics = .{ .etag = true, .reconciling = true },
+    };
+    pub const cancel_execution = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.Executions",
+        .method = "CancelExecution",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.CancelExecutionRequest",
+        .response_type = "google.longrunning.Operation",
+        .rest = .{ .method = .post, .path_template = "/v2/{name=projects/*/locations/*/jobs/*/executions/*}:cancel", .body = "*", .query_fields = &action_delete_query },
+        .routing_field = "name",
+        .long_running = execution_lro,
+        .transports = cloud_run_transport,
+        .semantics = .{ .validate_only = true, .etag = true, .reconciling = true },
+    };
+
+    pub const create_worker_pool = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.WorkerPools",
+        .method = "CreateWorkerPool",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.CreateWorkerPoolRequest",
+        .response_type = "google.longrunning.Operation",
+        .rest = .{ .method = .post, .path_template = "/v2/{parent=projects/*/locations/*}/workerPools", .body = "worker_pool", .query_fields = &worker_pool_create_query },
+        .routing_field = "parent",
+        .long_running = worker_pool_lro,
+        .transports = cloud_run_transport,
+        .semantics = .{ .validate_only = true, .etag = true, .reconciling = true },
+    };
+    pub const get_worker_pool = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.WorkerPools",
+        .method = "GetWorkerPool",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.GetWorkerPoolRequest",
+        .response_type = "google.cloud.run.v2.WorkerPool",
+        .rest = .{ .method = .get, .path_template = "/v2/{name=projects/*/locations/*/workerPools/*}" },
+        .routing_field = "name",
+        .transports = cloud_run_transport,
+        .semantics = .{ .etag = true, .reconciling = true },
+    };
+    pub const update_worker_pool = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.WorkerPools",
+        .method = "UpdateWorkerPool",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.UpdateWorkerPoolRequest",
+        .response_type = "google.longrunning.Operation",
+        .rest = .{ .method = .patch, .path_template = "/v2/{worker_pool.name=projects/*/locations/*/workerPools/*}", .body = "worker_pool", .query_fields = &worker_pool_update_query },
+        .routing_field = "worker_pool.name",
+        .long_running = worker_pool_lro,
+        .transports = cloud_run_transport,
+        .semantics = .{ .validate_only = true, .update_mask = true, .etag = true, .reconciling = true },
+    };
+    pub const delete_worker_pool = Method{
+        .package = "google.cloud.run.v2",
+        .service = "google.cloud.run.v2.WorkerPools",
+        .method = "DeleteWorkerPool",
+        .default_host = "run.googleapis.com",
+        .request_type = "google.cloud.run.v2.DeleteWorkerPoolRequest",
+        .response_type = "google.longrunning.Operation",
+        .rest = .{ .method = .delete, .path_template = "/v2/{name=projects/*/locations/*/workerPools/*}", .query_fields = &delete_query },
+        .routing_field = "name",
+        .long_running = worker_pool_lro,
+        .transports = cloud_run_transport,
+        .semantics = .{ .validate_only = true, .etag = true, .reconciling = true },
     };
 };
 

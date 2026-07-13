@@ -20,6 +20,15 @@ export function resourceVisualIdentity(resource: Pick<ZiacVisualResource, "provi
   if (resource.type === "gcp.run.Service") {
     return { family: "gcp.run", label: "Cloud Run", iconPath: `${gcpIconRoot}/cloud-run.png`, official: true };
   }
+  if (resource.type === "gcp.run.Job") {
+    return { family: "gcp.run.job", label: "Cloud Run Jobs", iconPath: `${gcpIconRoot}/cloud-run.png`, official: true };
+  }
+  if (resource.type === "gcp.run.WorkerPool") {
+    return { family: "gcp.run.worker-pool", label: "Cloud Run Worker Pools", iconPath: `${gcpIconRoot}/cloud-run.png`, official: true };
+  }
+  if (resource.type.startsWith("gcp.run.")) {
+    return { family: "gcp.run.iam", label: "Cloud Run IAM", iconPath: `${gcpIconRoot}/cloud-run.png`, official: true };
+  }
   if (resource.type.startsWith("gcp.storage.")) {
     return { family: "gcp.storage", label: "Cloud Storage", iconPath: `${gcpIconRoot}/cloud-storage.png`, official: true };
   }

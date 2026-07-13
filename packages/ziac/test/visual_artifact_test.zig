@@ -180,6 +180,55 @@ test "visual artifact projects Cloud Tasks and Eventarc delivery metadata" {
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"region\":\"europe-west1\"") != null);
 }
 
+test "visual artifact projects Cloud Run Job Worker Pool and workload IAM metadata" {
+    const provider = ziac.gcp.ProviderConfig{ .project_id = "ziac-prod", .primary_region = "europe-west1" };
+    var scheduled = try ziac.gcp.ScheduledZigJob.build(std.testing.allocator, provider, .{
+        .workload = .{
+            .name = "nightly-report",
+            .containers = &.{.{
+                .name = "main",
+                .image = "example.invalid/report@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            }},
+            .task_count = 12,
+            .parallelism = 3,
+            .max_retries = 2,
+            .timeout_seconds = 900,
+        },
+        .schedule = "0 2 * * *",
+    });
+    defer scheduled.deinit();
+    var worker = try ziac.gcp.ZigWorkerPool.build(std.testing.allocator, provider, .{
+        .workload = .{
+            .name = "events",
+            .containers = &.{.{
+                .name = "worker",
+                .image = "example.invalid/events@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            }},
+            .manual_instance_count = 4,
+            .instance_splits = &.{.{ .allocation = .latest, .percent = 100 }},
+        },
+    });
+    defer worker.deinit();
+    for (worker.graph.resources.items) |node| try scheduled.graph.addResource(node);
+    for (worker.graph.dependencies.items) |edge| try scheduled.graph.addDependency(edge.from, edge.to);
+
+    var artifact = try ziac.visual_artifact.serializeAlloc(std.testing.allocator, &scheduled.graph, null, .{
+        .stack = "workloads",
+        .stage = "prod",
+        .created_at_millis = 7,
+    });
+    defer artifact.deinit();
+
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"run_workload\":{\"kind\":\"job\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"task_count\":12") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"parallelism\":3") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"run_workload\":{\"kind\":\"worker_pool\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"manual_instance_count\":4") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"instance_split_count\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"run_workload\":{\"kind\":\"job_iam_member\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"iam_role\":\"roles/run.invoker\"") != null);
+}
+
 fn fixtureGraph() !ziac.ResourceGraph {
     var graph = ziac.ResourceGraph.init(std.testing.allocator);
     errdefer graph.deinit();

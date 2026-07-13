@@ -100,6 +100,58 @@ test "async delivery graph synthesizes Cloud Tasks Eventarc and act-as preflight
     try std.testing.expect(requirements.hasPermission("iam.serviceAccounts.actAs"));
 }
 
+test "Cloud Run workload components synthesize lifecycle IAM scheduler and action preflight" {
+    var scheduled = try ziac.gcp.ScheduledZigJob.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{
+        .workload = .{
+            .name = "nightly-report",
+            .containers = &.{.{
+                .name = "main",
+                .image = "example.invalid/report@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            }},
+        },
+        .schedule = "0 2 * * *",
+    });
+    defer scheduled.deinit();
+    var worker = try ziac.gcp.ZigWorkerPool.build(std.testing.allocator, .{
+        .project_id = "ziac-dev",
+        .primary_region = "europe-west1",
+    }, .{
+        .workload = .{
+            .name = "events",
+            .containers = &.{.{
+                .name = "worker",
+                .image = "example.invalid/events@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            }},
+        },
+    });
+    defer worker.deinit();
+
+    for (worker.graph.resources.items) |node| try scheduled.graph.addResource(node);
+    for (worker.graph.dependencies.items) |edge| try scheduled.graph.addDependency(edge.from, edge.to);
+    var requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &scheduled.graph);
+    defer requirements.deinit(std.testing.allocator);
+
+    try std.testing.expect(contains(requirements.apis, "run.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "cloudscheduler.googleapis.com"));
+    try std.testing.expect(requirements.hasPermission("run.jobs.create"));
+    try std.testing.expect(requirements.hasPermission("run.jobs.update"));
+    try std.testing.expect(requirements.hasPermission("run.jobs.getIamPolicy"));
+    try std.testing.expect(requirements.hasPermission("run.jobs.setIamPolicy"));
+    try std.testing.expect(requirements.hasPermission("run.workerpools.create"));
+    try std.testing.expect(requirements.hasPermission("run.workerpools.update"));
+    try std.testing.expect(requirements.hasPermission("cloudscheduler.jobs.create"));
+    try std.testing.expect(requirements.hasPermission("iam.serviceAccounts.actAs"));
+
+    var action_requirements = try ziac.gcp.intelligence.synthesize(std.testing.allocator, ziac.gcp.intelligence.jobExecutionUsages());
+    defer action_requirements.deinit(std.testing.allocator);
+    try std.testing.expect(action_requirements.hasPermission("run.jobs.run"));
+    try std.testing.expect(action_requirements.hasPermission("run.executions.get"));
+    try std.testing.expect(action_requirements.hasPermission("run.executions.cancel"));
+}
+
 test "topology advice respects residency and Cockroach locality without mutating policy" {
     const intelligence = ziac.gcp.intelligence;
     var advice = try intelligence.adviseTopology(std.testing.allocator, .{

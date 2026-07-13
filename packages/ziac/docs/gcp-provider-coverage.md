@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 45 managed GCP resource types.
+The current deterministic provider gate contains 48 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -47,9 +47,20 @@ silently diverge.
 
 - `gcp.run.Service`
 - `gcp.run.ServiceIamMember`
+- `gcp.run.Job`
+- `gcp.run.JobIamMember`
+- `gcp.run.WorkerPool`
 - `gcp.cloudbuild.ZigImage`
 - `gcp.storage.BuildBucket`
 - `gcp.storage.SourceObject`
+
+Jobs and Worker Pools share typed multi-container, identity, Secret Manager,
+Direct VPC, CMEK and GPU controls while preserving their distinct lifecycle.
+Executions are governed actions with exact capability digests and receipts;
+they are not managed resources. `ScheduledZigJob` uses OAuth to call the Google
+RunJob API with exact resource IAM. Workload permission synthesis, Cloud Asset
+identity, separate 3D canvas groups and explicit compute-duration cost estimates
+are synchronized. See `gcp-cloud-run-workloads.md`.
 
 ### General Cloud Storage
 

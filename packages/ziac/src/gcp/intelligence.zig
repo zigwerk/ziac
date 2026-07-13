@@ -223,6 +223,21 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Services.GetIamPolicy", .permission = "run.services.getIamPolicy" },
         .{ .suffix = "Services.SetIamPolicy", .permission = "run.services.setIamPolicy" },
         .{ .suffix = "Services.TestIamPermissions", .permission = "run.services.getIamPolicy" },
+        .{ .suffix = "Jobs.CreateJob", .permission = "run.jobs.create" },
+        .{ .suffix = "Jobs.GetJob", .permission = "run.jobs.get" },
+        .{ .suffix = "Jobs.ListJobs", .permission = "run.jobs.list" },
+        .{ .suffix = "Jobs.UpdateJob", .permission = "run.jobs.update" },
+        .{ .suffix = "Jobs.DeleteJob", .permission = "run.jobs.delete" },
+        .{ .suffix = "Jobs.RunJob", .permission = "run.jobs.run" },
+        .{ .suffix = "Jobs.GetIamPolicy", .permission = "run.jobs.getIamPolicy" },
+        .{ .suffix = "Jobs.SetIamPolicy", .permission = "run.jobs.setIamPolicy" },
+        .{ .suffix = "Executions.GetExecution", .permission = "run.executions.get" },
+        .{ .suffix = "Executions.CancelExecution", .permission = "run.executions.cancel" },
+        .{ .suffix = "WorkerPools.CreateWorkerPool", .permission = "run.workerpools.create" },
+        .{ .suffix = "WorkerPools.GetWorkerPool", .permission = "run.workerpools.get" },
+        .{ .suffix = "WorkerPools.ListWorkerPools", .permission = "run.workerpools.list" },
+        .{ .suffix = "WorkerPools.UpdateWorkerPool", .permission = "run.workerpools.update" },
+        .{ .suffix = "WorkerPools.DeleteWorkerPool", .permission = "run.workerpools.delete" },
         .{ .suffix = "Publisher.GetTopic", .permission = "pubsub.topics.get" },
         .{ .suffix = "Publisher.CreateTopic", .permission = "pubsub.topics.create" },
         .{ .suffix = "Publisher.UpdateTopic", .permission = "pubsub.topics.update" },
@@ -253,6 +268,10 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Eventarc.CreateTrigger", .permission = "eventarc.triggers.create" },
         .{ .suffix = "Eventarc.UpdateTrigger", .permission = "eventarc.triggers.update" },
         .{ .suffix = "Eventarc.DeleteTrigger", .permission = "eventarc.triggers.delete" },
+        .{ .suffix = "CloudScheduler.GetJob", .permission = "cloudscheduler.jobs.get" },
+        .{ .suffix = "CloudScheduler.CreateJob", .permission = "cloudscheduler.jobs.create" },
+        .{ .suffix = "CloudScheduler.UpdateJob", .permission = "cloudscheduler.jobs.update" },
+        .{ .suffix = "CloudScheduler.DeleteJob", .permission = "cloudscheduler.jobs.delete" },
         .{ .suffix = "ServiceAccounts.ActAs", .permission = "iam.serviceAccounts.actAs" },
         .{ .suffix = "IAM.GetServiceAccount", .permission = "iam.serviceAccounts.get" },
         .{ .suffix = "IAM.CreateServiceAccount", .permission = "iam.serviceAccounts.create" },
@@ -266,6 +285,15 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
     return null;
 }
 
+pub fn jobExecutionUsages() []const RpcUsage {
+    const usages = [_]RpcUsage{
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Jobs.RunJob" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Executions.GetExecution" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Executions.CancelExecution" },
+    };
+    return &usages;
+}
+
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const run = [_]RpcUsage{
         .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.GetService" },
@@ -276,6 +304,24 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const run_iam = [_]RpcUsage{
         .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.GetIamPolicy" },
         .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.SetIamPolicy" },
+    };
+    const run_job = [_]RpcUsage{
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Jobs.GetJob" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Jobs.CreateJob" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Jobs.UpdateJob" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Jobs.DeleteJob" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
+    const run_job_iam = [_]RpcUsage{
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Jobs.GetIamPolicy" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Jobs.SetIamPolicy" },
+    };
+    const run_worker_pool = [_]RpcUsage{
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.WorkerPools.GetWorkerPool" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.WorkerPools.CreateWorkerPool" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.WorkerPools.UpdateWorkerPool" },
+        .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.WorkerPools.DeleteWorkerPool" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
     };
     const iam_service_account = [_]RpcUsage{
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.GetServiceAccount" },
@@ -333,6 +379,13 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.Eventarc.DeleteTrigger" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
     };
+    const scheduler_job = [_]RpcUsage{
+        .{ .service = "cloudscheduler.googleapis.com", .method = "google.cloud.scheduler.v1.CloudScheduler.GetJob" },
+        .{ .service = "cloudscheduler.googleapis.com", .method = "google.cloud.scheduler.v1.CloudScheduler.CreateJob" },
+        .{ .service = "cloudscheduler.googleapis.com", .method = "google.cloud.scheduler.v1.CloudScheduler.UpdateJob" },
+        .{ .service = "cloudscheduler.googleapis.com", .method = "google.cloud.scheduler.v1.CloudScheduler.DeleteJob" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
     const compute_backend = [_]RpcUsage{
         .{ .service = "compute.googleapis.com", .method = "compute.backendServices.get" },
         .{ .service = "compute.googleapis.com", .method = "compute.backendServices.insert" },
@@ -348,6 +401,9 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     };
     if (std.mem.eql(u8, type_name, "gcp.run.Service")) return &run;
     if (std.mem.eql(u8, type_name, "gcp.run.ServiceIamMember")) return &run_iam;
+    if (std.mem.eql(u8, type_name, "gcp.run.Job")) return &run_job;
+    if (std.mem.eql(u8, type_name, "gcp.run.JobIamMember")) return &run_job_iam;
+    if (std.mem.eql(u8, type_name, "gcp.run.WorkerPool")) return &run_worker_pool;
     if (std.mem.eql(u8, type_name, "gcp.iam.ServiceAccount")) return &iam_service_account;
     if (std.mem.eql(u8, type_name, "gcp.pubsub.Topic")) return &pubsub_topic;
     if (std.mem.eql(u8, type_name, "gcp.pubsub.TopicIamMember")) return &pubsub_topic_iam;
@@ -358,6 +414,7 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.tasks.Queue")) return &tasks_queue;
     if (std.mem.eql(u8, type_name, "gcp.tasks.QueueIamMember")) return &tasks_queue_iam;
     if (std.mem.eql(u8, type_name, "gcp.eventarc.Trigger")) return &eventarc_trigger;
+    if (std.mem.eql(u8, type_name, "gcp.scheduler.Job")) return &scheduler_job;
     if (std.mem.eql(u8, type_name, "gcp.compute.BackendService")) return &compute_backend;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionServerlessNeg")) return &compute_neg;
     if (std.mem.startsWith(u8, type_name, "gcp.compute.")) return &compute_generic;

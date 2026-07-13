@@ -138,6 +138,53 @@ test("resources are grouped by provider product within each slab", () => {
   expect(rectanglesOverlap(europeGroups[0]!.position, europeGroups[0]!.size, europeGroups[1]!.position, europeGroups[1]!.size)).toBe(false);
 });
 
+test("Cloud Run Jobs and Worker Pools render as distinct workload groups", () => {
+  const base = filteredModel();
+  const template = base.resources.find((resource) => resource.type === "gcp.run.Service")!;
+  const resources: ZiacVisualResource[] = [
+    {
+      ...template,
+      id: "gcp.run.Job.europe-west1.nightly-report",
+      type: "gcp.run.Job",
+      logical_id: "nightly-report",
+      region: "europe-west1",
+      regions: ["europe-west1"],
+    },
+    {
+      ...template,
+      id: "gcp.run.WorkerPool.europe-west1.events",
+      type: "gcp.run.WorkerPool",
+      logical_id: "events",
+      region: "europe-west1",
+      regions: ["europe-west1"],
+    },
+  ];
+  const model: FilteredZiacVisualModel = {
+    ...base,
+    artifact: {
+      ...base.artifact,
+      regions: ["europe-west1"],
+      resources,
+      edges: [],
+      routes: [],
+      summary: { resources: 2, edges: 0, regions: 1 },
+    },
+    resources,
+    edges: [],
+    routes: [],
+    regionNodes: [{ id: "europe-west1", location: null, resources, operations: ["create"], health: "unknown" }],
+    resourceIds: new Set(resources.map((resource) => resource.id)),
+  };
+  const scene = deriveZiacSceneModel(model, "architecture");
+
+  expect(scene.nodes.map((node) => node.type).sort()).toEqual(["gcp.run.Job", "gcp.run.WorkerPool"]);
+  expect(scene.groups.map((group) => [group.family, group.label])).toEqual([
+    ["gcp.run.job", "Cloud Run Jobs"],
+    ["gcp.run.worker-pool", "Cloud Run Worker Pools"],
+  ]);
+  expect(scene.nodes.every((node) => node.iconPath === "/provider-icons/gcp/cloud-run.png")).toBe(true);
+});
+
 test("same-slab IAM access becomes a labelled local permission route", () => {
   const scene = deriveZiacSceneModel(mixedRegionalModel(), "architecture");
   const route = scene.routes.find((value) => value.id === "runtime-bucket-access");

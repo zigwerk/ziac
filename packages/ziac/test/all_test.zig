@@ -73,6 +73,10 @@ comptime {
     _ = @import("gcp_delivery_policy_test.zig");
     _ = @import("gcp_tasks_live_provider_test.zig");
     _ = @import("gcp_eventarc_live_provider_test.zig");
+    _ = @import("gcp_run_workloads_test.zig");
+    _ = @import("gcp_run_workloads_live_provider_test.zig");
+    _ = @import("gcp_run_actions_test.zig");
+    _ = @import("gcp_run_components_test.zig");
     _ = @import("gcp_pubsub_test.zig");
     _ = @import("gcp_pubsub_components_test.zig");
     _ = @import("gcp_pubsub_live_provider_test.zig");

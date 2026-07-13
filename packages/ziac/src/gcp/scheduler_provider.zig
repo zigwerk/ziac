@@ -30,12 +30,17 @@ pub const Handler = struct {
         const desired_url = try targetUrlAlloc(context, node);
         defer context.allocator.free(desired_url);
         const fields = [_]struct { input: []const u8, output: []const u8 }{
+            .{ .input = "auth_kind", .output = "auth_kind" },
+            .{ .input = "body_json", .output = "body_json" },
+            .{ .input = "description", .output = "description" },
+            .{ .input = "oauth_scope", .output = "oauth_scope" },
             .{ .input = "schedule", .output = "schedule" },
             .{ .input = "time_zone", .output = "time_zone" },
             .{ .input = "service_account", .output = "service_account" },
         };
         var changed = !std.mem.eql(u8, desired_url, outputString(observed, "uri") orelse "");
         for (fields) |field| changed = changed or !std.mem.eql(u8, try requiredString(node.inputs, field.input), outputString(observed, field.output) orelse "");
+        changed = changed or try requiredInteger(node.inputs, "attempt_deadline_seconds") != (outputInteger(observed, "attempt_deadline_seconds") orelse -1);
         return provider_mod.DiffResult.init(context.allocator, if (changed) .update else .noop, if (changed) &.{"Cloud Scheduler target or cadence differs"} else &.{});
     }
 
@@ -96,20 +101,41 @@ fn bodyAlloc(context: *provider_mod.OperationContext, node: resource.ResourceNod
     defer context.allocator.free(uri);
     const deadline = try std.fmt.allocPrint(context.allocator, "{d}s", .{try requiredInteger(node.inputs, "attempt_deadline_seconds")});
     defer context.allocator.free(deadline);
-    return std.json.Stringify.valueAlloc(context.allocator, .{
-        .name = name,
-        .description = "Ingest authoritative Ziac Cloud billing export",
-        .schedule = try requiredString(node.inputs, "schedule"),
-        .timeZone = try requiredString(node.inputs, "time_zone"),
-        .attemptDeadline = deadline,
-        .retryConfig = .{ .retryCount = 3, .minBackoffDuration = "30s", .maxBackoffDuration = "300s", .maxDoublings = 3 },
-        .httpTarget = .{
-            .uri = uri,
-            .httpMethod = "POST",
-            .body = "e30=",
-            .oidcToken = .{ .serviceAccountEmail = try requiredString(node.inputs, "service_account"), .audience = service_url },
-        },
-    }, .{}) catch error.OutOfMemory;
+    const body_json = try requiredString(node.inputs, "body_json");
+    const encoded = try context.allocator.alloc(u8, std.base64.standard.Encoder.calcSize(body_json.len));
+    defer context.allocator.free(encoded);
+    _ = std.base64.standard.Encoder.encode(encoded, body_json);
+    var arena_state = std.heap.ArenaAllocator.init(context.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var target: std.json.ObjectMap = .empty;
+    try target.put(arena, "uri", .{ .string = uri });
+    try target.put(arena, "httpMethod", .{ .string = "POST" });
+    try target.put(arena, "body", .{ .string = encoded });
+    var token: std.json.ObjectMap = .empty;
+    try token.put(arena, "serviceAccountEmail", .{ .string = try requiredString(node.inputs, "service_account") });
+    const auth_kind = try requiredString(node.inputs, "auth_kind");
+    if (std.mem.eql(u8, auth_kind, "oauth")) {
+        try token.put(arena, "scope", .{ .string = try requiredString(node.inputs, "oauth_scope") });
+        try target.put(arena, "oauthToken", .{ .object = token });
+    } else if (std.mem.eql(u8, auth_kind, "oidc")) {
+        try token.put(arena, "audience", .{ .string = service_url });
+        try target.put(arena, "oidcToken", .{ .object = token });
+    } else return error.InvalidConfiguration;
+    var retry: std.json.ObjectMap = .empty;
+    try retry.put(arena, "retryCount", .{ .integer = 3 });
+    try retry.put(arena, "minBackoffDuration", .{ .string = "30s" });
+    try retry.put(arena, "maxBackoffDuration", .{ .string = "300s" });
+    try retry.put(arena, "maxDoublings", .{ .integer = 3 });
+    var root: std.json.ObjectMap = .empty;
+    try root.put(arena, "name", .{ .string = name });
+    try root.put(arena, "description", .{ .string = try requiredString(node.inputs, "description") });
+    try root.put(arena, "schedule", .{ .string = try requiredString(node.inputs, "schedule") });
+    try root.put(arena, "timeZone", .{ .string = try requiredString(node.inputs, "time_zone") });
+    try root.put(arena, "attemptDeadline", .{ .string = deadline });
+    try root.put(arena, "retryConfig", .{ .object = retry });
+    try root.put(arena, "httpTarget", .{ .object = target });
+    return std.json.Stringify.valueAlloc(context.allocator, std.json.Value{ .object = root }, .{}) catch error.OutOfMemory;
 }
 
 fn resultFromJson(context: *provider_mod.OperationContext, node: resource.ResourceNode, physical: []const u8, body: []const u8) ProviderError!provider_mod.ResourceResult {
@@ -118,14 +144,26 @@ fn resultFromJson(context: *provider_mod.OperationContext, node: resource.Resour
     const root = object(parsed.value) orelse return error.ProviderBug;
     if (!std.mem.eql(u8, string(root.get("name")) orelse return error.ProviderBug, physical)) return error.InvalidConfiguration;
     const target = object(root.get("httpTarget") orelse return error.ProviderBug) orelse return error.ProviderBug;
-    const token = object(target.get("oidcToken") orelse return error.ProviderBug) orelse return error.ProviderBug;
+    const auth_kind: []const u8 = if (target.get("oauthToken") != null) "oauth" else if (target.get("oidcToken") != null) "oidc" else return error.ProviderBug;
+    const token = object(target.get(if (std.mem.eql(u8, auth_kind, "oauth")) "oauthToken" else "oidcToken") orelse return error.ProviderBug) orelse return error.ProviderBug;
+    const encoded_body = string(target.get("body")) orelse "";
+    const decoded_size = std.base64.standard.Decoder.calcSizeForSlice(encoded_body) catch return error.ProviderBug;
+    const decoded_body = try context.allocator.alloc(u8, decoded_size);
+    defer context.allocator.free(decoded_body);
+    std.base64.standard.Decoder.decode(decoded_body, encoded_body) catch return error.ProviderBug;
+    const deadline = parseDurationSeconds(string(root.get("attemptDeadline")) orelse return error.ProviderBug) orelse return error.ProviderBug;
     const outputs = [_]state.StateOutput{
         .{ .name = "name", .value = .{ .string = physical } },
         .{ .name = "state", .value = .{ .string = string(root.get("state")) orelse "ENABLED" } },
+        .{ .name = "description", .value = .{ .string = string(root.get("description")) orelse "" } },
         .{ .name = "schedule", .value = .{ .string = string(root.get("schedule")) orelse return error.ProviderBug } },
         .{ .name = "time_zone", .value = .{ .string = string(root.get("timeZone")) orelse return error.ProviderBug } },
         .{ .name = "uri", .value = .{ .string = string(target.get("uri")) orelse return error.ProviderBug } },
         .{ .name = "service_account", .value = .{ .string = string(token.get("serviceAccountEmail")) orelse return error.ProviderBug } },
+        .{ .name = "auth_kind", .value = .{ .string = auth_kind } },
+        .{ .name = "oauth_scope", .value = .{ .string = if (std.mem.eql(u8, auth_kind, "oauth")) string(token.get("scope")) orelse "" else try requiredString(node.inputs, "oauth_scope") } },
+        .{ .name = "body_json", .value = .{ .string = decoded_body } },
+        .{ .name = "attempt_deadline_seconds", .value = .{ .integer = deadline } },
     };
     return provider_mod.ResourceResult.init(context.allocator, physical, node.inputs, &outputs, null);
 }
@@ -140,6 +178,13 @@ fn physicalIdAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) Pr
 fn outputString(result: *const provider_mod.ResourceResult, name: []const u8) ?[]const u8 {
     for (result.outputs) |entry| if (std.mem.eql(u8, entry.name, name)) return switch (entry.value) {
         .string => |text| text,
+        else => null,
+    };
+    return null;
+}
+fn outputInteger(result: *const provider_mod.ResourceResult, name: []const u8) ?i64 {
+    for (result.outputs) |entry| if (std.mem.eql(u8, entry.name, name)) return switch (entry.value) {
+        .integer => |number| number,
         else => null,
     };
     return null;
@@ -180,4 +225,9 @@ fn string(input: ?std.json.Value) ?[]const u8 {
         .string => |entry| entry,
         else => null,
     };
+}
+
+fn parseDurationSeconds(input: []const u8) ?i64 {
+    if (input.len < 2 or input[input.len - 1] != 's') return null;
+    return std.fmt.parseInt(i64, input[0 .. input.len - 1], 10) catch null;
 }
