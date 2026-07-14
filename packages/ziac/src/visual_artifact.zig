@@ -188,6 +188,7 @@ fn appendResource(
     try appendNetworkDeliveryDetails(output, allocator, item.node);
     try appendEdgeSecurityDetails(output, allocator, item.node);
     try appendConnectivityDetails(output, allocator, item.node);
+    try appendContainerPlatformDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -526,6 +527,39 @@ fn appendConnectivityDetails(output: *std.ArrayList(u8), allocator: std.mem.Allo
     try appendStorageListCount(output, allocator, node, "links", "link_count");
     try appendStorageListCount(output, allocator, node, "subnetworks", "subnetwork_count");
     try appendOptionalStorageBool(output, allocator, node, "site_to_site_data_transfer", "site_to_site_data_transfer");
+    try output.append(allocator, '}');
+}
+
+fn appendContainerPlatformDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.container.Cluster"))
+        "cluster"
+    else if (std.mem.eql(u8, node.type_name, "gcp.container.NodePool"))
+        "node_pool"
+    else if (std.mem.eql(u8, node.type_name, "gcp.gkehub.Fleet"))
+        "fleet"
+    else if (std.mem.eql(u8, node.type_name, "gcp.gkehub.Membership"))
+        "membership"
+    else if (std.mem.eql(u8, node.type_name, "gcp.functions.FunctionV2"))
+        "function"
+    else if (std.mem.eql(u8, node.type_name, "gcp.batch.Job"))
+        "batch_job"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"container_platform\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "mode", "mode");
+    try appendOptionalStorageString(output, allocator, node, "release_channel", "release_channel");
+    try appendOptionalStorageString(output, allocator, node, "machine_type", "machine_type");
+    try appendOptionalStorageString(output, allocator, node, "runtime", "runtime");
+    try appendOptionalStorageString(output, allocator, node, "trigger_kind", "trigger_kind");
+    try appendOptionalStorageString(output, allocator, node, "provisioning_model", "provisioning_model");
+    try appendOptionalStorageInteger(output, allocator, node, "node_count", "node_count");
+    try appendOptionalStorageInteger(output, allocator, node, "task_count", "task_count");
+    try appendOptionalStorageInteger(output, allocator, node, "parallelism", "parallelism");
+    try appendOptionalStorageBool(output, allocator, node, "private_nodes", "private_nodes");
+    try appendOptionalStorageBool(output, allocator, node, "spot", "spot");
+    try appendOptionalStorageBool(output, allocator, node, "autoscaling_enabled", "autoscaling");
     try output.append(allocator, '}');
 }
 
@@ -1110,6 +1144,16 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.container.NodePool") and std.mem.eql(u8, to_type, "gcp.container.Cluster")) return "node_pool";
+    if (std.mem.eql(u8, from_type, "gcp.gkehub.Membership") and
+        (std.mem.eql(u8, to_type, "gcp.gkehub.Fleet") or std.mem.eql(u8, to_type, "gcp.container.Cluster"))) return "fleet_membership";
+    if (from_node) |node| if (std.mem.eql(u8, from_type, "gcp.iam.ServiceAccountIamMember") and
+        std.mem.eql(u8, objectString(node, "role") orelse "", "roles/iam.workloadIdentityUser")) return "workload_identity";
+    if ((std.mem.eql(u8, from_type, "gcp.container.NodePool") or
+        std.mem.eql(u8, from_type, "gcp.functions.FunctionV2") or
+        std.mem.eql(u8, from_type, "gcp.batch.Job")) and
+        std.mem.eql(u8, to_type, "gcp.iam.ServiceAccount")) return "runtime_identity";
+    if (std.mem.eql(u8, from_type, "gcp.functions.FunctionV2") and std.mem.eql(u8, to_type, "gcp.pubsub.Topic")) return "event";
     if (std.mem.eql(u8, from_type, "gcp.compute.BackendBucket") and std.mem.eql(u8, to_type, "gcp.storage.Bucket")) return "cache_origin";
     if (std.mem.eql(u8, from_type, "gcp.compute.BackendBucket") and std.mem.eql(u8, to_type, "gcp.compute.SecurityPolicy")) return "security_enforcement";
     if (std.mem.eql(u8, from_type, "gcp.certificatemanager.Certificate") and std.mem.eql(u8, to_type, "gcp.certificatemanager.DnsAuthorization")) return "dns_authorization";

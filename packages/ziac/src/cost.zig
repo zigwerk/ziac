@@ -249,6 +249,28 @@ pub const ConnectivityEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const ContainerPlatformEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    gke_management_sku_id: []const u8 = "",
+    node_cpu_sku_id: []const u8 = "",
+    node_memory_sku_id: []const u8 = "",
+    function_invocation_sku_id: []const u8 = "",
+    function_cpu_sku_id: []const u8 = "",
+    function_memory_sku_id: []const u8 = "",
+    batch_cpu_sku_id: []const u8 = "",
+    batch_memory_sku_id: []const u8 = "",
+    gke_management_hours: u64 = 0,
+    node_vcpu_hours: u64 = 0,
+    node_memory_gib_hours: u64 = 0,
+    function_invocations: u64 = 0,
+    function_vcpu_seconds: u64 = 0,
+    function_memory_gib_seconds: u64 = 0,
+    batch_vcpu_hours: u64 = 0,
+    batch_memory_gib_hours: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -737,6 +759,21 @@ pub fn connectivityConfigurationEstimate(prices: []const SkuPrice, input: Connec
     try appendUsage(&usage, &count, input.ncc_hybrid_spoke_sku_id, input.region, input.ncc_hybrid_spoke_hours);
     try appendUsage(&usage, &count, input.ncc_vpc_spoke_sku_id, input.region, input.ncc_vpc_spoke_hours);
     try appendUsage(&usage, &count, input.ncc_data_transfer_sku_id, input.region, input.ncc_data_transfer_gib);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn containerPlatformConfigurationEstimate(prices: []const SkuPrice, input: ContainerPlatformEstimateInput) !ResourceCost {
+    var usage: [8]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.gke_management_sku_id, "global", input.gke_management_hours);
+    try appendUsage(&usage, &count, input.node_cpu_sku_id, input.region, input.node_vcpu_hours);
+    try appendUsage(&usage, &count, input.node_memory_sku_id, input.region, input.node_memory_gib_hours);
+    try appendUsage(&usage, &count, input.function_invocation_sku_id, input.region, input.function_invocations);
+    try appendUsage(&usage, &count, input.function_cpu_sku_id, input.region, input.function_vcpu_seconds);
+    try appendUsage(&usage, &count, input.function_memory_sku_id, input.region, input.function_memory_gib_seconds);
+    try appendUsage(&usage, &count, input.batch_cpu_sku_id, input.region, input.batch_vcpu_hours);
+    try appendUsage(&usage, &count, input.batch_memory_sku_id, input.region, input.batch_memory_gib_hours);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }

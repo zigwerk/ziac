@@ -334,6 +334,31 @@ pub fn rolloutAllowed(signal: RolloutSignal, gate: RolloutGate) bool {
 
 fn permissionForMethod(method: []const u8) ?[]const u8 {
     const mappings = [_]struct { suffix: []const u8, permission: []const u8 }{
+        .{ .suffix = "ClusterManager.GetCluster", .permission = "container.clusters.get" },
+        .{ .suffix = "ClusterManager.CreateCluster", .permission = "container.clusters.create" },
+        .{ .suffix = "ClusterManager.UpdateCluster", .permission = "container.clusters.update" },
+        .{ .suffix = "ClusterManager.DeleteCluster", .permission = "container.clusters.delete" },
+        .{ .suffix = "ClusterManager.GetNodePool", .permission = "container.clusters.get" },
+        .{ .suffix = "ClusterManager.CreateNodePool", .permission = "container.clusters.update" },
+        .{ .suffix = "ClusterManager.UpdateNodePool", .permission = "container.clusters.update" },
+        .{ .suffix = "ClusterManager.DeleteNodePool", .permission = "container.clusters.update" },
+        .{ .suffix = "GkeHub.GetFleet", .permission = "gkehub.fleet.get" },
+        .{ .suffix = "GkeHub.CreateFleet", .permission = "gkehub.fleet.create" },
+        .{ .suffix = "GkeHub.UpdateFleet", .permission = "gkehub.fleet.update" },
+        .{ .suffix = "GkeHub.DeleteFleet", .permission = "gkehub.fleet.delete" },
+        .{ .suffix = "GkeHub.GetMembership", .permission = "gkehub.memberships.get" },
+        .{ .suffix = "GkeHub.CreateMembership", .permission = "gkehub.memberships.create" },
+        .{ .suffix = "GkeHub.UpdateMembership", .permission = "gkehub.memberships.update" },
+        .{ .suffix = "GkeHub.DeleteMembership", .permission = "gkehub.memberships.delete" },
+        .{ .suffix = "FunctionService.GetFunction", .permission = "cloudfunctions.functions.get" },
+        .{ .suffix = "FunctionService.CreateFunction", .permission = "cloudfunctions.functions.create" },
+        .{ .suffix = "FunctionService.UpdateFunction", .permission = "cloudfunctions.functions.update" },
+        .{ .suffix = "FunctionService.DeleteFunction", .permission = "cloudfunctions.functions.delete" },
+        .{ .suffix = "FunctionIam.GetIamPolicy", .permission = "cloudfunctions.functions.getIamPolicy" },
+        .{ .suffix = "FunctionIam.SetIamPolicy", .permission = "cloudfunctions.functions.setIamPolicy" },
+        .{ .suffix = "BatchService.GetJob", .permission = "batch.jobs.get" },
+        .{ .suffix = "BatchService.CreateJob", .permission = "batch.jobs.create" },
+        .{ .suffix = "BatchService.DeleteJob", .permission = "batch.jobs.delete" },
         .{ .suffix = "Services.CreateService", .permission = "run.services.create" },
         .{ .suffix = "Services.GetService", .permission = "run.services.get" },
         .{ .suffix = "Services.ListServices", .permission = "run.services.list" },
@@ -737,6 +762,50 @@ pub fn jobExecutionUsages() []const RpcUsage {
 }
 
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
+    const container_cluster = [_]RpcUsage{
+        .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.GetCluster" },
+        .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.CreateCluster" },
+        .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.UpdateCluster" },
+        .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.DeleteCluster" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Subnetworks.Use" },
+    };
+    const container_node_pool = [_]RpcUsage{
+        .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.GetNodePool" },
+        .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.CreateNodePool" },
+        .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.UpdateNodePool" },
+        .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.DeleteNodePool" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
+    const gke_fleet = [_]RpcUsage{
+        .{ .service = "gkehub.googleapis.com", .method = "google.cloud.gkehub.v1.GkeHub.GetFleet" },
+        .{ .service = "gkehub.googleapis.com", .method = "google.cloud.gkehub.v1.GkeHub.CreateFleet" },
+        .{ .service = "gkehub.googleapis.com", .method = "google.cloud.gkehub.v1.GkeHub.UpdateFleet" },
+        .{ .service = "gkehub.googleapis.com", .method = "google.cloud.gkehub.v1.GkeHub.DeleteFleet" },
+    };
+    const gke_membership = [_]RpcUsage{
+        .{ .service = "gkehub.googleapis.com", .method = "google.cloud.gkehub.v1.GkeHub.GetMembership" },
+        .{ .service = "gkehub.googleapis.com", .method = "google.cloud.gkehub.v1.GkeHub.CreateMembership" },
+        .{ .service = "gkehub.googleapis.com", .method = "google.cloud.gkehub.v1.GkeHub.UpdateMembership" },
+        .{ .service = "gkehub.googleapis.com", .method = "google.cloud.gkehub.v1.GkeHub.DeleteMembership" },
+    };
+    const cloud_function = [_]RpcUsage{
+        .{ .service = "cloudfunctions.googleapis.com", .method = "google.cloud.functions.v2.FunctionService.GetFunction" },
+        .{ .service = "cloudfunctions.googleapis.com", .method = "google.cloud.functions.v2.FunctionService.CreateFunction" },
+        .{ .service = "cloudfunctions.googleapis.com", .method = "google.cloud.functions.v2.FunctionService.UpdateFunction" },
+        .{ .service = "cloudfunctions.googleapis.com", .method = "google.cloud.functions.v2.FunctionService.DeleteFunction" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
+    const cloud_function_iam = [_]RpcUsage{
+        .{ .service = "cloudfunctions.googleapis.com", .method = "google.cloud.functions.v2.FunctionIam.GetIamPolicy" },
+        .{ .service = "cloudfunctions.googleapis.com", .method = "google.cloud.functions.v2.FunctionIam.SetIamPolicy" },
+    };
+    const batch_job = [_]RpcUsage{
+        .{ .service = "batch.googleapis.com", .method = "google.cloud.batch.v1.BatchService.GetJob" },
+        .{ .service = "batch.googleapis.com", .method = "google.cloud.batch.v1.BatchService.CreateJob" },
+        .{ .service = "batch.googleapis.com", .method = "google.cloud.batch.v1.BatchService.DeleteJob" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
     const run = [_]RpcUsage{
         .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.GetService" },
         .{ .service = "run.googleapis.com", .method = "google.cloud.run.v2.Services.CreateService" },
@@ -1356,6 +1425,13 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
+    if (std.mem.eql(u8, type_name, "gcp.container.Cluster")) return &container_cluster;
+    if (std.mem.eql(u8, type_name, "gcp.container.NodePool")) return &container_node_pool;
+    if (std.mem.eql(u8, type_name, "gcp.gkehub.Fleet")) return &gke_fleet;
+    if (std.mem.eql(u8, type_name, "gcp.gkehub.Membership")) return &gke_membership;
+    if (std.mem.eql(u8, type_name, "gcp.functions.FunctionV2")) return &cloud_function;
+    if (std.mem.eql(u8, type_name, "gcp.functions.FunctionIamMember")) return &cloud_function_iam;
+    if (std.mem.eql(u8, type_name, "gcp.batch.Job")) return &batch_job;
     if (std.mem.eql(u8, type_name, "gcp.run.Service")) return &run;
     if (std.mem.eql(u8, type_name, "gcp.run.ServiceIamMember")) return &run_iam;
     if (std.mem.eql(u8, type_name, "gcp.run.Job")) return &run_job;

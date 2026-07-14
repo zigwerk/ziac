@@ -219,7 +219,7 @@ isolated serializer tests.
 - [x] M69 firewalls, routes, health checks, regional/internal load balancing.
 - [x] M70 Cloud CDN, backend buckets, Cloud Armor and Certificate Manager.
 - [x] M71 VPN, HA VPN, peering, Network Connectivity Center and service networking.
-- [ ] M72 GKE clusters, node pools, fleets, workload identity, Functions v2 and
+- [x] M72 GKE clusters, node pools, fleets, workload identity, Functions v2 and
   Batch.
 
 ## M73-M76: Operations And Delivery
@@ -305,3 +305,24 @@ synchronized. The Testing v2 package gate reports 737 discovered/executed
 tests, 736 passed, one credential-gated skip, and zero failures, pending tests,
 leaks or logged errors. Authenticated tunnel, route and NCC qualification
 remains a disposable-project gate and is not represented as local proof.
+
+## M72 Evidence
+
+M72 is locally complete with 156 managed resources. Seven container-platform
+types cover Standard and Autopilot GKE clusters, explicit node pools, Fleet and
+membership registration, Cloud Run functions v2 with additive IAM, and
+immutable Batch jobs. Standard cluster creation removes Google's implicit
+default node pool, Container mutations select native update actions, and Fleet,
+Functions and Batch operations checkpoint and resume through their respective
+Google operation protocols.
+
+`GkePlatform`, `ZigFunction` and `ZigBatchJob` compose dedicated identities and
+typed workload wiring without hidden broad project roles. Exact permission
+synthesis, supported Cloud Asset identities, canvas topology, explicit
+configuration estimates, installed documentation and the fail-closed
+qualification runner are synchronized. The Testing v2 package gate reports 759
+discovered/executed tests, 758 passed, one credential-gated skip, and zero
+failures, pending tests, leaks or logged errors. Public examples, migration,
+root TypeScript and static secret gates pass. Authenticated GKE, Fleet,
+Function and Batch qualification remains a disposable-project gate and is not
+represented as local proof.

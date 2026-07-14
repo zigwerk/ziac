@@ -19,6 +19,20 @@ pub const sources = [_]Source{
         .document_sha256 = "c59cfb39aa30bd6a96ddd94db1194e7a5ace2a0bc2c423cb450d96762f565f6e",
     },
     .{
+        .id = "batch:v1",
+        .version = "v1",
+        .revision = "20260702",
+        .discovery_url = "https://batch.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "a1d4bccc0c316e9de358a7289fffcd91fb29dbc6b44bf3f9a1e10b9474440296",
+    },
+    .{
+        .id = "cloudfunctions:v2",
+        .version = "v2",
+        .revision = "20260709",
+        .discovery_url = "https://cloudfunctions.googleapis.com/$discovery/rest?version=v2",
+        .document_sha256 = "8c0b2977432d0c8ce30afee8f891b5a494585839de086b2e0c6bb7660150a19b",
+    },
+    .{
         .id = "compute:v1",
         .version = "v1",
         .revision = "20260629",
@@ -26,11 +40,25 @@ pub const sources = [_]Source{
         .document_sha256 = "d14b88ee486ca3e49897b737a45717141d2003a9782571d0b96a66f26af0fd12",
     },
     .{
+        .id = "container:v1",
+        .version = "v1",
+        .revision = "20260630",
+        .discovery_url = "https://container.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "a9af9378a7849d351c538136e06d3006ca6dec81c89f9ef22b2198981a332312",
+    },
+    .{
         .id = "dns:v1",
         .version = "v1",
         .revision = "20260630",
         .discovery_url = "https://dns.googleapis.com/discovery/v1/apis/dns/v1/rest",
         .document_sha256 = "39b1f648d4fa0824cfc0e8ee19101ddfeda12a53dc3ee3d8c1869a8dae0aeba6",
+    },
+    .{
+        .id = "gkehub:v1",
+        .version = "v1",
+        .revision = "20260706",
+        .discovery_url = "https://gkehub.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "b939847af952d89c80f6f4e3dd76e7bdbe1c6078e04c99b7faa0cc97f03ba573",
     },
     .{
         .id = "identitytoolkit:v2",

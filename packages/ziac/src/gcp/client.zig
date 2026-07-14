@@ -40,6 +40,10 @@ pub const Api = enum {
     parameter_manager,
     certificate_manager,
     network_connectivity,
+    container,
+    gke_hub,
+    cloud_functions,
+    batch,
 };
 
 pub const Endpoints = struct {
@@ -75,6 +79,10 @@ pub const Endpoints = struct {
     parameter_manager: []const u8 = "https://parametermanager.googleapis.com",
     certificate_manager: []const u8 = "https://certificatemanager.googleapis.com",
     network_connectivity: []const u8 = "https://networkconnectivity.googleapis.com",
+    container: []const u8 = "https://container.googleapis.com",
+    gke_hub: []const u8 = "https://gkehub.googleapis.com",
+    cloud_functions: []const u8 = "https://cloudfunctions.googleapis.com",
+    batch: []const u8 = "https://batch.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
         return switch (api) {
@@ -110,6 +118,10 @@ pub const Endpoints = struct {
             .parameter_manager => self.parameter_manager,
             .certificate_manager => self.certificate_manager,
             .network_connectivity => self.network_connectivity,
+            .container => self.container,
+            .gke_hub => self.gke_hub,
+            .cloud_functions => self.cloud_functions,
+            .batch => self.batch,
         };
     }
 };

@@ -1022,3 +1022,29 @@ executed tests, 736 passed, one credential-gated skip, and zero failures,
 pending tests, leaks or logged errors. The provider catalog reports 149 managed
 resources. Authenticated connectivity qualification remains explicitly
 external and fail-closed.
+
+M72 is locally complete and awaiting authenticated container-platform
+qualification. Seven managed resources add Standard and Autopilot GKE
+clusters, explicit node pools, Fleet and memberships, Cloud Run functions v2,
+additive function IAM and immutable Batch jobs.
+
+`GkePlatform` composes a dedicated workload identity, typed Standard node pools
+or Autopilot, optional Fleet registration and exact Kubernetes Workload
+Identity members. `ZigFunction` and `ZigBatchJob` compose dedicated runtime
+identities with explicit invocation and execution semantics. Standard cluster
+creation removes the implicit default node pool so Ziac does not leave an
+unowned node group behind.
+
+The provider resumes native Container and generic Google operations, chooses
+field-specific GKE update actions, preserves unrelated Function IAM bindings
+under policy etags and treats submitted Batch jobs as immutable. Permission
+synthesis, Cloud Asset adoption, canvas relationships and eight explicit cost
+dimensions are synchronized. See `docs/gcp-container-platform.md`.
+
+The M72 local Testing v2 package gate is complete with 759 discovered and
+executed tests, 758 passed, one credential-gated skip, and zero failures,
+pending tests, leaks or logged errors. The provider catalog reports 156 managed
+resources. Public examples, installation checks, migration, root TypeScript
+and static secret gates pass. `scripts/qualify-container-platform.sh` remains
+the fail-closed authenticated boundary for GKE, Fleet, Function and Batch
+runtime evidence.

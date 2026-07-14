@@ -375,6 +375,12 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.certificatemanager.CertificateMap"
     else if (std.mem.eql(u8, asset_type, "certificatemanager.googleapis.com/CertificateMapEntry"))
         "gcp.certificatemanager.CertificateMapEntry"
+    else if (std.mem.eql(u8, asset_type, "cloudfunctions.googleapis.com/CloudFunction"))
+        "gcp.functions.FunctionV2"
+    else if (std.mem.eql(u8, asset_type, "container.googleapis.com/Cluster"))
+        "gcp.container.Cluster"
+    else if (std.mem.eql(u8, asset_type, "container.googleapis.com/NodePool"))
+        "gcp.container.NodePool"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -441,6 +447,10 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.networkconnectivity.Spoke"
     else if (std.mem.eql(u8, asset_type, "networkconnectivity.googleapis.com/ServiceConnectionPolicy"))
         "gcp.networkconnectivity.ServiceConnectionPolicy"
+    else if (std.mem.eql(u8, asset_type, "gkehub.googleapis.com/Fleet"))
+        "gcp.gkehub.Fleet"
+    else if (std.mem.eql(u8, asset_type, "gkehub.googleapis.com/Membership"))
+        "gcp.gkehub.Membership"
     else
         "gcp.asset.Resource";
     return allocator.dupe(u8, mapped);
@@ -549,6 +559,11 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "certificatemanager.googleapis.com/Certificate", .prefix = "//certificatemanager.googleapis.com/" },
         .{ .asset_type = "certificatemanager.googleapis.com/CertificateMap", .prefix = "//certificatemanager.googleapis.com/" },
         .{ .asset_type = "certificatemanager.googleapis.com/CertificateMapEntry", .prefix = "//certificatemanager.googleapis.com/" },
+        .{ .asset_type = "cloudfunctions.googleapis.com/CloudFunction", .prefix = "//cloudfunctions.googleapis.com/" },
+        .{ .asset_type = "container.googleapis.com/Cluster", .prefix = "//container.googleapis.com/" },
+        .{ .asset_type = "container.googleapis.com/NodePool", .prefix = "//container.googleapis.com/" },
+        .{ .asset_type = "gkehub.googleapis.com/Fleet", .prefix = "//gkehub.googleapis.com/" },
+        .{ .asset_type = "gkehub.googleapis.com/Membership", .prefix = "//gkehub.googleapis.com/" },
         .{ .asset_type = "networkconnectivity.googleapis.com/Hub", .prefix = "//networkconnectivity.googleapis.com/" },
         .{ .asset_type = "networkconnectivity.googleapis.com/ServiceConnectionPolicy", .prefix = "//networkconnectivity.googleapis.com/" },
         .{ .asset_type = "networkconnectivity.googleapis.com/Spoke", .prefix = "//networkconnectivity.googleapis.com/" },
