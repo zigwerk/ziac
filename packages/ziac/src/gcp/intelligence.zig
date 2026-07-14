@@ -98,6 +98,12 @@ pub fn synthesizeGraph(allocator: std.mem.Allocator, graph: *const resource.Reso
     for (graph.resources.items) |node| {
         const contracts = rpcUsagesForType(node.type_name);
         try usages.appendSlice(allocator, contracts);
+        if (std.mem.eql(u8, node.type_name, "gcp.redis.Instance") and (inputBool(node, "auth_enabled") orelse false)) {
+            try usages.append(allocator, .{
+                .service = "secretmanager.googleapis.com",
+                .method = "google.cloud.secretmanager.v1.SecretVersions.AddSecretVersion",
+            });
+        }
     }
     return synthesize(allocator, usages.items);
 }
@@ -115,6 +121,15 @@ pub fn synthesizePermissionPlan(
     for (graph.resources.items) |node| {
         for (rpcUsagesForType(node.type_name)) |usage| {
             const permission = permissionForMethod(usage.method) orelse continue;
+            try appendPermissionEntry(allocator, &entries, .deployer, permission, node.id, usage.method);
+            try appendUnique(allocator, &deployer, permission);
+        }
+        if (std.mem.eql(u8, node.type_name, "gcp.redis.Instance") and (inputBool(node, "auth_enabled") orelse false)) {
+            const usage = RpcUsage{
+                .service = "secretmanager.googleapis.com",
+                .method = "google.cloud.secretmanager.v1.SecretVersions.AddSecretVersion",
+            };
+            const permission = permissionForMethod(usage.method).?;
             try appendPermissionEntry(allocator, &entries, .deployer, permission, node.id, usage.method);
             try appendUnique(allocator, &deployer, permission);
         }
@@ -447,6 +462,49 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "SqlSslCertsService.Get", .permission = "cloudsql.sslCerts.get" },
         .{ .suffix = "SqlSslCertsService.Create", .permission = "cloudsql.sslCerts.create" },
         .{ .suffix = "SqlSslCertsService.Delete", .permission = "cloudsql.sslCerts.delete" },
+        .{ .suffix = "SpannerInstanceAdmin.GetInstance", .permission = "spanner.instances.get" },
+        .{ .suffix = "SpannerInstanceAdmin.CreateInstance", .permission = "spanner.instances.create" },
+        .{ .suffix = "SpannerInstanceAdmin.UpdateInstance", .permission = "spanner.instances.update" },
+        .{ .suffix = "SpannerInstanceAdmin.DeleteInstance", .permission = "spanner.instances.delete" },
+        .{ .suffix = "SpannerInstanceAdmin.GetIamPolicy", .permission = "spanner.instances.getIamPolicy" },
+        .{ .suffix = "SpannerInstanceAdmin.SetIamPolicy", .permission = "spanner.instances.setIamPolicy" },
+        .{ .suffix = "SpannerDatabaseAdmin.GetDatabase", .permission = "spanner.databases.get" },
+        .{ .suffix = "SpannerDatabaseAdmin.CreateDatabase", .permission = "spanner.databases.create" },
+        .{ .suffix = "SpannerDatabaseAdmin.UpdateDatabaseDdl", .permission = "spanner.databases.updateDdl" },
+        .{ .suffix = "SpannerDatabaseAdmin.DropDatabase", .permission = "spanner.databases.drop" },
+        .{ .suffix = "SpannerDatabaseAdmin.GetIamPolicy", .permission = "spanner.databases.getIamPolicy" },
+        .{ .suffix = "SpannerDatabaseAdmin.SetIamPolicy", .permission = "spanner.databases.setIamPolicy" },
+        .{ .suffix = "SpannerDatabaseAdmin.GetBackup", .permission = "spanner.backups.get" },
+        .{ .suffix = "SpannerDatabaseAdmin.CreateBackup", .permission = "spanner.backups.create" },
+        .{ .suffix = "SpannerDatabaseAdmin.AuthorizeCreateBackup", .permission = "spanner.databases.createBackup" },
+        .{ .suffix = "SpannerDatabaseAdmin.UpdateBackup", .permission = "spanner.backups.update" },
+        .{ .suffix = "SpannerDatabaseAdmin.DeleteBackup", .permission = "spanner.backups.delete" },
+        .{ .suffix = "SpannerDatabaseAdmin.GetBackupSchedule", .permission = "spanner.backupSchedules.get" },
+        .{ .suffix = "SpannerDatabaseAdmin.CreateBackupSchedule", .permission = "spanner.backupSchedules.create" },
+        .{ .suffix = "SpannerDatabaseAdmin.UpdateBackupSchedule", .permission = "spanner.backupSchedules.update" },
+        .{ .suffix = "SpannerDatabaseAdmin.DeleteBackupSchedule", .permission = "spanner.backupSchedules.delete" },
+        .{ .suffix = "RedisInstances.Get", .permission = "redis.instances.get" },
+        .{ .suffix = "RedisInstances.Create", .permission = "redis.instances.create" },
+        .{ .suffix = "RedisInstances.Update", .permission = "redis.instances.update" },
+        .{ .suffix = "RedisInstances.Delete", .permission = "redis.instances.delete" },
+        .{ .suffix = "RedisInstances.Upgrade", .permission = "redis.instances.upgrade" },
+        .{ .suffix = "RedisInstances.GetAuthString", .permission = "redis.instances.getAuthString" },
+        .{ .suffix = "RedisClusters.Get", .permission = "redis.clusters.get" },
+        .{ .suffix = "RedisClusters.Create", .permission = "redis.clusters.create" },
+        .{ .suffix = "RedisClusters.Update", .permission = "redis.clusters.update" },
+        .{ .suffix = "RedisClusters.Delete", .permission = "redis.clusters.delete" },
+        .{ .suffix = "RedisAclPolicies.Get", .permission = "redis.aclPolicies.get" },
+        .{ .suffix = "RedisAclPolicies.Create", .permission = "redis.aclPolicies.create" },
+        .{ .suffix = "RedisAclPolicies.Update", .permission = "redis.aclPolicies.update" },
+        .{ .suffix = "RedisAclPolicies.Delete", .permission = "redis.aclPolicies.delete" },
+        .{ .suffix = "PrivateServiceRanges.Get", .permission = "compute.globalAddresses.get" },
+        .{ .suffix = "PrivateServiceRanges.Create", .permission = "compute.globalAddresses.create" },
+        .{ .suffix = "PrivateServiceRanges.Delete", .permission = "compute.globalAddresses.delete" },
+        .{ .suffix = "ServiceNetworkingConnections.Get", .permission = "servicenetworking.services.get" },
+        .{ .suffix = "ServiceNetworkingConnections.Create", .permission = "servicenetworking.services.addPeering" },
+        .{ .suffix = "ServiceNetworkingConnections.Update", .permission = "servicenetworking.services.addPeering" },
+        .{ .suffix = "ServiceNetworkingConnections.Delete", .permission = "servicenetworking.services.deleteConnection" },
+        .{ .suffix = "SecretVersions.AddSecretVersion", .permission = "secretmanager.versions.add" },
         .{ .suffix = "CloudScheduler.GetJob", .permission = "cloudscheduler.jobs.get" },
         .{ .suffix = "CloudScheduler.CreateJob", .permission = "cloudscheduler.jobs.create" },
         .{ .suffix = "CloudScheduler.UpdateJob", .permission = "cloudscheduler.jobs.update" },
@@ -645,6 +703,70 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlSslCertsService.Create" },
         .{ .service = "sqladmin.googleapis.com", .method = "google.cloud.sql.v1.SqlSslCertsService.Delete" },
     };
+    const spanner_instance = [_]RpcUsage{
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerInstanceAdmin.GetInstance" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerInstanceAdmin.CreateInstance" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerInstanceAdmin.UpdateInstance" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerInstanceAdmin.DeleteInstance" },
+    };
+    const spanner_instance_iam = [_]RpcUsage{
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerInstanceAdmin.GetIamPolicy" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerInstanceAdmin.SetIamPolicy" },
+    };
+    const spanner_database = [_]RpcUsage{
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.GetDatabase" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.CreateDatabase" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.UpdateDatabaseDdl" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.DropDatabase" },
+    };
+    const spanner_database_iam = [_]RpcUsage{
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.GetIamPolicy" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.SetIamPolicy" },
+    };
+    const spanner_backup = [_]RpcUsage{
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.GetBackup" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.CreateBackup" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.AuthorizeCreateBackup" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.UpdateBackup" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.DeleteBackup" },
+    };
+    const spanner_backup_schedule = [_]RpcUsage{
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.GetBackupSchedule" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.CreateBackupSchedule" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.UpdateBackupSchedule" },
+        .{ .service = "spanner.googleapis.com", .method = "ziac.gcp.SpannerDatabaseAdmin.DeleteBackupSchedule" },
+    };
+    const redis_instance = [_]RpcUsage{
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisInstances.Get" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisInstances.Create" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisInstances.Update" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisInstances.Delete" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisInstances.Upgrade" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisInstances.GetAuthString" },
+    };
+    const redis_cluster = [_]RpcUsage{
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisClusters.Get" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisClusters.Create" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisClusters.Update" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisClusters.Delete" },
+    };
+    const redis_acl_policy = [_]RpcUsage{
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisAclPolicies.Get" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisAclPolicies.Create" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisAclPolicies.Update" },
+        .{ .service = "redis.googleapis.com", .method = "ziac.gcp.RedisAclPolicies.Delete" },
+    };
+    const private_service_range = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "ziac.gcp.PrivateServiceRanges.Get" },
+        .{ .service = "compute.googleapis.com", .method = "ziac.gcp.PrivateServiceRanges.Create" },
+        .{ .service = "compute.googleapis.com", .method = "ziac.gcp.PrivateServiceRanges.Delete" },
+    };
+    const service_networking_connection = [_]RpcUsage{
+        .{ .service = "servicenetworking.googleapis.com", .method = "ziac.gcp.ServiceNetworkingConnections.Get" },
+        .{ .service = "servicenetworking.googleapis.com", .method = "ziac.gcp.ServiceNetworkingConnections.Create" },
+        .{ .service = "servicenetworking.googleapis.com", .method = "ziac.gcp.ServiceNetworkingConnections.Update" },
+        .{ .service = "servicenetworking.googleapis.com", .method = "ziac.gcp.ServiceNetworkingConnections.Delete" },
+    };
     const iam_service_account = [_]RpcUsage{
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.GetServiceAccount" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.IAM.CreateServiceAccount" },
@@ -784,6 +906,17 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.sql.Database")) return &sql_database;
     if (std.mem.eql(u8, type_name, "gcp.sql.User")) return &sql_user;
     if (std.mem.eql(u8, type_name, "gcp.sql.ClientCertificate")) return &sql_certificate;
+    if (std.mem.eql(u8, type_name, "gcp.spanner.Instance")) return &spanner_instance;
+    if (std.mem.eql(u8, type_name, "gcp.spanner.InstanceIamMember")) return &spanner_instance_iam;
+    if (std.mem.eql(u8, type_name, "gcp.spanner.Database")) return &spanner_database;
+    if (std.mem.eql(u8, type_name, "gcp.spanner.DatabaseIamMember")) return &spanner_database_iam;
+    if (std.mem.eql(u8, type_name, "gcp.spanner.Backup")) return &spanner_backup;
+    if (std.mem.eql(u8, type_name, "gcp.spanner.BackupSchedule")) return &spanner_backup_schedule;
+    if (std.mem.eql(u8, type_name, "gcp.redis.Instance")) return &redis_instance;
+    if (std.mem.eql(u8, type_name, "gcp.redis.Cluster")) return &redis_cluster;
+    if (std.mem.eql(u8, type_name, "gcp.redis.AclPolicy")) return &redis_acl_policy;
+    if (std.mem.eql(u8, type_name, "gcp.compute.PrivateServiceRange")) return &private_service_range;
+    if (std.mem.eql(u8, type_name, "gcp.servicenetworking.Connection")) return &service_networking_connection;
     if (std.mem.eql(u8, type_name, "gcp.iam.ServiceAccount")) return &iam_service_account;
     if (std.mem.startsWith(u8, type_name, "gcp.iam.Project") and
         !std.mem.eql(u8, type_name, "gcp.iam.ProjectCustomRole")) return &project_iam;
@@ -828,6 +961,8 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },
         .{ .role = "roles/pubsub.subscriber", .permission = "pubsub.subscriptions.consume" },
         .{ .role = "roles/run.invoker", .permission = "run.routes.invoke" },
+        .{ .role = "roles/spanner.databaseUser", .permission = "spanner.databases.read" },
+        .{ .role = "roles/redis.dbConnectionUser", .permission = "redis.clusters.connect" },
         .{ .role = "roles/secretmanager.secretAccessor", .permission = "secretmanager.versions.access" },
         .{ .role = "roles/storage.objectCreator", .permission = "storage.objects.create" },
         .{ .role = "roles/storage.objectUser", .permission = "storage.objects.create" },
@@ -846,6 +981,21 @@ fn inputString(node: resource.ResourceNode, name: []const u8) ?[]const u8 {
         if (!std.mem.eql(u8, field.name, name)) continue;
         return switch (field.value) {
             .string => |text| text,
+            else => null,
+        };
+    }
+    return null;
+}
+
+fn inputBool(node: resource.ResourceNode, name: []const u8) ?bool {
+    const fields = switch (node.inputs) {
+        .object => |items| items,
+        else => return null,
+    };
+    for (fields) |field| {
+        if (!std.mem.eql(u8, field.name, name)) continue;
+        return switch (field.value) {
+            .boolean => |present| present,
             else => null,
         };
     }

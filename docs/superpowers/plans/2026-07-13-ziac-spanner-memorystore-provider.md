@@ -8,7 +8,7 @@ Design: `docs/superpowers/specs/2026-07-13-ziac-spanner-memorystore-provider-des
 - [x] Pin Spanner, Redis, and Service Networking GA Discovery contracts.
 - [x] Add failing declaration tests for all eleven resources.
 - [x] Add failing lifecycle tests for CRUD, import, LRO resume and drift.
-- [ ] Add product tests for components, IAM, estate, visual and cost behavior.
+- [x] Add product tests for components, IAM, estate, visual and cost behavior.
 
 ## Typed Primitives
 
@@ -29,19 +29,31 @@ Design: `docs/superpowers/specs/2026-07-13-ziac-spanner-memorystore-provider-des
 
 ## Components And Product Surface
 
-- [ ] Add `PrivateServiceAccess` with explicit shared-network ownership.
-- [ ] Add `SpannerDatabase` with backups and least-privilege IAM.
-- [ ] Add tagged `MemorystoreCache` classic and cluster composition.
-- [ ] Add API/permission synthesis and runtime role mappings.
-- [ ] Add Cloud Asset identity and ownership reconciliation.
-- [ ] Add canvas topology, network, data, backup, ACL and IAM metadata.
-- [ ] Add explicit configuration-estimate cost models.
+- [x] Add `PrivateServiceAccess` with explicit shared-network ownership.
+- [x] Add `SpannerDatabase` with backups and least-privilege IAM.
+- [x] Add tagged `MemorystoreCache` classic and cluster composition.
+- [x] Add API/permission synthesis and runtime role mappings.
+- [x] Add Cloud Asset identity and ownership reconciliation.
+- [x] Add canvas topology, network, data, backup, ACL and IAM metadata.
+- [x] Add explicit configuration-estimate cost models.
 
 ## Distribution And Qualification
 
-- [ ] Add public examples and agent documentation.
-- [ ] Add fail-closed authenticated qualification script and receipt schema.
-- [ ] Compile installed-package examples under Testing v2.
-- [ ] Run formatting, migration guard, root typecheck and package release gate.
-- [ ] Record exact receipt counts and update both roadmaps.
-- [ ] Commit M66 as one independently reviewable milestone.
+- [x] Add public examples and agent documentation.
+- [x] Add fail-closed authenticated qualification script and receipt schema.
+- [x] Compile installed-package examples under Testing v2.
+- [x] Run formatting, migration guard, root typecheck and package release gate.
+- [x] Record exact receipt counts and update both roadmaps.
+- [x] Commit M66 as one independently reviewable milestone.
+
+## Completion Evidence
+
+- Testing v2: 656 discovered and executed, 655 passed, one credential-gated
+  skip, zero failures, pending tests, leaks or logged errors.
+- Release gate: 131/131 steps succeeded; 668/669 tests passed with one skip.
+- Dashboard: TypeScript passed and 55 tests passed.
+- Repository TypeScript and Testing v2 migration guard passed.
+- Provider catalog: 96 managed resource types.
+- Authenticated proof remains external until
+  `scripts/qualify-data-services.sh` emits a passing disposable-project
+  receipt from a VPC-connected runner.

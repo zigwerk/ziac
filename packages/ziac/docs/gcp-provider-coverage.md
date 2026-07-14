@@ -247,6 +247,24 @@ is never synthesized as a hidden side effect. Permission synthesis, Cloud Asset
 instance identity, canvas metadata, IAM edges and explicit compute, storage,
 backup and egress estimates are synchronized. See `gcp-cloud-sql.md`.
 
+### Spanner and Memorystore data platform
+
+M66 adds eleven managed resources for Spanner instances, databases, backups,
+backup schedules and additive IAM; classic Redis, Redis Cluster and secret-safe
+ACL policy; and explicit private-service address ranges and connections.
+
+`ziac.gcp.PrivateServiceAccess`, `ziac.gcp.SpannerDatabase` and tagged
+`ziac.gcp.MemorystoreCache` expose the opinionated layer without hiding VPC
+mutations or mixing classic and cluster settings. Hardened providers resume
+LROs, normalize DDL, capacity, maintenance and configuration maps, enforce data
+protection and replacement boundaries, and save generated Redis AUTH directly
+to Secret Manager.
+
+API and permission synthesis, supported Cloud Asset identities, canvas data and
+private-network metadata, runtime IAM edges and explicit configuration cost
+assumptions are synchronized. Unsupported Cloud Asset child kinds remain
+observed-only. See `gcp-spanner-memorystore.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`
@@ -263,8 +281,8 @@ M56-M62 adds the provider catalog and generation spine, then completes:
 4. general additive and authoritative IAM semantics;
 5. one integrated authenticated application-platform qualification.
 
-The subsequent waves cover Spanner, Memorystore, Compute Engine,
-GKE, broader networking, Cloud Armor, Certificate
+The subsequent waves cover broader application services, Compute Engine, GKE,
+networking, Cloud Armor, Certificate
 Manager, Monitoring, Logging, Cloud Build/Deploy, organization governance,
 security, analytics, integration and stable Vertex AI resources.
 

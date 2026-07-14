@@ -218,6 +218,7 @@ pub fn build(b: *std.Build) void {
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "analytics-warehouse", "examples/analytics_warehouse.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "document-store", "examples/document_store.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "managed-postgres", "examples/managed_postgres.zig");
+    addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "data-services-platform", "examples/data_services_platform.zig");
 
     const visual_sample_module = b.createModule(.{
         .root_source_file = b.path("examples/visual_artifact.zig"),

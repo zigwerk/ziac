@@ -210,7 +210,7 @@ isolated serializer tests.
 - [x] M63 BigQuery: Dataset, Table, View, Routine, Connection, Reservation, IAM.
 - [x] M64 Firestore: Database, Index, Field, BackupSchedule, IAM.
 - [x] M65 Cloud SQL: Instance, Database, User, replica, private IP, SSL and IAM.
-- [ ] M66 Spanner and Memorystore primitives plus private connectivity.
+- [x] M66 Spanner and Memorystore primitives plus private connectivity.
 - [ ] M67 Workflows, API Gateway, Identity Platform and Parameter Manager.
 
 ## M68-M72: Compute, Network And Container Platform

@@ -850,3 +850,31 @@ The M65 local Testing v2 gate is complete with 631 discovered and executed
 tests, 630 passed, one credential-gated skip, and zero failures, pending tests,
 leaks or logged errors. The provider catalog reports 85 managed resources and
 the public managed-postgres example compiles.
+
+M66 is locally complete and awaiting authenticated Spanner and Memorystore data
+path qualification. Eleven managed resource types cover Spanner instances,
+databases, backups, backup schedules and additive instance/database IAM;
+classic Redis, Redis Cluster and ACL policies; and explicit Compute global
+private-service ranges plus Service Networking connections.
+
+`ziac.gcp.PrivateServiceAccess` owns the visible peering boundary,
+`ziac.gcp.SpannerDatabase` composes retained data, backups and exact runtime
+access, and tagged `ziac.gcp.MemorystoreCache` keeps classic Redis and Cluster
+topologies disjoint. The lifecycle adapters resume Google LROs, normalize
+remote defaults, enforce immutable and destructive boundaries, and persist
+one-time Redis AUTH only into a declared Secret Manager version.
+
+Permission synthesis distinguishes Compute global-address authority, Spanner's
+two-permission backup creation and conditional Secret Manager writes. Cloud
+Asset adoption maps only Google-supported identities; unsupported Spanner
+backup schedules and Redis ACL policies remain generic observed assets. Canvas
+metadata and explicit Spanner compute/storage/backup and Memorystore
+capacity/egress estimates are synchronized. The installed example and
+`scripts/qualify-data-services.sh` document the VPC-connected remote proof. See
+`docs/gcp-spanner-memorystore.md`.
+
+The M66 local Testing v2 gate is complete with 656 discovered and executed
+tests, 655 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. The release gate completed 131/131 steps, the provider
+catalog reports 96 managed resources and the public data-services example
+compiles.

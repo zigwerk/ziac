@@ -139,6 +139,28 @@ pub const CloudSqlEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const SpannerEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    compute_sku_id: []const u8,
+    storage_sku_id: []const u8,
+    backup_sku_id: []const u8,
+    processing_unit_hours: u64,
+    stored_gib_month: u64,
+    backup_gib_month: u64,
+    observed_at_millis: u64,
+};
+
+pub const MemorystoreEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    capacity_sku_id: []const u8,
+    egress_sku_id: []const u8,
+    capacity_gib_hours: u64,
+    egress_gib: u64,
+    observed_at_millis: u64,
+};
+
 pub const CloudRunJobEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8,
@@ -471,6 +493,45 @@ pub fn cloudSqlConfigurationEstimate(
         if (assumption.quantity == 0) continue;
         if (assumption.sku_id.len == 0) return error.InvalidPricing;
         usage[count] = .{ .sku_id = assumption.sku_id, .region = input.region, .quantity = assumption.quantity };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn spannerConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: SpannerEstimateInput,
+) !ResourceCost {
+    var usage: [3]UsageAssumption = undefined;
+    var count: usize = 0;
+    const assumptions = [_]struct { quantity: u64, sku_id: []const u8 }{
+        .{ .quantity = input.processing_unit_hours, .sku_id = input.compute_sku_id },
+        .{ .quantity = input.stored_gib_month, .sku_id = input.storage_sku_id },
+        .{ .quantity = input.backup_gib_month, .sku_id = input.backup_sku_id },
+    };
+    for (assumptions) |assumption| {
+        if (assumption.quantity == 0) continue;
+        if (assumption.sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = assumption.sku_id, .region = input.region, .quantity = assumption.quantity };
+        count += 1;
+    }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn memorystoreConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: MemorystoreEstimateInput,
+) !ResourceCost {
+    var usage: [2]UsageAssumption = undefined;
+    var count: usize = 0;
+    if (input.capacity_gib_hours > 0) {
+        if (input.capacity_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.capacity_sku_id, .region = input.region, .quantity = input.capacity_gib_hours };
+        count += 1;
+    }
+    if (input.egress_gib > 0) {
+        if (input.egress_sku_id.len == 0) return error.InvalidPricing;
+        usage[count] = .{ .sku_id = input.egress_sku_id, .region = input.region, .quantity = input.egress_gib };
         count += 1;
     }
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);

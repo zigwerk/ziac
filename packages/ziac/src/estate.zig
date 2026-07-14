@@ -322,6 +322,18 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.bigquery.Reservation"
     else if (std.mem.eql(u8, asset_type, "firestore.googleapis.com/Database"))
         "gcp.firestore.Database"
+    else if (std.mem.eql(u8, asset_type, "spanner.googleapis.com/Instance"))
+        "gcp.spanner.Instance"
+    else if (std.mem.eql(u8, asset_type, "spanner.googleapis.com/Database"))
+        "gcp.spanner.Database"
+    else if (std.mem.eql(u8, asset_type, "spanner.googleapis.com/Backup"))
+        "gcp.spanner.Backup"
+    else if (std.mem.eql(u8, asset_type, "redis.googleapis.com/Instance"))
+        "gcp.redis.Instance"
+    else if (std.mem.eql(u8, asset_type, "redis.googleapis.com/Cluster"))
+        "gcp.redis.Cluster"
+    else if (std.mem.eql(u8, asset_type, "servicenetworking.googleapis.com/Connection"))
+        "gcp.servicenetworking.Connection"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -397,6 +409,26 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
     }
     if (std.mem.eql(u8, asset_type, "firestore.googleapis.com/Database")) {
         const prefix = "//firestore.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "spanner.googleapis.com/Instance") or
+        std.mem.eql(u8, asset_type, "spanner.googleapis.com/Database") or
+        std.mem.eql(u8, asset_type, "spanner.googleapis.com/Backup"))
+    {
+        const prefix = "//spanner.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "redis.googleapis.com/Instance") or
+        std.mem.eql(u8, asset_type, "redis.googleapis.com/Cluster"))
+    {
+        const prefix = "//redis.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
+    if (std.mem.eql(u8, asset_type, "servicenetworking.googleapis.com/Connection")) {
+        const prefix = "//servicenetworking.googleapis.com/";
         if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
         return allocator.dupe(u8, name[prefix.len..]);
     }
