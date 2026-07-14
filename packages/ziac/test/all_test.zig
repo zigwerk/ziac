@@ -1,4 +1,5 @@
 comptime {
+    _ = @import("gcp_application_services_product_test.zig");
     _ = @import("gcp_bigquery_live_provider_test.zig");
     _ = @import("gcp_bigquery_product_test.zig");
     _ = @import("gcp_firestore_live_provider_test.zig");

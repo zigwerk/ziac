@@ -497,6 +497,60 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "RedisAclPolicies.Create", .permission = "redis.aclPolicies.create" },
         .{ .suffix = "RedisAclPolicies.Update", .permission = "redis.aclPolicies.update" },
         .{ .suffix = "RedisAclPolicies.Delete", .permission = "redis.aclPolicies.delete" },
+        .{ .suffix = "Workflows.GetWorkflow", .permission = "workflows.workflows.get" },
+        .{ .suffix = "Workflows.CreateWorkflow", .permission = "workflows.workflows.create" },
+        .{ .suffix = "Workflows.UpdateWorkflow", .permission = "workflows.workflows.update" },
+        .{ .suffix = "Workflows.DeleteWorkflow", .permission = "workflows.workflows.delete" },
+        .{ .suffix = "Apis.GetApi", .permission = "apigateway.apis.get" },
+        .{ .suffix = "Apis.CreateApi", .permission = "apigateway.apis.create" },
+        .{ .suffix = "Apis.UpdateApi", .permission = "apigateway.apis.update" },
+        .{ .suffix = "Apis.DeleteApi", .permission = "apigateway.apis.delete" },
+        .{ .suffix = "Apis.GetIamPolicy", .permission = "apigateway.apis.getIamPolicy" },
+        .{ .suffix = "Apis.SetIamPolicy", .permission = "apigateway.apis.setIamPolicy" },
+        .{ .suffix = "ApiConfigs.GetApiConfig", .permission = "apigateway.apiconfigs.get" },
+        .{ .suffix = "ApiConfigs.CreateApiConfig", .permission = "apigateway.apiconfigs.create" },
+        .{ .suffix = "ApiConfigs.UpdateApiConfig", .permission = "apigateway.apiconfigs.update" },
+        .{ .suffix = "ApiConfigs.DeleteApiConfig", .permission = "apigateway.apiconfigs.delete" },
+        .{ .suffix = "ApiConfigs.GetIamPolicy", .permission = "apigateway.apiconfigs.getIamPolicy" },
+        .{ .suffix = "ApiConfigs.SetIamPolicy", .permission = "apigateway.apiconfigs.setIamPolicy" },
+        .{ .suffix = "Gateways.GetGateway", .permission = "apigateway.gateways.get" },
+        .{ .suffix = "Gateways.CreateGateway", .permission = "apigateway.gateways.create" },
+        .{ .suffix = "Gateways.UpdateGateway", .permission = "apigateway.gateways.update" },
+        .{ .suffix = "Gateways.DeleteGateway", .permission = "apigateway.gateways.delete" },
+        .{ .suffix = "Gateways.GetIamPolicy", .permission = "apigateway.gateways.getIamPolicy" },
+        .{ .suffix = "Gateways.SetIamPolicy", .permission = "apigateway.gateways.setIamPolicy" },
+        .{ .suffix = "Projects.GetConfig", .permission = "identitytoolkit.configs.get" },
+        .{ .suffix = "Projects.UpdateConfig", .permission = "identitytoolkit.configs.update" },
+        .{ .suffix = "Tenants.GetTenant", .permission = "identitytoolkit.tenants.get" },
+        .{ .suffix = "Tenants.CreateTenant", .permission = "identitytoolkit.tenants.create" },
+        .{ .suffix = "Tenants.UpdateTenant", .permission = "identitytoolkit.tenants.update" },
+        .{ .suffix = "Tenants.DeleteTenant", .permission = "identitytoolkit.tenants.delete" },
+        .{ .suffix = "Tenants.GetIamPolicy", .permission = "identitytoolkit.tenants.getIamPolicy" },
+        .{ .suffix = "Tenants.SetIamPolicy", .permission = "identitytoolkit.tenants.setIamPolicy" },
+        .{ .suffix = "OAuthIdpConfigs.GetOAuthIdpConfig", .permission = "identitytoolkit.oauthIdpConfigs.get" },
+        .{ .suffix = "OAuthIdpConfigs.CreateOAuthIdpConfig", .permission = "identitytoolkit.oauthIdpConfigs.create" },
+        .{ .suffix = "OAuthIdpConfigs.UpdateOAuthIdpConfig", .permission = "identitytoolkit.oauthIdpConfigs.update" },
+        .{ .suffix = "OAuthIdpConfigs.DeleteOAuthIdpConfig", .permission = "identitytoolkit.oauthIdpConfigs.delete" },
+        .{ .suffix = "InboundSamlConfigs.GetInboundSamlConfig", .permission = "identitytoolkit.inboundSamlConfigs.get" },
+        .{ .suffix = "InboundSamlConfigs.CreateInboundSamlConfig", .permission = "identitytoolkit.inboundSamlConfigs.create" },
+        .{ .suffix = "InboundSamlConfigs.UpdateInboundSamlConfig", .permission = "identitytoolkit.inboundSamlConfigs.update" },
+        .{ .suffix = "InboundSamlConfigs.DeleteInboundSamlConfig", .permission = "identitytoolkit.inboundSamlConfigs.delete" },
+        .{ .suffix = "ParameterManager.GetParameter", .permission = "parametermanager.parameters.get" },
+        .{ .suffix = "ParameterManager.CreateParameter", .permission = "parametermanager.parameters.create" },
+        .{ .suffix = "ParameterManager.UpdateParameter", .permission = "parametermanager.parameters.update" },
+        .{ .suffix = "ParameterManager.DeleteParameter", .permission = "parametermanager.parameters.delete" },
+        .{ .suffix = "ParameterManager.GetParameterVersion", .permission = "parametermanager.parameterVersions.get" },
+        .{ .suffix = "ParameterManager.CreateParameterVersion", .permission = "parametermanager.parameterVersions.create" },
+        .{ .suffix = "ParameterManager.UpdateParameterVersion", .permission = "parametermanager.parameterVersions.update" },
+        .{ .suffix = "ParameterManager.DeleteParameterVersion", .permission = "parametermanager.parameterVersions.delete" },
+        .{ .suffix = "ParameterManager.GetTemplate", .permission = "parametermanager.templates.get" },
+        .{ .suffix = "ParameterManager.CreateTemplate", .permission = "parametermanager.templates.create" },
+        .{ .suffix = "ParameterManager.UpdateTemplate", .permission = "parametermanager.templates.update" },
+        .{ .suffix = "ParameterManager.DeleteTemplate", .permission = "parametermanager.templates.delete" },
+        .{ .suffix = "ParameterManager.GetTemplateVersion", .permission = "parametermanager.templateVersions.get" },
+        .{ .suffix = "ParameterManager.CreateTemplateVersion", .permission = "parametermanager.templateVersions.create" },
+        .{ .suffix = "ParameterManager.UpdateTemplateVersion", .permission = "parametermanager.templateVersions.update" },
+        .{ .suffix = "ParameterManager.DeleteTemplateVersion", .permission = "parametermanager.templateVersions.delete" },
         .{ .suffix = "PrivateServiceRanges.Get", .permission = "compute.globalAddresses.get" },
         .{ .suffix = "PrivateServiceRanges.Create", .permission = "compute.globalAddresses.create" },
         .{ .suffix = "PrivateServiceRanges.Delete", .permission = "compute.globalAddresses.delete" },
@@ -864,6 +918,94 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "cloudscheduler.googleapis.com", .method = "google.cloud.scheduler.v1.CloudScheduler.DeleteJob" },
         .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
     };
+    const workflow = [_]RpcUsage{
+        .{ .service = "workflows.googleapis.com", .method = "google.cloud.workflows.v1.Workflows.GetWorkflow" },
+        .{ .service = "workflows.googleapis.com", .method = "google.cloud.workflows.v1.Workflows.CreateWorkflow" },
+        .{ .service = "workflows.googleapis.com", .method = "google.cloud.workflows.v1.Workflows.UpdateWorkflow" },
+        .{ .service = "workflows.googleapis.com", .method = "google.cloud.workflows.v1.Workflows.DeleteWorkflow" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
+    const api_gateway_api = [_]RpcUsage{
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Apis.GetApi" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Apis.CreateApi" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Apis.UpdateApi" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Apis.DeleteApi" },
+    };
+    const api_gateway_config = [_]RpcUsage{
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.ApiConfigs.GetApiConfig" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.ApiConfigs.CreateApiConfig" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.ApiConfigs.UpdateApiConfig" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.ApiConfigs.DeleteApiConfig" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
+    const api_gateway_gateway = [_]RpcUsage{
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Gateways.GetGateway" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Gateways.CreateGateway" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Gateways.UpdateGateway" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Gateways.DeleteGateway" },
+    };
+    const api_gateway_api_iam = [_]RpcUsage{
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Apis.GetIamPolicy" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Apis.SetIamPolicy" },
+    };
+    const api_gateway_config_iam = [_]RpcUsage{
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.ApiConfigs.GetIamPolicy" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.ApiConfigs.SetIamPolicy" },
+    };
+    const api_gateway_gateway_iam = [_]RpcUsage{
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Gateways.GetIamPolicy" },
+        .{ .service = "apigateway.googleapis.com", .method = "google.cloud.apigateway.v1.Gateways.SetIamPolicy" },
+    };
+    const identity_project_config = [_]RpcUsage{
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.Projects.GetConfig" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.Projects.UpdateConfig" },
+    };
+    const identity_tenant = [_]RpcUsage{
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.Tenants.GetTenant" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.Tenants.CreateTenant" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.Tenants.UpdateTenant" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.Tenants.DeleteTenant" },
+    };
+    const identity_tenant_iam = [_]RpcUsage{
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.Tenants.GetIamPolicy" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.Tenants.SetIamPolicy" },
+    };
+    const identity_oidc = [_]RpcUsage{
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.OAuthIdpConfigs.GetOAuthIdpConfig" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.OAuthIdpConfigs.CreateOAuthIdpConfig" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.OAuthIdpConfigs.UpdateOAuthIdpConfig" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.OAuthIdpConfigs.DeleteOAuthIdpConfig" },
+    };
+    const identity_saml = [_]RpcUsage{
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.InboundSamlConfigs.GetInboundSamlConfig" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.InboundSamlConfigs.CreateInboundSamlConfig" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.InboundSamlConfigs.UpdateInboundSamlConfig" },
+        .{ .service = "identitytoolkit.googleapis.com", .method = "google.cloud.identitytoolkit.v2.InboundSamlConfigs.DeleteInboundSamlConfig" },
+    };
+    const parameter = [_]RpcUsage{
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.GetParameter" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.CreateParameter" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.UpdateParameter" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.DeleteParameter" },
+    };
+    const parameter_version = [_]RpcUsage{
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.GetParameterVersion" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.CreateParameterVersion" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.UpdateParameterVersion" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.DeleteParameterVersion" },
+    };
+    const parameter_template = [_]RpcUsage{
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.GetTemplate" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.CreateTemplate" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.UpdateTemplate" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.DeleteTemplate" },
+    };
+    const parameter_template_version = [_]RpcUsage{
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.GetTemplateVersion" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.CreateTemplateVersion" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.UpdateTemplateVersion" },
+        .{ .service = "parametermanager.googleapis.com", .method = "google.cloud.parametermanager.v1.ParameterManager.DeleteTemplateVersion" },
+    };
     const compute_backend = [_]RpcUsage{
         .{ .service = "compute.googleapis.com", .method = "compute.backendServices.get" },
         .{ .service = "compute.googleapis.com", .method = "compute.backendServices.insert" },
@@ -938,6 +1080,22 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.tasks.QueueIamMember")) return &tasks_queue_iam;
     if (std.mem.eql(u8, type_name, "gcp.eventarc.Trigger")) return &eventarc_trigger;
     if (std.mem.eql(u8, type_name, "gcp.scheduler.Job")) return &scheduler_job;
+    if (std.mem.eql(u8, type_name, "gcp.workflows.Workflow")) return &workflow;
+    if (std.mem.eql(u8, type_name, "gcp.apigateway.Api")) return &api_gateway_api;
+    if (std.mem.eql(u8, type_name, "gcp.apigateway.ApiConfig")) return &api_gateway_config;
+    if (std.mem.eql(u8, type_name, "gcp.apigateway.Gateway")) return &api_gateway_gateway;
+    if (std.mem.eql(u8, type_name, "gcp.apigateway.ApiIamMember")) return &api_gateway_api_iam;
+    if (std.mem.eql(u8, type_name, "gcp.apigateway.ApiConfigIamMember")) return &api_gateway_config_iam;
+    if (std.mem.eql(u8, type_name, "gcp.apigateway.GatewayIamMember")) return &api_gateway_gateway_iam;
+    if (std.mem.eql(u8, type_name, "gcp.identity.ProjectConfig")) return &identity_project_config;
+    if (std.mem.eql(u8, type_name, "gcp.identity.Tenant")) return &identity_tenant;
+    if (std.mem.eql(u8, type_name, "gcp.identity.TenantIamMember")) return &identity_tenant_iam;
+    if (std.mem.eql(u8, type_name, "gcp.identity.ProjectOAuthIdpConfig") or std.mem.eql(u8, type_name, "gcp.identity.TenantOAuthIdpConfig")) return &identity_oidc;
+    if (std.mem.eql(u8, type_name, "gcp.identity.ProjectInboundSamlConfig") or std.mem.eql(u8, type_name, "gcp.identity.TenantInboundSamlConfig")) return &identity_saml;
+    if (std.mem.eql(u8, type_name, "gcp.parametermanager.Parameter")) return &parameter;
+    if (std.mem.eql(u8, type_name, "gcp.parametermanager.ParameterVersion")) return &parameter_version;
+    if (std.mem.eql(u8, type_name, "gcp.parametermanager.Template")) return &parameter_template;
+    if (std.mem.eql(u8, type_name, "gcp.parametermanager.TemplateVersion")) return &parameter_template_version;
     if (std.mem.eql(u8, type_name, "gcp.compute.BackendService")) return &compute_backend;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionServerlessNeg")) return &compute_neg;
     if (std.mem.startsWith(u8, type_name, "gcp.compute.")) return &compute_generic;
@@ -961,6 +1119,8 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },
         .{ .role = "roles/pubsub.subscriber", .permission = "pubsub.subscriptions.consume" },
         .{ .role = "roles/run.invoker", .permission = "run.routes.invoke" },
+        .{ .role = "roles/workflows.invoker", .permission = "workflows.executions.create" },
+        .{ .role = "roles/parametermanager.parameterAccessor", .permission = "parametermanager.parameterVersions.render" },
         .{ .role = "roles/spanner.databaseUser", .permission = "spanner.databases.read" },
         .{ .role = "roles/redis.dbConnectionUser", .permission = "redis.clusters.connect" },
         .{ .role = "roles/secretmanager.secretAccessor", .permission = "secretmanager.versions.access" },

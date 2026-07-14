@@ -334,6 +334,26 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.redis.Cluster"
     else if (std.mem.eql(u8, asset_type, "servicenetworking.googleapis.com/Connection"))
         "gcp.servicenetworking.Connection"
+    else if (std.mem.eql(u8, asset_type, "workflows.googleapis.com/Workflow"))
+        "gcp.workflows.Workflow"
+    else if (std.mem.eql(u8, asset_type, "apigateway.googleapis.com/Api"))
+        "gcp.apigateway.Api"
+    else if (std.mem.eql(u8, asset_type, "apigateway.googleapis.com/ApiConfig"))
+        "gcp.apigateway.ApiConfig"
+    else if (std.mem.eql(u8, asset_type, "apigateway.googleapis.com/Gateway"))
+        "gcp.apigateway.Gateway"
+    else if (std.mem.eql(u8, asset_type, "identitytoolkit.googleapis.com/Config"))
+        "gcp.identity.ProjectConfig"
+    else if (std.mem.eql(u8, asset_type, "identitytoolkit.googleapis.com/Tenant"))
+        "gcp.identity.Tenant"
+    else if (std.mem.eql(u8, asset_type, "identitytoolkit.googleapis.com/OauthIdpConfig"))
+        if (std.mem.indexOf(u8, name, "/tenants/") != null) "gcp.identity.TenantOAuthIdpConfig" else "gcp.identity.ProjectOAuthIdpConfig"
+    else if (std.mem.eql(u8, asset_type, "identitytoolkit.googleapis.com/InboundSamlConfig"))
+        if (std.mem.indexOf(u8, name, "/tenants/") != null) "gcp.identity.TenantInboundSamlConfig" else "gcp.identity.ProjectInboundSamlConfig"
+    else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/Parameter"))
+        "gcp.parametermanager.Parameter"
+    else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/ParameterVersion"))
+        "gcp.parametermanager.ParameterVersion"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -432,6 +452,22 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
         return allocator.dupe(u8, name[prefix.len..]);
     }
+    const service_prefixes = [_]struct { asset_type: []const u8, prefix: []const u8 }{
+        .{ .asset_type = "workflows.googleapis.com/Workflow", .prefix = "//workflows.googleapis.com/" },
+        .{ .asset_type = "apigateway.googleapis.com/Api", .prefix = "//apigateway.googleapis.com/" },
+        .{ .asset_type = "apigateway.googleapis.com/ApiConfig", .prefix = "//apigateway.googleapis.com/" },
+        .{ .asset_type = "apigateway.googleapis.com/Gateway", .prefix = "//apigateway.googleapis.com/" },
+        .{ .asset_type = "identitytoolkit.googleapis.com/Config", .prefix = "//identitytoolkit.googleapis.com/" },
+        .{ .asset_type = "identitytoolkit.googleapis.com/Tenant", .prefix = "//identitytoolkit.googleapis.com/" },
+        .{ .asset_type = "identitytoolkit.googleapis.com/OauthIdpConfig", .prefix = "//identitytoolkit.googleapis.com/" },
+        .{ .asset_type = "identitytoolkit.googleapis.com/InboundSamlConfig", .prefix = "//identitytoolkit.googleapis.com/" },
+        .{ .asset_type = "parametermanager.googleapis.com/Parameter", .prefix = "//parametermanager.googleapis.com/" },
+        .{ .asset_type = "parametermanager.googleapis.com/ParameterVersion", .prefix = "//parametermanager.googleapis.com/" },
+    };
+    for (service_prefixes) |entry| if (std.mem.eql(u8, asset_type, entry.asset_type)) {
+        if (!std.mem.startsWith(u8, name, entry.prefix) or name.len == entry.prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[entry.prefix.len..]);
+    };
     return allocator.dupe(u8, name);
 }
 

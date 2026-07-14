@@ -190,6 +190,22 @@ pub const CloudRunWorkerPoolEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const ApplicationServicesEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8 = "global",
+    workflow_internal_steps_sku_id: []const u8 = "",
+    workflow_external_steps_sku_id: []const u8 = "",
+    gateway_calls_sku_id: []const u8 = "",
+    identity_tier1_mau_sku_id: []const u8 = "",
+    identity_tier2_mau_sku_id: []const u8 = "",
+    workflow_internal_steps: u64 = 0,
+    workflow_external_steps: u64 = 0,
+    gateway_calls: u64 = 0,
+    identity_tier1_mau: u64 = 0,
+    identity_tier2_mau: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const BillingRow = struct {
     resource_id: []const u8,
     cost_micros: i64,
@@ -422,6 +438,33 @@ pub fn eventarcConfigurationEstimate(
         count += 1;
     }
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn applicationServicesConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: ApplicationServicesEstimateInput,
+) !ResourceCost {
+    var usage: [5]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.workflow_internal_steps_sku_id, input.region, input.workflow_internal_steps);
+    try appendUsage(&usage, &count, input.workflow_external_steps_sku_id, input.region, input.workflow_external_steps);
+    try appendUsage(&usage, &count, input.gateway_calls_sku_id, input.region, input.gateway_calls);
+    try appendUsage(&usage, &count, input.identity_tier1_mau_sku_id, input.region, input.identity_tier1_mau);
+    try appendUsage(&usage, &count, input.identity_tier2_mau_sku_id, input.region, input.identity_tier2_mau);
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+fn appendUsage(
+    usage: []UsageAssumption,
+    count: *usize,
+    sku_id: []const u8,
+    region: []const u8,
+    quantity: u64,
+) !void {
+    if (quantity == 0) return;
+    if (sku_id.len == 0 or count.* >= usage.len) return error.InvalidPricing;
+    usage[count.*] = .{ .sku_id = sku_id, .region = region, .quantity = quantity };
+    count.* += 1;
 }
 
 pub fn bigqueryConfigurationEstimate(

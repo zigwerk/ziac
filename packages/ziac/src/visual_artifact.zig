@@ -189,6 +189,7 @@ fn appendResource(
     try appendCloudSqlDetails(output, allocator, item.node);
     try appendSpannerDetails(output, allocator, item.node);
     try appendMemorystoreDetails(output, allocator, item.node);
+    try appendApplicationServicesDetails(output, allocator, item.node);
     try appendPrivateConnectivityDetails(output, allocator, item.node);
     try appendIamDetails(output, allocator, item.node);
     try appendConfigurationCost(output, allocator, observed_at_millis);
@@ -268,6 +269,8 @@ fn iamEdgeDetails(role: []const u8) ?IamEdgeDetails {
         .{ .role = "roles/pubsub.publisher", .access = "write", .permission = "pubsub.topics.publish" },
         .{ .role = "roles/pubsub.subscriber", .access = "read", .permission = "pubsub.subscriptions.consume" },
         .{ .role = "roles/run.invoker", .access = "invoke", .permission = "run.routes.invoke" },
+        .{ .role = "roles/workflows.invoker", .access = "invoke", .permission = "workflows.executions.create" },
+        .{ .role = "roles/parametermanager.parameterAccessor", .access = "read", .permission = "parametermanager.parameterVersions.render" },
         .{ .role = "roles/spanner.databaseUser", .access = "read_write", .permission = "spanner.databases.read" },
         .{ .role = "roles/redis.dbConnectionUser", .access = "connect", .permission = "redis.clusters.connect" },
         .{ .role = "roles/secretmanager.secretAccessor", .access = "read", .permission = "secretmanager.versions.access" },
@@ -338,6 +341,9 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         std.mem.startsWith(u8, node.type_name, "gcp.firestore.") or
         std.mem.startsWith(u8, node.type_name, "gcp.sql.") or
         std.mem.startsWith(u8, node.type_name, "gcp.redis.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.workflows.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.apigateway.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.parametermanager.") or
         std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
         std.mem.startsWith(u8, node.type_name, "gcp.eventarc."))
     {
@@ -345,6 +351,83 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         return if (location == .string) location.string else null;
     }
     return null;
+}
+
+fn appendApplicationServicesDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    if (std.mem.eql(u8, node.type_name, "gcp.workflows.Workflow")) {
+        try output.appendSlice(allocator, ",\"workflow\":{");
+        try appendNamedString(output, allocator, "kind", "workflow", false);
+        try appendOptionalStorageString(output, allocator, node, "workflow_id", "workflow_id");
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageString(output, allocator, node, "source_sha256", "source_sha256");
+        try appendOptionalStorageString(output, allocator, node, "call_log_level", "call_log_level");
+        try appendOptionalStorageString(output, allocator, node, "execution_history", "execution_history");
+        try appendOptionalStorageBool(output, allocator, node, "deletion_protection", "deletion_protection");
+        try output.append(allocator, '}');
+        return;
+    }
+    if (std.mem.startsWith(u8, node.type_name, "gcp.apigateway.")) {
+        try output.appendSlice(allocator, ",\"api_gateway\":{");
+        const kind = if (std.mem.eql(u8, node.type_name, "gcp.apigateway.Api"))
+            "api"
+        else if (std.mem.eql(u8, node.type_name, "gcp.apigateway.ApiConfig"))
+            "config"
+        else if (std.mem.eql(u8, node.type_name, "gcp.apigateway.Gateway"))
+            "gateway"
+        else
+            "iam_member";
+        try appendNamedString(output, allocator, "kind", kind, false);
+        try appendOptionalStorageString(output, allocator, node, "api_id", "api_id");
+        try appendOptionalStorageString(output, allocator, node, "config_id", "config_id");
+        try appendOptionalStorageString(output, allocator, node, "gateway_id", "gateway_id");
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendStorageListCount(output, allocator, node, "documents", "document_count");
+        try appendOptionalStorageBool(output, allocator, node, "deletion_protection", "deletion_protection");
+        try output.append(allocator, '}');
+        return;
+    }
+    if (std.mem.startsWith(u8, node.type_name, "gcp.identity.")) {
+        try output.appendSlice(allocator, ",\"identity\":{");
+        const kind = if (std.mem.eql(u8, node.type_name, "gcp.identity.ProjectConfig"))
+            "project_config"
+        else if (std.mem.eql(u8, node.type_name, "gcp.identity.Tenant"))
+            "tenant"
+        else if (std.mem.endsWith(u8, node.type_name, "OAuthIdpConfig"))
+            "oidc"
+        else if (std.mem.endsWith(u8, node.type_name, "InboundSamlConfig"))
+            "saml"
+        else
+            "iam_member";
+        try appendNamedString(output, allocator, "kind", kind, false);
+        try appendOptionalStorageString(output, allocator, node, "tenant_id", "tenant_id");
+        try appendOptionalStorageString(output, allocator, node, "provider_id", "provider_id");
+        try appendOptionalStorageString(output, allocator, node, "display_name", "display_name");
+        try appendOptionalStorageString(output, allocator, node, "mfa_state", "mfa_state");
+        try appendOptionalStorageBool(output, allocator, node, "enabled", "enabled");
+        try appendOptionalStorageBool(output, allocator, node, "disable_auth", "disable_auth");
+        try output.append(allocator, '}');
+        return;
+    }
+    if (std.mem.startsWith(u8, node.type_name, "gcp.parametermanager.")) {
+        try output.appendSlice(allocator, ",\"parameter_manager\":{");
+        const kind = if (std.mem.eql(u8, node.type_name, "gcp.parametermanager.Parameter"))
+            "parameter"
+        else if (std.mem.eql(u8, node.type_name, "gcp.parametermanager.ParameterVersion"))
+            "parameter_version"
+        else if (std.mem.eql(u8, node.type_name, "gcp.parametermanager.Template"))
+            "template"
+        else
+            "template_version";
+        try appendNamedString(output, allocator, "kind", kind, false);
+        try appendOptionalStorageString(output, allocator, node, "resource_id", "resource_id");
+        try appendOptionalStorageString(output, allocator, node, "parent_id", "parent_id");
+        try appendOptionalStorageString(output, allocator, node, "version_id", "version_id");
+        try appendOptionalStorageString(output, allocator, node, "location", "location");
+        try appendOptionalStorageString(output, allocator, node, "format", "format");
+        try appendOptionalStorageString(output, allocator, node, "payload_sha256", "payload_sha256");
+        try appendOptionalStorageBool(output, allocator, node, "disabled", "disabled");
+        try output.append(allocator, '}');
+    }
 }
 
 fn appendSpannerDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {

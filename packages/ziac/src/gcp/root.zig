@@ -31,6 +31,7 @@ pub const api_gateway = @import("api_gateway.zig");
 pub const identity = @import("identity_platform.zig");
 pub const parameter_manager = @import("parameter_manager.zig");
 pub const application_services_provider = @import("application_services_provider.zig");
+pub const application_services_qualification = @import("application_services_qualification.zig");
 pub const application_services_components = @import("application_services_components.zig");
 pub const pubsub = @import("pubsub.zig");
 pub const pubsub_provider = @import("pubsub_provider.zig");

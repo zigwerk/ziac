@@ -878,3 +878,32 @@ tests, 655 passed, one credential-gated skip, and zero failures, pending tests,
 leaks or logged errors. The release gate completed 131/131 steps, the provider
 catalog reports 96 managed resources and the public data-services example
 compiles.
+
+M67 is locally complete and awaiting authenticated Workflows, API Gateway,
+Identity Platform and Parameter Manager qualification. Eighteen managed
+resource types cover Workflows, API/config/gateway and scoped IAM, the protected
+Identity project singleton, tenants, project/tenant OIDC and SAML, tenant IAM,
+and Parameter Manager parameters/templates with immutable versions.
+
+`ziac.gcp.WorkflowProgram`, `ziac.gcp.ManagedApiGateway`, tagged
+`ziac.gcp.IdentityRealm` and tagged `ziac.gcp.ParameterBundle` provide the
+opinionated layer. Hardened adapters resume long-running operations, preserve
+etags and immutable identities, reject singleton deletion, resolve secrets only
+inside mutation scopes and verify declared SHA-256 values before sending API
+documents or parameter payloads.
+
+Permission synthesis derives all four APIs, exact deployer methods and separate
+Workflows/Parameter Manager runtime access. Cloud Asset adoption maps only
+Google-supported types; Parameter Manager templates remain generic observed
+assets. Canvas metadata, IAM edges and explicit catalog-backed Workflows step,
+API Gateway call and Identity MAU estimates are synchronized. The local receipt
+proves apply/import/refresh/no-op/retention-aware cleanup. The fail-closed
+`scripts/qualify-application-services.sh` requires ADC, explicit probe names
+and a project ending in `-ziac-disposable`. See
+`docs/gcp-application-services.md`.
+
+The M67 local Testing v2 gate is complete with 671 discovered and executed
+tests, 670 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. The release gate completed 134/134 steps, the provider
+catalog reports 114 managed resources and the public application-services
+example compiles through the relocatable install gate.

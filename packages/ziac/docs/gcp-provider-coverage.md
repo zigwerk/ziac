@@ -265,6 +265,22 @@ private-network metadata, runtime IAM edges and explicit configuration cost
 assumptions are synchronized. Unsupported Cloud Asset child kinds remain
 observed-only. See `gcp-spanner-memorystore.md`.
 
+### Application services
+
+M67 adds eighteen managed resources across Workflows, API Gateway, Identity
+Platform and Parameter Manager. `WorkflowProgram`, `ManagedApiGateway`, tagged
+`IdentityRealm` and tagged `ParameterBundle` compose orchestration, public API
+ingress, customer identity and immutable runtime configuration without hiding
+service identities or secret boundaries.
+
+The lifecycle adapters resume Google operations, normalize remote state, use
+etags and update masks, protect the project identity singleton and prove API
+document and payload digests before mutation. Permission synthesis, supported
+Cloud Asset identities, canvas metadata, runtime IAM edges and explicit
+Workflows/API Gateway/Identity usage estimates are synchronized. Unsupported
+Parameter Manager template assets remain observed-only. See
+`gcp-application-services.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`
