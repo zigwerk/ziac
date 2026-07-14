@@ -8,6 +8,9 @@ const value = @import("../value.zig");
 const ProviderError = provider_mod.ProviderError;
 
 const supported_types = [_][]const u8{
+    "gcp.apigateway.ApiConfigIamMember",
+    "gcp.apigateway.ApiIamMember",
+    "gcp.apigateway.GatewayIamMember",
     "gcp.bigquery.ConnectionIamMember",
     "gcp.bigquery.DatasetIamMember",
     "gcp.bigquery.ReservationIamMember",
@@ -25,6 +28,7 @@ const supported_types = [_][]const u8{
     "gcp.iam.ProjectPolicy",
     "gcp.iam.ServiceAccountIamBinding",
     "gcp.iam.ServiceAccountIamMember",
+    "gcp.identity.TenantIamMember",
     "gcp.spanner.DatabaseIamMember",
     "gcp.spanner.InstanceIamMember",
 };
@@ -181,6 +185,8 @@ fn ownership(node: resource.ResourceNode) ProviderError!Ownership {
 }
 
 fn policyApi(node: resource.ResourceNode) client_mod.Api {
+    if (std.mem.startsWith(u8, node.type_name, "gcp.apigateway.")) return .api_gateway;
+    if (std.mem.startsWith(u8, node.type_name, "gcp.identity.")) return .identity_toolkit;
     if (std.mem.startsWith(u8, node.type_name, "gcp.firestore.")) return .firestore;
     if (std.mem.startsWith(u8, node.type_name, "gcp.spanner.")) return .spanner;
     if (std.mem.startsWith(u8, node.type_name, "gcp.bigquery.Connection")) return .bigquery_connection;
@@ -195,6 +201,12 @@ fn policyPathAlloc(
     target: []const u8,
     get: bool,
 ) ProviderError![]const u8 {
+    if (std.mem.startsWith(u8, node.type_name, "gcp.apigateway.")) {
+        return std.fmt.allocPrint(allocator, "/v1/{s}:{s}IamPolicy", .{ target, if (get) "get" else "set" }) catch error.OutOfMemory;
+    }
+    if (std.mem.startsWith(u8, node.type_name, "gcp.identity.")) {
+        return std.fmt.allocPrint(allocator, "/v2/{s}:{s}IamPolicy", .{ target, if (get) "get" else "set" }) catch error.OutOfMemory;
+    }
     if (std.mem.startsWith(u8, node.type_name, "gcp.firestore.")) {
         return std.fmt.allocPrint(allocator, "/v1/{s}:{s}IamPolicy", .{ target, if (get) "get" else "set" }) catch error.OutOfMemory;
     }

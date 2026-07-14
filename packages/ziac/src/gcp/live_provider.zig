@@ -1,6 +1,7 @@
 const std = @import("std");
 const client_mod = @import("client.zig");
 const bigquery_provider = @import("bigquery_provider.zig");
+const application_services_provider = @import("application_services_provider.zig");
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const compute_provider = @import("compute_provider.zig");
 const dns_provider = @import("dns_provider.zig");
@@ -40,6 +41,12 @@ const secret_iam_member_type = "gcp.secret.SecretIamMember";
 const cloud_run_service_type = "gcp.run.Service";
 
 pub const managed_type_names = [_][]const u8{
+    "gcp.apigateway.Api",
+    "gcp.apigateway.ApiConfig",
+    "gcp.apigateway.ApiConfigIamMember",
+    "gcp.apigateway.ApiIamMember",
+    "gcp.apigateway.Gateway",
+    "gcp.apigateway.GatewayIamMember",
     "gcp.artifact.Repository",
     "gcp.bigquery.CapacityCommitment",
     "gcp.bigquery.Connection",
@@ -96,8 +103,19 @@ pub const managed_type_names = [_][]const u8{
     "gcp.iam.ServiceAccountIamMember",
     "gcp.iam.WorkloadIdentityPool",
     "gcp.iam.WorkloadIdentityPoolProvider",
+    "gcp.identity.ProjectConfig",
+    "gcp.identity.ProjectInboundSamlConfig",
+    "gcp.identity.ProjectOAuthIdpConfig",
+    "gcp.identity.Tenant",
+    "gcp.identity.TenantIamMember",
+    "gcp.identity.TenantInboundSamlConfig",
+    "gcp.identity.TenantOAuthIdpConfig",
     "gcp.kms.CryptoKey",
     "gcp.kms.KeyRing",
+    "gcp.parametermanager.Parameter",
+    "gcp.parametermanager.ParameterVersion",
+    "gcp.parametermanager.Template",
+    "gcp.parametermanager.TemplateVersion",
     "gcp.project.Service",
     "gcp.pubsub.Schema",
     "gcp.pubsub.Snapshot",
@@ -136,6 +154,7 @@ pub const managed_type_names = [_][]const u8{
     "gcp.storage.SourceObject",
     "gcp.tasks.Queue",
     "gcp.tasks.QueueIamMember",
+    "gcp.workflows.Workflow",
 };
 
 pub const PayloadDeinitObserver = secret_mod.PayloadDeinitObserver;
@@ -197,6 +216,7 @@ pub const LiveProvider = struct {
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().read(context, node, null);
         if (spanner_provider.supports(node)) return self.spannerHandler().read(context, node, null);
         if (redis_provider.supports(node)) return self.redisHandler().read(context, node, null);
+        if (application_services_provider.supports(node)) return self.applicationServicesHandler().read(context, node, null);
         return error.InvalidConfiguration;
     }
 
@@ -229,6 +249,7 @@ pub const LiveProvider = struct {
         if (bigquery_provider.supports(node)) return bigquery_provider.Handler.diff(context, node, observed);
         if (spanner_provider.supports(node)) return spanner_provider.Handler.diff(context, node, observed);
         if (redis_provider.supports(node)) return redis_provider.Handler.diff(context, node, observed);
+        if (application_services_provider.supports(node)) return application_services_provider.Handler.diff(context, node, observed);
         const kind: provider_mod.DiffKind = if (std.mem.eql(u8, &node.inputs_hash, &observed.observed_hash))
             .noop
         else if (isType(node, artifact_repository_type))
@@ -274,6 +295,7 @@ pub const LiveProvider = struct {
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().create(context, node);
         if (spanner_provider.supports(node)) return self.spannerHandler().create(context, node);
         if (redis_provider.supports(node)) return self.redisHandler().create(context, node);
+        if (application_services_provider.supports(node)) return self.applicationServicesHandler().create(context, node);
         return error.InvalidConfiguration;
     }
 
@@ -308,6 +330,7 @@ pub const LiveProvider = struct {
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().update(context, node, observed);
         if (spanner_provider.supports(node)) return self.spannerHandler().update(context, node, observed);
         if (redis_provider.supports(node)) return self.redisHandler().update(context, node, observed);
+        if (application_services_provider.supports(node)) return self.applicationServicesHandler().update(context, node, observed);
         return error.InvalidConfiguration;
     }
 
@@ -344,6 +367,7 @@ pub const LiveProvider = struct {
         if (bigquery_provider.supports(node)) return self.bigqueryHandler().delete(context, node, physical_id);
         if (spanner_provider.supports(node)) return self.spannerHandler().delete(context, node, physical_id);
         if (redis_provider.supports(node)) return self.redisHandler().delete(context, node, physical_id);
+        if (application_services_provider.supports(node)) return self.applicationServicesHandler().delete(context, node, physical_id);
         if (isType(node, secret_iam_member_type)) {
             var removed = try self.ensureSecretIamMember(context, node, false);
             removed.deinit();
@@ -531,6 +555,7 @@ pub const LiveProvider = struct {
         }
         if (spanner_provider.supports(node)) return self.spannerHandler().importResource(context, node, physical_id);
         if (redis_provider.supports(node)) return self.redisHandler().importResource(context, node, physical_id);
+        if (application_services_provider.supports(node)) return self.applicationServicesHandler().importResource(context, node, physical_id);
         return error.InvalidConfiguration;
     }
 
@@ -1224,6 +1249,10 @@ pub const LiveProvider = struct {
     }
 
     fn redisHandler(self: *LiveProvider) redis_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy, .secret_source = self.secret_source };
+    }
+
+    fn applicationServicesHandler(self: *LiveProvider) application_services_provider.Handler {
         return .{ .client = self.client, .operation_policy = self.operation_policy, .secret_source = self.secret_source };
     }
 };

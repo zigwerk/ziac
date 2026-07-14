@@ -10,6 +10,7 @@ pub const Stage = enum {
 };
 
 pub const Service = enum {
+    api_gateway,
     artifact_registry,
     bigquery,
     cloud_build,
@@ -19,7 +20,9 @@ pub const Service = enum {
     eventarc,
     firestore,
     iam,
+    identity_platform,
     kms,
+    parameter_manager,
     pubsub,
     redis,
     scheduler,
@@ -29,6 +32,7 @@ pub const Service = enum {
     sql_admin,
     storage,
     tasks,
+    workflows,
 };
 
 pub const Scope = enum {
@@ -130,6 +134,12 @@ const retained_replaceable = Capabilities{
 const planned = Capabilities{};
 
 pub const resources = [_]Resource{
+    managed("gcp.apigateway.Api", .api_gateway, .global, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.apigateway.ApiConfig", .api_gateway, .global, .google_discovery, "M67", withProduct(replaceable)),
+    managed("gcp.apigateway.ApiConfigIamMember", .api_gateway, .global, .google_rest, "M67", withVisual(additive_iam)),
+    managed("gcp.apigateway.ApiIamMember", .api_gateway, .global, .google_rest, "M67", withVisual(additive_iam)),
+    managed("gcp.apigateway.Gateway", .api_gateway, .region, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.apigateway.GatewayIamMember", .api_gateway, .region, .google_rest, "M67", withVisual(additive_iam)),
     managed("gcp.artifact.Repository", .artifact_registry, .location, .google_rest, "M4", full),
     managed("gcp.bigquery.CapacityCommitment", .bigquery, .location, .googleapis_proto, "M63", withVisualCost(retained_replaceable)),
     managed("gcp.bigquery.Connection", .bigquery, .location, .googleapis_proto, "M63", withVisualCost(full)),
@@ -186,8 +196,19 @@ pub const resources = [_]Resource{
     managed("gcp.iam.ServiceAccountIamMember", .iam, .project, .google_rest, "M61", additive_iam),
     managed("gcp.iam.WorkloadIdentityPool", .iam, .global, .google_rest, "M61", full),
     managed("gcp.iam.WorkloadIdentityPoolProvider", .iam, .global, .google_rest, "M61", full),
+    managed("gcp.identity.ProjectConfig", .identity_platform, .project, .google_discovery, "M67", withProduct(retained)),
+    managed("gcp.identity.ProjectInboundSamlConfig", .identity_platform, .project, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.identity.ProjectOAuthIdpConfig", .identity_platform, .project, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.identity.Tenant", .identity_platform, .project, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.identity.TenantIamMember", .identity_platform, .project, .google_rest, "M67", withVisual(additive_iam)),
+    managed("gcp.identity.TenantInboundSamlConfig", .identity_platform, .project, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.identity.TenantOAuthIdpConfig", .identity_platform, .project, .google_discovery, "M67", withProduct(full)),
     managed("gcp.kms.CryptoKey", .kms, .location, .google_rest, "M26", retained),
     managed("gcp.kms.KeyRing", .kms, .location, .google_rest, "M26", retained_replaceable),
+    managed("gcp.parametermanager.Parameter", .parameter_manager, .location, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.parametermanager.ParameterVersion", .parameter_manager, .location, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.parametermanager.Template", .parameter_manager, .location, .google_discovery, "M67", withProduct(full)),
+    managed("gcp.parametermanager.TemplateVersion", .parameter_manager, .location, .google_discovery, "M67", withProduct(full)),
     managed("gcp.project.Service", .service_usage, .project, .googleapis_proto, "M4", replaceable),
     managed("gcp.pubsub.Schema", .pubsub, .project, .googleapis_proto, "M58", withVisual(full)),
     managed("gcp.pubsub.Snapshot", .pubsub, .project, .googleapis_proto, "M58", withVisualCost(full)),
@@ -226,6 +247,7 @@ pub const resources = [_]Resource{
     managed("gcp.storage.SourceObject", .storage, .global, .google_discovery, "M8", retained_replaceable),
     managed("gcp.tasks.Queue", .tasks, .location, .googleapis_proto, "M59", withProduct(full)),
     managed("gcp.tasks.QueueIamMember", .tasks, .location, .google_rest, "M59", withVisual(additive_iam)),
+    managed("gcp.workflows.Workflow", .workflows, .location, .google_discovery, "M67", withProduct(full)),
 };
 
 pub const ValidationError = error{

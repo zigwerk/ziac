@@ -7,6 +7,9 @@ comptime {
     _ = @import("gcp_cloud_sql_product_test.zig");
     _ = @import("gcp_cloud_sql_live_provider_test.zig"); // M65 lifecycle and recovery evidence.
     _ = @import("gcp_spanner_memorystore_test.zig");
+    _ = @import("gcp_application_services_test.zig");
+    _ = @import("gcp_application_services_live_provider_test.zig");
+    _ = @import("gcp_application_services_components_test.zig");
     _ = @import("gcp_spanner_memorystore_components_test.zig");
     _ = @import("gcp_spanner_memorystore_product_test.zig");
     _ = @import("gcp_spanner_live_provider_test.zig");

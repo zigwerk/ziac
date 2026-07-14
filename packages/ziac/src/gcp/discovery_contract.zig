@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const pinned_at = "2026-07-13";
+pub const pinned_at = "2026-07-14";
 
 pub const Source = struct {
     id: []const u8,
@@ -11,6 +11,13 @@ pub const Source = struct {
 };
 
 pub const sources = [_]Source{
+    .{
+        .id = "apigateway:v1",
+        .version = "v1",
+        .revision = "20260625",
+        .discovery_url = "https://apigateway.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "c59cfb39aa30bd6a96ddd94db1194e7a5ace2a0bc2c423cb450d96762f565f6e",
+    },
     .{
         .id = "compute:v1",
         .version = "v1",
@@ -24,6 +31,20 @@ pub const sources = [_]Source{
         .revision = "20260630",
         .discovery_url = "https://dns.googleapis.com/discovery/v1/apis/dns/v1/rest",
         .document_sha256 = "39b1f648d4fa0824cfc0e8ee19101ddfeda12a53dc3ee3d8c1869a8dae0aeba6",
+    },
+    .{
+        .id = "identitytoolkit:v2",
+        .version = "v2",
+        .revision = "20260703",
+        .discovery_url = "https://identitytoolkit.googleapis.com/$discovery/rest?version=v2",
+        .document_sha256 = "a845b96dfef3ecd5eae8022be598b8622a18e9e1be707b2c2bf7a938ef5a3713",
+    },
+    .{
+        .id = "parametermanager:v1",
+        .version = "v1",
+        .revision = "20260629",
+        .discovery_url = "https://parametermanager.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "670701cb42522540ae5af279318d8db584cbc442953d6873ebeed15b8fdd526b",
     },
     .{
         .id = "redis:v1",
@@ -59,6 +80,13 @@ pub const sources = [_]Source{
         .revision = "20260707",
         .discovery_url = "https://storage.googleapis.com/discovery/v1/apis/storage/v1/rest",
         .document_sha256 = "225e6237f7fff5f24e04f29e1901b1eee999e9e5eee0db7676883cea8948b122",
+    },
+    .{
+        .id = "workflows:v1",
+        .version = "v1",
+        .revision = "20260701",
+        .discovery_url = "https://workflows.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "bb944a9423276c3366343834e2bc51a67d11f2ca972317ba2e784ac1a1289202",
     },
 };
 

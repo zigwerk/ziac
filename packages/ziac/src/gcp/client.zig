@@ -34,6 +34,10 @@ pub const Api = enum {
     service_networking,
     spanner,
     sql_admin,
+    workflows,
+    api_gateway,
+    identity_toolkit,
+    parameter_manager,
 };
 
 pub const Endpoints = struct {
@@ -63,6 +67,10 @@ pub const Endpoints = struct {
     service_networking: []const u8 = "https://servicenetworking.googleapis.com",
     spanner: []const u8 = "https://spanner.googleapis.com",
     sql_admin: []const u8 = "https://sqladmin.googleapis.com",
+    workflows: []const u8 = "https://workflows.googleapis.com",
+    api_gateway: []const u8 = "https://apigateway.googleapis.com",
+    identity_toolkit: []const u8 = "https://identitytoolkit.googleapis.com",
+    parameter_manager: []const u8 = "https://parametermanager.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
         return switch (api) {
@@ -92,6 +100,10 @@ pub const Endpoints = struct {
             .service_networking => self.service_networking,
             .spanner => self.spanner,
             .sql_admin => self.sql_admin,
+            .workflows => self.workflows,
+            .api_gateway => self.api_gateway,
+            .identity_toolkit => self.identity_toolkit,
+            .parameter_manager => self.parameter_manager,
         };
     }
 };
