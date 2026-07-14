@@ -308,6 +308,32 @@ identities, canvas metadata and explicit CPU, memory, accelerator, disk and
 image configuration estimates are synchronized. See
 `gcp-compute-workloads.md`.
 
+### Network delivery
+
+M69 adds nine managed Compute networking resources:
+
+- `gcp.compute.Firewall`
+- `gcp.compute.Route`
+- `gcp.compute.HealthCheck`
+- `gcp.compute.RegionHealthCheck`
+- `gcp.compute.InternalAddress`
+- `gcp.compute.RegionBackendService`
+- `gcp.compute.RegionUrlMap`
+- `gcp.compute.RegionTargetHttpProxy`
+- `gcp.compute.ForwardingRule`
+
+`NetworkPolicy` composes explicit VPC policy. `InternalPassthroughLoadBalancer`
+and `RegionalInternalApplicationLoadBalancer` compile private L4 and L7 paths
+without hidden network mutation. The lifecycle adapter checkpoints global and
+regional Compute operations, uses current fingerprints, retries bounded
+compare-and-swap conflicts and preserves immutable frontend identity.
+
+Permission synthesis uses exact regional health-check, backend, URL-map and
+proxy authority. Property-aware Cloud Asset mapping only adopts addresses and
+forwarding rules when their internal scheme is proven. Canvas private-traffic
+and health-probe edges and explicit forwarding, data and probe estimates are
+synchronized. See `gcp-network-delivery.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`

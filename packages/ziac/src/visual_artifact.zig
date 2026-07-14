@@ -185,6 +185,7 @@ fn appendResource(
     try appendAsyncDeliveryDetails(output, allocator, item.node);
     try appendRunWorkloadDetails(output, allocator, item.node);
     try appendComputeWorkloadDetails(output, allocator, item.node);
+    try appendNetworkDeliveryDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -397,6 +398,50 @@ fn appendComputeWorkloadDetails(output: *std.ArrayList(u8), allocator: std.mem.A
     try appendStorageListCount(output, allocator, node, "network_interfaces", "network_interface_count");
     try appendStorageListCount(output, allocator, node, "replica_zones", "replica_zone_count");
     try appendStorageListCount(output, allocator, node, "distribution_zones", "distribution_zone_count");
+    try output.append(allocator, '}');
+}
+
+fn appendNetworkDeliveryDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.compute.Firewall"))
+        "firewall"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.Route"))
+        "route"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.HealthCheck"))
+        "health_check"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RegionHealthCheck"))
+        "region_health_check"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.InternalAddress"))
+        "internal_address"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RegionBackendService"))
+        "region_backend_service"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RegionUrlMap"))
+        "region_url_map"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RegionTargetHttpProxy"))
+        "region_target_http_proxy"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.ForwardingRule"))
+        "forwarding_rule"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"network_delivery\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "region", "region");
+    try appendOptionalStorageString(output, allocator, node, "direction", "direction");
+    try appendOptionalStorageString(output, allocator, node, "action", "action");
+    try appendOptionalStorageString(output, allocator, node, "destination_range", "destination_range");
+    try appendOptionalStorageString(output, allocator, node, "next_hop_kind", "next_hop_kind");
+    try appendOptionalStorageString(output, allocator, node, "protocol", "protocol");
+    try appendOptionalStorageString(output, allocator, node, "request_path", "request_path");
+    try appendOptionalStorageString(output, allocator, node, "load_balancing_scheme", "load_balancing_scheme");
+    try appendOptionalStorageString(output, allocator, node, "purpose", "purpose");
+    try appendOptionalStorageString(output, allocator, node, "target_kind", "target_kind");
+    try appendOptionalStorageInteger(output, allocator, node, "priority", "priority");
+    try appendOptionalStorageInteger(output, allocator, node, "port", "health_port");
+    try appendStorageListCount(output, allocator, node, "ports", "port_count");
+    try appendStorageListCount(output, allocator, node, "backends", "backend_count");
+    try appendOptionalStorageBool(output, allocator, node, "logging", "logging");
+    try appendOptionalStorageBool(output, allocator, node, "disabled", "disabled");
+    try appendOptionalStorageBool(output, allocator, node, "all_ports", "all_ports");
+    try appendOptionalStorageBool(output, allocator, node, "allow_global_access", "allow_global_access");
     try output.append(allocator, '}');
 }
 
@@ -981,12 +1026,22 @@ fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []c
         std.mem.indexOf(u8, from_type, "IamBinding") != null or
         std.mem.indexOf(u8, from_type, "IamPolicy") != null or
         std.mem.startsWith(u8, from_type, "gcp.iam.")) return "iam";
+    if (isPrivateTrafficPair(from_type, to_type)) return "private_traffic";
+    if (std.mem.eql(u8, from_type, "gcp.compute.RegionBackendService") and
+        (std.mem.eql(u8, to_type, "gcp.compute.RegionHealthCheck") or std.mem.eql(u8, to_type, "gcp.compute.HealthCheck"))) return "health_probe";
     if (from_node) |node| if (containsOutputReference(node.inputs, to_id)) return "output";
     if (isTrafficPair(from_type, to_type)) return "traffic";
     if (std.mem.startsWith(u8, from_type, "cockroach.") != std.mem.startsWith(u8, to_type, "cockroach.")) {
         return "connectivity";
     }
     return "dependency";
+}
+
+fn isPrivateTrafficPair(from_type: []const u8, to_type: []const u8) bool {
+    return (std.mem.eql(u8, from_type, "gcp.compute.ForwardingRule") and
+        (std.mem.eql(u8, to_type, "gcp.compute.RegionBackendService") or std.mem.eql(u8, to_type, "gcp.compute.RegionTargetHttpProxy"))) or
+        (std.mem.eql(u8, from_type, "gcp.compute.RegionTargetHttpProxy") and std.mem.eql(u8, to_type, "gcp.compute.RegionUrlMap")) or
+        (std.mem.eql(u8, from_type, "gcp.compute.RegionUrlMap") and std.mem.eql(u8, to_type, "gcp.compute.RegionBackendService"));
 }
 
 fn isTrafficPair(from_type: []const u8, to_type: []const u8) bool {

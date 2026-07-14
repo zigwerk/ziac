@@ -5,6 +5,7 @@ const application_services_provider = @import("application_services_provider.zig
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const compute_provider = @import("compute_provider.zig");
 const compute_workloads_provider = @import("compute_workloads_provider.zig");
+const network_delivery_provider = @import("network_delivery_provider.zig");
 const dns_provider = @import("dns_provider.zig");
 const network_provider = @import("network_provider.zig");
 const kms_provider = @import("kms_provider.zig");
@@ -66,23 +67,32 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.Autoscaler",
     "gcp.compute.BackendService",
     "gcp.compute.Disk",
+    "gcp.compute.Firewall",
+    "gcp.compute.ForwardingRule",
     "gcp.compute.GlobalAddress",
     "gcp.compute.GlobalForwardingRule",
+    "gcp.compute.HealthCheck",
     "gcp.compute.HttpRedirectUrlMap",
     "gcp.compute.Image",
     "gcp.compute.Instance",
     "gcp.compute.InstanceGroupManager",
     "gcp.compute.InstanceTemplate",
+    "gcp.compute.InternalAddress",
     "gcp.compute.ManagedSslCertificate",
     "gcp.compute.Network",
     "gcp.compute.PrivateServiceRange",
     "gcp.compute.PscAddress",
     "gcp.compute.PscEndpoint",
     "gcp.compute.RegionAutoscaler",
+    "gcp.compute.RegionBackendService",
     "gcp.compute.RegionDisk",
+    "gcp.compute.RegionHealthCheck",
     "gcp.compute.RegionInstanceGroupManager",
     "gcp.compute.RegionServerlessNeg",
+    "gcp.compute.RegionTargetHttpProxy",
+    "gcp.compute.RegionUrlMap",
     "gcp.compute.RegionalAddress",
+    "gcp.compute.Route",
     "gcp.compute.Router",
     "gcp.compute.RouterNat",
     "gcp.compute.Subnetwork",
@@ -212,6 +222,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return self.runIamHandler().read(context, node, null);
         if (network_provider.supports(node)) return self.networkHandler().read(context, node, null);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().read(context, node, null);
+        if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().read(context, node, null);
         if (compute_provider.supports(node)) return self.computeHandler().read(context, node, null);
         if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().read(context, node, null);
         if (dns_provider.supports(node)) return self.dnsHandler().read(context, node, null);
@@ -246,6 +257,7 @@ pub const LiveProvider = struct {
         if (iam_admin_provider.supports(node)) return iam_admin_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (compute_workloads_provider.supports(node)) return compute_workloads_provider.Handler.diff(context, node, observed);
+        if (network_delivery_provider.supports(node)) return network_delivery_provider.Handler.diff(context, node, observed);
         if (compute_provider.supports(node)) return compute_provider.Handler.diff(context, node, observed);
         if (service_networking_provider.supports(node)) return service_networking_provider.Handler.diff(context, node, observed);
         if (dns_provider.supports(node)) return dns_provider.Handler.diff(context, node, observed);
@@ -293,6 +305,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return self.runIamHandler().create(context, node);
         if (network_provider.supports(node)) return self.networkHandler().create(context, node);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().create(context, node);
+        if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().create(context, node);
         if (compute_provider.supports(node)) return self.computeHandler().create(context, node);
         if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().create(context, node);
         if (dns_provider.supports(node)) return self.dnsHandler().create(context, node);
@@ -329,6 +342,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return self.runIamHandler().update(context, node, observed.physical_id);
         if (network_provider.supports(node)) return self.networkHandler().update(context, node, observed.physical_id);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().update(context, node, observed);
+        if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().update(context, node, observed);
         if (compute_provider.supports(node)) return self.computeHandler().update(context, node, observed.physical_id);
         if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().update(context, node, observed);
         if (dns_provider.supports(node)) return self.dnsHandler().update(context, node, observed.physical_id);
@@ -367,6 +381,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return self.runIamHandler().delete(context, node, physical_id);
         if (network_provider.supports(node)) return self.networkHandler().delete(context, node, physical_id);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().delete(context, node, physical_id);
+        if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().delete(context, node, physical_id);
         if (compute_provider.supports(node)) return self.computeHandler().delete(context, node, physical_id);
         if (service_networking_provider.supports(node)) return self.serviceNetworkingHandler().delete(context, node, physical_id);
         if (dns_provider.supports(node)) return self.dnsHandler().delete(context, node, physical_id);
@@ -490,6 +505,7 @@ pub const LiveProvider = struct {
             };
         }
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().importResource(context, node, physical_id);
+        if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().importResource(context, node, physical_id);
         if (compute_provider.supports(node)) {
             const result = try self.computeHandler().read(context, node, physical_id);
             return switch (result) {
@@ -1198,6 +1214,14 @@ pub const LiveProvider = struct {
             .operation_policy = self.operation_policy,
             .conflict_retries = self.compute_conflict_retries,
             .secret_source = self.secret_source,
+        };
+    }
+
+    fn networkDeliveryHandler(self: *LiveProvider) network_delivery_provider.Handler {
+        return .{
+            .client = self.client,
+            .operation_policy = self.operation_policy,
+            .conflict_retries = self.compute_conflict_retries,
         };
     }
 

@@ -614,6 +614,46 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Autoscalers.Insert", .permission = "compute.autoscalers.create" },
         .{ .suffix = "Autoscalers.Patch", .permission = "compute.autoscalers.update" },
         .{ .suffix = "Autoscalers.Delete", .permission = "compute.autoscalers.delete" },
+        .{ .suffix = "Firewalls.Get", .permission = "compute.firewalls.get" },
+        .{ .suffix = "Firewalls.Insert", .permission = "compute.firewalls.create" },
+        .{ .suffix = "Firewalls.Patch", .permission = "compute.firewalls.update" },
+        .{ .suffix = "Firewalls.Delete", .permission = "compute.firewalls.delete" },
+        .{ .suffix = "Routes.Get", .permission = "compute.routes.get" },
+        .{ .suffix = "Routes.Insert", .permission = "compute.routes.create" },
+        .{ .suffix = "Routes.Delete", .permission = "compute.routes.delete" },
+        .{ .suffix = "RegionHealthChecks.Get", .permission = "compute.regionHealthChecks.get" },
+        .{ .suffix = "RegionHealthChecks.Insert", .permission = "compute.regionHealthChecks.create" },
+        .{ .suffix = "RegionHealthChecks.Update", .permission = "compute.regionHealthChecks.update" },
+        .{ .suffix = "RegionHealthChecks.Delete", .permission = "compute.regionHealthChecks.delete" },
+        .{ .suffix = "RegionHealthChecks.UseReadOnly", .permission = "compute.regionHealthChecks.useReadOnly" },
+        .{ .suffix = "HealthChecks.Get", .permission = "compute.healthChecks.get" },
+        .{ .suffix = "HealthChecks.Insert", .permission = "compute.healthChecks.create" },
+        .{ .suffix = "HealthChecks.Update", .permission = "compute.healthChecks.update" },
+        .{ .suffix = "HealthChecks.Delete", .permission = "compute.healthChecks.delete" },
+        .{ .suffix = "HealthChecks.UseReadOnly", .permission = "compute.healthChecks.useReadOnly" },
+        .{ .suffix = "Addresses.Get", .permission = "compute.addresses.get" },
+        .{ .suffix = "Addresses.InsertInternal", .permission = "compute.addresses.createInternal" },
+        .{ .suffix = "Addresses.DeleteInternal", .permission = "compute.addresses.deleteInternal" },
+        .{ .suffix = "Addresses.Use", .permission = "compute.addresses.use" },
+        .{ .suffix = "Addresses.UseInternal", .permission = "compute.addresses.useInternal" },
+        .{ .suffix = "RegionBackendServices.Get", .permission = "compute.regionBackendServices.get" },
+        .{ .suffix = "RegionBackendServices.Insert", .permission = "compute.regionBackendServices.create" },
+        .{ .suffix = "RegionBackendServices.Update", .permission = "compute.regionBackendServices.update" },
+        .{ .suffix = "RegionBackendServices.Delete", .permission = "compute.regionBackendServices.delete" },
+        .{ .suffix = "RegionBackendServices.Use", .permission = "compute.regionBackendServices.use" },
+        .{ .suffix = "RegionUrlMaps.Get", .permission = "compute.regionUrlMaps.get" },
+        .{ .suffix = "RegionUrlMaps.Insert", .permission = "compute.regionUrlMaps.create" },
+        .{ .suffix = "RegionUrlMaps.Update", .permission = "compute.regionUrlMaps.update" },
+        .{ .suffix = "RegionUrlMaps.Delete", .permission = "compute.regionUrlMaps.delete" },
+        .{ .suffix = "RegionUrlMaps.Use", .permission = "compute.regionUrlMaps.use" },
+        .{ .suffix = "RegionTargetHttpProxies.Get", .permission = "compute.regionTargetHttpProxies.get" },
+        .{ .suffix = "RegionTargetHttpProxies.Insert", .permission = "compute.regionTargetHttpProxies.create" },
+        .{ .suffix = "RegionTargetHttpProxies.SetUrlMap", .permission = "compute.regionTargetHttpProxies.setUrlMap" },
+        .{ .suffix = "RegionTargetHttpProxies.Delete", .permission = "compute.regionTargetHttpProxies.delete" },
+        .{ .suffix = "RegionTargetHttpProxies.Use", .permission = "compute.regionTargetHttpProxies.use" },
+        .{ .suffix = "ForwardingRules.Get", .permission = "compute.forwardingRules.get" },
+        .{ .suffix = "ForwardingRules.Insert", .permission = "compute.forwardingRules.create" },
+        .{ .suffix = "ForwardingRules.Delete", .permission = "compute.forwardingRules.delete" },
         .{ .suffix = "Networks.Use", .permission = "compute.networks.use" },
         .{ .suffix = "Subnetworks.Use", .permission = "compute.subnetworks.use" },
         .{ .suffix = "Disks.Use", .permission = "compute.disks.use" },
@@ -1084,6 +1124,69 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Autoscalers.Patch" },
         .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Autoscalers.Delete" },
     };
+    const compute_firewall = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Firewalls.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Firewalls.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Firewalls.Patch" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Firewalls.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+    };
+    const compute_route = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Routes.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Routes.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Routes.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+    };
+    const compute_health_check = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.HealthChecks.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.HealthChecks.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.HealthChecks.Update" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.HealthChecks.Delete" },
+    };
+    const compute_region_health_check = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionHealthChecks.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionHealthChecks.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionHealthChecks.Update" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionHealthChecks.Delete" },
+    };
+    const compute_internal_address = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Addresses.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Addresses.InsertInternal" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Addresses.DeleteInternal" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Subnetworks.Use" },
+    };
+    const compute_region_backend = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionBackendServices.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionBackendServices.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionBackendServices.Update" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionBackendServices.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionHealthChecks.UseReadOnly" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+    };
+    const compute_region_url_map = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionUrlMaps.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionUrlMaps.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionUrlMaps.Update" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionUrlMaps.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionBackendServices.Use" },
+    };
+    const compute_region_http_proxy = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionTargetHttpProxies.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionTargetHttpProxies.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionTargetHttpProxies.SetUrlMap" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionTargetHttpProxies.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionUrlMaps.Use" },
+    };
+    const compute_forwarding_rule = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.ForwardingRules.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.ForwardingRules.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.ForwardingRules.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Addresses.UseInternal" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Subnetworks.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionBackendServices.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionTargetHttpProxies.Use" },
+    };
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
@@ -1172,6 +1275,15 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.compute.InstanceTemplate")) return &compute_template;
     if (std.mem.eql(u8, type_name, "gcp.compute.InstanceGroupManager") or std.mem.eql(u8, type_name, "gcp.compute.RegionInstanceGroupManager")) return &compute_group;
     if (std.mem.eql(u8, type_name, "gcp.compute.Autoscaler") or std.mem.eql(u8, type_name, "gcp.compute.RegionAutoscaler")) return &compute_autoscaler;
+    if (std.mem.eql(u8, type_name, "gcp.compute.Firewall")) return &compute_firewall;
+    if (std.mem.eql(u8, type_name, "gcp.compute.Route")) return &compute_route;
+    if (std.mem.eql(u8, type_name, "gcp.compute.HealthCheck")) return &compute_health_check;
+    if (std.mem.eql(u8, type_name, "gcp.compute.RegionHealthCheck")) return &compute_region_health_check;
+    if (std.mem.eql(u8, type_name, "gcp.compute.InternalAddress")) return &compute_internal_address;
+    if (std.mem.eql(u8, type_name, "gcp.compute.RegionBackendService")) return &compute_region_backend;
+    if (std.mem.eql(u8, type_name, "gcp.compute.RegionUrlMap")) return &compute_region_url_map;
+    if (std.mem.eql(u8, type_name, "gcp.compute.RegionTargetHttpProxy")) return &compute_region_http_proxy;
+    if (std.mem.eql(u8, type_name, "gcp.compute.ForwardingRule")) return &compute_forwarding_rule;
     if (std.mem.startsWith(u8, type_name, "gcp.compute.")) return &compute_generic;
     if (std.mem.eql(u8, type_name, "gcp.dns.RecordSet")) return &dns;
     return &.{};

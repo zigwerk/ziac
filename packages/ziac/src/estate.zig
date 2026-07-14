@@ -114,6 +114,11 @@ pub fn scanAlloc(allocator: std.mem.Allocator, client: Client, input: ScanInput)
             const location = jsonString(object.get("location")) orelse "global";
             const display_name = jsonString(object.get("displayName")) orelse resourceBasename(name);
             const related = try relatedResourcesAlloc(a, object.get("relationships"));
+            const asset_shape = AssetShape{
+                .address_type = resourceDataString(object, "addressType") orelse "",
+                .load_balancing_scheme = resourceDataString(object, "loadBalancingScheme") orelse "",
+                .purpose = resourceDataString(object, "purpose") orelse "",
+            };
             try assets.append(a, .{
                 .name = try a.dupe(u8, name),
                 .asset_type = try a.dupe(u8, asset_type),
@@ -121,7 +126,7 @@ pub fn scanAlloc(allocator: std.mem.Allocator, client: Client, input: ScanInput)
                 .display_name = try a.dupe(u8, display_name),
                 .related_resources = related,
                 .id = try observedIdAlloc(a, name),
-                .ziac_type = try mappedTypeAlloc(a, asset_type, location, name),
+                .ziac_type = try mappedTypeAlloc(a, asset_type, location, name, asset_shape),
                 .physical_id = try managedPhysicalIdAlloc(a, asset_type, name),
             });
         };
@@ -285,7 +290,13 @@ fn observedIdAlloc(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "observed.{s}", .{hex[0..20]});
 }
 
-fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, location: []const u8, name: []const u8) ![]const u8 {
+const AssetShape = struct {
+    address_type: []const u8,
+    load_balancing_scheme: []const u8,
+    purpose: []const u8,
+};
+
+fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, location: []const u8, name: []const u8, shape: AssetShape) ![]const u8 {
     const mapped = if (std.mem.eql(u8, asset_type, "run.googleapis.com/Service"))
         "gcp.run.Service"
     else if (std.mem.eql(u8, asset_type, "run.googleapis.com/Job"))
@@ -358,10 +369,34 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
         "gcp.compute.Subnetwork"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Firewall"))
+        "gcp.compute.Firewall"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Route"))
+        "gcp.compute.Route"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/HealthCheck"))
+        if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionHealthCheck" else "gcp.compute.HealthCheck"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Address"))
+        if (std.mem.eql(u8, shape.address_type, "INTERNAL") and
+            (std.mem.eql(u8, shape.purpose, "SHARED_LOADBALANCER_VIP") or shape.purpose.len == 0))
+            "gcp.compute.InternalAddress"
+        else if (!std.mem.eql(u8, location, "global"))
+            "gcp.compute.RegionalAddress"
+        else
+            "gcp.compute.GlobalAddress"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/ForwardingRule"))
-        if (std.mem.eql(u8, location, "global")) "gcp.compute.GlobalForwardingRule" else "gcp.compute.RegionForwardingRule"
+        if (!std.mem.eql(u8, location, "global") and
+            (std.mem.eql(u8, shape.load_balancing_scheme, "INTERNAL") or std.mem.eql(u8, shape.load_balancing_scheme, "INTERNAL_MANAGED")))
+            "gcp.compute.ForwardingRule"
+        else if (std.mem.eql(u8, location, "global"))
+            "gcp.compute.GlobalForwardingRule"
+        else
+            "gcp.asset.Resource"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/BackendService"))
-        "gcp.compute.BackendService"
+        if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionBackendService" else "gcp.compute.BackendService"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/UrlMap"))
+        if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionUrlMap" else "gcp.compute.UrlMap"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/TargetHttpProxy"))
+        if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionTargetHttpProxy" else "gcp.compute.TargetHttpProxy"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Disk"))
         if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionDisk" else "gcp.compute.Disk"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Image"))
@@ -541,6 +576,14 @@ fn jsonString(value: ?std.json.Value) ?[]const u8 {
         .string => |text| text,
         else => null,
     };
+}
+
+fn resourceDataString(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
+    const resource_value = object.get("resource") orelse return null;
+    const resource_object = jsonObject(resource_value) orelse return null;
+    const data_value = resource_object.get("data") orelse return null;
+    const data_object = jsonObject(data_value) orelse return null;
+    return jsonString(data_object.get(key));
 }
 
 fn containsString(values: []const []const u8, value: []const u8) bool {

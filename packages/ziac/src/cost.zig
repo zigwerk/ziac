@@ -207,6 +207,18 @@ pub const ComputeWorkloadEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const NetworkDeliveryEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    forwarding_rule_sku_id: []const u8 = "",
+    data_processed_sku_id: []const u8 = "",
+    health_probe_sku_id: []const u8 = "",
+    forwarding_rule_hours: u64 = 0,
+    data_processed_gib: u64 = 0,
+    health_probes: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -659,6 +671,19 @@ pub fn computeWorkloadConfigurationEstimate(
     }
     try appendUsage(&usage, &count, input.disk_sku_id, input.region, input.disk_gib_month);
     try appendUsage(&usage, &count, input.image_storage_sku_id, input.region, input.image_gib_month);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn networkDeliveryConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: NetworkDeliveryEstimateInput,
+) !ResourceCost {
+    var usage: [3]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.forwarding_rule_sku_id, input.region, input.forwarding_rule_hours);
+    try appendUsage(&usage, &count, input.data_processed_sku_id, input.region, input.data_processed_gib);
+    try appendUsage(&usage, &count, input.health_probe_sku_id, input.region, input.health_probes);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }

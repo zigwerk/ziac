@@ -216,7 +216,7 @@ isolated serializer tests.
 ## M68-M72: Compute, Network And Container Platform
 
 - [x] M68 Compute instance, disk, image, template and managed instance group.
-- [ ] M69 firewalls, routes, health checks, regional/internal load balancing.
+- [x] M69 firewalls, routes, health checks, regional/internal load balancing.
 - [ ] M70 Cloud CDN, backend buckets, Cloud Armor and Certificate Manager.
 - [ ] M71 VPN, HA VPN, peering, Network Connectivity Center and service networking.
 - [ ] M72 GKE clusters, node pools, fleets, workload identity, Functions v2 and
@@ -265,3 +265,24 @@ and zero failures, pending tests, leaks or logged errors. The full release gate,
 all public examples, migration guard and root typecheck pass. Authenticated
 qualification remains a disposable-project gate and is not represented as
 local proof.
+
+## M69 Evidence
+
+M69 is locally complete with 132 managed resources. Nine network-delivery
+types cover explicit firewall and route policy, global and regional health
+checks, internal addresses, regional backends, regional URL maps and HTTP
+proxies, and immutable regional forwarding rules. The provider checkpoints
+global and regional operations, uses current fingerprints for mutable policy,
+retries bounded 412 conflicts and keeps route, VIP and frontend replacement
+boundaries explicit.
+
+`NetworkPolicy`, `InternalPassthroughLoadBalancer` and
+`RegionalInternalApplicationLoadBalancer` provide the opinionated layer
+without hidden ingress, routes or proxy-only subnet creation. Exact regional
+Compute permissions, property-aware Cloud Asset adoption, private-traffic and
+health-probe canvas edges, explicit configuration estimates, installed
+documentation and the fail-closed qualification runner are synchronized. The
+Testing v2 package gate reports 703 discovered/executed tests, 702 passed, one
+credential-gated skip, and zero failures, pending tests, leaks or logged
+errors. Authenticated backend health and private probes remain a disposable-
+project gate and are not represented as local proof.

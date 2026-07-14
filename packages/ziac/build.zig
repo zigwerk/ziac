@@ -217,6 +217,7 @@ pub fn build(b: *std.Build) void {
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "application-platform", "examples/application_platform.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "application-services", "examples/application_services.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "compute-workloads", "examples/compute_workloads.zig");
+    addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "network-delivery", "examples/network_delivery.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "analytics-warehouse", "examples/analytics_warehouse.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "document-store", "examples/document_store.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "managed-postgres", "examples/managed_postgres.zig");

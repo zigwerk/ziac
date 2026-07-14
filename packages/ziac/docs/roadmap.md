@@ -935,3 +935,34 @@ tests, 687 passed, one credential-gated skip, and zero failures, pending tests,
 leaks or logged errors. The full release gate, public examples, Testing v2
 migration guard and root TypeScript checks pass. The provider catalog reports
 123 managed resources.
+
+M69 is locally complete and awaiting authenticated private-network
+qualification. Nine managed types cover firewalls, routes, global and regional
+health checks, internal addresses, regional backend services, regional URL
+maps and HTTP proxies, and internal forwarding rules. The handwritten adapter
+checkpoints global and regional operations, uses current fingerprints for
+mutable policy, retries bounded compare-and-swap conflicts and replaces routes,
+VIPs and frontends when their immutable identity changes.
+
+`NetworkPolicy` composes explicit policy without invented ingress or routes.
+`InternalPassthroughLoadBalancer` and
+`RegionalInternalApplicationLoadBalancer` provide typed private L4 and L7
+paths, and require the application and proxy-only subnet relationships to be
+visible in the graph. Permission synthesis uses Google's distinct regional IAM
+permissions. Cloud Asset adoption is property-aware so ambiguous addresses and
+forwarding rules remain observed rather than being claimed as managed internal
+resources.
+
+Canvas metadata exposes policy, health and frontend configuration with private-
+traffic and health-probe edges. Forwarding-rule hours, processed data and probe
+costs remain explicit configuration estimates. The local receipt proves apply,
+second-state import, refresh/no-op and cleanup. The installed example and
+`scripts/qualify-network-delivery.sh` document the remote boundary, which must
+observe healthy L4/L7 backends and successful private probes before passing.
+See `docs/gcp-network-delivery.md`.
+
+The M69 local Testing v2 package gate is complete with 703 discovered and
+executed tests, 702 passed, one credential-gated skip, and zero failures,
+pending tests, leaks or logged errors. The provider catalog reports 132 managed
+resources. Full release, migration and root TypeScript gates are recorded in
+the M69 implementation plan.
