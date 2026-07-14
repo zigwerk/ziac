@@ -12,6 +12,13 @@ pub const Source = struct {
 
 pub const sources = [_]Source{
     .{
+        .id = "accesscontextmanager:v1",
+        .version = "v1",
+        .revision = "20260707",
+        .discovery_url = "https://accesscontextmanager.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "88981fd8ecb1ec305364999172fdd6061843c97a373e78595883fc2b2da1c57a",
+    },
+    .{
         .id = "apigateway:v1",
         .version = "v1",
         .revision = "20260625",
@@ -143,6 +150,13 @@ pub const sources = [_]Source{
         .revision = "20260701",
         .discovery_url = "https://networkconnectivity.googleapis.com/$discovery/rest?version=v1",
         .document_sha256 = "a785c3a0736931b120a76a2e694f71b5cee6d49471bec8f1c049dac594029b8c",
+    },
+    .{
+        .id = "orgpolicy:v2",
+        .version = "v2",
+        .revision = "20260702",
+        .discovery_url = "https://orgpolicy.googleapis.com/$discovery/rest?version=v2",
+        .document_sha256 = "24db4f5718b279cee104b4b0f88b2a3997037c78d12ba7fa0759612aaf8d76f4",
     },
     .{
         .id = "parametermanager:v1",

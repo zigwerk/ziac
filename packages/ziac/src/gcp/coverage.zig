@@ -10,6 +10,7 @@ pub const Stage = enum {
 };
 
 pub const Service = enum {
+    access_context_manager,
     api_gateway,
     artifact_registry,
     batch,
@@ -32,6 +33,7 @@ pub const Service = enum {
     logging,
     monitoring,
     network_connectivity,
+    organization_policy,
     parameter_manager,
     pubsub,
     redis,
@@ -146,6 +148,10 @@ const retained_replaceable = Capabilities{
 const planned = Capabilities{};
 
 pub const resources = [_]Resource{
+    managed("gcp.accesscontextmanager.AccessLevel", .access_context_manager, .organization, .google_discovery, "M79", withProduct(full)),
+    managed("gcp.accesscontextmanager.AccessPolicy", .access_context_manager, .organization, .google_discovery, "M79", withProduct(full)),
+    managed("gcp.accesscontextmanager.GcpUserAccessBinding", .access_context_manager, .organization, .google_discovery, "M79", withProduct(full)),
+    managed("gcp.accesscontextmanager.ServicePerimeter", .access_context_manager, .organization, .google_discovery, "M79", withProduct(full)),
     managed("gcp.apigateway.Api", .api_gateway, .global, .google_discovery, "M67", withProduct(full)),
     managed("gcp.apigateway.ApiConfig", .api_gateway, .global, .google_discovery, "M67", withProduct(replaceable)),
     managed("gcp.apigateway.ApiConfigIamMember", .api_gateway, .global, .google_rest, "M67", withVisual(additive_iam)),
@@ -285,6 +291,8 @@ pub const resources = [_]Resource{
     managed("gcp.networkconnectivity.Hub", .network_connectivity, .global, .google_discovery, "M71", withProduct(full)),
     managed("gcp.networkconnectivity.ServiceConnectionPolicy", .network_connectivity, .region, .google_discovery, "M71", withProduct(full)),
     managed("gcp.networkconnectivity.Spoke", .network_connectivity, .global, .google_discovery, "M71", withProduct(full)),
+    managed("gcp.orgpolicy.CustomConstraint", .organization_policy, .organization, .google_discovery, "M79", withProduct(full)),
+    managed("gcp.orgpolicy.Policy", .organization_policy, .organization, .google_discovery, "M79", withProduct(full)),
     managed("gcp.parametermanager.Parameter", .parameter_manager, .location, .google_discovery, "M67", withProduct(full)),
     managed("gcp.parametermanager.ParameterVersion", .parameter_manager, .location, .google_discovery, "M67", withProduct(full)),
     managed("gcp.parametermanager.Template", .parameter_manager, .location, .google_discovery, "M67", withProduct(full)),
@@ -329,6 +337,10 @@ pub const resources = [_]Resource{
     managed("gcp.storage.BuildBucket", .storage, .global, .google_discovery, "M8", retained),
     managed("gcp.storage.Object", .storage, .global, .google_discovery, "M57", withProduct(replaceable)),
     managed("gcp.storage.SourceObject", .storage, .global, .google_discovery, "M8", retained_replaceable),
+    managed("gcp.tags.TagBinding", .resource_manager, .global, .google_discovery, "M79", withProduct(replaceable)),
+    managed("gcp.tags.TagHold", .resource_manager, .global, .google_discovery, "M79", withProduct(replaceable)),
+    managed("gcp.tags.TagKey", .resource_manager, .organization, .google_discovery, "M79", withProduct(full)),
+    managed("gcp.tags.TagValue", .resource_manager, .organization, .google_discovery, "M79", withProduct(full)),
     managed("gcp.tasks.Queue", .tasks, .location, .googleapis_proto, "M59", withProduct(full)),
     managed("gcp.tasks.QueueIamMember", .tasks, .location, .google_rest, "M59", withVisual(additive_iam)),
     managed("gcp.workflows.Workflow", .workflows, .location, .google_discovery, "M67", withProduct(full)),

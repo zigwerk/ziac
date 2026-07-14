@@ -737,6 +737,48 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "CloudBilling.UpdateProjectBillingInfo", .permission = "billing.resourceAssociations.create" },
         .{ .suffix = "CloudBilling.DetachProjectBillingInfo", .permission = "resourcemanager.projects.deleteBillingAssignment" },
         .{ .suffix = "ServiceUsage.GenerateServiceIdentity", .permission = "serviceusage.services.use" },
+        .{ .suffix = "OrgPolicy.GetPolicy", .permission = "orgpolicy.policies.get" },
+        .{ .suffix = "OrgPolicy.CreatePolicy", .permission = "orgpolicy.policies.create" },
+        .{ .suffix = "OrgPolicy.UpdatePolicy", .permission = "orgpolicy.policies.update" },
+        .{ .suffix = "OrgPolicy.DeletePolicy", .permission = "orgpolicy.policies.delete" },
+        .{ .suffix = "OrgPolicy.GetCustomConstraint", .permission = "orgpolicy.customConstraints.get" },
+        .{ .suffix = "OrgPolicy.CreateCustomConstraint", .permission = "orgpolicy.customConstraints.create" },
+        .{ .suffix = "OrgPolicy.UpdateCustomConstraint", .permission = "orgpolicy.customConstraints.update" },
+        .{ .suffix = "OrgPolicy.DeleteCustomConstraint", .permission = "orgpolicy.customConstraints.delete" },
+        .{ .suffix = "TagKeys.GetTagKey", .permission = "resourcemanager.tagKeys.get" },
+        .{ .suffix = "TagKeys.ListTagKeys", .permission = "resourcemanager.tagKeys.list" },
+        .{ .suffix = "TagKeys.CreateTagKey", .permission = "resourcemanager.tagKeys.create" },
+        .{ .suffix = "TagKeys.UpdateTagKey", .permission = "resourcemanager.tagKeys.update" },
+        .{ .suffix = "TagKeys.DeleteTagKey", .permission = "resourcemanager.tagKeys.delete" },
+        .{ .suffix = "TagValues.GetTagValue", .permission = "resourcemanager.tagValues.get" },
+        .{ .suffix = "TagValues.ListTagValues", .permission = "resourcemanager.tagValues.list" },
+        .{ .suffix = "TagValues.CreateTagValue", .permission = "resourcemanager.tagValues.create" },
+        .{ .suffix = "TagValues.UpdateTagValue", .permission = "resourcemanager.tagValues.update" },
+        .{ .suffix = "TagValues.DeleteTagValue", .permission = "resourcemanager.tagValues.delete" },
+        .{ .suffix = "TagBindings.ListTagBindings", .permission = "resourcemanager.tagBindings.list" },
+        .{ .suffix = "TagBindings.CreateTagBinding", .permission = "resourcemanager.tagBindings.create" },
+        .{ .suffix = "TagBindings.DeleteTagBinding", .permission = "resourcemanager.tagBindings.delete" },
+        .{ .suffix = "TagHolds.ListTagHolds", .permission = "resourcemanager.tagHolds.list" },
+        .{ .suffix = "TagHolds.CreateTagHold", .permission = "resourcemanager.tagHolds.create" },
+        .{ .suffix = "TagHolds.DeleteTagHold", .permission = "resourcemanager.tagHolds.delete" },
+        .{ .suffix = "AccessContextManager.ListAccessPolicies", .permission = "accesscontextmanager.policies.list" },
+        .{ .suffix = "AccessContextManager.GetAccessPolicy", .permission = "accesscontextmanager.policies.get" },
+        .{ .suffix = "AccessContextManager.CreateAccessPolicy", .permission = "accesscontextmanager.policies.create" },
+        .{ .suffix = "AccessContextManager.UpdateAccessPolicy", .permission = "accesscontextmanager.policies.update" },
+        .{ .suffix = "AccessContextManager.DeleteAccessPolicy", .permission = "accesscontextmanager.policies.delete" },
+        .{ .suffix = "AccessContextManager.GetAccessLevel", .permission = "accesscontextmanager.accessLevels.get" },
+        .{ .suffix = "AccessContextManager.CreateAccessLevel", .permission = "accesscontextmanager.accessLevels.create" },
+        .{ .suffix = "AccessContextManager.UpdateAccessLevel", .permission = "accesscontextmanager.accessLevels.update" },
+        .{ .suffix = "AccessContextManager.DeleteAccessLevel", .permission = "accesscontextmanager.accessLevels.delete" },
+        .{ .suffix = "AccessContextManager.GetServicePerimeter", .permission = "accesscontextmanager.servicePerimeters.get" },
+        .{ .suffix = "AccessContextManager.CreateServicePerimeter", .permission = "accesscontextmanager.servicePerimeters.create" },
+        .{ .suffix = "AccessContextManager.UpdateServicePerimeter", .permission = "accesscontextmanager.servicePerimeters.update" },
+        .{ .suffix = "AccessContextManager.DeleteServicePerimeter", .permission = "accesscontextmanager.servicePerimeters.delete" },
+        .{ .suffix = "AccessContextManager.ListGcpUserAccessBindings", .permission = "accesscontextmanager.gcpUserAccessBindings.list" },
+        .{ .suffix = "AccessContextManager.GetGcpUserAccessBinding", .permission = "accesscontextmanager.gcpUserAccessBindings.get" },
+        .{ .suffix = "AccessContextManager.CreateGcpUserAccessBinding", .permission = "accesscontextmanager.gcpUserAccessBindings.create" },
+        .{ .suffix = "AccessContextManager.UpdateGcpUserAccessBinding", .permission = "accesscontextmanager.gcpUserAccessBindings.update" },
+        .{ .suffix = "AccessContextManager.DeleteGcpUserAccessBinding", .permission = "accesscontextmanager.gcpUserAccessBindings.delete" },
         .{ .suffix = "Roles.GetRole", .permission = "iam.roles.get" },
         .{ .suffix = "Roles.CreateRole", .permission = "iam.roles.create" },
         .{ .suffix = "Roles.UpdateRole", .permission = "iam.roles.update" },
@@ -897,6 +939,27 @@ fn conditionalRpcUsage(node: resource.ResourceNode) ?RpcUsage {
         return .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Liens.DeleteLien" };
     if (std.mem.eql(u8, node.type_name, "gcp.billing.ProjectBillingAssociation") and std.mem.eql(u8, inputString(node, "removal_policy") orelse "retain", "detach"))
         return .{ .service = "cloudbilling.googleapis.com", .method = "google.cloud.billing.v1.CloudBilling.DetachProjectBillingInfo" };
+    const governance_delete = std.mem.eql(u8, inputString(node, "removal_policy") orelse "retain", "delete");
+    if (std.mem.eql(u8, node.type_name, "gcp.orgpolicy.Policy") and governance_delete)
+        return .{ .service = "orgpolicy.googleapis.com", .method = "google.cloud.orgpolicy.v2.OrgPolicy.DeletePolicy" };
+    if (std.mem.eql(u8, node.type_name, "gcp.orgpolicy.CustomConstraint") and governance_delete)
+        return .{ .service = "orgpolicy.googleapis.com", .method = "google.cloud.orgpolicy.v2.OrgPolicy.DeleteCustomConstraint" };
+    if (std.mem.eql(u8, node.type_name, "gcp.tags.TagKey") and governance_delete)
+        return .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagKeys.DeleteTagKey" };
+    if (std.mem.eql(u8, node.type_name, "gcp.tags.TagValue") and governance_delete)
+        return .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagValues.DeleteTagValue" };
+    if (std.mem.eql(u8, node.type_name, "gcp.tags.TagBinding") and governance_delete)
+        return .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagBindings.DeleteTagBinding" };
+    if (std.mem.eql(u8, node.type_name, "gcp.tags.TagHold") and governance_delete)
+        return .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagHolds.DeleteTagHold" };
+    if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.AccessPolicy") and (inputBool(node, "request_delete") orelse false))
+        return .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.DeleteAccessPolicy" };
+    if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.AccessLevel") and governance_delete)
+        return .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.DeleteAccessLevel" };
+    if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.ServicePerimeter") and governance_delete)
+        return .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.DeleteServicePerimeter" };
+    if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.GcpUserAccessBinding") and governance_delete)
+        return .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.DeleteGcpUserAccessBinding" };
     return null;
 }
 
@@ -1740,6 +1803,58 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const service_identity = [_]RpcUsage{
         .{ .service = "serviceusage.googleapis.com", .method = "google.api.serviceusage.v1beta1.ServiceUsage.GenerateServiceIdentity" },
     };
+    const governance_policy = [_]RpcUsage{
+        .{ .service = "orgpolicy.googleapis.com", .method = "google.cloud.orgpolicy.v2.OrgPolicy.GetPolicy" },
+        .{ .service = "orgpolicy.googleapis.com", .method = "google.cloud.orgpolicy.v2.OrgPolicy.CreatePolicy" },
+        .{ .service = "orgpolicy.googleapis.com", .method = "google.cloud.orgpolicy.v2.OrgPolicy.UpdatePolicy" },
+    };
+    const governance_custom_constraint = [_]RpcUsage{
+        .{ .service = "orgpolicy.googleapis.com", .method = "google.cloud.orgpolicy.v2.OrgPolicy.GetCustomConstraint" },
+        .{ .service = "orgpolicy.googleapis.com", .method = "google.cloud.orgpolicy.v2.OrgPolicy.CreateCustomConstraint" },
+        .{ .service = "orgpolicy.googleapis.com", .method = "google.cloud.orgpolicy.v2.OrgPolicy.UpdateCustomConstraint" },
+    };
+    const tag_key = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagKeys.GetTagKey" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagKeys.ListTagKeys" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagKeys.CreateTagKey" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagKeys.UpdateTagKey" },
+    };
+    const tag_value = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagValues.GetTagValue" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagValues.ListTagValues" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagValues.CreateTagValue" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagValues.UpdateTagValue" },
+    };
+    const tag_binding = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagBindings.ListTagBindings" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagBindings.CreateTagBinding" },
+    };
+    const tag_hold = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagHolds.ListTagHolds" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.TagHolds.CreateTagHold" },
+    };
+    const access_policy = [_]RpcUsage{
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.ListAccessPolicies" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.GetAccessPolicy" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.CreateAccessPolicy" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.UpdateAccessPolicy" },
+    };
+    const access_level = [_]RpcUsage{
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.GetAccessLevel" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.CreateAccessLevel" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.UpdateAccessLevel" },
+    };
+    const service_perimeter = [_]RpcUsage{
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.GetServicePerimeter" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.CreateServicePerimeter" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.UpdateServicePerimeter" },
+    };
+    const user_access_binding = [_]RpcUsage{
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.ListGcpUserAccessBindings" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.GetGcpUserAccessBinding" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.CreateGcpUserAccessBinding" },
+        .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.UpdateGcpUserAccessBinding" },
+    };
     const kms_key_ring = [_]RpcUsage{
         .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.KeyRings.GetKeyRing" },
         .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.KeyRings.CreateKeyRing" },
@@ -1898,6 +2013,16 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.resourcemanager.Lien")) return &organization_lien;
     if (std.mem.eql(u8, type_name, "gcp.billing.ProjectBillingAssociation")) return &project_billing;
     if (std.mem.eql(u8, type_name, "gcp.serviceusage.ServiceIdentity")) return &service_identity;
+    if (std.mem.eql(u8, type_name, "gcp.orgpolicy.Policy")) return &governance_policy;
+    if (std.mem.eql(u8, type_name, "gcp.orgpolicy.CustomConstraint")) return &governance_custom_constraint;
+    if (std.mem.eql(u8, type_name, "gcp.tags.TagKey")) return &tag_key;
+    if (std.mem.eql(u8, type_name, "gcp.tags.TagValue")) return &tag_value;
+    if (std.mem.eql(u8, type_name, "gcp.tags.TagBinding")) return &tag_binding;
+    if (std.mem.eql(u8, type_name, "gcp.tags.TagHold")) return &tag_hold;
+    if (std.mem.eql(u8, type_name, "gcp.accesscontextmanager.AccessPolicy")) return &access_policy;
+    if (std.mem.eql(u8, type_name, "gcp.accesscontextmanager.AccessLevel")) return &access_level;
+    if (std.mem.eql(u8, type_name, "gcp.accesscontextmanager.ServicePerimeter")) return &service_perimeter;
+    if (std.mem.eql(u8, type_name, "gcp.accesscontextmanager.GcpUserAccessBinding")) return &user_access_binding;
     if (std.mem.eql(u8, type_name, "gcp.compute.BackendService")) return &compute_backend;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionServerlessNeg")) return &compute_neg;
     if (std.mem.eql(u8, type_name, "gcp.compute.Disk") or std.mem.eql(u8, type_name, "gcp.compute.RegionDisk")) return &compute_disk;

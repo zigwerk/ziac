@@ -1,4 +1,10 @@
 comptime {
+    _ = @import("gcp_governance_orgpolicy_test.zig");
+    _ = @import("gcp_governance_tags_test.zig");
+    _ = @import("gcp_governance_access_test.zig");
+    _ = @import("gcp_governance_live_provider_test.zig");
+    _ = @import("gcp_governance_components_test.zig");
+    _ = @import("gcp_governance_product_test.zig");
     _ = @import("gcp_kms_secret_actions_test.zig");
     _ = @import("gcp_kms_secret_product_test.zig");
     _ = @import("gcp_kms_live_provider_test.zig");

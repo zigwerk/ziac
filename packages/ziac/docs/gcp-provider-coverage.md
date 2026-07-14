@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 186 managed GCP resource types.
+The current deterministic provider gate contains 196 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -56,6 +56,21 @@ projects in one graph by project-scoping billing, API and service-identity
 logical IDs. Permission synthesis, Cloud Asset hierarchy, canvas edges and
 explicit zero-dollar management estimates are synchronized. See
 `gcp-organization-foundation.md`.
+
+### Organization governance and VPC Service Controls
+
+M79 adds ten managed resources for Organization Policy v2, Resource Manager v3
+tags and Access Context Manager v1. Typed enforced and dry-run policy, CEL
+constraints, tag identities, basic/custom access levels, service perimeters and
+user access bindings use etags, exact masks, list discovery and resumable Google
+operations. Governance deletion is retained by default and requires declaration
+intent plus destructive authority.
+
+`GovernedProjectBoundary` composes project policy, tag assignment and regular
+VPC Service Controls membership while consuming shared organization-wide tag
+and access roots as typed outputs. Exact permission synthesis, Cloud Asset
+identity, named governance canvas edges and explicit zero-dollar management
+estimates are synchronized. See `gcp-governance-boundary.md`.
 
 ### KMS and Secret Manager security lifecycle
 

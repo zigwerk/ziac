@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 186), managed_count);
+    try std.testing.expectEqual(@as(usize, 196), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -65,6 +65,20 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     const service_identity = ziac.gcp.coverage.find("gcp.serviceusage.ServiceIdentity") orelse return error.TestExpectedEqual;
     try std.testing.expect(!service_identity.capabilities.delete_resource);
     try std.testing.expect(service_identity.capabilities.visual);
+
+    const organization_policy = ziac.gcp.coverage.find("gcp.orgpolicy.Policy") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M79", organization_policy.milestone);
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.organization_policy, organization_policy.service);
+    try std.testing.expect(organization_policy.capabilities.update);
+    try std.testing.expect(organization_policy.capabilities.estate);
+
+    const service_perimeter = ziac.gcp.coverage.find("gcp.accesscontextmanager.ServicePerimeter") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.access_context_manager, service_perimeter.service);
+    try std.testing.expect(service_perimeter.capabilities.delete_resource);
+
+    const tag_binding = ziac.gcp.coverage.find("gcp.tags.TagBinding") orelse return error.TestExpectedEqual;
+    try std.testing.expect(!tag_binding.capabilities.update);
+    try std.testing.expect(tag_binding.capabilities.visual);
 
     const job_invoker = ziac.gcp.coverage.find("gcp.run.JobIamMember") orelse return error.TestExpectedEqual;
     try std.testing.expectEqual(ziac.gcp.coverage.Stage.managed, job_invoker.stage);

@@ -379,6 +379,26 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.resourcemanager.Project"
     else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/Lien"))
         "gcp.resourcemanager.Lien"
+    else if (std.mem.eql(u8, asset_type, "orgpolicy.googleapis.com/Policy"))
+        "gcp.orgpolicy.Policy"
+    else if (std.mem.eql(u8, asset_type, "orgpolicy.googleapis.com/CustomConstraint"))
+        "gcp.orgpolicy.CustomConstraint"
+    else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/TagKey"))
+        "gcp.tags.TagKey"
+    else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/TagValue"))
+        "gcp.tags.TagValue"
+    else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/TagBinding"))
+        "gcp.tags.TagBinding"
+    else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/TagHold"))
+        "gcp.tags.TagHold"
+    else if (std.mem.eql(u8, asset_type, "accesscontextmanager.googleapis.com/AccessPolicy"))
+        "gcp.accesscontextmanager.AccessPolicy"
+    else if (std.mem.eql(u8, asset_type, "accesscontextmanager.googleapis.com/AccessLevel"))
+        "gcp.accesscontextmanager.AccessLevel"
+    else if (std.mem.eql(u8, asset_type, "accesscontextmanager.googleapis.com/ServicePerimeter"))
+        "gcp.accesscontextmanager.ServicePerimeter"
+    else if (std.mem.eql(u8, asset_type, "accesscontextmanager.googleapis.com/GcpUserAccessBinding"))
+        "gcp.accesscontextmanager.GcpUserAccessBinding"
     else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/Parameter"))
         "gcp.parametermanager.Parameter"
     else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/ParameterVersion"))
@@ -613,6 +633,16 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "cloudresourcemanager.googleapis.com/Folder", .prefix = "//cloudresourcemanager.googleapis.com/" },
         .{ .asset_type = "cloudresourcemanager.googleapis.com/Project", .prefix = "//cloudresourcemanager.googleapis.com/" },
         .{ .asset_type = "cloudresourcemanager.googleapis.com/Lien", .prefix = "//cloudresourcemanager.googleapis.com/" },
+        .{ .asset_type = "cloudresourcemanager.googleapis.com/TagKey", .prefix = "//cloudresourcemanager.googleapis.com/" },
+        .{ .asset_type = "cloudresourcemanager.googleapis.com/TagValue", .prefix = "//cloudresourcemanager.googleapis.com/" },
+        .{ .asset_type = "cloudresourcemanager.googleapis.com/TagBinding", .prefix = "//cloudresourcemanager.googleapis.com/" },
+        .{ .asset_type = "cloudresourcemanager.googleapis.com/TagHold", .prefix = "//cloudresourcemanager.googleapis.com/" },
+        .{ .asset_type = "orgpolicy.googleapis.com/Policy", .prefix = "//orgpolicy.googleapis.com/" },
+        .{ .asset_type = "orgpolicy.googleapis.com/CustomConstraint", .prefix = "//orgpolicy.googleapis.com/" },
+        .{ .asset_type = "accesscontextmanager.googleapis.com/AccessPolicy", .prefix = "//accesscontextmanager.googleapis.com/" },
+        .{ .asset_type = "accesscontextmanager.googleapis.com/AccessLevel", .prefix = "//accesscontextmanager.googleapis.com/" },
+        .{ .asset_type = "accesscontextmanager.googleapis.com/ServicePerimeter", .prefix = "//accesscontextmanager.googleapis.com/" },
+        .{ .asset_type = "accesscontextmanager.googleapis.com/GcpUserAccessBinding", .prefix = "//accesscontextmanager.googleapis.com/" },
         .{ .asset_type = "parametermanager.googleapis.com/Parameter", .prefix = "//parametermanager.googleapis.com/" },
         .{ .asset_type = "parametermanager.googleapis.com/ParameterVersion", .prefix = "//parametermanager.googleapis.com/" },
         .{ .asset_type = "certificatemanager.googleapis.com/DnsAuthorization", .prefix = "//certificatemanager.googleapis.com/" },

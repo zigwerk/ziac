@@ -1184,3 +1184,32 @@ logged errors are reported. The catalog reports 186 managed resources.
 `scripts/qualify-organization-foundation.sh` remains the fail-closed boundary
 for live project creation, billing attachment, second-state import/no-op and
 explicit disposable-project cleanup.
+
+M79 is locally complete and awaiting authenticated disposable-governance-scope
+qualification. Ten managed resources add Organization Policy v2 policies and
+custom constraints, Resource Manager v3 tag keys, values, bindings and holds,
+and Access Context Manager v1 policies, levels, service perimeters and user
+access bindings.
+
+The provider preserves enforced and dry-run policy as distinct state, applies
+spec etags and exact masks, adopts Google-assigned tag and binding identities,
+uses parent-list discovery where Google exposes no direct read, and checkpoints
+Access Context Manager and Resource Manager operations. Governance resources
+retain by default; deletion requires declaration intent plus destructive
+authority, with an additional cascade declaration for access-policy removal.
+
+`GovernedProjectBoundary` composes project policy, tag assignment and VPC
+Service Controls membership while consuming shared organization roots as typed
+outputs. Exact API and permission synthesis, pinned Discovery contracts, Cloud
+Asset identity, governance-specific canvas edges, zero-dollar management
+estimates, local qualification evidence, installed documentation and the
+fail-closed runner are synchronized. See `docs/gcp-governance-boundary.md`.
+
+The M79 Testing v2 package gate discovers and executes 874 tests: 873 pass, one
+credential-gated test skips, and none fail or remain pending; no leaks or logged
+errors are reported. The catalog reports 196 managed resources. Public examples
+include `governed-project-boundary`; the complete release gate, migration guard,
+root TypeScript checks, static secret checks and non-root arm64 container probe
+pass. The authenticated runner requires ADC, an explicit disposable scope and
+exact confirmation, performs second-state import/no-op proof, and retains
+governance resources for operator-owned cleanup.

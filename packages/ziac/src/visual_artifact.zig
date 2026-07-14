@@ -193,6 +193,7 @@ fn appendResource(
     try appendLoggingDetails(output, allocator, item.node);
     try appendBuildDeliveryDetails(output, allocator, item.node);
     try appendCloudDeployDetails(output, allocator, item.node);
+    try appendGovernanceDetails(output, allocator, item.node);
     try appendOrganizationFoundationDetails(output, allocator, item.node);
     try appendKmsSecretDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
@@ -238,9 +239,58 @@ fn appendConfigurationCost(
 
 fn isNoChargeFoundationType(type_name: []const u8) bool {
     return std.mem.startsWith(u8, type_name, "gcp.resourcemanager.") or
+        std.mem.startsWith(u8, type_name, "gcp.orgpolicy.") or
+        std.mem.startsWith(u8, type_name, "gcp.tags.") or
+        std.mem.startsWith(u8, type_name, "gcp.accesscontextmanager.") or
         std.mem.eql(u8, type_name, "gcp.billing.ProjectBillingAssociation") or
         std.mem.eql(u8, type_name, "gcp.serviceusage.ServiceIdentity") or
         std.mem.eql(u8, type_name, "gcp.project.Service");
+}
+
+fn appendGovernanceDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.orgpolicy.Policy"))
+        "organization_policy"
+    else if (std.mem.eql(u8, node.type_name, "gcp.orgpolicy.CustomConstraint"))
+        "custom_constraint"
+    else if (std.mem.eql(u8, node.type_name, "gcp.tags.TagKey"))
+        "tag_key"
+    else if (std.mem.eql(u8, node.type_name, "gcp.tags.TagValue"))
+        "tag_value"
+    else if (std.mem.eql(u8, node.type_name, "gcp.tags.TagBinding"))
+        "tag_binding"
+    else if (std.mem.eql(u8, node.type_name, "gcp.tags.TagHold"))
+        "tag_hold"
+    else if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.AccessPolicy"))
+        "access_policy"
+    else if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.AccessLevel"))
+        "access_level"
+    else if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.ServicePerimeter"))
+        "service_perimeter"
+    else if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.GcpUserAccessBinding"))
+        "user_access_binding"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"governance\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "constraint", "constraint");
+    try appendOptionalStorageString(output, allocator, node, "short_name", "short_name");
+    try appendOptionalStorageString(output, allocator, node, "group_key", "group_key");
+    try appendOptionalStorageString(output, allocator, node, "perimeter_type", "perimeter_type");
+    try appendOptionalStorageString(output, allocator, node, "removal_policy", "removal_policy");
+    try appendOptionalStorageBool(output, allocator, node, "has_dry_run_spec", "has_dry_run_spec");
+    try appendOptionalStorageBool(output, allocator, node, "has_dry_run", "has_dry_run");
+    try appendNestedListCount(output, allocator, node, "spec", "rules", "enforced_rule_count");
+    try appendNestedListCount(output, allocator, node, "dry_run_spec", "rules", "dry_run_rule_count");
+    try appendNestedListCount(output, allocator, node, "status", "restricted_services", "restricted_service_count");
+    try appendNestedListCount(output, allocator, node, "dry_run", "restricted_services", "dry_run_restricted_service_count");
+    try output.append(allocator, '}');
+}
+
+fn appendNestedListCount(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode, object_name: []const u8, list_name: []const u8, output_name: []const u8) !void {
+    const object = objectField(node.inputs, object_name) orelse return;
+    if (object != .object) return;
+    const list = objectField(object, list_name) orelse return;
+    if (list == .list) try appendNamedUnsigned(output, allocator, output_name, list.list.len, true);
 }
 
 fn appendEdge(
@@ -1356,6 +1406,18 @@ fn appendJsonArrayStringCount(
 }
 
 fn resourceScope(node: resource.ResourceNode, regions: []const []const u8) []const u8 {
+    if (std.mem.eql(u8, node.type_name, "gcp.orgpolicy.Policy")) {
+        const parent = objectString(node, "parent") orelse return "hierarchy";
+        if (std.mem.startsWith(u8, parent, "organizations/")) return "organization";
+        if (std.mem.startsWith(u8, parent, "folders/")) return "folder";
+        return "project";
+    }
+    if (std.mem.eql(u8, node.type_name, "gcp.orgpolicy.CustomConstraint") or
+        std.mem.eql(u8, node.type_name, "gcp.tags.TagKey") or
+        std.mem.eql(u8, node.type_name, "gcp.tags.TagValue") or
+        std.mem.eql(u8, node.type_name, "gcp.tags.TagHold") or
+        std.mem.startsWith(u8, node.type_name, "gcp.accesscontextmanager.")) return "organization";
+    if (std.mem.eql(u8, node.type_name, "gcp.tags.TagBinding")) return "project";
     if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Folder")) return "folder";
     if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Project") or
         std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Lien") or
@@ -1390,6 +1452,17 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.orgpolicy.Policy") and
+        (std.mem.eql(u8, to_type, "gcp.resourcemanager.Project") or std.mem.eql(u8, to_type, "gcp.resourcemanager.Folder"))) return "policy_scope";
+    if (std.mem.eql(u8, from_type, "gcp.tags.TagValue") and std.mem.eql(u8, to_type, "gcp.tags.TagKey")) return "tag_membership";
+    if (std.mem.eql(u8, from_type, "gcp.tags.TagBinding")) return "tag_assignment";
+    if (std.mem.eql(u8, from_type, "gcp.tags.TagHold") and std.mem.eql(u8, to_type, "gcp.tags.TagValue")) return "tag_hold";
+    if (std.mem.eql(u8, from_type, "gcp.accesscontextmanager.AccessLevel") and std.mem.eql(u8, to_type, "gcp.accesscontextmanager.AccessPolicy")) return "access_policy_membership";
+    if (std.mem.eql(u8, from_type, "gcp.accesscontextmanager.ServicePerimeter") and std.mem.eql(u8, to_type, "gcp.accesscontextmanager.AccessPolicy")) return "perimeter_policy";
+    if (std.mem.eql(u8, from_type, "gcp.accesscontextmanager.ServicePerimeter") and std.mem.eql(u8, to_type, "gcp.accesscontextmanager.AccessLevel")) return "perimeter_access";
+    if (std.mem.eql(u8, from_type, "gcp.accesscontextmanager.ServicePerimeter") and
+        (std.mem.eql(u8, to_type, "gcp.resourcemanager.Project") or std.mem.startsWith(u8, to_type, "gcp.compute.Network"))) return "perimeter_membership";
+    if (std.mem.eql(u8, from_type, "gcp.accesscontextmanager.GcpUserAccessBinding") and std.mem.eql(u8, to_type, "gcp.accesscontextmanager.AccessLevel")) return "user_access";
     if (std.mem.eql(u8, from_type, "gcp.resourcemanager.Project") and std.mem.eql(u8, to_type, "gcp.resourcemanager.Folder")) return "hierarchy_parent";
     if (std.mem.eql(u8, from_type, "gcp.billing.ProjectBillingAssociation") and std.mem.eql(u8, to_type, "gcp.resourcemanager.Project")) return "billing_attachment";
     if (std.mem.eql(u8, from_type, "gcp.project.Service") and std.mem.eql(u8, to_type, "gcp.resourcemanager.Project")) return "api_enablement";

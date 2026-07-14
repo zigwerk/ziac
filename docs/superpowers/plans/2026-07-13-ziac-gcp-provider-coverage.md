@@ -233,7 +233,7 @@ isolated serializer tests.
 
 - [x] M77 KMS IAM/version lifecycle, Secret Manager replication/rotation/IAM.
 - [x] M78 folders, projects, billing association, service identities and liens.
-- [ ] M79 organization policy, tags, access policies and VPC Service Controls.
+- [x] M79 organization policy, tags, access policies and VPC Service Controls.
 - [ ] M80 Security Command Center, Binary Authorization and CA Service.
 
 ## M81+: Analytics, Integration And AI

@@ -248,6 +248,55 @@ test "preflight reports missing Google service agents separately from permission
     try std.testing.expect(report.hasFinding(.service_agent_missing));
 }
 
+test "governance graphs synthesize exact Org Policy Tags and Access Context authority" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    const provider = ziac.gcp.ProviderConfig{ .project_id = "host-project", .primary_region = "europe-west1" };
+    var policy = try ziac.gcp.governance.Policy.build(std.testing.allocator, provider, .{
+        .name = "allowed-regions",
+        .parent = ziac.PublicOutput([]const u8).known("organizations/123456789"),
+        .constraint = "gcp.resourceLocations",
+        .spec = .{ .rules = &.{.{ .effect = .{ .values = .{ .allowed = &.{"in:eu-locations"} } } }} },
+        .removal_policy = .delete,
+    });
+    defer policy.deinit(std.testing.allocator);
+    var binding = try ziac.gcp.governance.TagBinding.build(std.testing.allocator, provider, .{
+        .name = "platform-production",
+        .parent = ziac.PublicOutput([]const u8).known("//cloudresourcemanager.googleapis.com/projects/987654321"),
+        .tag_value = ziac.PublicOutput([]const u8).known("tagValues/222"),
+        .removal_policy = .delete,
+    });
+    defer binding.deinit(std.testing.allocator);
+    var perimeter = try ziac.gcp.governance.ServicePerimeter.build(std.testing.allocator, provider, .{
+        .name = "production_data",
+        .policy = ziac.PublicOutput([]const u8).known("accessPolicies/123"),
+        .title = "Production data",
+        .status = .{ .resources = &.{ziac.PublicOutput([]const u8).known("projects/987654321")} },
+        .removal_policy = .delete,
+    });
+    defer perimeter.deinit(std.testing.allocator);
+    try graph.addResource(policy.node);
+    try graph.addResource(binding.node);
+    try graph.addResource(perimeter.node);
+
+    var requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &graph);
+    defer requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(requirements.apis, "orgpolicy.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "cloudresourcemanager.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "accesscontextmanager.googleapis.com"));
+    try std.testing.expect(requirements.hasPermission("orgpolicy.policies.get"));
+    try std.testing.expect(requirements.hasPermission("orgpolicy.policies.create"));
+    try std.testing.expect(requirements.hasPermission("orgpolicy.policies.update"));
+    try std.testing.expect(requirements.hasPermission("orgpolicy.policies.delete"));
+    try std.testing.expect(requirements.hasPermission("resourcemanager.tagBindings.list"));
+    try std.testing.expect(requirements.hasPermission("resourcemanager.tagBindings.create"));
+    try std.testing.expect(requirements.hasPermission("resourcemanager.tagBindings.delete"));
+    try std.testing.expect(requirements.hasPermission("accesscontextmanager.servicePerimeters.get"));
+    try std.testing.expect(requirements.hasPermission("accesscontextmanager.servicePerimeters.create"));
+    try std.testing.expect(requirements.hasPermission("accesscontextmanager.servicePerimeters.update"));
+    try std.testing.expect(requirements.hasPermission("accesscontextmanager.servicePerimeters.delete"));
+}
+
 test "topology advice respects residency and Cockroach locality without mutating policy" {
     const intelligence = ziac.gcp.intelligence;
     var advice = try intelligence.adviseTopology(std.testing.allocator, .{

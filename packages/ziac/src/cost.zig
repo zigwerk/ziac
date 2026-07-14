@@ -916,6 +916,17 @@ pub fn organizationFoundationEstimate(resource_id: []const u8, observed_at_milli
     };
 }
 
+pub fn governanceConfigurationEstimate(resource_id: []const u8, observed_at_millis: u64) !ResourceCost {
+    try validateIdentity(resource_id, observed_at_millis);
+    return .{
+        .resource_id = resource_id,
+        .origin = .configuration_estimate,
+        .amount_micros = 0,
+        .confidence = .explicit_usage,
+        .provenance = .{ .observed_at_millis = observed_at_millis },
+    };
+}
+
 const CloudRunComputeEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8,
