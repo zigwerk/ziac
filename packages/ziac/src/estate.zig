@@ -381,6 +381,16 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.container.Cluster"
     else if (std.mem.eql(u8, asset_type, "container.googleapis.com/NodePool"))
         "gcp.container.NodePool"
+    else if (std.mem.eql(u8, asset_type, "cloudbuild.googleapis.com/Connection"))
+        "gcp.cloudbuild.Connection"
+    else if (std.mem.eql(u8, asset_type, "cloudbuild.googleapis.com/Repository"))
+        "gcp.cloudbuild.Repository"
+    else if (std.mem.eql(u8, asset_type, "cloudbuild.googleapis.com/WorkerPool"))
+        "gcp.cloudbuild.WorkerPool"
+    else if (std.mem.eql(u8, asset_type, "cloudbuild.googleapis.com/BuildTrigger"))
+        "gcp.cloudbuild.Trigger"
+    else if (std.mem.eql(u8, asset_type, "artifactregistry.googleapis.com/Repository"))
+        "gcp.artifact.Repository"
     else if (std.mem.eql(u8, asset_type, "logging.googleapis.com/LogBucket"))
         "gcp.logging.Bucket"
     else if (std.mem.eql(u8, asset_type, "logging.googleapis.com/LogView"))
@@ -578,6 +588,11 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "cloudfunctions.googleapis.com/CloudFunction", .prefix = "//cloudfunctions.googleapis.com/" },
         .{ .asset_type = "container.googleapis.com/Cluster", .prefix = "//container.googleapis.com/" },
         .{ .asset_type = "container.googleapis.com/NodePool", .prefix = "//container.googleapis.com/" },
+        .{ .asset_type = "cloudbuild.googleapis.com/Connection", .prefix = "//cloudbuild.googleapis.com/" },
+        .{ .asset_type = "cloudbuild.googleapis.com/Repository", .prefix = "//cloudbuild.googleapis.com/" },
+        .{ .asset_type = "cloudbuild.googleapis.com/WorkerPool", .prefix = "//cloudbuild.googleapis.com/" },
+        .{ .asset_type = "cloudbuild.googleapis.com/BuildTrigger", .prefix = "//cloudbuild.googleapis.com/" },
+        .{ .asset_type = "artifactregistry.googleapis.com/Repository", .prefix = "//artifactregistry.googleapis.com/" },
         .{ .asset_type = "logging.googleapis.com/LogBucket", .prefix = "//logging.googleapis.com/" },
         .{ .asset_type = "logging.googleapis.com/LogView", .prefix = "//logging.googleapis.com/" },
         .{ .asset_type = "logging.googleapis.com/LogMetric", .prefix = "//logging.googleapis.com/" },

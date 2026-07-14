@@ -1088,3 +1088,26 @@ executed tests, 789 passed, one credential-gated skip, and zero failures,
 pending tests, leaks or logged errors. The provider catalog reports 167 managed
 resources. `scripts/qualify-logging.sh` remains the fail-closed authenticated
 boundary for real sink routing, view visibility and derived metric evidence.
+
+M75 is locally complete and awaiting authenticated Cloud Build and Artifact
+Registry qualification. Six new managed resources add Cloud Build source
+connections, linked repositories, repository-event triggers, private worker
+pools, retained Artifact Registry project settings and regional VPC Service
+Controls configuration. The existing Artifact Registry repository is upgraded
+to every standard format, canonical cleanup policies, CMEK and scanning.
+
+`ZigBuildPipeline` composes source, private execution, triggering and protected
+artifact storage. The provider checkpoints long-running operations, applies
+exact masks and etags, keeps SCM credentials out of state and evidence, detects
+remote semantic drift and blocks reversal of finalized Artifact Registry
+redirection. Permission synthesis, supported Cloud Asset adoption, canvas
+relationships and explicit build, disk, storage, transfer and scan estimates
+are synchronized. See `docs/gcp-build-delivery.md`.
+
+The M75 local Testing v2 package gate is complete with 806 discovered and
+executed tests, 805 passed, one credential-gated skip, and zero failures,
+pending tests, leaks or logged errors. The provider catalog reports 173 managed
+resources. Public examples, installed distribution, migration, root TypeScript
+and static secret gates pass. `scripts/qualify-build-delivery.sh` remains the
+fail-closed authenticated boundary for real SCM, successful build, import
+no-op and cleanup evidence.

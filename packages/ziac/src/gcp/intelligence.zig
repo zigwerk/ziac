@@ -334,6 +334,29 @@ pub fn rolloutAllowed(signal: RolloutSignal, gate: RolloutGate) bool {
 
 fn permissionForMethod(method: []const u8) ?[]const u8 {
     const mappings = [_]struct { suffix: []const u8, permission: []const u8 }{
+        .{ .suffix = "RepositoryManager.GetConnection", .permission = "cloudbuild.connections.get" },
+        .{ .suffix = "RepositoryManager.CreateConnection", .permission = "cloudbuild.connections.create" },
+        .{ .suffix = "RepositoryManager.UpdateConnection", .permission = "cloudbuild.connections.update" },
+        .{ .suffix = "RepositoryManager.DeleteConnection", .permission = "cloudbuild.connections.delete" },
+        .{ .suffix = "RepositoryManager.GetRepository", .permission = "cloudbuild.repositories.get" },
+        .{ .suffix = "RepositoryManager.CreateRepository", .permission = "cloudbuild.repositories.create" },
+        .{ .suffix = "RepositoryManager.DeleteRepository", .permission = "cloudbuild.repositories.delete" },
+        .{ .suffix = "CloudBuild.GetWorkerPool", .permission = "cloudbuild.workerpools.get" },
+        .{ .suffix = "CloudBuild.CreateWorkerPool", .permission = "cloudbuild.workerpools.create" },
+        .{ .suffix = "CloudBuild.UpdateWorkerPool", .permission = "cloudbuild.workerpools.update" },
+        .{ .suffix = "CloudBuild.DeleteWorkerPool", .permission = "cloudbuild.workerpools.delete" },
+        .{ .suffix = "CloudBuild.GetBuildTrigger", .permission = "cloudbuild.builds.get" },
+        .{ .suffix = "CloudBuild.CreateBuildTrigger", .permission = "cloudbuild.builds.create" },
+        .{ .suffix = "CloudBuild.PatchBuildTrigger", .permission = "cloudbuild.builds.update" },
+        .{ .suffix = "CloudBuild.DeleteBuildTrigger", .permission = "cloudbuild.builds.delete" },
+        .{ .suffix = "ArtifactRegistry.GetRepository", .permission = "artifactregistry.repositories.get" },
+        .{ .suffix = "ArtifactRegistry.CreateRepository", .permission = "artifactregistry.repositories.create" },
+        .{ .suffix = "ArtifactRegistry.UpdateRepository", .permission = "artifactregistry.repositories.update" },
+        .{ .suffix = "ArtifactRegistry.DeleteRepository", .permission = "artifactregistry.repositories.delete" },
+        .{ .suffix = "ArtifactRegistry.GetProjectSettings", .permission = "artifactregistry.projectsettings.get" },
+        .{ .suffix = "ArtifactRegistry.UpdateProjectSettings", .permission = "artifactregistry.projectsettings.update" },
+        .{ .suffix = "ArtifactRegistry.GetVPCSCConfig", .permission = "artifactregistry.vpcscconfigs.get" },
+        .{ .suffix = "ArtifactRegistry.UpdateVPCSCConfig", .permission = "artifactregistry.vpcscconfigs.update" },
         .{ .suffix = "ConfigServiceV2.GetBucket", .permission = "logging.buckets.get" },
         .{ .suffix = "ConfigServiceV2.CreateBucketAsync", .permission = "logging.buckets.create" },
         .{ .suffix = "ConfigServiceV2.UpdateBucketAsync", .permission = "logging.buckets.update" },
@@ -806,6 +829,43 @@ pub fn jobExecutionUsages() []const RpcUsage {
 }
 
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
+    const build_connection = [_]RpcUsage{
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.GetConnection" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.CreateConnection" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.UpdateConnection" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.DeleteConnection" },
+    };
+    const build_repository = [_]RpcUsage{
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.GetRepository" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.CreateRepository" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.DeleteRepository" },
+    };
+    const build_worker_pool = [_]RpcUsage{
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.GetWorkerPool" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.CreateWorkerPool" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.UpdateWorkerPool" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.DeleteWorkerPool" },
+    };
+    const build_trigger = [_]RpcUsage{
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.GetBuildTrigger" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.CreateBuildTrigger" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.PatchBuildTrigger" },
+        .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.DeleteBuildTrigger" },
+    };
+    const artifact_repository = [_]RpcUsage{
+        .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.GetRepository" },
+        .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.CreateRepository" },
+        .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.UpdateRepository" },
+        .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.DeleteRepository" },
+    };
+    const artifact_project_settings = [_]RpcUsage{
+        .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.GetProjectSettings" },
+        .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.UpdateProjectSettings" },
+    };
+    const artifact_vpcsc = [_]RpcUsage{
+        .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.GetVPCSCConfig" },
+        .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.UpdateVPCSCConfig" },
+    };
     const logging_bucket = [_]RpcUsage{
         .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.GetBucket" },
         .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.CreateBucketAsync" },
@@ -1535,6 +1595,13 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
+    if (std.mem.eql(u8, type_name, "gcp.cloudbuild.Connection")) return &build_connection;
+    if (std.mem.eql(u8, type_name, "gcp.cloudbuild.Repository")) return &build_repository;
+    if (std.mem.eql(u8, type_name, "gcp.cloudbuild.WorkerPool")) return &build_worker_pool;
+    if (std.mem.eql(u8, type_name, "gcp.cloudbuild.Trigger")) return &build_trigger;
+    if (std.mem.eql(u8, type_name, "gcp.artifact.Repository")) return &artifact_repository;
+    if (std.mem.eql(u8, type_name, "gcp.artifact.ProjectSettings")) return &artifact_project_settings;
+    if (std.mem.eql(u8, type_name, "gcp.artifact.VpcscConfig")) return &artifact_vpcsc;
     if (std.mem.eql(u8, type_name, "gcp.logging.Bucket")) return &logging_bucket;
     if (std.mem.eql(u8, type_name, "gcp.logging.View")) return &logging_view;
     if (std.mem.eql(u8, type_name, "gcp.logging.Sink")) return &logging_sink;

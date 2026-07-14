@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 149 managed GCP resource types.
+The current deterministic provider gate contains 173 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -396,6 +396,27 @@ supported Cloud Asset identities, canvas routing and derivation edges, and
 explicit ingestion, retention and metric estimates are synchronized. See
 `gcp-logging.md`.
 
+### Build and artifact delivery
+
+M75 adds six managed resource types and upgrades the existing Artifact
+Registry repository contract. Modern Cloud Build coverage includes source
+connections, linked repositories, repository-event triggers and private worker
+pools. Artifact Registry adds all standard repository formats, canonical
+cleanup policies, CMEK and scanning controls, retained project redirection
+settings and regional VPC Service Controls configuration.
+
+`ZigBuildPipeline` composes source, private execution, trigger and artifact
+storage without hiding SCM credentials or network ownership. The provider
+checkpoints Cloud Build long-running operations, applies exact update masks and
+etags, treats worker-pool network changes as replacements, preserves
+server-generated trigger identity and blocks reversal of finalized Artifact
+Registry redirection.
+
+Exact Cloud Build and Artifact Registry permissions, supported Cloud Asset
+identities, source/execution/artifact canvas edges and explicit build-minute,
+private-disk, storage, transfer and scan estimates are synchronized. See
+`gcp-build-delivery.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`
@@ -413,7 +434,7 @@ M56-M62 adds the provider catalog and generation spine, then completes:
 5. one integrated authenticated application-platform qualification.
 
 The subsequent waves cover GKE, Functions, Batch, Monitoring, Logging, Cloud
-Build/Deploy, organization governance,
+Deploy, organization governance,
 security, analytics, integration and stable Vertex AI resources.
 
 See `roadmap.md` for programme status. The source repository also contains the

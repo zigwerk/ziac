@@ -123,6 +123,10 @@ comptime {
     _ = @import("gcp_run_components_test.zig");
     _ = @import("gcp_application_platform_test.zig");
     _ = @import("gcp_bigquery_test.zig");
+    _ = @import("gcp_build_delivery_test.zig");
+    _ = @import("gcp_build_delivery_live_provider_test.zig");
+    _ = @import("gcp_build_delivery_components_test.zig");
+    _ = @import("gcp_build_delivery_product_test.zig");
     _ = @import("gcp_firestore_test.zig");
     _ = @import("gcp_pubsub_test.zig");
     _ = @import("gcp_pubsub_components_test.zig");

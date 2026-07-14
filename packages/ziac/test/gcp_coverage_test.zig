@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 167), managed_count);
+    try std.testing.expectEqual(@as(usize, 173), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -204,6 +204,28 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     try std.testing.expect(project_exclusion.capabilities.visual);
     try std.testing.expect(project_exclusion.capabilities.cost);
 
+    const build_trigger = ziac.gcp.coverage.find("gcp.cloudbuild.Trigger") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M75", build_trigger.milestone);
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.cloud_build, build_trigger.service);
+    try std.testing.expect(build_trigger.capabilities.update);
+    try std.testing.expect(build_trigger.capabilities.estate);
+    try std.testing.expect(build_trigger.capabilities.visual);
+    try std.testing.expect(build_trigger.capabilities.cost);
+
+    const source_repository = ziac.gcp.coverage.find("gcp.cloudbuild.Repository") orelse return error.TestExpectedEqual;
+    try std.testing.expect(!source_repository.capabilities.update);
+    try std.testing.expect(source_repository.capabilities.import_resource);
+
+    const artifact_repository = ziac.gcp.coverage.find("gcp.artifact.Repository") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M75", artifact_repository.milestone);
+    try std.testing.expect(artifact_repository.capabilities.estate);
+    try std.testing.expect(artifact_repository.capabilities.visual);
+    try std.testing.expect(artifact_repository.capabilities.cost);
+
+    const project_settings = ziac.gcp.coverage.find("gcp.artifact.ProjectSettings") orelse return error.TestExpectedEqual;
+    try std.testing.expect(project_settings.capabilities.update);
+    try std.testing.expect(!project_settings.capabilities.delete_resource);
+
     try std.testing.expect(ziac.gcp.coverage.find("gcp.not.a.Resource") == null);
 }
 
@@ -222,8 +244,11 @@ test "GCP provider coverage reports are deterministic filterable and provenance 
     try std.testing.expect(std.mem.indexOf(u8, json_first, "storage:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "workflows:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "apigateway:v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json_first, "artifactregistry:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "batch:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "cloudfunctions:v2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json_first, "cloudbuild:v1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json_first, "cloudbuild:v2") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "container:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "gkehub:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "networkconnectivity:v1") != null);

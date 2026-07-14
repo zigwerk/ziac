@@ -191,6 +191,7 @@ fn appendResource(
     try appendContainerPlatformDetails(output, allocator, item.node);
     try appendMonitoringDetails(output, allocator, item.node);
     try appendLoggingDetails(output, allocator, item.node);
+    try appendBuildDeliveryDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -357,6 +358,8 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         std.mem.startsWith(u8, node.type_name, "gcp.workflows.") or
         std.mem.startsWith(u8, node.type_name, "gcp.apigateway.") or
         std.mem.startsWith(u8, node.type_name, "gcp.parametermanager.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.cloudbuild.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.artifact.") or
         std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
         std.mem.startsWith(u8, node.type_name, "gcp.eventarc."))
     {
@@ -625,6 +628,38 @@ fn appendLoggingDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator
     try appendStorageListCount(output, allocator, node, "indexes", "index_count");
     try appendStorageListCount(output, allocator, node, "exclusions", "exclusion_count");
     try appendStorageListCount(output, allocator, node, "labels", "label_count");
+    try output.append(allocator, '}');
+}
+
+fn appendBuildDeliveryDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.cloudbuild.Connection"))
+        "connection"
+    else if (std.mem.eql(u8, node.type_name, "gcp.cloudbuild.Repository"))
+        "source_repository"
+    else if (std.mem.eql(u8, node.type_name, "gcp.cloudbuild.WorkerPool"))
+        "worker_pool"
+    else if (std.mem.eql(u8, node.type_name, "gcp.cloudbuild.Trigger"))
+        "trigger"
+    else if (std.mem.eql(u8, node.type_name, "gcp.artifact.Repository"))
+        "artifact_repository"
+    else if (std.mem.eql(u8, node.type_name, "gcp.artifact.ProjectSettings"))
+        "project_settings"
+    else if (std.mem.eql(u8, node.type_name, "gcp.artifact.VpcscConfig"))
+        "vpcsc_config"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"build_delivery\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "format", "format");
+    try appendOptionalStorageString(output, allocator, node, "mode", "mode");
+    try appendOptionalStorageString(output, allocator, node, "machine_type", "machine_type");
+    try appendOptionalStorageString(output, allocator, node, "remote_uri", "remote_uri");
+    try appendOptionalStorageString(output, allocator, node, "redirection", "redirection");
+    try appendOptionalStorageString(output, allocator, node, "policy", "vpcsc_policy");
+    try appendOptionalStorageBool(output, allocator, node, "disabled", "disabled");
+    try appendOptionalStorageBool(output, allocator, node, "cleanup_policy_dry_run", "cleanup_policy_dry_run");
+    try appendStorageListCount(output, allocator, node, "cleanup_policies", "cleanup_policy_count");
     try output.append(allocator, '}');
 }
 
@@ -1209,6 +1244,10 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.cloudbuild.Repository") and std.mem.eql(u8, to_type, "gcp.cloudbuild.Connection")) return "source_connection";
+    if (std.mem.eql(u8, from_type, "gcp.cloudbuild.Trigger") and std.mem.eql(u8, to_type, "gcp.cloudbuild.Repository")) return "trigger_source";
+    if (std.mem.eql(u8, from_type, "gcp.cloudbuild.Trigger") and std.mem.eql(u8, to_type, "gcp.cloudbuild.WorkerPool")) return "private_execution";
+    if (std.mem.eql(u8, from_type, "gcp.cloudbuild.Trigger") and std.mem.eql(u8, to_type, "gcp.artifact.Repository")) return "build_artifact";
     if (std.mem.eql(u8, from_type, "gcp.logging.View") and std.mem.eql(u8, to_type, "gcp.logging.Bucket")) return "log_view";
     if (std.mem.eql(u8, from_type, "gcp.logging.Sink") and std.mem.eql(u8, to_type, "gcp.logging.Bucket")) return "log_route";
     if (std.mem.eql(u8, from_type, "gcp.logging.Metric") and std.mem.eql(u8, to_type, "gcp.logging.Bucket")) return "log_metric";

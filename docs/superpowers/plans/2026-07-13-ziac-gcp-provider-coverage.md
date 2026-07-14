@@ -226,7 +226,7 @@ isolated serializer tests.
 
 - [x] M73 Monitoring alerts, uptime checks, channels, dashboards and SLOs.
 - [x] M74 Logging sinks, buckets, views, exclusions and log metrics.
-- [ ] M75 Cloud Build triggers/connections/worker pools and Artifact policies.
+- [x] M75 Cloud Build triggers/connections/worker pools and Artifact policies.
 - [ ] M76 Cloud Deploy pipelines, targets and automation.
 
 ## M77-M80: Security, Governance And Organization
@@ -362,3 +362,27 @@ metric estimates are synchronized. The local Testing v2 gate discovers and
 executes 790 tests: 789 pass, one credential-gated test skips, and none fail or
 remain pending; no leaks or logged errors are reported. The authenticated
 `scripts/qualify-logging.sh` receipt remains external and fail-closed.
+
+## M75 Evidence
+
+M75 is locally complete with 173 managed resources. Four modern Cloud Build
+types cover source connections, linked repositories, repository-event triggers
+and private worker pools. Artifact Registry repositories now cover all standard
+formats, canonical cleanup policies, CMEK and scanning; project redirection
+settings and regional VPC Service Controls configuration add two retained
+singleton resources.
+
+`ZigBuildPipeline` provides the opinionated source-to-artifact layer. The
+provider checkpoints long-running operations, uses exact field masks and etags,
+keeps SCM credentials out of persistent artifacts, detects remote trigger and
+pool drift and enforces one-way Artifact Registry transitions. Exact permission
+synthesis, supported Cloud Asset identities, canvas topology, explicit cost
+dimensions, installed docs and the fail-closed authenticated runner are
+synchronized.
+
+The Testing v2 package gate reports 806 discovered/executed tests, 805 passed,
+one credential-gated skip, and zero failures, pending tests, leaks or logged
+errors. Public examples, installation, migration, root TypeScript and static
+secret gates pass. The complete release gate also passes its Linux arm64
+non-root ZigService container probe. Authenticated SCM/build proof remains an
+external disposable-project gate and is not represented as local evidence.

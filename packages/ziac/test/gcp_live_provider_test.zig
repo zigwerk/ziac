@@ -282,6 +282,54 @@ test "live GCP Artifact Registry create adopts an identical existing repository"
     try std.testing.expectEqual(@as(usize, 2), harness.transport.requests.items.len);
 }
 
+test "live GCP provider manages standard Artifact Registry policy and scan configuration" {
+    const responses = [_]zstd.Http.Response{
+        .{ .status = 200, .body = "{\"name\":\"projects/ziac-dev/locations/europe-west1/operations/create-packages\"}" },
+        .{ .status = 200, .body = "{\"name\":\"projects/ziac-dev/locations/europe-west1/operations/create-packages\",\"done\":true}" },
+        .{ .status = 200, .body = repositoryV2Json("old description", true) },
+        .{ .status = 200, .body = repositoryV2Json("release packages", false) },
+    };
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    const policies = [_]ziac.gcp.artifact_registry.CleanupPolicy{
+        .{ .name = "delete-untagged", .rule = .{ .delete_condition = .{ .tag_state = .untagged, .older_than_seconds = 604800 } } },
+        .{ .name = "keep-releases", .rule = .{ .keep_most_recent = .{ .count = 20 } } },
+    };
+    var repository = try ziac.gcp.artifact_registry.Repository.build(std.testing.allocator, provider_config, .{
+        .name = "packages",
+        .format = .generic,
+        .description = "release packages",
+        .kms_key_name = ziac.PublicOutput([]const u8).known("projects/ziac-dev/locations/europe-west1/keyRings/platform/cryptoKeys/artifacts"),
+        .cleanup_policies = &policies,
+        .cleanup_policy_dry_run = false,
+        .vulnerability_scanning = .disabled,
+    });
+    defer repository.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    context.clock = &harness.clock;
+
+    var created = try live.createWithContext(&context, repository.node);
+    defer created.deinit();
+    try std.testing.expectEqualStrings("europe-west1-generic.pkg.dev/ziac-dev/packages", outputValue(created, "repository_url").string);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "\"format\":\"GENERIC\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "\"cleanupPolicies\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "\"kmsKeyName\"") != null);
+
+    var present = try live.readWithContext(&context, repository.node);
+    defer present.deinit();
+    var diff = try live.diffWithContext(&context, repository.node, &present.present);
+    defer diff.deinit();
+    try std.testing.expectEqual(ziac.provider.DiffKind.update, diff.kind);
+
+    var updated = try live.updateWithContext(&context, repository.node, &present.present);
+    defer updated.deinit();
+    try std.testing.expectEqual(repository.node.inputs_hash, updated.observed_hash);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[3].url, "updateMask=cleanupPolicyDryRun%2Cdescription") != null);
+    try std.testing.expectEqual(@as(i64, 2048), outputValue(updated, "size_bytes").integer);
+}
+
 const Harness = struct {
     token_source: FixedTokenSource,
     cache: auth.TokenCache,
@@ -332,4 +380,13 @@ fn serviceAccountJson(comptime display_name: []const u8, comptime description: [
 
 fn repositoryJson(comptime environment: []const u8) []const u8 {
     return "{\"name\":\"projects/ziac-dev/locations/europe-west1/repositories/hello-global\",\"format\":\"DOCKER\",\"labels\":{\"env\":\"" ++ environment ++ "\"},\"registryUri\":\"europe-west1-docker.pkg.dev/ziac-dev/hello-global\"}";
+}
+
+fn repositoryV2Json(comptime description: []const u8, comptime dry_run: bool) []const u8 {
+    return "{\"name\":\"projects/ziac-dev/locations/europe-west1/repositories/packages\",\"format\":\"GENERIC\",\"description\":\"" ++ description ++ "\",\"mode\":\"STANDARD_REPOSITORY\",\"kmsKeyName\":\"projects/ziac-dev/locations/europe-west1/keyRings/platform/cryptoKeys/artifacts\",\"labels\":{},\"cleanupPolicies\":{\"delete-untagged\":{\"id\":\"delete-untagged\",\"action\":\"DELETE\",\"condition\":{\"tagState\":\"UNTAGGED\",\"olderThan\":\"604800s\"}},\"keep-releases\":{\"id\":\"keep-releases\",\"action\":\"KEEP\",\"mostRecentVersions\":{\"keepCount\":20}}},\"cleanupPolicyDryRun\":" ++ (if (dry_run) "true" else "false") ++ ",\"vulnerabilityScanningConfig\":{\"enablementConfig\":\"DISABLED\"},\"registryUri\":\"europe-west1-generic.pkg.dev/ziac-dev/packages\",\"sizeBytes\":\"2048\"}";
+}
+
+fn outputValue(result: ziac.provider.ResourceResult, name: []const u8) ziac.value.Value {
+    for (result.outputs) |item| if (std.mem.eql(u8, item.name, name)) return item.value;
+    unreachable;
 }

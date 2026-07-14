@@ -295,6 +295,25 @@ pub const LoggingEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const BuildDeliveryEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    default_build_minute_sku_id: []const u8 = "",
+    private_build_minute_sku_id: []const u8 = "",
+    private_disk_sku_id: []const u8 = "",
+    artifact_storage_sku_id: []const u8 = "",
+    artifact_transfer_sku_id: []const u8 = "",
+    vulnerability_scan_sku_id: []const u8 = "",
+    default_build_minutes: u64 = 0,
+    free_default_build_minutes: u64 = 0,
+    private_build_minutes: u64 = 0,
+    private_disk_gib_hours: u64 = 0,
+    artifact_storage_gib_month: u64 = 0,
+    artifact_transfer_gib: u64 = 0,
+    vulnerability_scans: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -820,6 +839,19 @@ pub fn loggingConfigurationEstimate(prices: []const SkuPrice, input: LoggingEsti
     try appendUsage(&usage, &count, input.vended_ingestion_sku_id, "global", input.vended_ingestion_gib);
     try appendUsage(&usage, &count, input.excess_retention_sku_id, "global", input.retained_gib_months_beyond_30_days);
     try appendUsage(&usage, &count, input.custom_metric_bytes_sku_id, "global", input.custom_metric_mib_months);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn buildDeliveryConfigurationEstimate(prices: []const SkuPrice, input: BuildDeliveryEstimateInput) !ResourceCost {
+    var usage: [6]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.default_build_minute_sku_id, input.region, input.default_build_minutes -| input.free_default_build_minutes);
+    try appendUsage(&usage, &count, input.private_build_minute_sku_id, input.region, input.private_build_minutes);
+    try appendUsage(&usage, &count, input.private_disk_sku_id, input.region, input.private_disk_gib_hours);
+    try appendUsage(&usage, &count, input.artifact_storage_sku_id, input.region, input.artifact_storage_gib_month);
+    try appendUsage(&usage, &count, input.artifact_transfer_sku_id, input.region, input.artifact_transfer_gib);
+    try appendUsage(&usage, &count, input.vulnerability_scan_sku_id, input.region, input.vulnerability_scans);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }

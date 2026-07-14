@@ -19,11 +19,32 @@ pub const sources = [_]Source{
         .document_sha256 = "c59cfb39aa30bd6a96ddd94db1194e7a5ace2a0bc2c423cb450d96762f565f6e",
     },
     .{
+        .id = "artifactregistry:v1",
+        .version = "v1",
+        .revision = "20260702",
+        .discovery_url = "https://artifactregistry.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "8db01db5354a58d312b1e627f067741b40fb41bf1940c211e58676a91d1fd719",
+    },
+    .{
         .id = "batch:v1",
         .version = "v1",
         .revision = "20260702",
         .discovery_url = "https://batch.googleapis.com/$discovery/rest?version=v1",
         .document_sha256 = "a1d4bccc0c316e9de358a7289fffcd91fb29dbc6b44bf3f9a1e10b9474440296",
+    },
+    .{
+        .id = "cloudbuild:v1",
+        .version = "v1",
+        .revision = "20260627",
+        .discovery_url = "https://cloudbuild.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "2ccaf9685578eb58438cab4a3c0765dc108f3c26148c2399988749e4db80ccf7",
+    },
+    .{
+        .id = "cloudbuild:v2",
+        .version = "v2",
+        .revision = "20260627",
+        .discovery_url = "https://cloudbuild.googleapis.com/$discovery/rest?version=v2",
+        .document_sha256 = "0f278d1563896222cf12a40c013dbacc0ab45ca3e0526f6b83855a5ea62e9f84",
     },
     .{
         .id = "cloudfunctions:v2",

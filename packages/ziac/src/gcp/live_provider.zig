@@ -2,6 +2,7 @@ const std = @import("std");
 const client_mod = @import("client.zig");
 const bigquery_provider = @import("bigquery_provider.zig");
 const application_services_provider = @import("application_services_provider.zig");
+const build_delivery_provider = @import("build_delivery_provider.zig");
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const container_platform_provider = @import("container_platform_provider.zig");
 const monitoring_provider = @import("monitoring_provider.zig");
@@ -54,7 +55,9 @@ pub const managed_type_names = [_][]const u8{
     "gcp.apigateway.ApiIamMember",
     "gcp.apigateway.Gateway",
     "gcp.apigateway.GatewayIamMember",
+    "gcp.artifact.ProjectSettings",
     "gcp.artifact.Repository",
+    "gcp.artifact.VpcscConfig",
     "gcp.batch.Job",
     "gcp.bigquery.CapacityCommitment",
     "gcp.bigquery.Connection",
@@ -73,6 +76,10 @@ pub const managed_type_names = [_][]const u8{
     "gcp.certificatemanager.CertificateMap",
     "gcp.certificatemanager.CertificateMapEntry",
     "gcp.certificatemanager.DnsAuthorization",
+    "gcp.cloudbuild.Connection",
+    "gcp.cloudbuild.Repository",
+    "gcp.cloudbuild.Trigger",
+    "gcp.cloudbuild.WorkerPool",
     "gcp.cloudbuild.ZigImage",
     "gcp.compute.Autoscaler",
     "gcp.compute.BackendBucket",
@@ -253,6 +260,7 @@ pub const LiveProvider = struct {
         if (isType(node, service_account_type)) return self.readServiceAccount(context, node, null);
         if (iam_provider.supports(node)) return self.iamHandler().read(context, node, null);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().read(context, node, null);
+        if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().read(context, node, null);
         if (isType(node, artifact_repository_type)) return self.readArtifactRepository(context, node, null);
         if (isType(node, secret_type)) return self.readSecret(context, node, null);
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
@@ -300,6 +308,7 @@ pub const LiveProvider = struct {
         if (run_iam_provider.supports(node)) return run_iam_provider.Handler.diff(context, node, observed);
         if (iam_provider.supports(node)) return iam_provider.Handler.diff(context, node, observed);
         if (iam_admin_provider.supports(node)) return iam_admin_provider.Handler.diff(context, node, observed);
+        if (build_delivery_provider.Handler.supports(node)) return build_delivery_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (connectivity_provider.supports(node)) return connectivity_provider.Handler.diff(context, node, observed);
         if (container_platform_provider.supports(node)) return container_platform_provider.Handler.diff(context, node, observed);
@@ -346,6 +355,7 @@ pub const LiveProvider = struct {
         if (isType(node, service_account_type)) return self.createServiceAccount(context, node);
         if (iam_provider.supports(node)) return self.iamHandler().create(context, node);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().create(context, node);
+        if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().create(context, node);
         if (isType(node, artifact_repository_type)) return self.createArtifactRepository(context, node);
         if (isType(node, secret_type)) return self.createSecret(context, node);
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
@@ -390,7 +400,8 @@ pub const LiveProvider = struct {
         if (isType(node, service_account_type)) return self.updateServiceAccount(context, node, observed.physical_id);
         if (iam_provider.supports(node)) return self.iamHandler().update(context, node, observed.physical_id);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().update(context, node, observed);
-        if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed.physical_id);
+        if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().update(context, node, observed);
+        if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed);
         if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().update(context, node, observed);
@@ -433,6 +444,7 @@ pub const LiveProvider = struct {
         if (isType(node, service_account_type)) return self.deleteServiceAccount(context, physical_id);
         if (iam_provider.supports(node)) return self.iamHandler().delete(context, node, physical_id);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().delete(context, node, physical_id);
+        if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().delete(context, node, physical_id);
         if (isType(node, artifact_repository_type)) return self.deleteArtifactRepository(context, physical_id);
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.destroySecretVersion(context, physical_id);
@@ -513,6 +525,7 @@ pub const LiveProvider = struct {
                 .present => |present| present,
             };
         }
+        if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().importResource(context, node, physical_id);
         if (isType(node, artifact_repository_type)) {
             const result = try self.readArtifactRepository(context, node, physical_id);
             return switch (result) {
@@ -845,7 +858,7 @@ pub const LiveProvider = struct {
             return err;
         };
         defer response.deinit(context.allocator);
-        return .{ .present = try artifactRepositoryResultFromJson(context.allocator, node, response.body) };
+        return .{ .present = try artifactRepositoryResultFromJson(context, node, response.body) };
     }
 
     fn createArtifactRepository(
@@ -856,15 +869,13 @@ pub const LiveProvider = struct {
         const project_id = try requiredInput(node, "project_id");
         const location = try requiredInput(node, "location");
         const name = try requiredInput(node, "name");
-        const labels_json = try inputJsonAlloc(context.allocator, node, "labels");
-        defer context.allocator.free(labels_json);
         const path = try std.fmt.allocPrint(
             context.allocator,
             "/v1/projects/{s}/locations/{s}/repositories?repositoryId={s}",
             .{ project_id, location, name },
         );
         defer context.allocator.free(path);
-        const body = try std.fmt.allocPrint(context.allocator, "{{\"format\":\"DOCKER\",\"labels\":{s}}}", .{labels_json});
+        const body = try artifactRepositoryBodyAlloc(context, node, null);
         defer context.allocator.free(body);
         const operation_name = self.startOperation(context, .artifact_registry, path, "POST", body) catch |err| {
             if (err != error.Conflict) return err;
@@ -889,21 +900,20 @@ pub const LiveProvider = struct {
         self: *LiveProvider,
         context: *provider_mod.OperationContext,
         node: resource.ResourceNode,
-        physical_id: []const u8,
+        observed: *const provider_mod.ResourceResult,
     ) ProviderError!provider_mod.ResourceResult {
-        const labels_json = try inputJsonAlloc(context.allocator, node, "labels");
-        defer context.allocator.free(labels_json);
-        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}?updateMask=labels", .{physical_id});
+        const mask = try artifactRepositoryUpdateMaskAlloc(context.allocator, node, observed.observed_inputs);
+        defer context.allocator.free(mask);
+        if (mask.len == 0) return observed.clone(context.allocator);
+        const encoded_mask = try percentEncodeAlloc(context.allocator, mask);
+        defer context.allocator.free(encoded_mask);
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}?updateMask={s}", .{ observed.physical_id, encoded_mask });
         defer context.allocator.free(path);
-        const body = try std.fmt.allocPrint(
-            context.allocator,
-            "{{\"name\":\"{s}\",\"labels\":{s}}}",
-            .{ physical_id, labels_json },
-        );
+        const body = try artifactRepositoryBodyAlloc(context, node, observed.physical_id);
         defer context.allocator.free(body);
         var response = try self.request(context, .{ .api = .artifact_registry, .method = "PATCH", .path = path, .body = body });
         defer response.deinit(context.allocator);
-        return artifactRepositoryResultFromJson(context.allocator, node, response.body);
+        return artifactRepositoryResultFromJson(context, node, response.body);
     }
 
     fn deleteArtifactRepository(
@@ -1352,6 +1362,14 @@ pub const LiveProvider = struct {
         };
     }
 
+    fn buildDeliveryHandler(self: *LiveProvider) build_delivery_provider.Handler {
+        return .{
+            .client = self.client,
+            .operation_policy = self.operation_policy,
+            .secret_source = self.secret_source,
+        };
+    }
+
     fn cloudBuildHandler(self: *LiveProvider) cloud_build_provider.Handler {
         return .{
             .client = self.client,
@@ -1449,11 +1467,57 @@ fn serviceAccountResultFromJson(
     return provider_mod.ResourceResult.init(allocator, name, .{ .object = &fields }, &outputs, null);
 }
 
+fn artifactRepositoryBodyAlloc(
+    context: *provider_mod.OperationContext,
+    node: resource.ResourceNode,
+    physical_id: ?[]const u8,
+) ProviderError![]const u8 {
+    var arena_state = std.heap.ArenaAllocator.init(context.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var root = std.json.ObjectMap.empty;
+    if (physical_id) |name| try root.put(arena, "name", .{ .string = name });
+    try root.put(arena, "format", .{ .string = try requiredInput(node, "format") });
+    try root.put(arena, "labels", try valueToJson(arena, try requiredInputValue(node.inputs, "labels")));
+    if (node.schema_version >= 2) {
+        try root.put(arena, "description", .{ .string = try requiredInput(node, "description") });
+        try root.put(arena, "mode", .{ .string = try requiredInput(node, "mode") });
+        const kms_key = try resolvedInputString(context, node.inputs, "kms_key_name");
+        if (kms_key.len != 0) try root.put(arena, "kmsKeyName", .{ .string = kms_key });
+        try root.put(arena, "cleanupPolicies", try cleanupPoliciesToJson(arena, try requiredInputValue(node.inputs, "cleanup_policies")));
+        try root.put(arena, "cleanupPolicyDryRun", .{ .bool = try requiredInputBoolean(node.inputs, "cleanup_policy_dry_run") });
+        var scanning = std.json.ObjectMap.empty;
+        try scanning.put(arena, "enablementConfig", .{ .string = try requiredInput(node, "vulnerability_scanning") });
+        try root.put(arena, "vulnerabilityScanningConfig", .{ .object = scanning });
+    }
+    return std.json.Stringify.valueAlloc(context.allocator, std.json.Value{ .object = root }, .{}) catch return error.OutOfMemory;
+}
+
+fn artifactRepositoryUpdateMaskAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, observed: value.Value) ProviderError![]const u8 {
+    if (node.schema_version < 2) return allocator.dupe(u8, if (inputChanged(node.inputs, observed, "labels")) "labels" else "") catch return error.OutOfMemory;
+    const fields = [_]struct { input: []const u8, api: []const u8 }{
+        .{ .input = "cleanup_policies", .api = "cleanupPolicies" },
+        .{ .input = "cleanup_policy_dry_run", .api = "cleanupPolicyDryRun" },
+        .{ .input = "description", .api = "description" },
+        .{ .input = "labels", .api = "labels" },
+        .{ .input = "vulnerability_scanning", .api = "vulnerabilityScanningConfig.enablementConfig" },
+    };
+    var mask = std.ArrayList(u8).empty;
+    errdefer mask.deinit(allocator);
+    for (fields) |field| {
+        if (!inputChanged(node.inputs, observed, field.input)) continue;
+        if (mask.items.len != 0) try mask.append(allocator, ',');
+        try mask.appendSlice(allocator, field.api);
+    }
+    return mask.toOwnedSlice(allocator) catch return error.OutOfMemory;
+}
+
 fn artifactRepositoryResultFromJson(
-    allocator: std.mem.Allocator,
+    context: *provider_mod.OperationContext,
     node: resource.ResourceNode,
     body: []const u8,
 ) ProviderError!provider_mod.ResourceResult {
+    const allocator = context.allocator;
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.ProviderBug;
     defer parsed.deinit();
     const object = jsonObject(parsed.value) orelse return error.ProviderBug;
@@ -1485,7 +1549,35 @@ fn artifactRepositoryResultFromJson(
     const outputs = [_]state.StateOutput{
         .{ .name = "repository_url", .value = .{ .string = registry_uri } },
     };
-    return provider_mod.ResourceResult.init(allocator, physical_id, .{ .object = &fields }, &outputs, null);
+    if (node.schema_version < 2) return provider_mod.ResourceResult.init(allocator, physical_id, .{ .object = &fields }, &outputs, null);
+
+    var observed = node.inputs.clone(allocator) catch return error.OutOfMemory;
+    defer observed.deinit(allocator);
+    try replaceInputString(allocator, &observed, "format", format);
+    try replaceInputString(allocator, &observed, "description", jsonString(object.get("description")) orelse "");
+    try replaceInputString(allocator, &observed, "mode", jsonString(object.get("mode")) orelse "STANDARD_REPOSITORY");
+    try replaceInputJson(allocator, &observed, "labels", object.get("labels") orelse .{ .object = std.json.ObjectMap.empty });
+    if (object.get("cleanupPolicies")) |policies| {
+        var normalized = try cleanupPoliciesFromJsonAlloc(allocator, policies);
+        defer normalized.deinit(allocator);
+        try replaceInputValue(allocator, &observed, "cleanup_policies", normalized);
+    } else try replaceInputValue(allocator, &observed, "cleanup_policies", .{ .list = &.{} });
+    try replaceInputBoolean(allocator, &observed, "cleanup_policy_dry_run", jsonBooleanValue(object.get("cleanupPolicyDryRun")) orelse false);
+    const scanning = jsonObject(object.get("vulnerabilityScanningConfig") orelse .{ .object = std.json.ObjectMap.empty });
+    try replaceInputString(allocator, &observed, "vulnerability_scanning", if (scanning) |config| jsonString(config.get("enablementConfig")) orelse "INHERITED" else "INHERITED");
+    const remote_kms = jsonString(object.get("kmsKeyName")) orelse "";
+    const current_kms = try requiredInputValue(observed, "kms_key_name");
+    const preserve_kms_ref = switch (current_kms) {
+        .output_ref => |reference| std.mem.eql(u8, try context.resolveOutputString(reference), remote_kms),
+        else => false,
+    };
+    if (!preserve_kms_ref) try replaceInputString(allocator, &observed, "kms_key_name", remote_kms);
+    const size_bytes = jsonI64(object.get("sizeBytes")) orelse 0;
+    const generic_outputs = [_]state.StateOutput{
+        .{ .name = "repository_url", .value = .{ .string = registry_uri } },
+        .{ .name = "size_bytes", .value = .{ .integer = size_bytes } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, observed, &generic_outputs, null);
 }
 
 fn artifactRepositoryDesiredResult(
@@ -1498,12 +1590,18 @@ fn artifactRepositoryDesiredResult(
     const name = try requiredInput(node, "name");
     const physical_id = try artifactRepositoryNameAlloc(allocator, node);
     defer allocator.free(physical_id);
-    const registry_uri = try std.fmt.allocPrint(allocator, "{s}-docker.pkg.dev/{s}/{s}", .{ location, project_id, name });
+    const format = try requiredInput(node, "format");
+    const format_slug = artifactFormatSlug(format) orelse return error.InvalidConfiguration;
+    const registry_uri = try std.fmt.allocPrint(allocator, "{s}-{s}.pkg.dev/{s}/{s}", .{ location, format_slug, project_id, name });
     defer allocator.free(registry_uri);
-    const outputs = [_]state.StateOutput{
+    const outputs_v1 = [_]state.StateOutput{
         .{ .name = "repository_url", .value = .{ .string = registry_uri } },
     };
-    return provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, operation_handle);
+    const outputs_v2 = [_]state.StateOutput{
+        .{ .name = "repository_url", .value = .{ .string = registry_uri } },
+        .{ .name = "size_bytes", .value = .{ .unknown_reason = "Artifact Registry size is available after refresh" } },
+    };
+    return provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, if (node.schema_version >= 2) &outputs_v2 else &outputs_v1, operation_handle);
 }
 
 fn secretResultFromJson(
@@ -1729,10 +1827,9 @@ fn secretNameAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode) Pr
 
 fn artifactRepositoryDiff(node: resource.ResourceNode, observed: value.Value) provider_mod.DiffKind {
     for ([_][]const u8{ "project_id", "location", "name", "format" }) |field| {
-        const desired_value = inputStringFromValue(node.inputs, field) orelse return .replace;
-        const observed_value = inputStringFromValue(observed, field) orelse return .replace;
-        if (!std.mem.eql(u8, desired_value, observed_value)) return .replace;
+        if (inputChanged(node.inputs, observed, field)) return .replace;
     }
+    if (node.schema_version >= 2) for ([_][]const u8{ "kms_key_name", "mode" }) |field| if (inputChanged(node.inputs, observed, field)) return .replace;
     return .update;
 }
 
@@ -1743,6 +1840,302 @@ fn secretDiff(node: resource.ResourceNode, observed: value.Value) provider_mod.D
         if (!std.mem.eql(u8, desired_value, observed_value)) return .replace;
     }
     return .update;
+}
+
+fn cleanupPoliciesToJson(allocator: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {
+    const policies = switch (input) {
+        .list => |items| items,
+        else => return error.InvalidConfiguration,
+    };
+    var result = std.json.ObjectMap.empty;
+    for (policies) |policy_value| {
+        const policy = valueObjectFields(policy_value) orelse return error.InvalidConfiguration;
+        const name = valueFieldString(policy, "name") orelse return error.InvalidConfiguration;
+        const rule = valueObjectFields(valueField(policy, "rule") orelse return error.InvalidConfiguration) orelse return error.InvalidConfiguration;
+        const kind = valueFieldString(rule, "kind") orelse return error.InvalidConfiguration;
+        const action = valueFieldString(rule, "action") orelse return error.InvalidConfiguration;
+        var encoded = std.json.ObjectMap.empty;
+        try encoded.put(allocator, "id", .{ .string = name });
+        try encoded.put(allocator, "action", .{ .string = action });
+        if (std.mem.eql(u8, kind, "condition")) {
+            var condition = std.json.ObjectMap.empty;
+            try condition.put(allocator, "tagState", .{ .string = valueFieldString(rule, "tag_state") orelse return error.InvalidConfiguration });
+            const older = valueFieldInteger(rule, "older_than_seconds") orelse return error.InvalidConfiguration;
+            if (older > 0) try condition.put(allocator, "olderThan", .{ .string = try std.fmt.allocPrint(allocator, "{d}s", .{older}) });
+            const newer = valueFieldInteger(rule, "newer_than_seconds") orelse return error.InvalidConfiguration;
+            if (newer > 0) try condition.put(allocator, "newerThan", .{ .string = try std.fmt.allocPrint(allocator, "{d}s", .{newer}) });
+            try condition.put(allocator, "packageNamePrefixes", try valueToJson(allocator, valueField(rule, "package_prefixes") orelse return error.InvalidConfiguration));
+            try condition.put(allocator, "versionNamePrefixes", try valueToJson(allocator, valueField(rule, "version_prefixes") orelse return error.InvalidConfiguration));
+            try condition.put(allocator, "tagPrefixes", try valueToJson(allocator, valueField(rule, "tag_prefixes") orelse return error.InvalidConfiguration));
+            try encoded.put(allocator, "condition", .{ .object = condition });
+        } else if (std.mem.eql(u8, kind, "most_recent")) {
+            var recent = std.json.ObjectMap.empty;
+            try recent.put(allocator, "packageNamePrefixes", try valueToJson(allocator, valueField(rule, "package_prefixes") orelse return error.InvalidConfiguration));
+            try recent.put(allocator, "keepCount", .{ .integer = valueFieldInteger(rule, "count") orelse return error.InvalidConfiguration });
+            try encoded.put(allocator, "mostRecentVersions", .{ .object = recent });
+        } else return error.InvalidConfiguration;
+        try result.put(allocator, name, .{ .object = encoded });
+    }
+    return .{ .object = result };
+}
+
+fn cleanupPoliciesFromJsonAlloc(allocator: std.mem.Allocator, input: std.json.Value) ProviderError!value.Value {
+    const object = jsonObject(input) orelse return error.ProviderBug;
+    const names = try allocator.alloc([]const u8, object.count());
+    defer allocator.free(names);
+    var iterator = object.iterator();
+    var name_index: usize = 0;
+    while (iterator.next()) |entry| : (name_index += 1) names[name_index] = entry.key_ptr.*;
+    std.mem.sort([]const u8, names, {}, lessThanString);
+    const policies = try allocator.alloc(value.Value, names.len);
+    defer allocator.free(policies);
+    var initialized: usize = 0;
+    defer for (policies[0..initialized]) |*policy| policy.deinit(allocator);
+    for (names, 0..) |name, index| {
+        const encoded = jsonObject(object.get(name) orelse return error.ProviderBug) orelse return error.ProviderBug;
+        const action = jsonString(encoded.get("action")) orelse return error.ProviderBug;
+        var rule: value.Value = undefined;
+        if (encoded.get("condition")) |condition_value| {
+            const condition = jsonObject(condition_value) orelse return error.ProviderBug;
+            var packages = try jsonStringArrayValueAlloc(allocator, condition.get("packageNamePrefixes"));
+            defer packages.deinit(allocator);
+            var versions = try jsonStringArrayValueAlloc(allocator, condition.get("versionNamePrefixes"));
+            defer versions.deinit(allocator);
+            var tags = try jsonStringArrayValueAlloc(allocator, condition.get("tagPrefixes"));
+            defer tags.deinit(allocator);
+            const fields = [_]value.Field{
+                .{ .name = "action", .value = .{ .string = action } },
+                .{ .name = "kind", .value = .{ .string = "condition" } },
+                .{ .name = "newer_than_seconds", .value = .{ .integer = jsonDurationSeconds(condition.get("newerThan")) orelse 0 } },
+                .{ .name = "older_than_seconds", .value = .{ .integer = jsonDurationSeconds(condition.get("olderThan")) orelse 0 } },
+                .{ .name = "package_prefixes", .value = packages },
+                .{ .name = "tag_prefixes", .value = tags },
+                .{ .name = "tag_state", .value = .{ .string = jsonString(condition.get("tagState")) orelse "ANY" } },
+                .{ .name = "version_prefixes", .value = versions },
+            };
+            rule = try ownValue(allocator, .{ .object = &fields });
+        } else if (encoded.get("mostRecentVersions")) |recent_value| {
+            const recent = jsonObject(recent_value) orelse return error.ProviderBug;
+            var packages = try jsonStringArrayValueAlloc(allocator, recent.get("packageNamePrefixes"));
+            defer packages.deinit(allocator);
+            const fields = [_]value.Field{
+                .{ .name = "action", .value = .{ .string = action } },
+                .{ .name = "count", .value = .{ .integer = jsonI64(recent.get("keepCount")) orelse return error.ProviderBug } },
+                .{ .name = "kind", .value = .{ .string = "most_recent" } },
+                .{ .name = "package_prefixes", .value = packages },
+            };
+            rule = try ownValue(allocator, .{ .object = &fields });
+        } else return error.ProviderBug;
+        defer rule.deinit(allocator);
+        const fields = [_]value.Field{
+            .{ .name = "name", .value = .{ .string = name } },
+            .{ .name = "rule", .value = rule },
+        };
+        policies[index] = try ownValue(allocator, .{ .object = &fields });
+        initialized += 1;
+    }
+    return ownValue(allocator, .{ .list = policies });
+}
+
+fn jsonStringArrayValueAlloc(allocator: std.mem.Allocator, input: ?std.json.Value) ProviderError!value.Value {
+    const array = switch (input orelse return ownValue(allocator, .{ .list = &.{} })) {
+        .array => |items| items.items,
+        else => return error.ProviderBug,
+    };
+    const values = try allocator.alloc(value.Value, array.len);
+    defer allocator.free(values);
+    for (array, 0..) |item, index| values[index] = .{ .string = jsonString(item) orelse return error.ProviderBug };
+    return ownValue(allocator, .{ .list = values });
+}
+
+fn valueToJson(allocator: std.mem.Allocator, input: value.Value) ProviderError!std.json.Value {
+    return switch (input) {
+        .string => |text| .{ .string = text },
+        .integer => |number| .{ .integer = number },
+        .boolean => |flag| .{ .bool = flag },
+        .list => |items| blk: {
+            var array = std.json.Array.init(allocator);
+            for (items) |item| try array.append(try valueToJson(allocator, item));
+            break :blk .{ .array = array };
+        },
+        .object => |fields| blk: {
+            var object = std.json.ObjectMap.empty;
+            for (fields) |field| try object.put(allocator, field.name, try valueToJson(allocator, field.value));
+            break :blk .{ .object = object };
+        },
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn jsonToValueAlloc(allocator: std.mem.Allocator, input: std.json.Value) ProviderError!value.Value {
+    return switch (input) {
+        .string => |text| ownValue(allocator, .{ .string = text }),
+        .integer => |number| ownValue(allocator, .{ .integer = number }),
+        .bool => |flag| ownValue(allocator, .{ .boolean = flag }),
+        .array => |array| blk: {
+            const items = try allocator.alloc(value.Value, array.items.len);
+            defer allocator.free(items);
+            var initialized: usize = 0;
+            defer for (items[0..initialized]) |*item| item.deinit(allocator);
+            for (array.items, 0..) |item, index| {
+                items[index] = try jsonToValueAlloc(allocator, item);
+                initialized += 1;
+            }
+            break :blk try ownValue(allocator, .{ .list = items });
+        },
+        .object => |object| blk: {
+            const fields = try allocator.alloc(value.Field, object.count());
+            defer allocator.free(fields);
+            var iterator = object.iterator();
+            var index: usize = 0;
+            defer for (fields[0..index]) |*field| field.value.deinit(allocator);
+            while (iterator.next()) |entry| : (index += 1) fields[index] = .{ .name = entry.key_ptr.*, .value = try jsonToValueAlloc(allocator, entry.value_ptr.*) };
+            break :blk try ownValue(allocator, .{ .object = fields });
+        },
+        else => error.ProviderBug,
+    };
+}
+
+fn replaceInputJson(allocator: std.mem.Allocator, inputs: *value.Value, name: []const u8, replacement: std.json.Value) ProviderError!void {
+    var converted = try jsonToValueAlloc(allocator, replacement);
+    defer converted.deinit(allocator);
+    return replaceInputValue(allocator, inputs, name, converted);
+}
+
+fn replaceInputString(allocator: std.mem.Allocator, inputs: *value.Value, name: []const u8, replacement: []const u8) ProviderError!void {
+    return replaceInputValue(allocator, inputs, name, .{ .string = replacement });
+}
+
+fn replaceInputBoolean(allocator: std.mem.Allocator, inputs: *value.Value, name: []const u8, replacement: bool) ProviderError!void {
+    return replaceInputValue(allocator, inputs, name, .{ .boolean = replacement });
+}
+
+fn replaceInputValue(allocator: std.mem.Allocator, inputs: *value.Value, name: []const u8, replacement: value.Value) ProviderError!void {
+    if (inputs.* != .object) return error.ProviderBug;
+    const fields: []value.Field = @constCast(inputs.object);
+    for (fields) |*field| {
+        if (!std.mem.eql(u8, field.name, name)) continue;
+        const owned = try ownValue(allocator, replacement);
+        field.value.deinit(allocator);
+        field.value = owned;
+        return;
+    }
+    return error.ProviderBug;
+}
+
+fn ownValue(allocator: std.mem.Allocator, input: value.Value) ProviderError!value.Value {
+    return value.Value.initOwned(allocator, input) catch |err| switch (err) {
+        error.DuplicateField => error.ProviderBug,
+        error.OutOfMemory => error.OutOfMemory,
+    };
+}
+
+fn requiredInputValue(inputs: value.Value, name: []const u8) ProviderError!value.Value {
+    return valueField(valueObjectFields(inputs) orelse return error.InvalidConfiguration, name) orelse error.InvalidConfiguration;
+}
+
+fn requiredInputBoolean(inputs: value.Value, name: []const u8) ProviderError!bool {
+    return switch (try requiredInputValue(inputs, name)) {
+        .boolean => |flag| flag,
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn resolvedInputString(context: *provider_mod.OperationContext, inputs: value.Value, name: []const u8) ProviderError![]const u8 {
+    return switch (try requiredInputValue(inputs, name)) {
+        .string => |text| text,
+        .output_ref => |reference| context.resolveOutputString(reference),
+        else => error.InvalidConfiguration,
+    };
+}
+
+fn inputChanged(desired: value.Value, observed: value.Value, name: []const u8) bool {
+    const left = requiredInputValue(desired, name) catch return true;
+    const right = requiredInputValue(observed, name) catch return true;
+    const left_hash = left.sha256(std.heap.page_allocator) catch return true;
+    const right_hash = right.sha256(std.heap.page_allocator) catch return true;
+    return !std.mem.eql(u8, &left_hash, &right_hash);
+}
+
+fn valueObjectFields(input: value.Value) ?[]const value.Field {
+    return switch (input) {
+        .object => |fields| fields,
+        else => null,
+    };
+}
+
+fn valueField(fields: []const value.Field, name: []const u8) ?value.Value {
+    for (fields) |field| if (std.mem.eql(u8, field.name, name)) return field.value;
+    return null;
+}
+
+fn valueFieldString(fields: []const value.Field, name: []const u8) ?[]const u8 {
+    return switch (valueField(fields, name) orelse return null) {
+        .string => |text| text,
+        else => null,
+    };
+}
+
+fn valueFieldInteger(fields: []const value.Field, name: []const u8) ?i64 {
+    return switch (valueField(fields, name) orelse return null) {
+        .integer => |number| number,
+        else => null,
+    };
+}
+
+fn jsonBooleanValue(input: ?std.json.Value) ?bool {
+    return switch (input orelse return null) {
+        .bool => |flag| flag,
+        else => null,
+    };
+}
+
+fn jsonI64(input: ?std.json.Value) ?i64 {
+    return switch (input orelse return null) {
+        .integer => |number| number,
+        .string => |text| std.fmt.parseInt(i64, text, 10) catch null,
+        else => null,
+    };
+}
+
+fn jsonDurationSeconds(input: ?std.json.Value) ?i64 {
+    const text = jsonString(input) orelse return null;
+    if (!std.mem.endsWith(u8, text, "s")) return null;
+    return std.fmt.parseInt(i64, text[0 .. text.len - 1], 10) catch null;
+}
+
+fn artifactFormatSlug(format: []const u8) ?[]const u8 {
+    const formats = [_]struct { api: []const u8, slug: []const u8 }{
+        .{ .api = "APT", .slug = "apt" },
+        .{ .api = "DOCKER", .slug = "docker" },
+        .{ .api = "GENERIC", .slug = "generic" },
+        .{ .api = "GO", .slug = "go" },
+        .{ .api = "GOOGET", .slug = "googet" },
+        .{ .api = "KFP", .slug = "kfp" },
+        .{ .api = "MAVEN", .slug = "maven" },
+        .{ .api = "NPM", .slug = "npm" },
+        .{ .api = "PYTHON", .slug = "python" },
+        .{ .api = "RUBY", .slug = "ruby" },
+        .{ .api = "YUM", .slug = "yum" },
+    };
+    for (formats) |candidate| if (std.mem.eql(u8, candidate.api, format)) return candidate.slug;
+    return null;
+}
+
+fn percentEncodeAlloc(allocator: std.mem.Allocator, input: []const u8) ProviderError![]const u8 {
+    var output = std.ArrayList(u8).empty;
+    errdefer output.deinit(allocator);
+    const hex = "0123456789ABCDEF";
+    for (input) |byte| if (std.ascii.isAlphanumeric(byte) or byte == '-' or byte == '_' or byte == '.' or byte == '~') try output.append(allocator, byte) else {
+        try output.append(allocator, '%');
+        try output.append(allocator, hex[byte >> 4]);
+        try output.append(allocator, hex[byte & 0x0f]);
+    };
+    return output.toOwnedSlice(allocator) catch return error.OutOfMemory;
+}
+
+fn lessThanString(_: void, left: []const u8, right: []const u8) bool {
+    return std.mem.lessThan(u8, left, right);
 }
 
 fn inputJsonAlloc(
