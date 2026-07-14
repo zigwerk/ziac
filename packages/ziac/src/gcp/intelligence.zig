@@ -334,6 +334,30 @@ pub fn rolloutAllowed(signal: RolloutSignal, gate: RolloutGate) bool {
 
 fn permissionForMethod(method: []const u8) ?[]const u8 {
     const mappings = [_]struct { suffix: []const u8, permission: []const u8 }{
+        .{ .suffix = "AlertPolicyService.GetAlertPolicy", .permission = "monitoring.alertPolicies.get" },
+        .{ .suffix = "AlertPolicyService.CreateAlertPolicy", .permission = "monitoring.alertPolicies.create" },
+        .{ .suffix = "AlertPolicyService.UpdateAlertPolicy", .permission = "monitoring.alertPolicies.update" },
+        .{ .suffix = "AlertPolicyService.DeleteAlertPolicy", .permission = "monitoring.alertPolicies.delete" },
+        .{ .suffix = "UptimeCheckService.GetUptimeCheckConfig", .permission = "monitoring.uptimeCheckConfigs.get" },
+        .{ .suffix = "UptimeCheckService.CreateUptimeCheckConfig", .permission = "monitoring.uptimeCheckConfigs.create" },
+        .{ .suffix = "UptimeCheckService.UpdateUptimeCheckConfig", .permission = "monitoring.uptimeCheckConfigs.update" },
+        .{ .suffix = "UptimeCheckService.DeleteUptimeCheckConfig", .permission = "monitoring.uptimeCheckConfigs.delete" },
+        .{ .suffix = "NotificationChannelService.GetNotificationChannel", .permission = "monitoring.notificationChannels.get" },
+        .{ .suffix = "NotificationChannelService.CreateNotificationChannel", .permission = "monitoring.notificationChannels.create" },
+        .{ .suffix = "NotificationChannelService.UpdateNotificationChannel", .permission = "monitoring.notificationChannels.update" },
+        .{ .suffix = "NotificationChannelService.DeleteNotificationChannel", .permission = "monitoring.notificationChannels.delete" },
+        .{ .suffix = "DashboardsService.GetDashboard", .permission = "monitoring.dashboards.get" },
+        .{ .suffix = "DashboardsService.CreateDashboard", .permission = "monitoring.dashboards.create" },
+        .{ .suffix = "DashboardsService.UpdateDashboard", .permission = "monitoring.dashboards.update" },
+        .{ .suffix = "DashboardsService.DeleteDashboard", .permission = "monitoring.dashboards.delete" },
+        .{ .suffix = "ServiceMonitoringService.GetService", .permission = "monitoring.services.get" },
+        .{ .suffix = "ServiceMonitoringService.CreateService", .permission = "monitoring.services.create" },
+        .{ .suffix = "ServiceMonitoringService.UpdateService", .permission = "monitoring.services.update" },
+        .{ .suffix = "ServiceMonitoringService.DeleteService", .permission = "monitoring.services.delete" },
+        .{ .suffix = "ServiceMonitoringService.GetServiceLevelObjective", .permission = "monitoring.slos.get" },
+        .{ .suffix = "ServiceMonitoringService.CreateServiceLevelObjective", .permission = "monitoring.slos.create" },
+        .{ .suffix = "ServiceMonitoringService.UpdateServiceLevelObjective", .permission = "monitoring.slos.update" },
+        .{ .suffix = "ServiceMonitoringService.DeleteServiceLevelObjective", .permission = "monitoring.slos.delete" },
         .{ .suffix = "ClusterManager.GetCluster", .permission = "container.clusters.get" },
         .{ .suffix = "ClusterManager.CreateCluster", .permission = "container.clusters.create" },
         .{ .suffix = "ClusterManager.UpdateCluster", .permission = "container.clusters.update" },
@@ -762,6 +786,42 @@ pub fn jobExecutionUsages() []const RpcUsage {
 }
 
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
+    const monitoring_alert_policy = [_]RpcUsage{
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.AlertPolicyService.GetAlertPolicy" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.AlertPolicyService.CreateAlertPolicy" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.AlertPolicyService.UpdateAlertPolicy" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.AlertPolicyService.DeleteAlertPolicy" },
+    };
+    const monitoring_uptime_check = [_]RpcUsage{
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.UptimeCheckService.GetUptimeCheckConfig" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.UptimeCheckService.CreateUptimeCheckConfig" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.UptimeCheckService.UpdateUptimeCheckConfig" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.UptimeCheckService.DeleteUptimeCheckConfig" },
+    };
+    const monitoring_channel = [_]RpcUsage{
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.NotificationChannelService.GetNotificationChannel" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.NotificationChannelService.CreateNotificationChannel" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.NotificationChannelService.UpdateNotificationChannel" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.NotificationChannelService.DeleteNotificationChannel" },
+    };
+    const monitoring_dashboard = [_]RpcUsage{
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.dashboard.v1.DashboardsService.GetDashboard" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.dashboard.v1.DashboardsService.CreateDashboard" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.dashboard.v1.DashboardsService.UpdateDashboard" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.dashboard.v1.DashboardsService.DeleteDashboard" },
+    };
+    const monitoring_service = [_]RpcUsage{
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.ServiceMonitoringService.GetService" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.ServiceMonitoringService.CreateService" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.ServiceMonitoringService.UpdateService" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.ServiceMonitoringService.DeleteService" },
+    };
+    const monitoring_slo = [_]RpcUsage{
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.ServiceMonitoringService.GetServiceLevelObjective" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.ServiceMonitoringService.CreateServiceLevelObjective" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.ServiceMonitoringService.UpdateServiceLevelObjective" },
+        .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.ServiceMonitoringService.DeleteServiceLevelObjective" },
+    };
     const container_cluster = [_]RpcUsage{
         .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.GetCluster" },
         .{ .service = "container.googleapis.com", .method = "google.container.v1.ClusterManager.CreateCluster" },
@@ -1425,6 +1485,12 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
+    if (std.mem.eql(u8, type_name, "gcp.monitoring.AlertPolicy")) return &monitoring_alert_policy;
+    if (std.mem.eql(u8, type_name, "gcp.monitoring.UptimeCheck")) return &monitoring_uptime_check;
+    if (std.mem.eql(u8, type_name, "gcp.monitoring.NotificationChannel")) return &monitoring_channel;
+    if (std.mem.eql(u8, type_name, "gcp.monitoring.Dashboard")) return &monitoring_dashboard;
+    if (std.mem.eql(u8, type_name, "gcp.monitoring.Service")) return &monitoring_service;
+    if (std.mem.eql(u8, type_name, "gcp.monitoring.ServiceLevelObjective")) return &monitoring_slo;
     if (std.mem.eql(u8, type_name, "gcp.container.Cluster")) return &container_cluster;
     if (std.mem.eql(u8, type_name, "gcp.container.NodePool")) return &container_node_pool;
     if (std.mem.eql(u8, type_name, "gcp.gkehub.Fleet")) return &gke_fleet;

@@ -189,6 +189,7 @@ fn appendResource(
     try appendEdgeSecurityDetails(output, allocator, item.node);
     try appendConnectivityDetails(output, allocator, item.node);
     try appendContainerPlatformDetails(output, allocator, item.node);
+    try appendMonitoringDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -560,6 +561,39 @@ fn appendContainerPlatformDetails(output: *std.ArrayList(u8), allocator: std.mem
     try appendOptionalStorageBool(output, allocator, node, "private_nodes", "private_nodes");
     try appendOptionalStorageBool(output, allocator, node, "spot", "spot");
     try appendOptionalStorageBool(output, allocator, node, "autoscaling_enabled", "autoscaling");
+    try output.append(allocator, '}');
+}
+
+fn appendMonitoringDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.monitoring.AlertPolicy"))
+        "alert_policy"
+    else if (std.mem.eql(u8, node.type_name, "gcp.monitoring.UptimeCheck"))
+        "uptime_check"
+    else if (std.mem.eql(u8, node.type_name, "gcp.monitoring.NotificationChannel"))
+        "notification_channel"
+    else if (std.mem.eql(u8, node.type_name, "gcp.monitoring.Dashboard"))
+        "dashboard"
+    else if (std.mem.eql(u8, node.type_name, "gcp.monitoring.Service"))
+        "service"
+    else if (std.mem.eql(u8, node.type_name, "gcp.monitoring.ServiceLevelObjective"))
+        "slo"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"monitoring\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "display_name", "display_name");
+    try appendOptionalStorageString(output, allocator, node, "type", "channel_type");
+    try appendOptionalStorageString(output, allocator, node, "protocol", "protocol");
+    try appendOptionalStorageString(output, allocator, node, "severity", "severity");
+    try appendOptionalStorageInteger(output, allocator, node, "period_seconds", "period_seconds");
+    try appendOptionalStorageInteger(output, allocator, node, "timeout_seconds", "timeout_seconds");
+    try appendOptionalStorageInteger(output, allocator, node, "goal_micros", "goal_micros");
+    try appendOptionalStorageInteger(output, allocator, node, "columns", "columns");
+    try appendOptionalStorageBool(output, allocator, node, "enabled", "enabled");
+    try appendOptionalStorageBool(output, allocator, node, "disabled", "disabled");
+    try appendStorageListCount(output, allocator, node, "conditions", "condition_count");
+    try appendStorageListCount(output, allocator, node, "notification_channels", "notification_channel_count");
+    try appendStorageListCount(output, allocator, node, "tiles", "tile_count");
     try output.append(allocator, '}');
 }
 
@@ -1144,6 +1178,11 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.monitoring.ServiceLevelObjective") and std.mem.eql(u8, to_type, "gcp.monitoring.Service")) return "service_slo";
+    if (std.mem.eql(u8, from_type, "gcp.monitoring.UptimeCheck") and std.mem.eql(u8, to_type, "gcp.monitoring.Service")) return "probe_target";
+    if (std.mem.eql(u8, from_type, "gcp.monitoring.AlertPolicy") and std.mem.eql(u8, to_type, "gcp.monitoring.UptimeCheck")) return "policy_evaluation";
+    if (std.mem.eql(u8, from_type, "gcp.monitoring.AlertPolicy") and std.mem.eql(u8, to_type, "gcp.monitoring.NotificationChannel")) return "notification";
+    if (std.mem.eql(u8, from_type, "gcp.monitoring.Dashboard") and std.mem.startsWith(u8, to_type, "gcp.monitoring.")) return "dashboard_visualizes";
     if (std.mem.eql(u8, from_type, "gcp.container.NodePool") and std.mem.eql(u8, to_type, "gcp.container.Cluster")) return "node_pool";
     if (std.mem.eql(u8, from_type, "gcp.gkehub.Membership") and
         (std.mem.eql(u8, to_type, "gcp.gkehub.Fleet") or std.mem.eql(u8, to_type, "gcp.container.Cluster"))) return "fleet_membership";

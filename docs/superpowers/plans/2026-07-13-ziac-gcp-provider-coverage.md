@@ -224,7 +224,7 @@ isolated serializer tests.
 
 ## M73-M76: Operations And Delivery
 
-- [ ] M73 Monitoring alerts, uptime checks, channels, dashboards and SLOs.
+- [x] M73 Monitoring alerts, uptime checks, channels, dashboards and SLOs.
 - [ ] M74 Logging sinks, buckets, views, exclusions and log metrics.
 - [ ] M75 Cloud Build triggers/connections/worker pools and Artifact policies.
 - [ ] M76 Cloud Deploy pipelines, targets and automation.
@@ -326,3 +326,23 @@ failures, pending tests, leaks or logged errors. Public examples, migration,
 root TypeScript and static secret gates pass. Authenticated GKE, Fleet,
 Function and Batch qualification remains a disposable-project gate and is not
 represented as local proof.
+
+## M73 Evidence
+
+M73 is locally complete with 162 managed resources. Six Cloud Monitoring types
+cover alert policies, uptime checks, notification channels, dashboards,
+services and service-level objectives. The synchronous adapter preserves
+server-generated identities, uses exact update masks, resolves channel and
+probe secrets only inside mutation scope, and retries dashboard etag conflicts
+with a fresh read.
+
+`ServiceObservability` composes a service, availability and optional latency
+SLOs, host-scoped endpoint probe, alert policy and mosaic dashboard. Exact
+Monitoring permissions, four official Cloud Asset identities, canvas
+observability edges and explicit uptime/alert estimates are synchronized. The
+Testing v2 package gate reports 775 discovered/executed tests, 774 passed, one
+credential-gated skip, and zero failures, pending tests, leaks or logged
+errors. Public examples, installed-client scaffolds, migration, root
+TypeScript and static secret checks pass. Authenticated endpoint, incident,
+notification and SLO-window evidence remains a fail-closed disposable-project
+gate and is not represented as local proof.

@@ -1,4 +1,8 @@
 comptime {
+    _ = @import("gcp_monitoring_live_provider_test.zig");
+    _ = @import("gcp_monitoring_test.zig");
+    _ = @import("gcp_monitoring_components_test.zig");
+    _ = @import("gcp_monitoring_product_test.zig");
     _ = @import("gcp_container_platform_components_test.zig");
     _ = @import("gcp_container_platform_live_provider_test.zig");
     _ = @import("gcp_container_platform_product_test.zig");

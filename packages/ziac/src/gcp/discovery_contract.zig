@@ -68,6 +68,20 @@ pub const sources = [_]Source{
         .document_sha256 = "a845b96dfef3ecd5eae8022be598b8622a18e9e1be707b2c2bf7a938ef5a3713",
     },
     .{
+        .id = "monitoring:v1",
+        .version = "v1",
+        .revision = "20260705",
+        .discovery_url = "https://monitoring.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "e75eaa5aaaea322cdf03d2970edcb37cf4b1a832c50fcc4a450da5778c73d5c5",
+    },
+    .{
+        .id = "monitoring:v3",
+        .version = "v3",
+        .revision = "20260705",
+        .discovery_url = "https://monitoring.googleapis.com/$discovery/rest?version=v3",
+        .document_sha256 = "9419509a1ced59a7bda62d54135551cbf0f9c68dce0de8185a6d1a10beb85394",
+    },
+    .{
         .id = "networkconnectivity:v1",
         .version = "v1",
         .revision = "20260701",

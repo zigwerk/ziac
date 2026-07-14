@@ -381,6 +381,14 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.container.Cluster"
     else if (std.mem.eql(u8, asset_type, "container.googleapis.com/NodePool"))
         "gcp.container.NodePool"
+    else if (std.mem.eql(u8, asset_type, "monitoring.googleapis.com/AlertPolicy"))
+        "gcp.monitoring.AlertPolicy"
+    else if (std.mem.eql(u8, asset_type, "monitoring.googleapis.com/Dashboard"))
+        "gcp.monitoring.Dashboard"
+    else if (std.mem.eql(u8, asset_type, "monitoring.googleapis.com/NotificationChannel"))
+        "gcp.monitoring.NotificationChannel"
+    else if (std.mem.eql(u8, asset_type, "monitoring.googleapis.com/UptimeCheckConfig"))
+        "gcp.monitoring.UptimeCheck"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -562,6 +570,10 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "cloudfunctions.googleapis.com/CloudFunction", .prefix = "//cloudfunctions.googleapis.com/" },
         .{ .asset_type = "container.googleapis.com/Cluster", .prefix = "//container.googleapis.com/" },
         .{ .asset_type = "container.googleapis.com/NodePool", .prefix = "//container.googleapis.com/" },
+        .{ .asset_type = "monitoring.googleapis.com/AlertPolicy", .prefix = "//monitoring.googleapis.com/" },
+        .{ .asset_type = "monitoring.googleapis.com/Dashboard", .prefix = "//monitoring.googleapis.com/" },
+        .{ .asset_type = "monitoring.googleapis.com/NotificationChannel", .prefix = "//monitoring.googleapis.com/" },
+        .{ .asset_type = "monitoring.googleapis.com/UptimeCheckConfig", .prefix = "//monitoring.googleapis.com/" },
         .{ .asset_type = "gkehub.googleapis.com/Fleet", .prefix = "//gkehub.googleapis.com/" },
         .{ .asset_type = "gkehub.googleapis.com/Membership", .prefix = "//gkehub.googleapis.com/" },
         .{ .asset_type = "networkconnectivity.googleapis.com/Hub", .prefix = "//networkconnectivity.googleapis.com/" },

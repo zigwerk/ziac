@@ -271,6 +271,16 @@ pub const ContainerPlatformEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const MonitoringEstimateInput = struct {
+    resource_id: []const u8,
+    uptime_execution_sku_id: []const u8 = "",
+    alert_metric_reference_sku_id: []const u8 = "",
+    uptime_executions: u64 = 0,
+    free_uptime_executions: u64 = 0,
+    alert_metric_reference_months: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -774,6 +784,16 @@ pub fn containerPlatformConfigurationEstimate(prices: []const SkuPrice, input: C
     try appendUsage(&usage, &count, input.function_memory_sku_id, input.region, input.function_memory_gib_seconds);
     try appendUsage(&usage, &count, input.batch_cpu_sku_id, input.region, input.batch_vcpu_hours);
     try appendUsage(&usage, &count, input.batch_memory_sku_id, input.region, input.batch_memory_gib_hours);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn monitoringConfigurationEstimate(prices: []const SkuPrice, input: MonitoringEstimateInput) !ResourceCost {
+    var usage: [2]UsageAssumption = undefined;
+    var count: usize = 0;
+    const billable_uptime = input.uptime_executions -| input.free_uptime_executions;
+    try appendUsage(&usage, &count, input.uptime_execution_sku_id, "global", billable_uptime);
+    try appendUsage(&usage, &count, input.alert_metric_reference_sku_id, "global", input.alert_metric_reference_months);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }

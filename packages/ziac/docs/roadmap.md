@@ -1048,3 +1048,25 @@ resources. Public examples, installation checks, migration, root TypeScript
 and static secret gates pass. `scripts/qualify-container-platform.sh` remains
 the fail-closed authenticated boundary for GKE, Fleet, Function and Batch
 runtime evidence.
+
+M73 is locally complete and awaiting authenticated Monitoring qualification.
+Six managed resources add alert policies, uptime checks, notification channels,
+mosaic dashboards, monitored services and service-level objectives.
+
+`ServiceObservability` composes one service, availability and optional latency
+SLOs, a host-scoped endpoint probe, notification-aware alert and operations
+dashboard. The provider preserves Google's server-generated IDs, applies exact
+update masks, resolves write-only channel/probe credentials only during
+mutation and retries dashboard updates with the latest etag.
+
+Exact Monitoring permissions, four official Cloud Asset adoption identities,
+canvas observability edges and explicit uptime/alert estimates are
+synchronized. See `docs/gcp-monitoring.md`.
+
+The M73 local Testing v2 package gate is complete with 775 discovered and
+executed tests, 774 passed, one credential-gated skip, and zero failures,
+pending tests, leaks or logged errors. The provider catalog reports 162 managed
+resources. Public examples, installation checks, migration, root TypeScript
+and static secret gates pass. `scripts/qualify-monitoring.sh` remains the
+fail-closed authenticated boundary and does not infer alert or notification
+delivery from object existence.

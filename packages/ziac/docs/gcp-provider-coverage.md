@@ -369,6 +369,19 @@ Cloud Asset adoption, exact connectivity permissions, VPN/BGP/NCC canvas edges
 and explicit VPN tunnel, NCC spoke and data-transfer estimates are
 synchronized. See `gcp-connectivity.md`.
 
+### Monitoring and SLOs
+
+M73 adds six managed Cloud Monitoring resources: alert policies, uptime checks,
+notification channels, dashboards, services and SLOs. `ServiceObservability`
+composes a service-level view, endpoint probe, alerting and dashboard without
+hiding notification destinations or SLO policy.
+
+The adapter preserves generated physical IDs, exact update masks and dashboard
+etags while keeping channel and probe credentials out of state. Permission
+synthesis, official Cloud Asset identities, observability canvas edges and
+free-allotment-aware uptime/alert estimates are synchronized. See
+`gcp-monitoring.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`

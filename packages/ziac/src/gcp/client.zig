@@ -44,6 +44,7 @@ pub const Api = enum {
     gke_hub,
     cloud_functions,
     batch,
+    monitoring,
 };
 
 pub const Endpoints = struct {
@@ -83,6 +84,7 @@ pub const Endpoints = struct {
     gke_hub: []const u8 = "https://gkehub.googleapis.com",
     cloud_functions: []const u8 = "https://cloudfunctions.googleapis.com",
     batch: []const u8 = "https://batch.googleapis.com",
+    monitoring: []const u8 = "https://monitoring.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
         return switch (api) {
@@ -122,6 +124,7 @@ pub const Endpoints = struct {
             .gke_hub => self.gke_hub,
             .cloud_functions => self.cloud_functions,
             .batch => self.batch,
+            .monitoring => self.monitoring,
         };
     }
 };
