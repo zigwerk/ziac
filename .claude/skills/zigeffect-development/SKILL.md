@@ -88,6 +88,18 @@ TanStack Solid Query; browser code never receives native service credentials.
 7. For Cloud Run, bind `0.0.0.0:$PORT` using h2c behind platform TLS, install
    health/reflection/Channelz before readiness, use audience-bound service
    identity, and drain on SIGTERM.
+8. Profile before tuning transport internals. Benchmark grpc-go, Tonic, gRPC
+   C++, and ZigEffect only inside one complete receipt with identical payload,
+   concurrency, connection, warm-up, container, and host settings. Preserve
+   message, queue, retry, TLS, and malformed-peer defenses while optimizing.
+
+The current working baseline is the schema-v2 ARM64 Docker optimization
+diagnostic: 11,792 RPC/s for 1 KiB unary, 96.6% of grpc-go in the same receipt,
+and 13.4% higher throughput than Tonic, with 2.42 ms p50, 6.06 ms p99, and 7.0
+server allocations per RPC. It is candidate engineering evidence, not a release
+or Cloud Run performance promise. Read
+`packages/zigeffect-grpc/benchmarks/PERFORMANCE.md` before repeating or changing
+the claim.
 
 `zigeffect-grpc` remains `production_candidate` until a schema-v2 receipt from
 committed source includes native Linux amd64, the complete 24-hour mixed-shape

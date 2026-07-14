@@ -1,4 +1,4 @@
 interface:
   display_name: "ZigEffect Development"
-  short_description: "Build evidence-driven Zig apps and gRPC services"
-  default_prompt: "Use $zigeffect-development to build this requirement with typed effects, generated contracts, native test receipts, deterministic adversarial evidence, causal diagnosis, and a truthful handoff."
+  short_description: "Build and profile evidence-driven Zig services"
+  default_prompt: "Use $zigeffect-development to build this requirement with typed effects, generated contracts, receipt-bound performance evidence, deterministic adversarial tests, causal diagnosis, and a truthful handoff."
