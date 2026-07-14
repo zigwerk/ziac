@@ -670,7 +670,28 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "ServiceNetworkingConnections.Create", .permission = "servicenetworking.services.addPeering" },
         .{ .suffix = "ServiceNetworkingConnections.Update", .permission = "servicenetworking.services.addPeering" },
         .{ .suffix = "ServiceNetworkingConnections.Delete", .permission = "servicenetworking.services.deleteConnection" },
+        .{ .suffix = "KeyRings.GetKeyRing", .permission = "cloudkms.keyRings.get" },
+        .{ .suffix = "KeyRings.CreateKeyRing", .permission = "cloudkms.keyRings.create" },
+        .{ .suffix = "KeyRings.GetIamPolicy", .permission = "cloudkms.keyRings.getIamPolicy" },
+        .{ .suffix = "KeyRings.SetIamPolicy", .permission = "cloudkms.keyRings.setIamPolicy" },
+        .{ .suffix = "CryptoKeys.GetCryptoKey", .permission = "cloudkms.cryptoKeys.get" },
+        .{ .suffix = "CryptoKeys.CreateCryptoKey", .permission = "cloudkms.cryptoKeys.create" },
+        .{ .suffix = "CryptoKeys.UpdateCryptoKey", .permission = "cloudkms.cryptoKeys.update" },
+        .{ .suffix = "CryptoKeys.GetIamPolicy", .permission = "cloudkms.cryptoKeys.getIamPolicy" },
+        .{ .suffix = "CryptoKeys.SetIamPolicy", .permission = "cloudkms.cryptoKeys.setIamPolicy" },
+        .{ .suffix = "CryptoKeyVersions.GetCryptoKeyVersion", .permission = "cloudkms.cryptoKeyVersions.get" },
+        .{ .suffix = "CryptoKeyVersions.CreateCryptoKeyVersion", .permission = "cloudkms.cryptoKeyVersions.create" },
+        .{ .suffix = "CryptoKeyVersions.UpdateCryptoKeyVersion", .permission = "cloudkms.cryptoKeyVersions.update" },
+        .{ .suffix = "SecretManagerService.GetSecret", .permission = "secretmanager.secrets.get" },
+        .{ .suffix = "SecretManagerService.CreateSecret", .permission = "secretmanager.secrets.create" },
+        .{ .suffix = "SecretManagerService.UpdateSecret", .permission = "secretmanager.secrets.update" },
+        .{ .suffix = "SecretManagerService.DeleteSecret", .permission = "secretmanager.secrets.delete" },
+        .{ .suffix = "SecretManagerService.GetSecretVersion", .permission = "secretmanager.versions.get" },
         .{ .suffix = "SecretVersions.AddSecretVersion", .permission = "secretmanager.versions.add" },
+        .{ .suffix = "SecretManagerService.EnableSecretVersion", .permission = "secretmanager.versions.enable" },
+        .{ .suffix = "SecretManagerService.DisableSecretVersion", .permission = "secretmanager.versions.disable" },
+        .{ .suffix = "SecretManagerService.GetIamPolicy", .permission = "secretmanager.secrets.getIamPolicy" },
+        .{ .suffix = "SecretManagerService.SetIamPolicy", .permission = "secretmanager.secrets.setIamPolicy" },
         .{ .suffix = "CloudScheduler.GetJob", .permission = "cloudscheduler.jobs.get" },
         .{ .suffix = "CloudScheduler.CreateJob", .permission = "cloudscheduler.jobs.create" },
         .{ .suffix = "CloudScheduler.UpdateJob", .permission = "cloudscheduler.jobs.update" },
@@ -1647,6 +1668,44 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
+    const kms_key_ring = [_]RpcUsage{
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.KeyRings.GetKeyRing" },
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.KeyRings.CreateKeyRing" },
+    };
+    const kms_crypto_key = [_]RpcUsage{
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.CryptoKeys.GetCryptoKey" },
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.CryptoKeys.CreateCryptoKey" },
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.CryptoKeys.UpdateCryptoKey" },
+    };
+    const kms_version = [_]RpcUsage{
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.CryptoKeyVersions.GetCryptoKeyVersion" },
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.CryptoKeyVersions.CreateCryptoKeyVersion" },
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.CryptoKeyVersions.UpdateCryptoKeyVersion" },
+    };
+    const kms_key_ring_iam = [_]RpcUsage{
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.KeyRings.GetIamPolicy" },
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.KeyRings.SetIamPolicy" },
+    };
+    const kms_crypto_key_iam = [_]RpcUsage{
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.CryptoKeys.GetIamPolicy" },
+        .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.CryptoKeys.SetIamPolicy" },
+    };
+    const secret = [_]RpcUsage{
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.GetSecret" },
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.CreateSecret" },
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.UpdateSecret" },
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.DeleteSecret" },
+    };
+    const secret_version = [_]RpcUsage{
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.GetSecretVersion" },
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretVersions.AddSecretVersion" },
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.EnableSecretVersion" },
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.DisableSecretVersion" },
+    };
+    const secret_iam = [_]RpcUsage{
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.GetIamPolicy" },
+        .{ .service = "secretmanager.googleapis.com", .method = "google.cloud.secretmanager.v1.SecretManagerService.SetIamPolicy" },
+    };
     if (std.mem.eql(u8, type_name, "gcp.cloudbuild.Connection")) return &build_connection;
     if (std.mem.eql(u8, type_name, "gcp.cloudbuild.Repository")) return &build_repository;
     if (std.mem.eql(u8, type_name, "gcp.cloudbuild.WorkerPool")) return &build_worker_pool;
@@ -1754,6 +1813,14 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.parametermanager.ParameterVersion")) return &parameter_version;
     if (std.mem.eql(u8, type_name, "gcp.parametermanager.Template")) return &parameter_template;
     if (std.mem.eql(u8, type_name, "gcp.parametermanager.TemplateVersion")) return &parameter_template_version;
+    if (std.mem.eql(u8, type_name, "gcp.kms.KeyRing")) return &kms_key_ring;
+    if (std.mem.eql(u8, type_name, "gcp.kms.CryptoKey")) return &kms_crypto_key;
+    if (std.mem.eql(u8, type_name, "gcp.kms.CryptoKeyVersion")) return &kms_version;
+    if (std.mem.eql(u8, type_name, "gcp.kms.KeyRingIamMember")) return &kms_key_ring_iam;
+    if (std.mem.eql(u8, type_name, "gcp.kms.CryptoKeyIamMember")) return &kms_crypto_key_iam;
+    if (std.mem.eql(u8, type_name, "gcp.secret.Secret")) return &secret;
+    if (std.mem.eql(u8, type_name, "gcp.secret.SecretVersion")) return &secret_version;
+    if (std.mem.eql(u8, type_name, "gcp.secret.SecretIamMember")) return &secret_iam;
     if (std.mem.eql(u8, type_name, "gcp.compute.BackendService")) return &compute_backend;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionServerlessNeg")) return &compute_neg;
     if (std.mem.eql(u8, type_name, "gcp.compute.Disk") or std.mem.eql(u8, type_name, "gcp.compute.RegionDisk")) return &compute_disk;
@@ -1807,6 +1874,8 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/cloudtasks.enqueuer", .permission = "cloudtasks.tasks.create" },
         .{ .role = "roles/cloudsql.client", .permission = "cloudsql.instances.connect" },
         .{ .role = "roles/cloudsql.instanceUser", .permission = "cloudsql.instances.login" },
+        .{ .role = "roles/cloudkms.cryptoKeyDecrypter", .permission = "cloudkms.cryptoKeyVersions.useToDecrypt" },
+        .{ .role = "roles/cloudkms.cryptoKeyEncrypterDecrypter", .permission = "cloudkms.cryptoKeyVersions.useToDecrypt" },
         .{ .role = "roles/iam.workloadIdentityUser", .permission = "iam.serviceAccounts.getAccessToken" },
         .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },
         .{ .role = "roles/pubsub.subscriber", .permission = "pubsub.subscriptions.consume" },

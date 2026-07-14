@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 178 managed GCP resource types.
+The current deterministic provider gate contains 181 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -42,6 +42,22 @@ silently diverge.
 - `gcp.secret.Secret`
 - `gcp.secret.SecretVersion`
 - `gcp.secret.SecretIamMember`
+
+### KMS and Secret Manager security lifecycle
+
+M77 hardens eight managed resources across Cloud KMS and Secret Manager. KMS
+keys model purpose-compatible algorithms, software/HSM/external protection,
+rotation, version state and additive conditional IAM. Secrets model automatic
+or regional replication, CMEK, notifications, rotation, aliases, annotations,
+safe version state and additive conditional IAM.
+
+Key rings, keys, key versions and secrets are retained by default. Ordinary
+reconciliation only performs reversible enable/disable transitions. Scheduling
+KMS destruction, restoring a scheduled version and destroying a secret version
+are target-bound governed actions with exact capability digests and receipts.
+Cloud Asset identities, regional canvas topology, security edges, exact
+permission synthesis and explicit configuration estimates are synchronized.
+See `gcp-kms-secret-manager.md`.
 
 ### Cloud Run and builds
 

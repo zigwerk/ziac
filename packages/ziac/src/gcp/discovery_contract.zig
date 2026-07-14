@@ -61,6 +61,13 @@ pub const sources = [_]Source{
         .document_sha256 = "8c0b2977432d0c8ce30afee8f891b5a494585839de086b2e0c6bb7660150a19b",
     },
     .{
+        .id = "cloudkms:v1",
+        .version = "v1",
+        .revision = "20260702",
+        .discovery_url = "https://cloudkms.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "0d84c07e14c61f76c620f1910ab59a36421721596957c300870a2df003c848d9",
+    },
+    .{
         .id = "compute:v1",
         .version = "v1",
         .revision = "20260629",
@@ -136,6 +143,13 @@ pub const sources = [_]Source{
         .revision = "20260707",
         .discovery_url = "https://redis.googleapis.com/$discovery/rest?version=v1",
         .document_sha256 = "600495e7c28025e4af8a2d83067a0ded935c55a96acaa67ed9128e584b6646a2",
+    },
+    .{
+        .id = "secretmanager:v1",
+        .version = "v1",
+        .revision = "20260705",
+        .discovery_url = "https://secretmanager.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "f04b20cabd72df1a41c311153a2d674fff9f7b6299d84c426da3a925c68c7131",
     },
     .{
         .id = "servicenetworking:v1",

@@ -1131,3 +1131,30 @@ errors are reported. The catalog reports 178 managed resources. Public examples,
 installed distribution, migration, root TypeScript and the full release gate
 pass. `scripts/qualify-cloud-deploy.sh` remains the fail-closed authenticated
 boundary for real release, rollout, import no-op and cleanup evidence.
+
+M77 is locally complete and awaiting authenticated KMS and Secret Manager
+qualification. Three new managed resources complete the existing security
+surface: KMS key-ring IAM, key IAM and Google-assigned cryptographic key
+versions. Existing key rings, keys, secrets, secret versions and secret IAM are
+hardened around the current Google contracts.
+
+The lifecycle adapter normalizes purpose-compatible key templates, exact
+rotation masks, reversible version state, Secret Manager replication, topics,
+rotation, aliases, annotations and etags. Key rings, keys, key versions and
+secrets are retained by default. Secret versions retain or disable on removal.
+Irreversible KMS scheduling/restoration and secret-version destruction are
+separate target-bound actions with capability digests, state refresh and
+receipts.
+
+Exact API and IAM synthesis, supported Cloud Asset identities, multi-region
+secret topology, CMEK and IAM edges, explicit key/version/access cost
+assumptions, installed documentation and the fail-closed qualification runner
+are synchronized. See `docs/gcp-kms-secret-manager.md`.
+
+The M77 Testing v2 package gate discovers and executes 835 tests: 834 pass,
+one credential-gated test skips, and none fail or remain pending; no leaks or
+logged errors are reported. The 181-resource catalog, public examples,
+relocatable installation, migration guard, root TypeScript checks, static
+secret checks, non-root arm64 container probe and complete release gate pass.
+`scripts/qualify-kms-secret.sh` remains the fail-closed authenticated boundary
+and never promotes its local receipt to live Google Cloud evidence.

@@ -193,6 +193,7 @@ fn appendResource(
     try appendLoggingDetails(output, allocator, item.node);
     try appendBuildDeliveryDetails(output, allocator, item.node);
     try appendCloudDeployDetails(output, allocator, item.node);
+    try appendKmsSecretDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -272,6 +273,8 @@ fn iamEdgeDetails(role: []const u8) ?IamEdgeDetails {
         .{ .role = "roles/cloudtasks.enqueuer", .access = "write", .permission = "cloudtasks.tasks.create" },
         .{ .role = "roles/cloudsql.client", .access = "connect", .permission = "cloudsql.instances.connect" },
         .{ .role = "roles/cloudsql.instanceUser", .access = "login", .permission = "cloudsql.instances.login" },
+        .{ .role = "roles/cloudkms.cryptoKeyDecrypter", .access = "decrypt", .permission = "cloudkms.cryptoKeyVersions.useToDecrypt" },
+        .{ .role = "roles/cloudkms.cryptoKeyEncrypterDecrypter", .access = "read_write", .permission = "cloudkms.cryptoKeyVersions.useToEncrypt" },
         .{ .role = "roles/datastore.user", .access = "read_write", .permission = "datastore.entities.create" },
         .{ .role = "roles/datastore.viewer", .access = "read", .permission = "datastore.entities.get" },
         .{ .role = "roles/iam.workloadIdentityUser", .access = "invoke", .permission = "iam.serviceAccounts.getAccessToken" },
@@ -339,6 +342,14 @@ fn appendNodeRegions(
     if (objectField(node.inputs, "allowed_persistence_regions")) |region_value| if (region_value == .list) {
         for (region_value.list) |entry| if (entry == .string) try appendUniqueString(allocator, regions, entry.string);
     };
+    if (objectField(node.inputs, "replicas_json")) |replicas| if (replicas == .string) {
+        var parsed = std.json.parseFromSlice(std.json.Value, allocator, replicas.string, .{}) catch return error.InvalidVisualArtifact;
+        defer parsed.deinit();
+        if (parsed.value == .array) for (parsed.value.array.items) |entry| if (entry == .object) {
+            const location = entry.object.get("location") orelse continue;
+            if (location == .string) try appendUniqueString(allocator, regions, location.string);
+        };
+    };
 }
 
 fn directRegion(node: resource.ResourceNode) ?[]const u8 {
@@ -359,6 +370,7 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         std.mem.startsWith(u8, node.type_name, "gcp.workflows.") or
         std.mem.startsWith(u8, node.type_name, "gcp.apigateway.") or
         std.mem.startsWith(u8, node.type_name, "gcp.parametermanager.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.kms.") or
         std.mem.startsWith(u8, node.type_name, "gcp.cloudbuild.") or
         std.mem.startsWith(u8, node.type_name, "gcp.artifact.") or
         std.mem.startsWith(u8, node.type_name, "gcp.deploy.") or
@@ -689,6 +701,41 @@ fn appendCloudDeployDetails(output: *std.ArrayList(u8), allocator: std.mem.Alloc
     try appendStorageListCount(output, allocator, node, "rules", "rule_count");
     try appendStorageListCount(output, allocator, node, "selectors", "selector_count");
     try appendStorageListCount(output, allocator, node, "target_ids", "target_count");
+    try output.append(allocator, '}');
+}
+
+fn appendKmsSecretDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.kms.KeyRing"))
+        "key_ring"
+    else if (std.mem.eql(u8, node.type_name, "gcp.kms.CryptoKey"))
+        "crypto_key"
+    else if (std.mem.eql(u8, node.type_name, "gcp.kms.CryptoKeyVersion"))
+        "crypto_key_version"
+    else if (std.mem.eql(u8, node.type_name, "gcp.kms.KeyRingIamMember"))
+        "key_ring_iam_member"
+    else if (std.mem.eql(u8, node.type_name, "gcp.kms.CryptoKeyIamMember"))
+        "crypto_key_iam_member"
+    else if (std.mem.eql(u8, node.type_name, "gcp.secret.Secret"))
+        "secret"
+    else if (std.mem.eql(u8, node.type_name, "gcp.secret.SecretVersion"))
+        "secret_version"
+    else if (std.mem.eql(u8, node.type_name, "gcp.secret.SecretIamMember"))
+        "secret_iam_member"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"kms_secret\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "purpose", "purpose");
+    try appendOptionalStorageString(output, allocator, node, "algorithm", "algorithm");
+    try appendOptionalStorageString(output, allocator, node, "protection_level", "protection_level");
+    try appendOptionalStorageString(output, allocator, node, "state", "state");
+    try appendOptionalStorageString(output, allocator, node, "replication_mode", "replication_mode");
+    try appendOptionalStorageString(output, allocator, node, "removal_policy", "removal_policy");
+    try appendOptionalStorageInteger(output, allocator, node, "rotation_period_seconds", "rotation_period_seconds");
+    try appendStorageListCount(output, allocator, node, "topics", "topic_count");
+    try appendStorageObjectCount(output, allocator, node, "version_aliases", "alias_count");
+    try appendJsonArrayStringCount(output, allocator, node, "replicas_json", "replica_count");
     try output.append(allocator, '}');
 }
 
@@ -1243,6 +1290,31 @@ fn appendStorageListCount(
     if (input == .list) try appendNamedUnsigned(output, allocator, output_name, input.list.len, true);
 }
 
+fn appendStorageObjectCount(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    input_name: []const u8,
+    output_name: []const u8,
+) !void {
+    const input = objectField(node.inputs, input_name) orelse return;
+    if (input == .object) try appendNamedUnsigned(output, allocator, output_name, input.object.len, true);
+}
+
+fn appendJsonArrayStringCount(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
+    input_name: []const u8,
+    output_name: []const u8,
+) !void {
+    const input = objectField(node.inputs, input_name) orelse return;
+    if (input != .string) return;
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, input.string, .{}) catch return error.InvalidVisualArtifact;
+    defer parsed.deinit();
+    if (parsed.value == .array) try appendNamedUnsigned(output, allocator, output_name, parsed.value.array.items.len, true);
+}
+
 fn resourceScope(node: resource.ResourceNode, regions: []const []const u8) []const u8 {
     if (isGlobalType(node.type_name)) return "global";
     if (objectField(node.inputs, "zone")) |zone| if (zone == .string and zone.string.len > 0) return "zonal";
@@ -1273,6 +1345,10 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.kms.CryptoKey") and std.mem.eql(u8, to_type, "gcp.kms.KeyRing")) return "key_membership";
+    if (std.mem.eql(u8, from_type, "gcp.kms.CryptoKeyVersion") and std.mem.eql(u8, to_type, "gcp.kms.CryptoKey")) return "key_version";
+    if (std.mem.eql(u8, from_type, "gcp.secret.Secret") and std.mem.eql(u8, to_type, "gcp.kms.CryptoKey")) return "customer_managed_encryption";
+    if (std.mem.eql(u8, from_type, "gcp.secret.SecretVersion") and std.mem.eql(u8, to_type, "gcp.secret.Secret")) return "secret_version";
     if (std.mem.eql(u8, from_type, "gcp.deploy.DeliveryPipeline") and std.mem.eql(u8, to_type, "gcp.deploy.Target")) return "delivery_stage";
     if (std.mem.eql(u8, from_type, "gcp.deploy.Automation") and std.mem.eql(u8, to_type, "gcp.deploy.DeliveryPipeline")) return "pipeline_automation";
     if (std.mem.eql(u8, from_type, "gcp.deploy.Target") and

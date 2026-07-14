@@ -363,6 +363,16 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         if (std.mem.indexOf(u8, name, "/tenants/") != null) "gcp.identity.TenantOAuthIdpConfig" else "gcp.identity.ProjectOAuthIdpConfig"
     else if (std.mem.eql(u8, asset_type, "identitytoolkit.googleapis.com/InboundSamlConfig"))
         if (std.mem.indexOf(u8, name, "/tenants/") != null) "gcp.identity.TenantInboundSamlConfig" else "gcp.identity.ProjectInboundSamlConfig"
+    else if (std.mem.eql(u8, asset_type, "cloudkms.googleapis.com/KeyRing"))
+        "gcp.kms.KeyRing"
+    else if (std.mem.eql(u8, asset_type, "cloudkms.googleapis.com/CryptoKey"))
+        "gcp.kms.CryptoKey"
+    else if (std.mem.eql(u8, asset_type, "cloudkms.googleapis.com/CryptoKeyVersion"))
+        "gcp.kms.CryptoKeyVersion"
+    else if (std.mem.eql(u8, asset_type, "secretmanager.googleapis.com/Secret"))
+        "gcp.secret.Secret"
+    else if (std.mem.eql(u8, asset_type, "secretmanager.googleapis.com/SecretVersion"))
+        "gcp.secret.SecretVersion"
     else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/Parameter"))
         "gcp.parametermanager.Parameter"
     else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/ParameterVersion"))
@@ -589,6 +599,11 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "identitytoolkit.googleapis.com/Tenant", .prefix = "//identitytoolkit.googleapis.com/" },
         .{ .asset_type = "identitytoolkit.googleapis.com/OauthIdpConfig", .prefix = "//identitytoolkit.googleapis.com/" },
         .{ .asset_type = "identitytoolkit.googleapis.com/InboundSamlConfig", .prefix = "//identitytoolkit.googleapis.com/" },
+        .{ .asset_type = "cloudkms.googleapis.com/KeyRing", .prefix = "//cloudkms.googleapis.com/" },
+        .{ .asset_type = "cloudkms.googleapis.com/CryptoKey", .prefix = "//cloudkms.googleapis.com/" },
+        .{ .asset_type = "cloudkms.googleapis.com/CryptoKeyVersion", .prefix = "//cloudkms.googleapis.com/" },
+        .{ .asset_type = "secretmanager.googleapis.com/Secret", .prefix = "//secretmanager.googleapis.com/" },
+        .{ .asset_type = "secretmanager.googleapis.com/SecretVersion", .prefix = "//secretmanager.googleapis.com/" },
         .{ .asset_type = "parametermanager.googleapis.com/Parameter", .prefix = "//parametermanager.googleapis.com/" },
         .{ .asset_type = "parametermanager.googleapis.com/ParameterVersion", .prefix = "//parametermanager.googleapis.com/" },
         .{ .asset_type = "certificatemanager.googleapis.com/DnsAuthorization", .prefix = "//certificatemanager.googleapis.com/" },

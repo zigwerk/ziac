@@ -325,6 +325,22 @@ pub const CloudDeployEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const KmsSecretEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    kms_software_version_sku_id: []const u8 = "",
+    kms_hsm_version_sku_id: []const u8 = "",
+    kms_external_version_sku_id: []const u8 = "",
+    secret_replica_version_sku_id: []const u8 = "",
+    secret_access_sku_id: []const u8 = "",
+    kms_software_active_versions: u64 = 0,
+    kms_hsm_active_versions: u64 = 0,
+    kms_external_active_versions: u64 = 0,
+    secret_active_replica_versions: u64 = 0,
+    secret_access_operations: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -873,6 +889,18 @@ pub fn cloudDeployConfigurationEstimate(prices: []const SkuPrice, input: CloudDe
     const billable_pipelines = input.active_multi_target_pipelines -| input.free_active_multi_target_pipelines;
     try appendUsage(&usage, &count, input.active_pipeline_sku_id, "global", billable_pipelines);
     try appendUsage(&usage, &count, input.underlying_build_minute_sku_id, input.region, input.underlying_build_minutes);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn kmsSecretConfigurationEstimate(prices: []const SkuPrice, input: KmsSecretEstimateInput) !ResourceCost {
+    var usage: [5]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.kms_software_version_sku_id, "global", input.kms_software_active_versions);
+    try appendUsage(&usage, &count, input.kms_hsm_version_sku_id, input.region, input.kms_hsm_active_versions);
+    try appendUsage(&usage, &count, input.kms_external_version_sku_id, input.region, input.kms_external_active_versions);
+    try appendUsage(&usage, &count, input.secret_replica_version_sku_id, "global", input.secret_active_replica_versions);
+    try appendUsage(&usage, &count, input.secret_access_sku_id, "global", input.secret_access_operations);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }

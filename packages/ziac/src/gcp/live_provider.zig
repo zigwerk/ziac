@@ -170,7 +170,10 @@ pub const managed_type_names = [_][]const u8{
     "gcp.identity.TenantInboundSamlConfig",
     "gcp.identity.TenantOAuthIdpConfig",
     "gcp.kms.CryptoKey",
+    "gcp.kms.CryptoKeyIamMember",
+    "gcp.kms.CryptoKeyVersion",
     "gcp.kms.KeyRing",
+    "gcp.kms.KeyRingIamMember",
     "gcp.logging.Bucket",
     "gcp.logging.Exclusion",
     "gcp.logging.Metric",
@@ -347,7 +350,9 @@ pub const LiveProvider = struct {
             artifactRepositoryDiff(node, observed.observed_inputs)
         else if (isType(node, secret_type))
             secretDiff(node, observed.observed_inputs)
-        else if (isType(node, secret_version_type) or isType(node, secret_iam_member_type))
+        else if (isType(node, secret_version_type))
+            secretVersionDiff(node, observed.observed_inputs)
+        else if (isType(node, secret_iam_member_type))
             .replace
         else if (isType(node, project_service_type))
             .replace
@@ -412,7 +417,8 @@ pub const LiveProvider = struct {
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().update(context, node, observed);
         if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().update(context, node, observed);
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed);
-        if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
+        if (isType(node, secret_type)) return self.updateSecret(context, node, observed);
+        if (isType(node, secret_version_type)) return self.updateSecretVersion(context, node, observed.physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed);
         if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().update(context, node, observed);
         if (run_iam_provider.supports(node)) return self.runIamHandler().update(context, node, observed.physical_id);
@@ -429,7 +435,7 @@ pub const LiveProvider = struct {
         if (dns_provider.supports(node)) return self.dnsHandler().update(context, node, observed.physical_id);
         if (storage_provider.supports(node)) return self.storageHandler().update(context, node, observed.physical_id);
         if (cloud_build_provider.supports(node)) return self.cloudBuildHandler().update(context, node, observed.physical_id);
-        if (kms_provider.supports(node)) return self.kmsHandler().update(context, node, observed.physical_id);
+        if (kms_provider.supports(node)) return self.kmsHandler().update(context, node, observed);
         if (scheduler_provider.supports(node)) return self.schedulerHandler().update(context, node, observed.physical_id);
         if (pubsub_provider.supports(node)) return self.pubsubHandler().update(context, node, observed.physical_id);
         if (tasks_provider.supports(node)) return self.tasksHandler().update(context, node, observed.physical_id);
@@ -458,7 +464,7 @@ pub const LiveProvider = struct {
         if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().delete(context, node, physical_id);
         if (isType(node, artifact_repository_type)) return self.deleteArtifactRepository(context, physical_id);
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
-        if (isType(node, secret_version_type)) return self.destroySecretVersion(context, physical_id);
+        if (isType(node, secret_version_type)) return self.removeSecretVersion(context, node, physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().delete(context, physical_id);
         if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().delete(context, node, physical_id);
         if (run_iam_provider.supports(node)) return self.runIamHandler().delete(context, node, physical_id);
@@ -986,15 +992,9 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const project_id = try requiredInput(node, "project_id");
         const name = try requiredInput(node, "name");
-        const labels_json = try inputJsonAlloc(context.allocator, node, "labels");
-        defer context.allocator.free(labels_json);
         const path = try std.fmt.allocPrint(context.allocator, "/v1/projects/{s}/secrets?secretId={s}", .{ project_id, name });
         defer context.allocator.free(path);
-        const body = try std.fmt.allocPrint(
-            context.allocator,
-            "{{\"replication\":{{\"automatic\":{{}}}},\"labels\":{s}}}",
-            .{labels_json},
-        );
+        const body = try secretBodyAlloc(context.allocator, node, null, null);
         defer context.allocator.free(body);
         var response = self.request(context, .{ .api = .secret_manager, .method = "POST", .path = path, .body = body }) catch |err| {
             if (err != error.Conflict) return err;
@@ -1018,17 +1018,17 @@ pub const LiveProvider = struct {
         self: *LiveProvider,
         context: *provider_mod.OperationContext,
         node: resource.ResourceNode,
-        physical_id: []const u8,
+        observed: *const provider_mod.ResourceResult,
     ) ProviderError!provider_mod.ResourceResult {
-        const labels_json = try inputJsonAlloc(context.allocator, node, "labels");
-        defer context.allocator.free(labels_json);
-        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}?updateMask=labels", .{physical_id});
+        const mask = try secretUpdateMaskAlloc(context.allocator, node, observed.observed_inputs);
+        defer context.allocator.free(mask);
+        if (mask.len == 0) return observed.clone(context.allocator);
+        const etag = stateOutputString(observed.outputs, "etag") orelse return error.InvalidConfiguration;
+        const encoded_mask = try percentEncodeAlloc(context.allocator, mask);
+        defer context.allocator.free(encoded_mask);
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}?updateMask={s}", .{ observed.physical_id, encoded_mask });
         defer context.allocator.free(path);
-        const body = try std.fmt.allocPrint(
-            context.allocator,
-            "{{\"name\":\"{s}\",\"labels\":{s}}}",
-            .{ physical_id, labels_json },
-        );
+        const body = try secretBodyAlloc(context.allocator, node, observed.physical_id, etag);
         defer context.allocator.free(body);
         var response = try self.request(context, .{ .api = .secret_manager, .method = "PATCH", .path = path, .body = body });
         defer response.deinit(context.allocator);
@@ -1100,15 +1100,35 @@ pub const LiveProvider = struct {
         defer context.allocator.free(path);
         var response = try self.request(context, .{ .api = .secret_manager, .method = "POST", .path = path, .body = body });
         defer response.deinit(context.allocator);
+        var created = try secretVersionResultFromJson(context.allocator, node, response.body);
+        const desired_state = try requiredInput(node, "state");
+        if (std.mem.eql(u8, desired_state, "ENABLED")) return created;
+        const physical_id = try context.allocator.dupe(u8, created.physical_id);
+        defer context.allocator.free(physical_id);
+        created.deinit();
+        return self.updateSecretVersion(context, node, physical_id);
+    }
+
+    fn updateSecretVersion(
+        self: *LiveProvider,
+        context: *provider_mod.OperationContext,
+        node: resource.ResourceNode,
+        physical_id: []const u8,
+    ) ProviderError!provider_mod.ResourceResult {
+        const desired_state = try requiredInput(node, "state");
+        const suffix: []const u8 = if (std.mem.eql(u8, desired_state, "ENABLED")) "enable" else if (std.mem.eql(u8, desired_state, "DISABLED")) "disable" else return error.InvalidConfiguration;
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}:{s}", .{ physical_id, suffix });
+        defer context.allocator.free(path);
+        var response = try self.request(context, .{ .api = .secret_manager, .method = "POST", .path = path, .body = "{}" });
+        defer response.deinit(context.allocator);
         return secretVersionResultFromJson(context.allocator, node, response.body);
     }
 
-    fn destroySecretVersion(
-        self: *LiveProvider,
-        context: *provider_mod.OperationContext,
-        physical_id: []const u8,
-    ) ProviderError!void {
-        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}:destroy", .{physical_id});
+    fn removeSecretVersion(self: *LiveProvider, context: *provider_mod.OperationContext, node: resource.ResourceNode, physical_id: []const u8) ProviderError!void {
+        const policy = try requiredInput(node, "removal_policy");
+        if (std.mem.eql(u8, policy, "retain")) return;
+        if (!std.mem.eql(u8, policy, "disable")) return error.InvalidConfiguration;
+        const path = try std.fmt.allocPrint(context.allocator, "/v1/{s}:disable", .{physical_id});
         defer context.allocator.free(path);
         var response = self.request(context, .{ .api = .secret_manager, .method = "POST", .path = path, .body = "{}" }) catch |err| {
             if (err == error.NotFound) return;
@@ -1620,6 +1640,179 @@ fn artifactRepositoryDesiredResult(
     return provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, if (node.schema_version >= 2) &outputs_v2 else &outputs_v1, operation_handle);
 }
 
+fn secretBodyAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, physical_id: ?[]const u8, etag: ?[]const u8) ProviderError![]u8 {
+    var arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var root: std.json.ObjectMap = .empty;
+    if (physical_id) |name| try root.put(arena, "name", .{ .string = name });
+    if (etag) |tag| try root.put(arena, "etag", .{ .string = tag });
+    try root.put(arena, "labels", try valueToJson(arena, try requiredInputValue(node.inputs, "labels")));
+    try root.put(arena, "annotations", try valueToJson(arena, try requiredInputValue(node.inputs, "annotations")));
+    var replication: std.json.ObjectMap = .empty;
+    const mode = try requiredInput(node, "replication_mode");
+    if (std.mem.eql(u8, mode, "automatic")) {
+        var automatic: std.json.ObjectMap = .empty;
+        if (inputStringFromValue(node.inputs, "automatic_kms_key_name")) |kms| {
+            var encryption: std.json.ObjectMap = .empty;
+            try encryption.put(arena, "kmsKeyName", .{ .string = kms });
+            try automatic.put(arena, "customerManagedEncryption", .{ .object = encryption });
+        }
+        try replication.put(arena, "automatic", .{ .object = automatic });
+    } else if (std.mem.eql(u8, mode, "user_managed")) {
+        const replicas_json = try requiredInput(node, "replicas_json");
+        var parsed = std.json.parseFromSlice(std.json.Value, arena, replicas_json, .{}) catch return error.InvalidConfiguration;
+        defer parsed.deinit();
+        const replicas = jsonArray(parsed.value) orelse return error.InvalidConfiguration;
+        var api_replicas: std.json.Array = .init(arena);
+        for (replicas.items) |replica_value| {
+            const replica = jsonObject(replica_value) orelse return error.InvalidConfiguration;
+            var api_replica: std.json.ObjectMap = .empty;
+            try api_replica.put(arena, "location", .{ .string = jsonString(replica.get("location")) orelse return error.InvalidConfiguration });
+            if (jsonString(replica.get("kms_key_name"))) |kms| {
+                var encryption: std.json.ObjectMap = .empty;
+                try encryption.put(arena, "kmsKeyName", .{ .string = kms });
+                try api_replica.put(arena, "customerManagedEncryption", .{ .object = encryption });
+            }
+            try api_replicas.append(.{ .object = api_replica });
+        }
+        var managed: std.json.ObjectMap = .empty;
+        try managed.put(arena, "replicas", .{ .array = api_replicas });
+        try replication.put(arena, "userManaged", .{ .object = managed });
+    } else return error.InvalidConfiguration;
+    try root.put(arena, "replication", .{ .object = replication });
+
+    var topics: std.json.Array = .init(arena);
+    const topic_values = switch (try requiredInputValue(node.inputs, "topics")) {
+        .list => |items| items,
+        else => return error.InvalidConfiguration,
+    };
+    for (topic_values) |topic_value| {
+        const topic = switch (topic_value) {
+            .string => |text| text,
+            else => return error.InvalidConfiguration,
+        };
+        var entry: std.json.ObjectMap = .empty;
+        try entry.put(arena, "name", .{ .string = topic });
+        try topics.append(.{ .object = entry });
+    }
+    try root.put(arena, "topics", .{ .array = topics });
+
+    var aliases: std.json.ObjectMap = .empty;
+    const alias_fields = valueObjectFields(try requiredInputValue(node.inputs, "version_aliases")) orelse return error.InvalidConfiguration;
+    for (alias_fields) |field| {
+        const version = switch (field.value) {
+            .integer => |number| number,
+            else => return error.InvalidConfiguration,
+        };
+        const text = try std.fmt.allocPrint(arena, "{d}", .{version});
+        try aliases.put(arena, field.name, .{ .string = text });
+    }
+    try root.put(arena, "versionAliases", .{ .object = aliases });
+    if (inputStringFromValue(node.inputs, "next_rotation_time")) |next| {
+        const seconds = switch (try requiredInputValue(node.inputs, "rotation_period_seconds")) {
+            .integer => |number| number,
+            else => return error.InvalidConfiguration,
+        };
+        const period = try std.fmt.allocPrint(arena, "{d}s", .{seconds});
+        var rotation: std.json.ObjectMap = .empty;
+        try rotation.put(arena, "nextRotationTime", .{ .string = next });
+        try rotation.put(arena, "rotationPeriod", .{ .string = period });
+        try root.put(arena, "rotation", .{ .object = rotation });
+    }
+    return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = root }, .{}) catch error.OutOfMemory;
+}
+
+fn secretUpdateMaskAlloc(allocator: std.mem.Allocator, node: resource.ResourceNode, observed: value.Value) ProviderError![]u8 {
+    const fields = [_]struct { input: []const u8, api: []const u8 }{
+        .{ .input = "labels", .api = "labels" },
+        .{ .input = "annotations", .api = "annotations" },
+        .{ .input = "topics", .api = "topics" },
+        .{ .input = "next_rotation_time", .api = "rotation" },
+        .{ .input = "rotation_period_seconds", .api = "rotation" },
+        .{ .input = "version_aliases", .api = "version_aliases" },
+    };
+    var result: std.ArrayList(u8) = .empty;
+    errdefer result.deinit(allocator);
+    for (fields) |field| {
+        if (!inputChangedOptional(node.inputs, observed, field.input)) continue;
+        if (std.mem.indexOf(u8, result.items, field.api) != null) continue;
+        if (result.items.len > 0) try result.append(allocator, ',');
+        try result.appendSlice(allocator, field.api);
+    }
+    return result.toOwnedSlice(allocator) catch error.OutOfMemory;
+}
+
+fn secretReplicasJsonAlloc(allocator: std.mem.Allocator, input: std.json.Value) ProviderError![]u8 {
+    const replicas = jsonArray(input) orelse return error.ProviderBug;
+    const Item = struct { location: []const u8, kms: ?[]const u8 };
+    const items = try allocator.alloc(Item, replicas.items.len);
+    defer allocator.free(items);
+    for (replicas.items, 0..) |replica_value, index| {
+        const replica = jsonObject(replica_value) orelse return error.ProviderBug;
+        const encryption = if (replica.get("customerManagedEncryption")) |entry| jsonObject(entry) else null;
+        items[index] = .{ .location = jsonString(replica.get("location")) orelse return error.ProviderBug, .kms = if (encryption) |entry| jsonString(entry.get("kmsKeyName")) else null };
+    }
+    std.mem.sort(Item, items, {}, struct {
+        fn less(_: void, a: Item, b: Item) bool {
+            return std.mem.lessThan(u8, a.location, b.location);
+        }
+    }.less);
+    var arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var array: std.json.Array = .init(arena);
+    for (items) |item| {
+        var object: std.json.ObjectMap = .empty;
+        try object.put(arena, "location", .{ .string = item.location });
+        if (item.kms) |kms| try object.put(arena, "kms_key_name", .{ .string = kms });
+        try array.append(.{ .object = object });
+    }
+    return std.json.Stringify.valueAlloc(allocator, std.json.Value{ .array = array }, .{}) catch error.OutOfMemory;
+}
+
+fn secretTopicsValueAlloc(allocator: std.mem.Allocator, input: ?std.json.Value) ProviderError!value.Value {
+    const array = if (input) |entry| jsonArray(entry) orelse return error.ProviderBug else return ownValue(allocator, .{ .list = &.{} });
+    const values = try allocator.alloc(value.Value, array.items.len);
+    defer allocator.free(values);
+    for (array.items, 0..) |entry, index| {
+        const topic = jsonObject(entry) orelse return error.ProviderBug;
+        values[index] = .{ .string = jsonString(topic.get("name")) orelse return error.ProviderBug };
+    }
+    std.mem.sort(value.Value, values, {}, lessThanValueString);
+    return ownValue(allocator, .{ .list = values });
+}
+
+fn secretAliasesValueAlloc(allocator: std.mem.Allocator, input: ?std.json.Value) ProviderError!value.Value {
+    const object = if (input) |entry| jsonObject(entry) orelse return error.ProviderBug else return ownValue(allocator, .{ .object = &.{} });
+    const fields = try allocator.alloc(value.Field, object.count());
+    defer allocator.free(fields);
+    var iterator = object.iterator();
+    var index: usize = 0;
+    while (iterator.next()) |entry| : (index += 1) {
+        const number = switch (entry.value_ptr.*) {
+            .integer => |integer| integer,
+            .string => |text| std.fmt.parseInt(i64, text, 10) catch return error.ProviderBug,
+            else => return error.ProviderBug,
+        };
+        fields[index] = .{ .name = entry.key_ptr.*, .value = .{ .integer = number } };
+    }
+    return ownValue(allocator, .{ .object = fields });
+}
+
+fn durationSeconds(text: []const u8) ?i64 {
+    if (text.len < 2 or text[text.len - 1] != 's') return null;
+    return std.fmt.parseInt(i64, text[0 .. text.len - 1], 10) catch null;
+}
+
+fn stateOutputString(outputs: []const state.StateOutput, name: []const u8) ?[]const u8 {
+    for (outputs) |entry| if (std.mem.eql(u8, entry.name, name)) return switch (entry.value) {
+        .string => |text| text,
+        else => null,
+    };
+    return null;
+}
+
 fn secretResultFromJson(
     allocator: std.mem.Allocator,
     node: resource.ResourceNode,
@@ -1629,27 +1822,42 @@ fn secretResultFromJson(
     defer parsed.deinit();
     const object = jsonObject(parsed.value) orelse return error.ProviderBug;
     const physical_id = jsonString(object.get("name")) orelse return error.ProviderBug;
-    const replication_value = object.get("replication") orelse return error.ProviderBug;
-    const replication = jsonObject(replication_value) orelse return error.ProviderBug;
-    if (replication.get("automatic") == null) return error.ProviderBug;
-    const project_id = try requiredInput(node, "project_id");
-    const name = try requiredInput(node, "name");
-    const label_object = if (object.get("labels")) |labels_value|
-        jsonObject(labels_value) orelse return error.ProviderBug
-    else
-        std.json.ObjectMap.empty;
-    const label_fields = try jsonLabelFieldsAlloc(allocator, label_object);
-    defer allocator.free(label_fields);
-    const fields = [_]value.Field{
-        .{ .name = "labels", .value = .{ .object = label_fields } },
-        .{ .name = "name", .value = .{ .string = name } },
-        .{ .name = "project_id", .value = .{ .string = project_id } },
-        .{ .name = "replication", .value = .{ .string = "automatic" } },
-    };
+    const replication = jsonObject(object.get("replication") orelse return error.ProviderBug) orelse return error.ProviderBug;
+    var observed = value.Value.initOwned(allocator, node.inputs) catch |err| return mapValueError(err);
+    defer observed.deinit(allocator);
+    try replaceInputJson(allocator, &observed, "labels", object.get("labels") orelse .{ .object = std.json.ObjectMap.empty });
+    try replaceInputJson(allocator, &observed, "annotations", object.get("annotations") orelse .{ .object = std.json.ObjectMap.empty });
+    if (replication.get("automatic")) |automatic_value| {
+        try replaceInputString(allocator, &observed, "replication_mode", "automatic");
+        if (hasInput(observed, "automatic_kms_key_name")) {
+            const automatic = jsonObject(automatic_value) orelse return error.ProviderBug;
+            const encryption = if (automatic.get("customerManagedEncryption")) |entry| jsonObject(entry) else null;
+            try replaceInputString(allocator, &observed, "automatic_kms_key_name", if (encryption) |entry| jsonString(entry.get("kmsKeyName")) orelse "" else "");
+        }
+    } else if (replication.get("userManaged")) |managed_value| {
+        try replaceInputString(allocator, &observed, "replication_mode", "user_managed");
+        const managed = jsonObject(managed_value) orelse return error.ProviderBug;
+        const normalized = try secretReplicasJsonAlloc(allocator, managed.get("replicas") orelse return error.ProviderBug);
+        defer allocator.free(normalized);
+        try replaceInputString(allocator, &observed, "replicas_json", normalized);
+    } else return error.ProviderBug;
+    var topics = try secretTopicsValueAlloc(allocator, object.get("topics"));
+    defer topics.deinit(allocator);
+    try replaceInputValue(allocator, &observed, "topics", topics);
+    var aliases = try secretAliasesValueAlloc(allocator, object.get("versionAliases"));
+    defer aliases.deinit(allocator);
+    try replaceInputValue(allocator, &observed, "version_aliases", aliases);
+    if (hasInput(observed, "next_rotation_time")) {
+        const rotation = if (object.get("rotation")) |entry| jsonObject(entry) else null;
+        try replaceInputString(allocator, &observed, "next_rotation_time", if (rotation) |entry| jsonString(entry.get("nextRotationTime")) orelse "" else "");
+        try replaceInputValue(allocator, &observed, "rotation_period_seconds", .{ .integer = if (rotation) |entry| durationSeconds(jsonString(entry.get("rotationPeriod")) orelse "") orelse 0 else 0 });
+    }
+    const etag = jsonString(object.get("etag")) orelse "";
     const outputs = [_]state.StateOutput{
         .{ .name = "resource_name", .value = .{ .string = physical_id } },
+        .{ .name = "etag", .value = .{ .string = etag } },
     };
-    return provider_mod.ResourceResult.init(allocator, physical_id, .{ .object = &fields }, &outputs, null);
+    return provider_mod.ResourceResult.init(allocator, physical_id, observed, &outputs, null);
 }
 
 fn secretVersionResultFromJson(
@@ -1666,14 +1874,19 @@ fn secretVersionResultFromJson(
     const secret_name = physical_id[0..version_index];
     const version = physical_id[version_index + marker.len ..];
     if (version.len == 0) return error.ProviderBug;
+    const remote_state = jsonString(object.get("state")) orelse "ENABLED";
+    var observed = value.Value.initOwned(allocator, node.inputs) catch |err| return mapValueError(err);
+    defer observed.deinit(allocator);
+    try replaceInputString(allocator, &observed, "state", remote_state);
     const outputs = [_]state.StateOutput{
         .{ .name = "version", .value = .{ .secret_ref = .{
             .provider = "gcp-secret-manager",
             .resource = secret_name,
             .version = version,
         } } },
+        .{ .name = "state", .value = .{ .string = remote_state } },
     };
-    return provider_mod.ResourceResult.init(allocator, physical_id, node.inputs, &outputs, null);
+    return provider_mod.ResourceResult.init(allocator, physical_id, observed, &outputs, null);
 }
 
 fn secretIamMemberResult(
@@ -1850,11 +2063,19 @@ fn artifactRepositoryDiff(node: resource.ResourceNode, observed: value.Value) pr
 }
 
 fn secretDiff(node: resource.ResourceNode, observed: value.Value) provider_mod.DiffKind {
-    for ([_][]const u8{ "project_id", "name", "replication" }) |field| {
+    for ([_][]const u8{ "project_id", "name" }) |field| {
         const desired_value = inputStringFromValue(node.inputs, field) orelse return .replace;
         const observed_value = inputStringFromValue(observed, field) orelse return .replace;
         if (!std.mem.eql(u8, desired_value, observed_value)) return .replace;
     }
+    if (node.schema_version >= 2) for ([_][]const u8{ "replication_mode", "automatic_kms_key_name", "replicas_json" }) |field| {
+        if (inputChangedOptional(node.inputs, observed, field)) return .replace;
+    };
+    return .update;
+}
+
+fn secretVersionDiff(node: resource.ResourceNode, observed: value.Value) provider_mod.DiffKind {
+    for ([_][]const u8{ "project_id", "secret_id", "source" }) |field| if (inputChanged(node.inputs, observed, field)) return .replace;
     return .update;
 }
 
@@ -2046,6 +2267,13 @@ fn ownValue(allocator: std.mem.Allocator, input: value.Value) ProviderError!valu
     };
 }
 
+fn mapValueError(err: value.ValueError) ProviderError {
+    return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.DuplicateField => error.ProviderBug,
+    };
+}
+
 fn requiredInputValue(inputs: value.Value, name: []const u8) ProviderError!value.Value {
     return valueField(valueObjectFields(inputs) orelse return error.InvalidConfiguration, name) orelse error.InvalidConfiguration;
 }
@@ -2071,6 +2299,20 @@ fn inputChanged(desired: value.Value, observed: value.Value, name: []const u8) b
     const left_hash = left.sha256(std.heap.page_allocator) catch return true;
     const right_hash = right.sha256(std.heap.page_allocator) catch return true;
     return !std.mem.eql(u8, &left_hash, &right_hash);
+}
+
+fn inputChangedOptional(desired: value.Value, observed: value.Value, name: []const u8) bool {
+    const left = requiredInputValue(desired, name) catch null;
+    const right = requiredInputValue(observed, name) catch null;
+    if (left == null or right == null) return left != null or right != null;
+    const left_hash = left.?.sha256(std.heap.page_allocator) catch return true;
+    const right_hash = right.?.sha256(std.heap.page_allocator) catch return true;
+    return !std.mem.eql(u8, &left_hash, &right_hash);
+}
+
+fn hasInput(inputs: value.Value, name: []const u8) bool {
+    _ = requiredInputValue(inputs, name) catch return false;
+    return true;
 }
 
 fn valueObjectFields(input: value.Value) ?[]const value.Field {
@@ -2212,6 +2454,25 @@ fn jsonObject(json_value: std.json.Value) ?std.json.ObjectMap {
         .object => |object| object,
         else => null,
     };
+}
+
+fn jsonArray(json_value: std.json.Value) ?std.json.Array {
+    return switch (json_value) {
+        .array => |array| array,
+        else => null,
+    };
+}
+
+fn lessThanValueString(_: void, left: value.Value, right: value.Value) bool {
+    const left_text = switch (left) {
+        .string => |text| text,
+        else => "",
+    };
+    const right_text = switch (right) {
+        .string => |text| text,
+        else => "",
+    };
+    return std.mem.lessThan(u8, left_text, right_text);
 }
 
 fn jsonString(json_value: ?std.json.Value) ?[]const u8 {

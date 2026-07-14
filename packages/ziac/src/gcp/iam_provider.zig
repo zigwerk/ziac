@@ -29,6 +29,9 @@ const supported_types = [_][]const u8{
     "gcp.iam.ServiceAccountIamBinding",
     "gcp.iam.ServiceAccountIamMember",
     "gcp.identity.TenantIamMember",
+    "gcp.kms.CryptoKeyIamMember",
+    "gcp.kms.KeyRingIamMember",
+    "gcp.secret.SecretIamMember",
     "gcp.spanner.DatabaseIamMember",
     "gcp.spanner.InstanceIamMember",
 };
@@ -45,7 +48,7 @@ pub const Handler = struct {
         node: resource.ResourceNode,
         physical_override: ?[]const u8,
     ) ProviderError!provider_mod.ReadResult {
-        const target = try requiredString(node.inputs, "resource_name");
+        const target = try resolvedResourceName(context, node);
         const physical = try physicalIdAlloc(context.allocator, node, target);
         defer context.allocator.free(physical);
         if (physical_override) |provided| if (!std.mem.eql(u8, provided, physical)) return error.InvalidConfiguration;
@@ -99,7 +102,7 @@ pub const Handler = struct {
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!void {
-        const target = try requiredString(node.inputs, "resource_name");
+        const target = try resolvedResourceName(context, node);
         const expected = try physicalIdAlloc(context.allocator, node, target);
         defer context.allocator.free(expected);
         if (!std.mem.eql(u8, expected, physical_id)) return error.InvalidConfiguration;
@@ -113,7 +116,7 @@ pub const Handler = struct {
         node: resource.ResourceNode,
         should_exist: bool,
     ) ProviderError!provider_mod.ResourceResult {
-        const target = try requiredString(node.inputs, "resource_name");
+        const target = try resolvedResourceName(context, node);
         var attempt: usize = 0;
         while (true) : (attempt += 1) {
             try context.checkActive();
@@ -185,6 +188,8 @@ fn ownership(node: resource.ResourceNode) ProviderError!Ownership {
 }
 
 fn policyApi(node: resource.ResourceNode) client_mod.Api {
+    if (std.mem.startsWith(u8, node.type_name, "gcp.kms.")) return .cloud_kms;
+    if (std.mem.startsWith(u8, node.type_name, "gcp.secret.")) return .secret_manager;
     if (std.mem.startsWith(u8, node.type_name, "gcp.apigateway.")) return .api_gateway;
     if (std.mem.startsWith(u8, node.type_name, "gcp.identity.")) return .identity_toolkit;
     if (std.mem.startsWith(u8, node.type_name, "gcp.firestore.")) return .firestore;
@@ -201,6 +206,9 @@ fn policyPathAlloc(
     target: []const u8,
     get: bool,
 ) ProviderError![]const u8 {
+    if (std.mem.startsWith(u8, node.type_name, "gcp.kms.") or std.mem.startsWith(u8, node.type_name, "gcp.secret.")) {
+        return std.fmt.allocPrint(allocator, "/v1/{s}:{s}IamPolicy", .{ target, if (get) "get" else "set" }) catch error.OutOfMemory;
+    }
     if (std.mem.startsWith(u8, node.type_name, "gcp.apigateway.")) {
         return std.fmt.allocPrint(allocator, "/v1/{s}:{s}IamPolicy", .{ target, if (get) "get" else "set" }) catch error.OutOfMemory;
     }
@@ -620,6 +628,14 @@ fn cloneJsonValue(allocator: std.mem.Allocator, source: std.json.Value) Provider
             );
             break :blk .{ .object = object };
         },
+    };
+}
+
+fn resolvedResourceName(context: *provider_mod.OperationContext, node: resource.ResourceNode) ProviderError![]const u8 {
+    return switch (try requiredValue(node.inputs, "resource_name")) {
+        .string => |text| text,
+        .output_ref => |reference| context.resolveOutputString(reference),
+        else => error.InvalidConfiguration,
     };
 }
 

@@ -1,4 +1,7 @@
 comptime {
+    _ = @import("gcp_kms_secret_actions_test.zig");
+    _ = @import("gcp_kms_secret_product_test.zig");
+    _ = @import("gcp_kms_live_provider_test.zig");
     _ = @import("gcp_cloud_deploy_product_test.zig");
     _ = @import("gcp_cloud_deploy_live_provider_test.zig");
     _ = @import("gcp_cloud_deploy_actions_test.zig");

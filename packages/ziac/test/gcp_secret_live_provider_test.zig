@@ -63,12 +63,10 @@ test "live GCP provider manages Secret Manager metadata drift and import" {
 
 test "live GCP secret version resolves payload ephemerally and stores only references" {
     const enabled = "{\"name\":\"projects/ziac-dev/secrets/database-url/versions/7\",\"state\":\"ENABLED\"}";
-    const destroyed = "{\"name\":\"projects/ziac-dev/secrets/database-url/versions/7\",\"state\":\"DESTROYED\"}";
     const responses = [_]zstd.Http.Response{
         .{ .status = 200, .body = enabled },
         .{ .status = 200, .body = enabled },
-        .{ .status = 200, .body = destroyed },
-        .{ .status = 200, .body = destroyed },
+        .{ .status = 200, .body = enabled },
         .{ .status = 200, .body = enabled },
     };
     var harness: Harness = undefined;
@@ -106,9 +104,9 @@ test "live GCP secret version resolves payload ephemerally and stores only refer
     defer noop.deinit();
     try std.testing.expectEqual(ziac.provider.DiffKind.noop, noop.kind);
     try live.deleteWithContext(&context, version.node, created.physical_id);
-    var gone = try live.readWithContext(&context, version.node);
-    defer gone.deinit();
-    try std.testing.expect(gone == .absent);
+    var retained = try live.readWithContext(&context, version.node);
+    defer retained.deinit();
+    try std.testing.expect(retained == .present);
     var imported = try live.importWithContext(&context, version.node, created.physical_id);
     defer imported.deinit();
     try std.testing.expect(imported.outputs[0].value == .secret_ref);
@@ -116,6 +114,28 @@ test "live GCP secret version resolves payload ephemerally and stores only refer
     const observed_json = try imported.observed_inputs.canonicalJsonAlloc(std.testing.allocator);
     defer std.testing.allocator.free(observed_json);
     try std.testing.expect(std.mem.indexOf(u8, observed_json, "sentinel-secret-for-tests") == null);
+    try std.testing.expectEqual(@as(usize, 4), harness.transport.requests.items.len);
+    for (harness.transport.requests.items) |request| try std.testing.expect(!std.mem.endsWith(u8, request.url, ":destroy"));
+}
+
+test "live GCP secret version cleanup can disable but never implicitly destroys" {
+    const disabled = "{\"name\":\"projects/ziac-dev/secrets/api-key/versions/3\",\"state\":\"DISABLED\"}";
+    const responses = [_]zstd.Http.Response{.{ .status = 200, .body = disabled }};
+    var harness: Harness = undefined;
+    harness.init(&responses);
+    defer harness.deinit();
+    var version = try ziac.gcp.secret_manager.SecretVersion.build(std.testing.allocator, config(&.{}), .{
+        .name = "retired",
+        .secret_id = "api-key",
+        .source = .{ .provider = "config", .resource = "API_KEY" },
+        .removal_policy = .disable,
+    });
+    defer version.deinit(std.testing.allocator);
+    const live = harness.live.provider();
+    var context = ziac.provider.OperationContext.init(std.testing.allocator);
+    try live.deleteWithContext(&context, version.node, "projects/ziac-dev/secrets/api-key/versions/3");
+    try std.testing.expect(std.mem.endsWith(u8, harness.transport.requests.items[0].url, ":disable"));
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].url, ":destroy") == null);
 }
 
 test "live GCP secret IAM member preserves conditional policy fields" {
