@@ -5,9 +5,10 @@ const resource = @import("../resource.zig");
 const validation = @import("validation.zig");
 const value = @import("../value.zig");
 
-pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || error{ DuplicateField, MissingService };
+pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || error{ DuplicateField, InvalidName, MissingService };
 
 pub const ServiceArgs = struct {
+    name: ?[]const u8 = null,
     service: []const u8,
 };
 
@@ -31,7 +32,9 @@ pub const Service = struct {
     ) BuildError!Service {
         try provider.validate();
         if (args.service.len == 0) return error.MissingService;
-        const id = try std.fmt.allocPrint(allocator, "gcp.project.Service.{s}", .{args.service});
+        const logical_name = args.name orelse args.service;
+        if (logical_name.len == 0) return error.InvalidName;
+        const id = try std.fmt.allocPrint(allocator, "gcp.project.Service.{s}", .{logical_name});
         defer allocator.free(id);
         const fields = [_]value.Field{
             .{ .name = "project_id", .value = .{ .string = provider.project_id } },
@@ -42,7 +45,7 @@ pub const Service = struct {
             .provider = .gcp,
             .type_name = "gcp.project.Service",
             .schema_version = 1,
-            .logical_id = args.service,
+            .logical_id = logical_name,
             .inputs = .{ .object = &fields },
         }) catch |err| switch (err) {
             error.DuplicateField => return error.DuplicateField,

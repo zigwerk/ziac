@@ -1158,3 +1158,29 @@ relocatable installation, migration guard, root TypeScript checks, static
 secret checks, non-root arm64 container probe and complete release gate pass.
 `scripts/qualify-kms-secret.sh` remains the fail-closed authenticated boundary
 and never promotes its local receipt to live Google Cloud evidence.
+
+M78 is locally complete and awaiting authenticated disposable-organization
+qualification. Five managed resources add folders, projects, liens, project
+billing associations and Google-managed service identities. The
+`ProjectFoundation` component compiles hierarchy, billing, API enablement and
+service agents into one retained-first graph. Its logical identities remain
+collision-free when several project foundations share one monorepo canvas.
+
+The provider checkpoints Resource Manager and Service Usage operations, adopts
+server-assigned numeric identities, moves projects through Google's native
+method, applies exact masks with etags, and keeps optional project display names
+outside ownership when omitted. Hierarchy deletion, lien removal and billing
+detach all require declaration-level intent plus explicit operation authority.
+Service identities remain undeletable.
+
+Exact deployer permissions, pinned Resource Manager, Cloud Billing and Service
+Usage Discovery contracts, Cloud Asset hierarchy identity, topology edges and
+zero-dollar management estimates are synchronized. See
+`docs/gcp-organization-foundation.md`.
+
+The M78 Testing v2 package gate discovers and executes 855 tests: 854 pass,
+one credential-gated test skips, and none fail or remain pending; no leaks or
+logged errors are reported. The catalog reports 186 managed resources.
+`scripts/qualify-organization-foundation.sh` remains the fail-closed boundary
+for live project creation, billing attachment, second-state import/no-op and
+explicit disposable-project cleanup.

@@ -33,6 +33,13 @@ pub const sources = [_]Source{
         .document_sha256 = "a1d4bccc0c316e9de358a7289fffcd91fb29dbc6b44bf3f9a1e10b9474440296",
     },
     .{
+        .id = "cloudbilling:v1",
+        .version = "v1",
+        .revision = "20260710",
+        .discovery_url = "https://cloudbilling.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "1daf9db8ef1984bbc46adfdeec581e1f1774a87fbec2ae0fda5b4c0cf302f10a",
+    },
+    .{
         .id = "cloudbuild:v1",
         .version = "v1",
         .revision = "20260627",
@@ -66,6 +73,13 @@ pub const sources = [_]Source{
         .revision = "20260702",
         .discovery_url = "https://cloudkms.googleapis.com/$discovery/rest?version=v1",
         .document_sha256 = "0d84c07e14c61f76c620f1910ab59a36421721596957c300870a2df003c848d9",
+    },
+    .{
+        .id = "cloudresourcemanager:v3",
+        .version = "v3",
+        .revision = "20260709",
+        .discovery_url = "https://cloudresourcemanager.googleapis.com/$discovery/rest?version=v3",
+        .document_sha256 = "19b05a73c08cb7650e9da7072503cd602ddb68b7341f29ce3ea15999f9f69253",
     },
     .{
         .id = "compute:v1",
@@ -157,6 +171,13 @@ pub const sources = [_]Source{
         .revision = "20260622",
         .discovery_url = "https://servicenetworking.googleapis.com/$discovery/rest?version=v1",
         .document_sha256 = "d845894da9ed689b1b76e80a570c105834b3dcd89670f389ba5d0d147ea3575f",
+    },
+    .{
+        .id = "serviceusage:v1beta1",
+        .version = "v1beta1",
+        .revision = "20260629",
+        .discovery_url = "https://serviceusage.googleapis.com/$discovery/rest?version=v1beta1",
+        .document_sha256 = "7fa0f49af58ad3b8d7591c176f0004cb84125abcbc973e4b95cd17426346e61d",
     },
     .{
         .id = "spanner:v1",

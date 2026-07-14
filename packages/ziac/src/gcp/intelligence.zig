@@ -81,6 +81,7 @@ pub fn synthesize(allocator: std.mem.Allocator, usages: []const RpcUsage) std.me
         try appendUnique(allocator, &apis, usage.service);
         try appendUnique(allocator, &methods, usage.method);
         if (permissionForMethod(usage.method)) |permission| try appendUnique(allocator, &permissions, permission);
+        for (additionalPermissionsForMethod(usage.method)) |permission| try appendUnique(allocator, &permissions, permission);
     }
     std.mem.sort([]const u8, apis.items, {}, lessThan);
     std.mem.sort([]const u8, methods.items, {}, lessThan);
@@ -98,6 +99,7 @@ pub fn synthesizeGraph(allocator: std.mem.Allocator, graph: *const resource.Reso
     for (graph.resources.items) |node| {
         const contracts = rpcUsagesForType(node.type_name);
         try usages.appendSlice(allocator, contracts);
+        if (conditionalRpcUsage(node)) |usage| try usages.append(allocator, usage);
         if (std.mem.eql(u8, node.type_name, "gcp.redis.Instance") and (inputBool(node, "auth_enabled") orelse false)) {
             try usages.append(allocator, .{
                 .service = "secretmanager.googleapis.com",
@@ -120,6 +122,15 @@ pub fn synthesizePermissionPlan(
     errdefer deinitList(allocator, &runtime);
     for (graph.resources.items) |node| {
         for (rpcUsagesForType(node.type_name)) |usage| {
+            const permission = permissionForMethod(usage.method) orelse continue;
+            try appendPermissionEntry(allocator, &entries, .deployer, permission, node.id, usage.method);
+            try appendUnique(allocator, &deployer, permission);
+            for (additionalPermissionsForMethod(usage.method)) |additional| {
+                try appendPermissionEntry(allocator, &entries, .deployer, additional, node.id, usage.method);
+                try appendUnique(allocator, &deployer, additional);
+            }
+        }
+        if (conditionalRpcUsage(node)) |usage| {
             const permission = permissionForMethod(usage.method) orelse continue;
             try appendPermissionEntry(allocator, &entries, .deployer, permission, node.id, usage.method);
             try appendUnique(allocator, &deployer, permission);
@@ -709,6 +720,23 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Organizations.SetIamPolicy", .permission = "resourcemanager.organizations.setIamPolicy" },
         .{ .suffix = "ServiceAccounts.GetIamPolicy", .permission = "iam.serviceAccounts.getIamPolicy" },
         .{ .suffix = "ServiceAccounts.SetIamPolicy", .permission = "iam.serviceAccounts.setIamPolicy" },
+        .{ .suffix = "Folders.GetFolder", .permission = "resourcemanager.folders.get" },
+        .{ .suffix = "Folders.CreateFolder", .permission = "resourcemanager.folders.create" },
+        .{ .suffix = "Folders.UpdateFolder", .permission = "resourcemanager.folders.update" },
+        .{ .suffix = "Folders.MoveFolder", .permission = "resourcemanager.folders.move" },
+        .{ .suffix = "Folders.DeleteFolder", .permission = "resourcemanager.folders.delete" },
+        .{ .suffix = "Projects.GetProject", .permission = "resourcemanager.projects.get" },
+        .{ .suffix = "Projects.CreateProject", .permission = "resourcemanager.projects.create" },
+        .{ .suffix = "Projects.UpdateProject", .permission = "resourcemanager.projects.update" },
+        .{ .suffix = "Projects.MoveProject", .permission = "resourcemanager.projects.move" },
+        .{ .suffix = "Projects.DeleteProject", .permission = "resourcemanager.projects.delete" },
+        .{ .suffix = "Liens.GetLien", .permission = "resourcemanager.projects.get" },
+        .{ .suffix = "Liens.CreateLien", .permission = "resourcemanager.projects.updateLiens" },
+        .{ .suffix = "Liens.DeleteLien", .permission = "resourcemanager.projects.updateLiens" },
+        .{ .suffix = "CloudBilling.GetProjectBillingInfo", .permission = "resourcemanager.projects.get" },
+        .{ .suffix = "CloudBilling.UpdateProjectBillingInfo", .permission = "billing.resourceAssociations.create" },
+        .{ .suffix = "CloudBilling.DetachProjectBillingInfo", .permission = "resourcemanager.projects.deleteBillingAssignment" },
+        .{ .suffix = "ServiceUsage.GenerateServiceIdentity", .permission = "serviceusage.services.use" },
         .{ .suffix = "Roles.GetRole", .permission = "iam.roles.get" },
         .{ .suffix = "Roles.CreateRole", .permission = "iam.roles.create" },
         .{ .suffix = "Roles.UpdateRole", .permission = "iam.roles.update" },
@@ -858,6 +886,27 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
     };
     for (mappings) |mapping| if (std.mem.endsWith(u8, method, mapping.suffix)) return mapping.permission;
     return null;
+}
+
+fn conditionalRpcUsage(node: resource.ResourceNode) ?RpcUsage {
+    if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Folder") and (inputBool(node, "request_delete") orelse false))
+        return .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Folders.DeleteFolder" };
+    if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Project") and (inputBool(node, "request_delete") orelse false))
+        return .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Projects.DeleteProject" };
+    if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Lien") and std.mem.eql(u8, inputString(node, "removal_policy") orelse "retain", "delete"))
+        return .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Liens.DeleteLien" };
+    if (std.mem.eql(u8, node.type_name, "gcp.billing.ProjectBillingAssociation") and std.mem.eql(u8, inputString(node, "removal_policy") orelse "retain", "detach"))
+        return .{ .service = "cloudbilling.googleapis.com", .method = "google.cloud.billing.v1.CloudBilling.DetachProjectBillingInfo" };
+    return null;
+}
+
+fn additionalPermissionsForMethod(method: []const u8) []const []const u8 {
+    if (std.mem.endsWith(u8, method, "CloudBilling.UpdateProjectBillingInfo")) return &.{
+        "resourcemanager.projects.createBillingAssignment",
+        "serviceusage.effectivepolicy.get",
+        "serviceusage.services.list",
+    };
+    return &.{};
 }
 
 pub fn jobExecutionUsages() []const RpcUsage {
@@ -1668,6 +1717,29 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
+    const organization_folder = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Folders.GetFolder" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Folders.CreateFolder" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Folders.UpdateFolder" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Folders.MoveFolder" },
+    };
+    const organization_project = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Projects.GetProject" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Projects.CreateProject" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Projects.UpdateProject" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Projects.MoveProject" },
+    };
+    const organization_lien = [_]RpcUsage{
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Liens.GetLien" },
+        .{ .service = "cloudresourcemanager.googleapis.com", .method = "google.cloud.resourcemanager.v3.Liens.CreateLien" },
+    };
+    const project_billing = [_]RpcUsage{
+        .{ .service = "cloudbilling.googleapis.com", .method = "google.cloud.billing.v1.CloudBilling.GetProjectBillingInfo" },
+        .{ .service = "cloudbilling.googleapis.com", .method = "google.cloud.billing.v1.CloudBilling.UpdateProjectBillingInfo" },
+    };
+    const service_identity = [_]RpcUsage{
+        .{ .service = "serviceusage.googleapis.com", .method = "google.api.serviceusage.v1beta1.ServiceUsage.GenerateServiceIdentity" },
+    };
     const kms_key_ring = [_]RpcUsage{
         .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.KeyRings.GetKeyRing" },
         .{ .service = "cloudkms.googleapis.com", .method = "google.cloud.kms.v1.KeyRings.CreateKeyRing" },
@@ -1821,6 +1893,11 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.secret.Secret")) return &secret;
     if (std.mem.eql(u8, type_name, "gcp.secret.SecretVersion")) return &secret_version;
     if (std.mem.eql(u8, type_name, "gcp.secret.SecretIamMember")) return &secret_iam;
+    if (std.mem.eql(u8, type_name, "gcp.resourcemanager.Folder")) return &organization_folder;
+    if (std.mem.eql(u8, type_name, "gcp.resourcemanager.Project")) return &organization_project;
+    if (std.mem.eql(u8, type_name, "gcp.resourcemanager.Lien")) return &organization_lien;
+    if (std.mem.eql(u8, type_name, "gcp.billing.ProjectBillingAssociation")) return &project_billing;
+    if (std.mem.eql(u8, type_name, "gcp.serviceusage.ServiceIdentity")) return &service_identity;
     if (std.mem.eql(u8, type_name, "gcp.compute.BackendService")) return &compute_backend;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionServerlessNeg")) return &compute_neg;
     if (std.mem.eql(u8, type_name, "gcp.compute.Disk") or std.mem.eql(u8, type_name, "gcp.compute.RegionDisk")) return &compute_disk;

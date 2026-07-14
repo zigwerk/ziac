@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 181 managed GCP resource types.
+The current deterministic provider gate contains 186 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -35,6 +35,11 @@ silently diverge.
 
 ### Foundation and identity
 
+- `gcp.resourcemanager.Folder`
+- `gcp.resourcemanager.Project`
+- `gcp.resourcemanager.Lien`
+- `gcp.billing.ProjectBillingAssociation`
+- `gcp.serviceusage.ServiceIdentity`
 - `gcp.project.Service`
 - `gcp.iam.ServiceAccount`
 - `gcp.iam.ProjectMember`
@@ -42,6 +47,15 @@ silently diverge.
 - `gcp.secret.Secret`
 - `gcp.secret.SecretVersion`
 - `gcp.secret.SecretIamMember`
+
+M78 adds retained-first organization and project foundations. Server-assigned
+folder/project identities, native project moves, etag and exact field masks,
+explicit billing detach, liens and resumable service-agent generation are
+covered by the live provider. `ProjectFoundation` safely composes multiple
+projects in one graph by project-scoping billing, API and service-identity
+logical IDs. Permission synthesis, Cloud Asset hierarchy, canvas edges and
+explicit zero-dollar management estimates are synchronized. See
+`gcp-organization-foundation.md`.
 
 ### KMS and Secret Manager security lifecycle
 

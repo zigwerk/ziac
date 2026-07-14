@@ -118,6 +118,10 @@ comptime {
     _ = @import("gcp_oauth_test.zig");
     _ = @import("gcp_kms_vault_test.zig");
     _ = @import("gcp_kms_test.zig");
+    _ = @import("gcp_organization_test.zig");
+    _ = @import("gcp_organization_components_test.zig");
+    _ = @import("gcp_organization_live_provider_test.zig");
+    _ = @import("gcp_organization_product_test.zig");
     _ = @import("gcp_scheduler_test.zig");
     _ = @import("gcp_tasks_test.zig");
     _ = @import("gcp_eventarc_test.zig");

@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 181), managed_count);
+    try std.testing.expectEqual(@as(usize, 186), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -26,11 +26,11 @@ test "every live provider type is registered as managed coverage" {
         if (entry.stage == .managed or entry.stage == .qualified) catalog_managed_count += 1;
     }
 
-    try std.testing.expectEqual(catalog_managed_count, ziac.gcp.live_provider.managed_type_names.len);
+    if (catalog_managed_count != ziac.gcp.live_provider.managed_type_names.len) return error.LiveProviderCatalogCountMismatch;
     for (ziac.gcp.live_provider.managed_type_names, 0..) |type_name, index| {
-        if (index > 0) try std.testing.expect(std.mem.order(u8, ziac.gcp.live_provider.managed_type_names[index - 1], type_name) == .lt);
+        if (index > 0 and std.mem.order(u8, ziac.gcp.live_provider.managed_type_names[index - 1], type_name) != .lt) return error.UnsortedLiveProviderTypes;
         const entry = ziac.gcp.coverage.find(type_name) orelse return error.LiveProviderTypeMissingFromCoverage;
-        try std.testing.expect(entry.stage == .managed or entry.stage == .qualified);
+        if (entry.stage != .managed and entry.stage != .qualified) return error.LiveProviderTypeNotManaged;
     }
 }
 
@@ -51,6 +51,20 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     try std.testing.expect(run_job.capabilities.estate);
     try std.testing.expect(run_job.capabilities.visual);
     try std.testing.expect(run_job.capabilities.cost);
+
+    const project = ziac.gcp.coverage.find("gcp.resourcemanager.Project") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M78", project.milestone);
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.resource_manager, project.service);
+    try std.testing.expect(project.capabilities.update);
+    try std.testing.expect(project.capabilities.estate);
+
+    const billing = ziac.gcp.coverage.find("gcp.billing.ProjectBillingAssociation") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.cloud_billing, billing.service);
+    try std.testing.expect(billing.capabilities.delete_resource);
+
+    const service_identity = ziac.gcp.coverage.find("gcp.serviceusage.ServiceIdentity") orelse return error.TestExpectedEqual;
+    try std.testing.expect(!service_identity.capabilities.delete_resource);
+    try std.testing.expect(service_identity.capabilities.visual);
 
     const job_invoker = ziac.gcp.coverage.find("gcp.run.JobIamMember") orelse return error.TestExpectedEqual;
     try std.testing.expectEqual(ziac.gcp.coverage.Stage.managed, job_invoker.stage);

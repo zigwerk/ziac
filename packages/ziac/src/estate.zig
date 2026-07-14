@@ -373,6 +373,12 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.secret.Secret"
     else if (std.mem.eql(u8, asset_type, "secretmanager.googleapis.com/SecretVersion"))
         "gcp.secret.SecretVersion"
+    else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/Folder"))
+        "gcp.resourcemanager.Folder"
+    else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/Project"))
+        "gcp.resourcemanager.Project"
+    else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/Lien"))
+        "gcp.resourcemanager.Lien"
     else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/Parameter"))
         "gcp.parametermanager.Parameter"
     else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/ParameterVersion"))
@@ -604,6 +610,9 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "cloudkms.googleapis.com/CryptoKeyVersion", .prefix = "//cloudkms.googleapis.com/" },
         .{ .asset_type = "secretmanager.googleapis.com/Secret", .prefix = "//secretmanager.googleapis.com/" },
         .{ .asset_type = "secretmanager.googleapis.com/SecretVersion", .prefix = "//secretmanager.googleapis.com/" },
+        .{ .asset_type = "cloudresourcemanager.googleapis.com/Folder", .prefix = "//cloudresourcemanager.googleapis.com/" },
+        .{ .asset_type = "cloudresourcemanager.googleapis.com/Project", .prefix = "//cloudresourcemanager.googleapis.com/" },
+        .{ .asset_type = "cloudresourcemanager.googleapis.com/Lien", .prefix = "//cloudresourcemanager.googleapis.com/" },
         .{ .asset_type = "parametermanager.googleapis.com/Parameter", .prefix = "//parametermanager.googleapis.com/" },
         .{ .asset_type = "parametermanager.googleapis.com/ParameterVersion", .prefix = "//parametermanager.googleapis.com/" },
         .{ .asset_type = "certificatemanager.googleapis.com/DnsAuthorization", .prefix = "//certificatemanager.googleapis.com/" },

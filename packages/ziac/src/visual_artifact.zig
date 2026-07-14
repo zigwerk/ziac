@@ -193,6 +193,7 @@ fn appendResource(
     try appendLoggingDetails(output, allocator, item.node);
     try appendBuildDeliveryDetails(output, allocator, item.node);
     try appendCloudDeployDetails(output, allocator, item.node);
+    try appendOrganizationFoundationDetails(output, allocator, item.node);
     try appendKmsSecretDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
@@ -202,7 +203,7 @@ fn appendResource(
     try appendApplicationServicesDetails(output, allocator, item.node);
     try appendPrivateConnectivityDetails(output, allocator, item.node);
     try appendIamDetails(output, allocator, item.node);
-    try appendConfigurationCost(output, allocator, observed_at_millis);
+    try appendConfigurationCost(output, allocator, item.node, observed_at_millis);
     try output.appendSlice(allocator, ",\"inputs\":");
     try appendSafeValue(output, allocator, item.node.inputs, null);
     try output.appendSlice(allocator, ",\"lifecycle\":{");
@@ -218,17 +219,28 @@ fn appendResource(
 fn appendConfigurationCost(
     output: *std.ArrayList(u8),
     allocator: std.mem.Allocator,
+    node: resource.ResourceNode,
     observed_at_millis: u64,
 ) !void {
     try output.appendSlice(allocator, ",\"cost\":{");
     try appendNamedString(output, allocator, "schema", "ziac.resource-cost.v1", false);
     try appendNamedString(output, allocator, "origin", "configuration_estimate", true);
     try appendNamedString(output, allocator, "currency", "USD", true);
-    try output.appendSlice(allocator, ",\"amount_micros\":null");
+    if (isNoChargeFoundationType(node.type_name))
+        try output.appendSlice(allocator, ",\"amount_micros\":0")
+    else
+        try output.appendSlice(allocator, ",\"amount_micros\":null");
     try appendNamedString(output, allocator, "confidence", "explicit_usage", true);
     try appendNamedUnsigned(output, allocator, "observed_at_millis", observed_at_millis, true);
     try appendNamedBool(output, allocator, "is_billing_export", false, true);
     try output.append(allocator, '}');
+}
+
+fn isNoChargeFoundationType(type_name: []const u8) bool {
+    return std.mem.startsWith(u8, type_name, "gcp.resourcemanager.") or
+        std.mem.eql(u8, type_name, "gcp.billing.ProjectBillingAssociation") or
+        std.mem.eql(u8, type_name, "gcp.serviceusage.ServiceIdentity") or
+        std.mem.eql(u8, type_name, "gcp.project.Service");
 }
 
 fn appendEdge(
@@ -736,6 +748,34 @@ fn appendKmsSecretDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocat
     try appendStorageListCount(output, allocator, node, "topics", "topic_count");
     try appendStorageObjectCount(output, allocator, node, "version_aliases", "alias_count");
     try appendJsonArrayStringCount(output, allocator, node, "replicas_json", "replica_count");
+    try output.append(allocator, '}');
+}
+
+fn appendOrganizationFoundationDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Folder"))
+        "folder"
+    else if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Project"))
+        "project"
+    else if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Lien"))
+        "lien"
+    else if (std.mem.eql(u8, node.type_name, "gcp.billing.ProjectBillingAssociation"))
+        "billing_association"
+    else if (std.mem.eql(u8, node.type_name, "gcp.serviceusage.ServiceIdentity"))
+        "service_identity"
+    else if (std.mem.eql(u8, node.type_name, "gcp.project.Service"))
+        "enabled_service"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"organization_foundation\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "display_name", "display_name");
+    try appendOptionalStorageString(output, allocator, node, "project_id", "project_id");
+    try appendOptionalStorageString(output, allocator, node, "billing_account", "billing_account");
+    try appendOptionalStorageString(output, allocator, node, "service", "service");
+    try appendOptionalStorageString(output, allocator, node, "origin", "origin");
+    try appendOptionalStorageString(output, allocator, node, "removal_policy", "removal_policy");
+    try appendOptionalStorageBool(output, allocator, node, "request_delete", "request_delete");
+    try appendStorageListCount(output, allocator, node, "restrictions", "restriction_count");
     try output.append(allocator, '}');
 }
 
@@ -1316,6 +1356,11 @@ fn appendJsonArrayStringCount(
 }
 
 fn resourceScope(node: resource.ResourceNode, regions: []const []const u8) []const u8 {
+    if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Folder")) return "folder";
+    if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Project") or
+        std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Lien") or
+        std.mem.eql(u8, node.type_name, "gcp.billing.ProjectBillingAssociation") or
+        std.mem.eql(u8, node.type_name, "gcp.serviceusage.ServiceIdentity")) return "project";
     if (isGlobalType(node.type_name)) return "global";
     if (objectField(node.inputs, "zone")) |zone| if (zone == .string and zone.string.len > 0) return "zonal";
     if (regions.len > 1) return "multi_region";
@@ -1345,6 +1390,11 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.resourcemanager.Project") and std.mem.eql(u8, to_type, "gcp.resourcemanager.Folder")) return "hierarchy_parent";
+    if (std.mem.eql(u8, from_type, "gcp.billing.ProjectBillingAssociation") and std.mem.eql(u8, to_type, "gcp.resourcemanager.Project")) return "billing_attachment";
+    if (std.mem.eql(u8, from_type, "gcp.project.Service") and std.mem.eql(u8, to_type, "gcp.resourcemanager.Project")) return "api_enablement";
+    if (std.mem.eql(u8, from_type, "gcp.serviceusage.ServiceIdentity") and std.mem.eql(u8, to_type, "gcp.resourcemanager.Project")) return "service_identity";
+    if (std.mem.eql(u8, from_type, "gcp.resourcemanager.Lien") and std.mem.eql(u8, to_type, "gcp.resourcemanager.Project")) return "deletion_guard";
     if (std.mem.eql(u8, from_type, "gcp.kms.CryptoKey") and std.mem.eql(u8, to_type, "gcp.kms.KeyRing")) return "key_membership";
     if (std.mem.eql(u8, from_type, "gcp.kms.CryptoKeyVersion") and std.mem.eql(u8, to_type, "gcp.kms.CryptoKey")) return "key_version";
     if (std.mem.eql(u8, from_type, "gcp.secret.Secret") and std.mem.eql(u8, to_type, "gcp.kms.CryptoKey")) return "customer_managed_encryption";

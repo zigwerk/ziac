@@ -7,6 +7,7 @@ const cloud_deploy_provider = @import("cloud_deploy_provider.zig");
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const container_platform_provider = @import("container_platform_provider.zig");
 const monitoring_provider = @import("monitoring_provider.zig");
+const organization_provider = @import("organization_provider.zig");
 const logging_provider = @import("logging_provider.zig");
 const compute_provider = @import("compute_provider.zig");
 const compute_workloads_provider = @import("compute_workloads_provider.zig");
@@ -73,6 +74,7 @@ pub const managed_type_names = [_][]const u8{
     "gcp.bigquery.Table",
     "gcp.bigquery.TableIamMember",
     "gcp.bigquery.View",
+    "gcp.billing.ProjectBillingAssociation",
     "gcp.certificatemanager.Certificate",
     "gcp.certificatemanager.CertificateMap",
     "gcp.certificatemanager.CertificateMapEntry",
@@ -202,6 +204,9 @@ pub const managed_type_names = [_][]const u8{
     "gcp.redis.AclPolicy",
     "gcp.redis.Cluster",
     "gcp.redis.Instance",
+    "gcp.resourcemanager.Folder",
+    "gcp.resourcemanager.Lien",
+    "gcp.resourcemanager.Project",
     "gcp.run.Job",
     "gcp.run.JobIamMember",
     "gcp.run.Service",
@@ -212,6 +217,7 @@ pub const managed_type_names = [_][]const u8{
     "gcp.secret.SecretIamMember",
     "gcp.secret.SecretVersion",
     "gcp.servicenetworking.Connection",
+    "gcp.serviceusage.ServiceIdentity",
     "gcp.spanner.Backup",
     "gcp.spanner.BackupSchedule",
     "gcp.spanner.Database",
@@ -267,6 +273,7 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, project_service_type)) return self.readProjectService(context, node);
         if (isType(node, service_account_type)) return self.readServiceAccount(context, node, null);
+        if (organization_provider.Handler.supports(node)) return self.organizationHandler().read(context, node, null);
         if (iam_provider.supports(node)) return self.iamHandler().read(context, node, null);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().read(context, node, null);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().read(context, node, null);
@@ -314,6 +321,7 @@ pub const LiveProvider = struct {
         try context.checkActive();
         if (!isSupported(node)) return error.InvalidConfiguration;
         if (isType(node, cloud_run_service_type)) return run_provider.Handler.diff(context, node, observed);
+        if (organization_provider.Handler.supports(node)) return organization_provider.Handler.diff(context, node, observed);
         if (run_workloads_provider.supports(node)) return run_workloads_provider.Handler.diff(context, node, observed);
         if (run_iam_provider.supports(node)) return run_iam_provider.Handler.diff(context, node, observed);
         if (iam_provider.supports(node)) return iam_provider.Handler.diff(context, node, observed);
@@ -366,6 +374,7 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, project_service_type)) return self.enableProjectService(context, node);
         if (isType(node, service_account_type)) return self.createServiceAccount(context, node);
+        if (organization_provider.Handler.supports(node)) return self.organizationHandler().create(context, node);
         if (iam_provider.supports(node)) return self.iamHandler().create(context, node);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().create(context, node);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().create(context, node);
@@ -412,6 +421,7 @@ pub const LiveProvider = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, service_account_type)) return self.updateServiceAccount(context, node, observed.physical_id);
+        if (organization_provider.Handler.supports(node)) return self.organizationHandler().update(context, node, observed);
         if (iam_provider.supports(node)) return self.iamHandler().update(context, node, observed.physical_id);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().update(context, node, observed);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().update(context, node, observed);
@@ -458,6 +468,7 @@ pub const LiveProvider = struct {
         const self: *LiveProvider = @ptrCast(@alignCast(ptr));
         if (isType(node, project_service_type)) return self.disableProjectService(context, physical_id);
         if (isType(node, service_account_type)) return self.deleteServiceAccount(context, physical_id);
+        if (organization_provider.Handler.supports(node)) return self.organizationHandler().delete(context, node, physical_id);
         if (iam_provider.supports(node)) return self.iamHandler().delete(context, node, physical_id);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().delete(context, node, physical_id);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().delete(context, node, physical_id);
@@ -514,6 +525,7 @@ pub const LiveProvider = struct {
                 .present => |present| present,
             };
         }
+        if (organization_provider.Handler.supports(node)) return self.organizationHandler().importResource(context, node, physical_id);
         if (isType(node, project_service_type)) {
             const result = try self.readProjectService(context, node);
             return switch (result) {
@@ -1293,6 +1305,10 @@ pub const LiveProvider = struct {
     }
 
     fn runHandler(self: *LiveProvider) run_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn organizationHandler(self: *LiveProvider) organization_provider.Handler {
         return .{ .client = self.client, .operation_policy = self.operation_policy };
     }
 

@@ -232,7 +232,7 @@ isolated serializer tests.
 ## M77-M80: Security, Governance And Organization
 
 - [x] M77 KMS IAM/version lifecycle, Secret Manager replication/rotation/IAM.
-- [ ] M78 folders, projects, billing association, service identities and liens.
+- [x] M78 folders, projects, billing association, service identities and liens.
 - [ ] M79 organization policy, tags, access policies and VPC Service Controls.
 - [ ] M80 Security Command Center, Binary Authorization and CA Service.
 
