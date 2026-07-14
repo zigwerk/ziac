@@ -190,6 +190,23 @@ pub const CloudRunWorkerPoolEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const ComputeWorkloadEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    cpu_sku_id: []const u8 = "",
+    memory_sku_id: []const u8 = "",
+    gpu_sku_id: []const u8 = "",
+    disk_sku_id: []const u8 = "",
+    image_storage_sku_id: []const u8 = "",
+    instance_hours: u64 = 0,
+    vcpu_per_instance: u64 = 0,
+    memory_gib_per_instance: u64 = 0,
+    gpu_per_instance: u64 = 0,
+    disk_gib_month: u64 = 0,
+    image_gib_month: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -626,6 +643,24 @@ pub fn cloudRunWorkerPoolConfigurationEstimate(
         .gpu = input.gpu_per_instance,
         .observed_at_millis = input.observed_at_millis,
     });
+}
+
+pub fn computeWorkloadConfigurationEstimate(
+    prices: []const SkuPrice,
+    input: ComputeWorkloadEstimateInput,
+) !ResourceCost {
+    var usage: [5]UsageAssumption = undefined;
+    var count: usize = 0;
+    if (input.instance_hours > 0) {
+        if (input.vcpu_per_instance == 0 or input.memory_gib_per_instance == 0) return error.InvalidUsageAssumption;
+        try appendUsage(&usage, &count, input.cpu_sku_id, input.region, try checkedProduct(&.{ input.instance_hours, input.vcpu_per_instance }));
+        try appendUsage(&usage, &count, input.memory_sku_id, input.region, try checkedProduct(&.{ input.instance_hours, input.memory_gib_per_instance }));
+        if (input.gpu_per_instance > 0) try appendUsage(&usage, &count, input.gpu_sku_id, input.region, try checkedProduct(&.{ input.instance_hours, input.gpu_per_instance }));
+    }
+    try appendUsage(&usage, &count, input.disk_sku_id, input.region, input.disk_gib_month);
+    try appendUsage(&usage, &count, input.image_storage_sku_id, input.region, input.image_gib_month);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }
 
 const CloudRunComputeEstimateInput = struct {

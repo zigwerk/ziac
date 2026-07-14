@@ -215,7 +215,7 @@ isolated serializer tests.
 
 ## M68-M72: Compute, Network And Container Platform
 
-- [ ] M68 Compute instance, disk, image, template and managed instance group.
+- [x] M68 Compute instance, disk, image, template and managed instance group.
 - [ ] M69 firewalls, routes, health checks, regional/internal load balancing.
 - [ ] M70 Cloud CDN, backend buckets, Cloud Armor and Certificate Manager.
 - [ ] M71 VPN, HA VPN, peering, Network Connectivity Center and service networking.
@@ -245,3 +245,23 @@ isolated serializer tests.
 - [ ] Continue descriptor-driven expansion until every supported public GCP
   resource is either managed, intentionally observed-only, or carries a visible
   exclusion reason.
+
+## M68 Evidence
+
+M68 is locally complete with 123 managed resources. Nine Compute workload
+types cover zonal and regional disks, images, instances, immutable templates,
+zonal and regional managed instance groups, and zonal and regional
+autoscalers. The provider checkpoints operations at all three Compute scopes,
+grows disks through native resize, uses fingerprint-safe group updates,
+normalizes remote label drift, resolves digest-pinned startup scripts only in
+mutation scope, and clears instance deletion protection before deletion.
+
+`VirtualMachine` and tagged `ManagedInstanceFleet` provide the opinionated
+layer. Exact deployer/runtime permissions, supported Cloud Asset identities,
+canvas metadata, explicit configuration estimates, installed documentation and
+the fail-closed qualification runner are synchronized. The Testing v2 gate
+reports 688 discovered/executed tests, 687 passed, one credential-gated skip,
+and zero failures, pending tests, leaks or logged errors. The full release gate,
+all public examples, migration guard and root typecheck pass. Authenticated
+qualification remains a disposable-project gate and is not represented as
+local proof.

@@ -9,6 +9,7 @@ pub const Kind = enum {
     generic,
     compute_global,
     compute_regional,
+    compute_zonal,
     cloud_sql,
 };
 
@@ -53,6 +54,23 @@ pub const Target = struct {
                 allocator,
                 "{s}/projects/{s}/regions/{s}/operations/{s}",
                 .{ std.mem.trimEnd(u8, base_url, "/"), project_id, region, operation_name },
+            ),
+        };
+    }
+
+    pub fn computeZonalAlloc(
+        allocator: std.mem.Allocator,
+        base_url: []const u8,
+        project_id: []const u8,
+        zone: []const u8,
+        operation_name: []const u8,
+    ) std.mem.Allocator.Error!Target {
+        return .{
+            .kind = .compute_zonal,
+            .url = try std.fmt.allocPrint(
+                allocator,
+                "{s}/projects/{s}/zones/{s}/operations/{s}",
+                .{ std.mem.trimEnd(u8, base_url, "/"), project_id, zone, operation_name },
             ),
         };
     }
@@ -154,7 +172,7 @@ fn inspectResponse(allocator: std.mem.Allocator, kind: Kind, body: []const u8) P
 
     return switch (kind) {
         .generic => inspectGeneric(root),
-        .compute_global, .compute_regional => inspectCompute(root),
+        .compute_global, .compute_regional, .compute_zonal => inspectCompute(root),
         .cloud_sql => inspectCloudSql(root),
     };
 }

@@ -362,14 +362,29 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         if (std.mem.eql(u8, location, "global")) "gcp.compute.GlobalForwardingRule" else "gcp.compute.RegionForwardingRule"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/BackendService"))
         "gcp.compute.BackendService"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Disk"))
+        if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionDisk" else "gcp.compute.Disk"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Image"))
+        "gcp.compute.Image"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Instance"))
         "gcp.compute.Instance"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/InstanceTemplate"))
+        "gcp.compute.InstanceTemplate"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/InstanceGroupManager"))
+        if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionInstanceGroupManager" else "gcp.compute.InstanceGroupManager"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Autoscaler"))
+        if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionAutoscaler" else "gcp.compute.Autoscaler"
     else
         "gcp.asset.Resource";
     return allocator.dupe(u8, mapped);
 }
 
 fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, name: []const u8) ![]const u8 {
+    if (std.mem.startsWith(u8, asset_type, "compute.googleapis.com/")) {
+        const prefix = "//compute.googleapis.com/";
+        if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;
+        return allocator.dupe(u8, name[prefix.len..]);
+    }
     if (std.mem.eql(u8, asset_type, "sqladmin.googleapis.com/Instance")) {
         const prefix = "//sqladmin.googleapis.com/";
         if (!std.mem.startsWith(u8, name, prefix) or name.len == prefix.len) return error.InvalidCloudAssetResponse;

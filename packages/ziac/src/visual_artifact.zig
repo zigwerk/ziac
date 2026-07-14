@@ -184,6 +184,7 @@ fn appendResource(
     try appendPubsubDetails(output, allocator, item.node);
     try appendAsyncDeliveryDetails(output, allocator, item.node);
     try appendRunWorkloadDetails(output, allocator, item.node);
+    try appendComputeWorkloadDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -336,6 +337,12 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
     if (objectField(node.inputs, "region")) |region| {
         if (region == .string) return region.string;
     }
+    if (objectField(node.inputs, "zone")) |zone| {
+        if (zone == .string and zone.string.len > 0) {
+            const separator = std.mem.lastIndexOfScalar(u8, zone.string, '-') orelse return null;
+            if (separator > 0) return zone.string[0..separator];
+        }
+    }
     if (std.mem.eql(u8, node.type_name, "gcp.storage.Bucket") or
         std.mem.startsWith(u8, node.type_name, "gcp.bigquery.") or
         std.mem.startsWith(u8, node.type_name, "gcp.firestore.") or
@@ -351,6 +358,46 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         return if (location == .string) location.string else null;
     }
     return null;
+}
+
+fn appendComputeWorkloadDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.compute.Disk"))
+        "disk"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RegionDisk"))
+        "regional_disk"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.Image"))
+        "image"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.Instance"))
+        "instance"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.InstanceTemplate"))
+        "instance_template"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.InstanceGroupManager"))
+        "instance_group_manager"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RegionInstanceGroupManager"))
+        "regional_instance_group_manager"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.Autoscaler"))
+        "autoscaler"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RegionAutoscaler"))
+        "regional_autoscaler"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"compute_workload\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "zone", "zone");
+    try appendOptionalStorageString(output, allocator, node, "region", "region");
+    try appendOptionalStorageString(output, allocator, node, "machine_type", "machine_type");
+    try appendOptionalStorageString(output, allocator, node, "disk_type", "disk_type");
+    try appendOptionalStorageString(output, allocator, node, "provisioning_model", "provisioning_model");
+    try appendOptionalStorageString(output, allocator, node, "mode", "autoscaling_mode");
+    try appendOptionalStorageInteger(output, allocator, node, "size_gb", "size_gb");
+    try appendOptionalStorageInteger(output, allocator, node, "boot_disk_size_gb", "boot_disk_size_gb");
+    try appendOptionalStorageInteger(output, allocator, node, "target_size", "target_size");
+    try appendOptionalStorageInteger(output, allocator, node, "min_replicas", "min_replicas");
+    try appendOptionalStorageInteger(output, allocator, node, "max_replicas", "max_replicas");
+    try appendStorageListCount(output, allocator, node, "network_interfaces", "network_interface_count");
+    try appendStorageListCount(output, allocator, node, "replica_zones", "replica_zone_count");
+    try appendStorageListCount(output, allocator, node, "distribution_zones", "distribution_zone_count");
+    try output.append(allocator, '}');
 }
 
 fn appendApplicationServicesDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
@@ -906,6 +953,7 @@ fn appendStorageListCount(
 
 fn resourceScope(node: resource.ResourceNode, regions: []const []const u8) []const u8 {
     if (isGlobalType(node.type_name)) return "global";
+    if (objectField(node.inputs, "zone")) |zone| if (zone == .string and zone.string.len > 0) return "zonal";
     if (regions.len > 1) return "multi_region";
     if (regions.len == 1) return "regional";
     if (node.provider == .local) return "local";
@@ -919,7 +967,9 @@ fn isGlobalType(type_name: []const u8) bool {
         std.mem.eql(u8, type_name, "gcp.compute.HttpRedirectUrlMap") or
         std.mem.eql(u8, type_name, "gcp.compute.TargetHttpsProxy") or
         std.mem.eql(u8, type_name, "gcp.compute.TargetHttpProxy") or
-        std.mem.eql(u8, type_name, "gcp.compute.ManagedSslCertificate");
+        std.mem.eql(u8, type_name, "gcp.compute.ManagedSslCertificate") or
+        std.mem.eql(u8, type_name, "gcp.compute.Image") or
+        std.mem.eql(u8, type_name, "gcp.compute.InstanceTemplate");
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {

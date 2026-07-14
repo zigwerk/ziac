@@ -4,6 +4,34 @@ const output = @import("../output.zig");
 const resource = @import("../resource.zig");
 const validation = @import("validation.zig");
 const value = @import("../value.zig");
+const compute_workloads = @import("compute_workloads.zig");
+
+pub const Autoscaler = compute_workloads.Autoscaler;
+pub const AutoscalerArgs = compute_workloads.AutoscalerArgs;
+pub const AutoscalingMode = compute_workloads.AutoscalingMode;
+pub const Disk = compute_workloads.Disk;
+pub const DiskArgs = compute_workloads.DiskArgs;
+pub const DiskType = compute_workloads.DiskType;
+pub const Image = compute_workloads.Image;
+pub const ImageArgs = compute_workloads.ImageArgs;
+pub const Instance = compute_workloads.Instance;
+pub const InstanceArgs = compute_workloads.InstanceArgs;
+pub const InstanceGroupManager = compute_workloads.InstanceGroupManager;
+pub const InstanceGroupManagerArgs = compute_workloads.InstanceGroupManagerArgs;
+pub const InstanceTemplate = compute_workloads.InstanceTemplate;
+pub const InstanceTemplateArgs = compute_workloads.InstanceTemplateArgs;
+pub const Metadata = compute_workloads.Metadata;
+pub const NamedPort = compute_workloads.NamedPort;
+pub const NetworkInterface = compute_workloads.NetworkInterface;
+pub const RegionAutoscaler = compute_workloads.RegionAutoscaler;
+pub const RegionAutoscalerArgs = compute_workloads.RegionAutoscalerArgs;
+pub const RegionDisk = compute_workloads.RegionDisk;
+pub const RegionDiskArgs = compute_workloads.RegionDiskArgs;
+pub const RegionInstanceGroupManager = compute_workloads.RegionInstanceGroupManager;
+pub const RegionInstanceGroupManagerArgs = compute_workloads.RegionInstanceGroupManagerArgs;
+pub const ReplacementMethod = compute_workloads.ReplacementMethod;
+pub const ShieldedVm = compute_workloads.ShieldedVm;
+pub const UpdateType = compute_workloads.UpdateType;
 
 pub const BuildError = validation.ValidationError || std.mem.Allocator.Error || error{
     DuplicateField,

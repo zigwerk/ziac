@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 80 managed GCP resource types.
+The current deterministic provider gate contains 123 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -280,6 +280,33 @@ Cloud Asset identities, canvas metadata, runtime IAM edges and explicit
 Workflows/API Gateway/Identity usage estimates are synchronized. Unsupported
 Parameter Manager template assets remain observed-only. See
 `gcp-application-services.md`.
+
+### Compute workloads
+
+M68 adds nine managed Compute Engine workload resources:
+
+- `gcp.compute.Disk`
+- `gcp.compute.RegionDisk`
+- `gcp.compute.Image`
+- `gcp.compute.Instance`
+- `gcp.compute.InstanceTemplate`
+- `gcp.compute.InstanceGroupManager`
+- `gcp.compute.RegionInstanceGroupManager`
+- `gcp.compute.Autoscaler`
+- `gcp.compute.RegionAutoscaler`
+
+`VirtualMachine` composes explicit retained storage and one VM. Tagged
+`ManagedInstanceFleet` composes an immutable template, zonal or regional
+managed group and matching autoscaler. The lifecycle adapter checkpoints
+global, regional and zonal Compute operations, uses native disk resize and
+managed-group fingerprints, normalizes remote label drift, and keeps startup
+script bytes behind a digest-pinned secret boundary.
+
+Permission synthesis includes exact disk, image, instance, template, group,
+autoscaler, network and service-account authority. Supported Cloud Asset
+identities, canvas metadata and explicit CPU, memory, accelerator, disk and
+image configuration estimates are synchronized. See
+`gcp-compute-workloads.md`.
 
 ### Security and orchestration
 

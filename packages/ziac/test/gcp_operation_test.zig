@@ -29,6 +29,19 @@ test "GCP operation targets build generic global and regional poll URLs" {
     );
     defer regional.deinit(std.testing.allocator);
 
+    var zonal = try operation.Target.computeZonalAlloc(
+        std.testing.allocator,
+        "https://compute.example.test/compute/v1",
+        "p",
+        "europe-west1-b",
+        "op-zonal",
+    );
+    defer zonal.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings(
+        "https://compute.example.test/compute/v1/projects/p/zones/europe-west1-b/operations/op-zonal",
+        zonal.url,
+    );
+
     try std.testing.expectEqualStrings("https://run.example.test/v2/projects/p/locations/r/operations/op-generic", generic.url);
     try std.testing.expectEqualStrings("https://compute.example.test/compute/v1/projects/p/global/operations/op-global", global.url);
     try std.testing.expectEqualStrings("https://compute.example.test/compute/v1/projects/p/regions/europe-west1/operations/op-regional", regional.url);

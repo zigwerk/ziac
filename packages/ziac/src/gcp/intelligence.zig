@@ -591,6 +591,32 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "backendServices.insert", .permission = "compute.backendServices.create" },
         .{ .suffix = "backendServices.get", .permission = "compute.backendServices.get" },
         .{ .suffix = "networkEndpointGroups.insert", .permission = "compute.networkEndpointGroups.create" },
+        .{ .suffix = "Disks.Get", .permission = "compute.disks.get" },
+        .{ .suffix = "Disks.Insert", .permission = "compute.disks.create" },
+        .{ .suffix = "Disks.Delete", .permission = "compute.disks.delete" },
+        .{ .suffix = "Disks.Resize", .permission = "compute.disks.update" },
+        .{ .suffix = "Images.Get", .permission = "compute.images.get" },
+        .{ .suffix = "Images.Insert", .permission = "compute.images.create" },
+        .{ .suffix = "Images.Delete", .permission = "compute.images.delete" },
+        .{ .suffix = "Images.UseReadOnly", .permission = "compute.images.useReadOnly" },
+        .{ .suffix = "Instances.Get", .permission = "compute.instances.get" },
+        .{ .suffix = "Instances.Insert", .permission = "compute.instances.create" },
+        .{ .suffix = "Instances.Delete", .permission = "compute.instances.delete" },
+        .{ .suffix = "Instances.SetDeletionProtection", .permission = "compute.instances.update" },
+        .{ .suffix = "InstanceTemplates.Get", .permission = "compute.instanceTemplates.get" },
+        .{ .suffix = "InstanceTemplates.Insert", .permission = "compute.instanceTemplates.create" },
+        .{ .suffix = "InstanceTemplates.Delete", .permission = "compute.instanceTemplates.delete" },
+        .{ .suffix = "InstanceGroupManagers.Get", .permission = "compute.instanceGroupManagers.get" },
+        .{ .suffix = "InstanceGroupManagers.Insert", .permission = "compute.instanceGroupManagers.create" },
+        .{ .suffix = "InstanceGroupManagers.Patch", .permission = "compute.instanceGroupManagers.update" },
+        .{ .suffix = "InstanceGroupManagers.Delete", .permission = "compute.instanceGroupManagers.delete" },
+        .{ .suffix = "Autoscalers.Get", .permission = "compute.autoscalers.get" },
+        .{ .suffix = "Autoscalers.Insert", .permission = "compute.autoscalers.create" },
+        .{ .suffix = "Autoscalers.Patch", .permission = "compute.autoscalers.update" },
+        .{ .suffix = "Autoscalers.Delete", .permission = "compute.autoscalers.delete" },
+        .{ .suffix = "Networks.Use", .permission = "compute.networks.use" },
+        .{ .suffix = "Subnetworks.Use", .permission = "compute.subnetworks.use" },
+        .{ .suffix = "Disks.Use", .permission = "compute.disks.use" },
     };
     for (mappings) |mapping| if (std.mem.endsWith(u8, method, mapping.suffix)) return mapping.permission;
     return null;
@@ -1016,6 +1042,48 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const compute_generic = [_]RpcUsage{
         .{ .service = "compute.googleapis.com", .method = "compute.resources.mutate" },
     };
+    const compute_disk = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Disks.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Disks.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Disks.Resize" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Disks.Delete" },
+    };
+    const compute_image = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Images.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Images.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Images.Delete" },
+    };
+    const compute_instance = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Instances.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Instances.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Instances.SetDeletionProtection" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Instances.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Disks.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Subnetworks.Use" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
+    const compute_template = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.InstanceTemplates.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.InstanceTemplates.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.InstanceTemplates.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Images.UseReadOnly" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Subnetworks.Use" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.v1.ServiceAccounts.ActAs" },
+    };
+    const compute_group = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.InstanceGroupManagers.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.InstanceGroupManagers.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.InstanceGroupManagers.Patch" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.InstanceGroupManagers.Delete" },
+    };
+    const compute_autoscaler = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Autoscalers.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Autoscalers.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Autoscalers.Patch" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Autoscalers.Delete" },
+    };
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
@@ -1098,6 +1166,12 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.parametermanager.TemplateVersion")) return &parameter_template_version;
     if (std.mem.eql(u8, type_name, "gcp.compute.BackendService")) return &compute_backend;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionServerlessNeg")) return &compute_neg;
+    if (std.mem.eql(u8, type_name, "gcp.compute.Disk") or std.mem.eql(u8, type_name, "gcp.compute.RegionDisk")) return &compute_disk;
+    if (std.mem.eql(u8, type_name, "gcp.compute.Image")) return &compute_image;
+    if (std.mem.eql(u8, type_name, "gcp.compute.Instance")) return &compute_instance;
+    if (std.mem.eql(u8, type_name, "gcp.compute.InstanceTemplate")) return &compute_template;
+    if (std.mem.eql(u8, type_name, "gcp.compute.InstanceGroupManager") or std.mem.eql(u8, type_name, "gcp.compute.RegionInstanceGroupManager")) return &compute_group;
+    if (std.mem.eql(u8, type_name, "gcp.compute.Autoscaler") or std.mem.eql(u8, type_name, "gcp.compute.RegionAutoscaler")) return &compute_autoscaler;
     if (std.mem.startsWith(u8, type_name, "gcp.compute.")) return &compute_generic;
     if (std.mem.eql(u8, type_name, "gcp.dns.RecordSet")) return &dns;
     return &.{};

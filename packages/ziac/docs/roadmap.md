@@ -907,3 +907,31 @@ tests, 670 passed, one credential-gated skip, and zero failures, pending tests,
 leaks or logged errors. The release gate completed 134/134 steps, the provider
 catalog reports 114 managed resources and the public application-services
 example compiles through the relocatable install gate.
+
+M68 is locally complete and awaiting authenticated Compute Engine
+qualification. Nine managed types cover zonal and regional persistent disks,
+images, instances, immutable instance templates, zonal and regional managed
+instance groups, and zonal and regional autoscalers. The handwritten adapter
+checkpoints global, regional and zonal operations, grows disks through native
+resize, uses current fingerprints for managed-group patches, normalizes remote
+label edits, and treats images, instances and templates conservatively as
+replacement resources.
+
+Startup scripts cross a typed secret boundary: only a reference and SHA-256
+remain in desired state, the payload is resolved and verified only for a
+mutation, and the transient request body is zeroed. Instance deletion
+protection is explicitly cleared before an authorized delete. `VirtualMachine`
+and tagged `ManagedInstanceFleet` compose the opinionated layer without hidden
+disk deletion or mixed regional/zonal identities.
+
+Permission synthesis, supported Cloud Asset identities, observed/managed
+reconciliation, canvas workload metadata, and explicit CPU, memory,
+accelerator, disk and image configuration estimates are synchronized. The
+installed example and `scripts/qualify-compute-workloads.sh` document the
+remote proof boundary. See `docs/gcp-compute-workloads.md`.
+
+The M68 local Testing v2 gate is complete with 688 discovered and executed
+tests, 687 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. The full release gate, public examples, Testing v2
+migration guard and root TypeScript checks pass. The provider catalog reports
+123 managed resources.
