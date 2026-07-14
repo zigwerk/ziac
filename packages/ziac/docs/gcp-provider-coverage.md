@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 173 managed GCP resource types.
+The current deterministic provider gate contains 178 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -416,6 +416,21 @@ Exact Cloud Build and Artifact Registry permissions, supported Cloud Asset
 identities, source/execution/artifact canvas edges and explicit build-minute,
 private-disk, storage, transfer and scan estimates are synchronized. See
 `gcp-build-delivery.md`.
+
+### Deployment progression
+
+M76 adds delivery pipelines, typed Cloud Run/GKE/Anthos/multi/custom targets,
+custom target types, automations and deploy policies. Releases, rollouts,
+automation runs and job runs are observed or invoked through governed actions,
+not treated as mutable desired state.
+
+`GlobalCloudRunDelivery` composes regional targets, guarded canary progression,
+repair automation and production freezes. Lifecycle operations use resumable
+Google operations, exact masks, fresh etags and deterministic request IDs.
+Release, promotion and recovery actions require payload-bound capabilities.
+Exact permissions, managed and observed Cloud Asset identities, delivery canvas
+edges and first-free active pipeline pricing are synchronized. See
+`gcp-cloud-deploy.md`.
 
 ### Security and orchestration
 

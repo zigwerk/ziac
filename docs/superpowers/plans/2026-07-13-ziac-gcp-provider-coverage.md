@@ -227,7 +227,7 @@ isolated serializer tests.
 - [x] M73 Monitoring alerts, uptime checks, channels, dashboards and SLOs.
 - [x] M74 Logging sinks, buckets, views, exclusions and log metrics.
 - [x] M75 Cloud Build triggers/connections/worker pools and Artifact policies.
-- [ ] M76 Cloud Deploy pipelines, targets and automation.
+- [x] M76 Cloud Deploy pipelines, targets and automation.
 
 ## M77-M80: Security, Governance And Organization
 
@@ -385,4 +385,29 @@ one credential-gated skip, and zero failures, pending tests, leaks or logged
 errors. Public examples, installation, migration, root TypeScript and static
 secret gates pass. The complete release gate also passes its Linux arm64
 non-root ZigService container probe. Authenticated SCM/build proof remains an
+external disposable-project gate and is not represented as local evidence.
+
+## M76 Evidence
+
+M76 is locally complete with 178 managed resources. Cloud Deploy now covers
+delivery pipelines, Cloud Run/GKE/Anthos/multi/custom targets, custom target
+types, automations and deploy policies. Releases, rollouts, automation runs and
+job runs are intentionally governed actions or observed history rather than
+mutable desired-state resources.
+
+The provider checkpoints generic long-running operations, applies exact masks,
+current etags and deterministic request IDs, detects remote semantic drift and
+replaces target runtime-union changes. Create-release, promote, approve,
+advance, rollback, cancel and abandon actions require payload-bound capability
+digests and emit redacted receipts. `GlobalCloudRunDelivery` composes regional
+targets, canary progression, repair automation and production freezes.
+
+Exact Cloud Deploy and service-account permissions, five managed and four
+observed Cloud Asset identities, canvas delivery edges, first-free pipeline
+cost semantics, installed docs, public example and fail-closed live runner are
+synchronized. The Testing v2 package gate discovers and executes 821 tests:
+820 pass, one credential-gated test skips, and none fail or remain pending; no
+leaks or logged errors are reported. Examples, installation, migration, root
+TypeScript and the complete release gate pass, including the Linux arm64
+non-root container probe. Authenticated release/rollout proof remains an
 external disposable-project gate and is not represented as local evidence.

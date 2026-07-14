@@ -1111,3 +1111,23 @@ resources. Public examples, installed distribution, migration, root TypeScript
 and static secret gates pass. `scripts/qualify-build-delivery.sh` remains the
 fail-closed authenticated boundary for real SCM, successful build, import
 no-op and cleanup evidence.
+
+M76 is locally complete and awaiting authenticated Cloud Deploy qualification.
+Five managed resources add delivery pipelines, typed runtime targets, custom
+target types, automations and deploy policies. Releases, rollouts, automation
+runs and job runs remain governed actions or observed execution history.
+
+`GlobalCloudRunDelivery` composes regional Cloud Run targets, serial and canary
+progression, repair automation and production freezes. The provider checkpoints
+long-running operations, applies exact masks and current etags, detects semantic
+drift and replaces target-runtime changes. Governed release and recovery actions
+require payload-bound capability digests. Permission synthesis, Cloud Asset
+ownership, delivery canvas edges and first-free pipeline cost estimates are
+synchronized. See `docs/gcp-cloud-deploy.md`.
+
+The M76 local Testing v2 gate discovers and executes 821 tests: 820 pass, one
+credential-gated test skips, and none fail or remain pending; no leaks or logged
+errors are reported. The catalog reports 178 managed resources. Public examples,
+installed distribution, migration, root TypeScript and the full release gate
+pass. `scripts/qualify-cloud-deploy.sh` remains the fail-closed authenticated
+boundary for real release, rollout, import no-op and cleanup evidence.

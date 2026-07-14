@@ -314,6 +314,17 @@ pub const BuildDeliveryEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const CloudDeployEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    active_pipeline_sku_id: []const u8 = "",
+    underlying_build_minute_sku_id: []const u8 = "",
+    active_multi_target_pipelines: u64 = 0,
+    free_active_multi_target_pipelines: u64 = 1,
+    underlying_build_minutes: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -852,6 +863,16 @@ pub fn buildDeliveryConfigurationEstimate(prices: []const SkuPrice, input: Build
     try appendUsage(&usage, &count, input.artifact_storage_sku_id, input.region, input.artifact_storage_gib_month);
     try appendUsage(&usage, &count, input.artifact_transfer_sku_id, input.region, input.artifact_transfer_gib);
     try appendUsage(&usage, &count, input.vulnerability_scan_sku_id, input.region, input.vulnerability_scans);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn cloudDeployConfigurationEstimate(prices: []const SkuPrice, input: CloudDeployEstimateInput) !ResourceCost {
+    var usage: [2]UsageAssumption = undefined;
+    var count: usize = 0;
+    const billable_pipelines = input.active_multi_target_pipelines -| input.free_active_multi_target_pipelines;
+    try appendUsage(&usage, &count, input.active_pipeline_sku_id, "global", billable_pipelines);
+    try appendUsage(&usage, &count, input.underlying_build_minute_sku_id, input.region, input.underlying_build_minutes);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }

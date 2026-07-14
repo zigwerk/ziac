@@ -349,6 +349,26 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "CloudBuild.CreateBuildTrigger", .permission = "cloudbuild.builds.create" },
         .{ .suffix = "CloudBuild.PatchBuildTrigger", .permission = "cloudbuild.builds.update" },
         .{ .suffix = "CloudBuild.DeleteBuildTrigger", .permission = "cloudbuild.builds.delete" },
+        .{ .suffix = "CloudDeploy.GetDeliveryPipeline", .permission = "clouddeploy.deliveryPipelines.get" },
+        .{ .suffix = "CloudDeploy.CreateDeliveryPipeline", .permission = "clouddeploy.deliveryPipelines.create" },
+        .{ .suffix = "CloudDeploy.UpdateDeliveryPipeline", .permission = "clouddeploy.deliveryPipelines.update" },
+        .{ .suffix = "CloudDeploy.DeleteDeliveryPipeline", .permission = "clouddeploy.deliveryPipelines.delete" },
+        .{ .suffix = "CloudDeploy.GetTarget", .permission = "clouddeploy.targets.get" },
+        .{ .suffix = "CloudDeploy.CreateTarget", .permission = "clouddeploy.targets.create" },
+        .{ .suffix = "CloudDeploy.UpdateTarget", .permission = "clouddeploy.targets.update" },
+        .{ .suffix = "CloudDeploy.DeleteTarget", .permission = "clouddeploy.targets.delete" },
+        .{ .suffix = "CloudDeploy.GetCustomTargetType", .permission = "clouddeploy.customTargetTypes.get" },
+        .{ .suffix = "CloudDeploy.CreateCustomTargetType", .permission = "clouddeploy.customTargetTypes.create" },
+        .{ .suffix = "CloudDeploy.UpdateCustomTargetType", .permission = "clouddeploy.customTargetTypes.update" },
+        .{ .suffix = "CloudDeploy.DeleteCustomTargetType", .permission = "clouddeploy.customTargetTypes.delete" },
+        .{ .suffix = "CloudDeploy.GetAutomation", .permission = "clouddeploy.automations.get" },
+        .{ .suffix = "CloudDeploy.CreateAutomation", .permission = "clouddeploy.automations.create" },
+        .{ .suffix = "CloudDeploy.UpdateAutomation", .permission = "clouddeploy.automations.update" },
+        .{ .suffix = "CloudDeploy.DeleteAutomation", .permission = "clouddeploy.automations.delete" },
+        .{ .suffix = "CloudDeploy.GetDeployPolicy", .permission = "clouddeploy.deployPolicies.get" },
+        .{ .suffix = "CloudDeploy.CreateDeployPolicy", .permission = "clouddeploy.deployPolicies.create" },
+        .{ .suffix = "CloudDeploy.UpdateDeployPolicy", .permission = "clouddeploy.deployPolicies.update" },
+        .{ .suffix = "CloudDeploy.DeleteDeployPolicy", .permission = "clouddeploy.deployPolicies.delete" },
         .{ .suffix = "ArtifactRegistry.GetRepository", .permission = "artifactregistry.repositories.get" },
         .{ .suffix = "ArtifactRegistry.CreateRepository", .permission = "artifactregistry.repositories.create" },
         .{ .suffix = "ArtifactRegistry.UpdateRepository", .permission = "artifactregistry.repositories.update" },
@@ -851,6 +871,38 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.CreateBuildTrigger" },
         .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.PatchBuildTrigger" },
         .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v1.CloudBuild.DeleteBuildTrigger" },
+    };
+    const deploy_pipeline = [_]RpcUsage{
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.GetDeliveryPipeline" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.CreateDeliveryPipeline" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.UpdateDeliveryPipeline" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.DeleteDeliveryPipeline" },
+    };
+    const deploy_target = [_]RpcUsage{
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.GetTarget" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.CreateTarget" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.UpdateTarget" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.DeleteTarget" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.ServiceAccounts.ActAs" },
+    };
+    const deploy_custom_target_type = [_]RpcUsage{
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.GetCustomTargetType" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.CreateCustomTargetType" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.UpdateCustomTargetType" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.DeleteCustomTargetType" },
+    };
+    const deploy_automation = [_]RpcUsage{
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.GetAutomation" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.CreateAutomation" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.UpdateAutomation" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.DeleteAutomation" },
+        .{ .service = "iam.googleapis.com", .method = "google.iam.admin.v1.ServiceAccounts.ActAs" },
+    };
+    const deploy_policy = [_]RpcUsage{
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.GetDeployPolicy" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.CreateDeployPolicy" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.UpdateDeployPolicy" },
+        .{ .service = "clouddeploy.googleapis.com", .method = "google.cloud.deploy.v1.CloudDeploy.DeleteDeployPolicy" },
     };
     const artifact_repository = [_]RpcUsage{
         .{ .service = "artifactregistry.googleapis.com", .method = "google.devtools.artifactregistry.v1.ArtifactRegistry.GetRepository" },
@@ -1599,6 +1651,11 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.cloudbuild.Repository")) return &build_repository;
     if (std.mem.eql(u8, type_name, "gcp.cloudbuild.WorkerPool")) return &build_worker_pool;
     if (std.mem.eql(u8, type_name, "gcp.cloudbuild.Trigger")) return &build_trigger;
+    if (std.mem.eql(u8, type_name, "gcp.deploy.DeliveryPipeline")) return &deploy_pipeline;
+    if (std.mem.eql(u8, type_name, "gcp.deploy.Target")) return &deploy_target;
+    if (std.mem.eql(u8, type_name, "gcp.deploy.CustomTargetType")) return &deploy_custom_target_type;
+    if (std.mem.eql(u8, type_name, "gcp.deploy.Automation")) return &deploy_automation;
+    if (std.mem.eql(u8, type_name, "gcp.deploy.DeployPolicy")) return &deploy_policy;
     if (std.mem.eql(u8, type_name, "gcp.artifact.Repository")) return &artifact_repository;
     if (std.mem.eql(u8, type_name, "gcp.artifact.ProjectSettings")) return &artifact_project_settings;
     if (std.mem.eql(u8, type_name, "gcp.artifact.VpcscConfig")) return &artifact_vpcsc;

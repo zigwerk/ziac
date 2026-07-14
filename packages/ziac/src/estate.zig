@@ -389,6 +389,16 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.cloudbuild.WorkerPool"
     else if (std.mem.eql(u8, asset_type, "cloudbuild.googleapis.com/BuildTrigger"))
         "gcp.cloudbuild.Trigger"
+    else if (std.mem.eql(u8, asset_type, "clouddeploy.googleapis.com/DeliveryPipeline"))
+        "gcp.deploy.DeliveryPipeline"
+    else if (std.mem.eql(u8, asset_type, "clouddeploy.googleapis.com/Target"))
+        "gcp.deploy.Target"
+    else if (std.mem.eql(u8, asset_type, "clouddeploy.googleapis.com/CustomTargetType"))
+        "gcp.deploy.CustomTargetType"
+    else if (std.mem.eql(u8, asset_type, "clouddeploy.googleapis.com/Automation"))
+        "gcp.deploy.Automation"
+    else if (std.mem.eql(u8, asset_type, "clouddeploy.googleapis.com/DeployPolicy"))
+        "gcp.deploy.DeployPolicy"
     else if (std.mem.eql(u8, asset_type, "artifactregistry.googleapis.com/Repository"))
         "gcp.artifact.Repository"
     else if (std.mem.eql(u8, asset_type, "logging.googleapis.com/LogBucket"))
@@ -592,6 +602,15 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "cloudbuild.googleapis.com/Repository", .prefix = "//cloudbuild.googleapis.com/" },
         .{ .asset_type = "cloudbuild.googleapis.com/WorkerPool", .prefix = "//cloudbuild.googleapis.com/" },
         .{ .asset_type = "cloudbuild.googleapis.com/BuildTrigger", .prefix = "//cloudbuild.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/DeliveryPipeline", .prefix = "//clouddeploy.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/Target", .prefix = "//clouddeploy.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/CustomTargetType", .prefix = "//clouddeploy.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/Automation", .prefix = "//clouddeploy.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/DeployPolicy", .prefix = "//clouddeploy.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/Release", .prefix = "//clouddeploy.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/Rollout", .prefix = "//clouddeploy.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/AutomationRun", .prefix = "//clouddeploy.googleapis.com/" },
+        .{ .asset_type = "clouddeploy.googleapis.com/JobRun", .prefix = "//clouddeploy.googleapis.com/" },
         .{ .asset_type = "artifactregistry.googleapis.com/Repository", .prefix = "//artifactregistry.googleapis.com/" },
         .{ .asset_type = "logging.googleapis.com/LogBucket", .prefix = "//logging.googleapis.com/" },
         .{ .asset_type = "logging.googleapis.com/LogView", .prefix = "//logging.googleapis.com/" },

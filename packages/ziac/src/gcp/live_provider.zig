@@ -3,6 +3,7 @@ const client_mod = @import("client.zig");
 const bigquery_provider = @import("bigquery_provider.zig");
 const application_services_provider = @import("application_services_provider.zig");
 const build_delivery_provider = @import("build_delivery_provider.zig");
+const cloud_deploy_provider = @import("cloud_deploy_provider.zig");
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const container_platform_provider = @import("container_platform_provider.zig");
 const monitoring_provider = @import("monitoring_provider.zig");
@@ -128,6 +129,11 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.VpnTunnel",
     "gcp.container.Cluster",
     "gcp.container.NodePool",
+    "gcp.deploy.Automation",
+    "gcp.deploy.CustomTargetType",
+    "gcp.deploy.DeliveryPipeline",
+    "gcp.deploy.DeployPolicy",
+    "gcp.deploy.Target",
     "gcp.dns.ManagedZone",
     "gcp.dns.RecordSet",
     "gcp.eventarc.Trigger",
@@ -261,6 +267,7 @@ pub const LiveProvider = struct {
         if (iam_provider.supports(node)) return self.iamHandler().read(context, node, null);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().read(context, node, null);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().read(context, node, null);
+        if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().read(context, node, null);
         if (isType(node, artifact_repository_type)) return self.readArtifactRepository(context, node, null);
         if (isType(node, secret_type)) return self.readSecret(context, node, null);
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
@@ -309,6 +316,7 @@ pub const LiveProvider = struct {
         if (iam_provider.supports(node)) return iam_provider.Handler.diff(context, node, observed);
         if (iam_admin_provider.supports(node)) return iam_admin_provider.Handler.diff(context, node, observed);
         if (build_delivery_provider.Handler.supports(node)) return build_delivery_provider.Handler.diff(context, node, observed);
+        if (cloud_deploy_provider.Handler.supports(node)) return cloud_deploy_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (connectivity_provider.supports(node)) return connectivity_provider.Handler.diff(context, node, observed);
         if (container_platform_provider.supports(node)) return container_platform_provider.Handler.diff(context, node, observed);
@@ -356,6 +364,7 @@ pub const LiveProvider = struct {
         if (iam_provider.supports(node)) return self.iamHandler().create(context, node);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().create(context, node);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().create(context, node);
+        if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().create(context, node);
         if (isType(node, artifact_repository_type)) return self.createArtifactRepository(context, node);
         if (isType(node, secret_type)) return self.createSecret(context, node);
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
@@ -401,6 +410,7 @@ pub const LiveProvider = struct {
         if (iam_provider.supports(node)) return self.iamHandler().update(context, node, observed.physical_id);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().update(context, node, observed);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().update(context, node, observed);
+        if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().update(context, node, observed);
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed.physical_id);
         if (isType(node, cloud_run_service_type)) return self.runHandler().update(context, node, observed);
@@ -445,6 +455,7 @@ pub const LiveProvider = struct {
         if (iam_provider.supports(node)) return self.iamHandler().delete(context, node, physical_id);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().delete(context, node, physical_id);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().delete(context, node, physical_id);
+        if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().delete(context, node, physical_id);
         if (isType(node, artifact_repository_type)) return self.deleteArtifactRepository(context, physical_id);
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.destroySecretVersion(context, physical_id);
@@ -526,6 +537,7 @@ pub const LiveProvider = struct {
             };
         }
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().importResource(context, node, physical_id);
+        if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().importResource(context, node, physical_id);
         if (isType(node, artifact_repository_type)) {
             const result = try self.readArtifactRepository(context, node, physical_id);
             return switch (result) {
@@ -1368,6 +1380,10 @@ pub const LiveProvider = struct {
             .operation_policy = self.operation_policy,
             .secret_source = self.secret_source,
         };
+    }
+
+    fn cloudDeployHandler(self: *LiveProvider) cloud_deploy_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
     }
 
     fn cloudBuildHandler(self: *LiveProvider) cloud_build_provider.Handler {

@@ -192,6 +192,7 @@ fn appendResource(
     try appendMonitoringDetails(output, allocator, item.node);
     try appendLoggingDetails(output, allocator, item.node);
     try appendBuildDeliveryDetails(output, allocator, item.node);
+    try appendCloudDeployDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -360,6 +361,7 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         std.mem.startsWith(u8, node.type_name, "gcp.parametermanager.") or
         std.mem.startsWith(u8, node.type_name, "gcp.cloudbuild.") or
         std.mem.startsWith(u8, node.type_name, "gcp.artifact.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.deploy.") or
         std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
         std.mem.startsWith(u8, node.type_name, "gcp.eventarc."))
     {
@@ -660,6 +662,33 @@ fn appendBuildDeliveryDetails(output: *std.ArrayList(u8), allocator: std.mem.All
     try appendOptionalStorageBool(output, allocator, node, "disabled", "disabled");
     try appendOptionalStorageBool(output, allocator, node, "cleanup_policy_dry_run", "cleanup_policy_dry_run");
     try appendStorageListCount(output, allocator, node, "cleanup_policies", "cleanup_policy_count");
+    try output.append(allocator, '}');
+}
+
+fn appendCloudDeployDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.deploy.DeliveryPipeline"))
+        "delivery_pipeline"
+    else if (std.mem.eql(u8, node.type_name, "gcp.deploy.Target"))
+        "target"
+    else if (std.mem.eql(u8, node.type_name, "gcp.deploy.CustomTargetType"))
+        "custom_target_type"
+    else if (std.mem.eql(u8, node.type_name, "gcp.deploy.Automation"))
+        "automation"
+    else if (std.mem.eql(u8, node.type_name, "gcp.deploy.DeployPolicy"))
+        "deploy_policy"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"cloud_deploy\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "service_account", "service_account");
+    try appendOptionalStorageBool(output, allocator, node, "require_approval", "require_approval");
+    try appendOptionalStorageBool(output, allocator, node, "suspended", "suspended");
+    try appendStorageListCount(output, allocator, node, "stages", "stage_count");
+    try appendStorageListCount(output, allocator, node, "execution", "execution_count");
+    try appendStorageListCount(output, allocator, node, "rules", "rule_count");
+    try appendStorageListCount(output, allocator, node, "selectors", "selector_count");
+    try appendStorageListCount(output, allocator, node, "target_ids", "target_count");
     try output.append(allocator, '}');
 }
 
@@ -1244,6 +1273,10 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.deploy.DeliveryPipeline") and std.mem.eql(u8, to_type, "gcp.deploy.Target")) return "delivery_stage";
+    if (std.mem.eql(u8, from_type, "gcp.deploy.Automation") and std.mem.eql(u8, to_type, "gcp.deploy.DeliveryPipeline")) return "pipeline_automation";
+    if (std.mem.eql(u8, from_type, "gcp.deploy.Target") and
+        (std.mem.eql(u8, to_type, "gcp.run.Service") or std.mem.eql(u8, to_type, "gcp.container.Cluster") or std.mem.eql(u8, to_type, "gcp.gkehub.Membership"))) return "deployment_target";
     if (std.mem.eql(u8, from_type, "gcp.cloudbuild.Repository") and std.mem.eql(u8, to_type, "gcp.cloudbuild.Connection")) return "source_connection";
     if (std.mem.eql(u8, from_type, "gcp.cloudbuild.Trigger") and std.mem.eql(u8, to_type, "gcp.cloudbuild.Repository")) return "trigger_source";
     if (std.mem.eql(u8, from_type, "gcp.cloudbuild.Trigger") and std.mem.eql(u8, to_type, "gcp.cloudbuild.WorkerPool")) return "private_execution";

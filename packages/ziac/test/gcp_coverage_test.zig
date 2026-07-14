@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 173), managed_count);
+    try std.testing.expectEqual(@as(usize, 178), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -225,6 +225,18 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     const project_settings = ziac.gcp.coverage.find("gcp.artifact.ProjectSettings") orelse return error.TestExpectedEqual;
     try std.testing.expect(project_settings.capabilities.update);
     try std.testing.expect(!project_settings.capabilities.delete_resource);
+
+    const delivery_pipeline = ziac.gcp.coverage.find("gcp.deploy.DeliveryPipeline") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M76", delivery_pipeline.milestone);
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.cloud_deploy, delivery_pipeline.service);
+    try std.testing.expect(delivery_pipeline.capabilities.update);
+    try std.testing.expect(delivery_pipeline.capabilities.estate);
+    try std.testing.expect(delivery_pipeline.capabilities.visual);
+    try std.testing.expect(delivery_pipeline.capabilities.cost);
+
+    const deploy_target = ziac.gcp.coverage.find("gcp.deploy.Target") orelse return error.TestExpectedEqual;
+    try std.testing.expect(deploy_target.capabilities.import_resource);
+    try std.testing.expect(deploy_target.capabilities.delete_resource);
 
     try std.testing.expect(ziac.gcp.coverage.find("gcp.not.a.Resource") == null);
 }
