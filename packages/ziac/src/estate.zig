@@ -118,6 +118,7 @@ pub fn scanAlloc(allocator: std.mem.Allocator, client: Client, input: ScanInput)
                 .address_type = resourceDataString(object, "addressType") orelse "",
                 .load_balancing_scheme = resourceDataString(object, "loadBalancingScheme") orelse "",
                 .purpose = resourceDataString(object, "purpose") orelse "",
+                .certificate_map = resourceDataString(object, "certificateMap") orelse "",
             };
             try assets.append(a, .{
                 .name = try a.dupe(u8, name),
@@ -294,6 +295,7 @@ const AssetShape = struct {
     address_type: []const u8,
     load_balancing_scheme: []const u8,
     purpose: []const u8,
+    certificate_map: []const u8,
 };
 
 fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, location: []const u8, name: []const u8, shape: AssetShape) ![]const u8 {
@@ -365,6 +367,14 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.parametermanager.Parameter"
     else if (std.mem.eql(u8, asset_type, "parametermanager.googleapis.com/ParameterVersion"))
         "gcp.parametermanager.ParameterVersion"
+    else if (std.mem.eql(u8, asset_type, "certificatemanager.googleapis.com/DnsAuthorization"))
+        "gcp.certificatemanager.DnsAuthorization"
+    else if (std.mem.eql(u8, asset_type, "certificatemanager.googleapis.com/Certificate"))
+        "gcp.certificatemanager.Certificate"
+    else if (std.mem.eql(u8, asset_type, "certificatemanager.googleapis.com/CertificateMap"))
+        "gcp.certificatemanager.CertificateMap"
+    else if (std.mem.eql(u8, asset_type, "certificatemanager.googleapis.com/CertificateMapEntry"))
+        "gcp.certificatemanager.CertificateMapEntry"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Network"))
         "gcp.compute.Network"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Subnetwork"))
@@ -397,6 +407,14 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionUrlMap" else "gcp.compute.UrlMap"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/TargetHttpProxy"))
         if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionTargetHttpProxy" else "gcp.compute.TargetHttpProxy"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/TargetHttpsProxy"))
+        if (shape.certificate_map.len > 0) "gcp.compute.CertificateMapTargetHttpsProxy" else "gcp.compute.TargetHttpsProxy"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/BackendBucket"))
+        "gcp.compute.BackendBucket"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/SecurityPolicy"))
+        "gcp.compute.SecurityPolicy"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/SslPolicy"))
+        "gcp.compute.SslPolicy"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Disk"))
         if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionDisk" else "gcp.compute.Disk"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Image"))
@@ -513,6 +531,10 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "identitytoolkit.googleapis.com/InboundSamlConfig", .prefix = "//identitytoolkit.googleapis.com/" },
         .{ .asset_type = "parametermanager.googleapis.com/Parameter", .prefix = "//parametermanager.googleapis.com/" },
         .{ .asset_type = "parametermanager.googleapis.com/ParameterVersion", .prefix = "//parametermanager.googleapis.com/" },
+        .{ .asset_type = "certificatemanager.googleapis.com/DnsAuthorization", .prefix = "//certificatemanager.googleapis.com/" },
+        .{ .asset_type = "certificatemanager.googleapis.com/Certificate", .prefix = "//certificatemanager.googleapis.com/" },
+        .{ .asset_type = "certificatemanager.googleapis.com/CertificateMap", .prefix = "//certificatemanager.googleapis.com/" },
+        .{ .asset_type = "certificatemanager.googleapis.com/CertificateMapEntry", .prefix = "//certificatemanager.googleapis.com/" },
     };
     for (service_prefixes) |entry| if (std.mem.eql(u8, asset_type, entry.asset_type)) {
         if (!std.mem.startsWith(u8, name, entry.prefix) or name.len == entry.prefix.len) return error.InvalidCloudAssetResponse;

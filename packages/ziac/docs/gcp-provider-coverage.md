@@ -334,6 +334,24 @@ forwarding rules when their internal scheme is proven. Canvas private-traffic
 and health-probe edges and explicit forwarding, data and probe estimates are
 synchronized. See `gcp-network-delivery.md`.
 
+### Edge security
+
+M70 adds eight managed global edge resources across Compute and Certificate
+Manager: backend buckets, Cloud Armor security policies, SSL policies, DNS
+authorizations, managed certificates, certificate maps, map entries and a
+certificate-map-aware HTTPS proxy.
+
+`ProtectedCdnBucket` and `ManagedCertificateMap` provide the opinionated layer.
+The lifecycle adapters resume Compute and generic Google operations, preserve
+canonical AIP identities and retry mutable Compute resources with current
+fingerprints. Exact `certs`, `certmaps`, `certmapentries` and
+`dnsauthorizations` use permissions are derived from graph wiring.
+
+Cloud Asset adoption proves certificate-map proxy shape from properties.
+Canvas cache-origin, security-enforcement, DNS-authorization,
+certificate-selection and TLS-policy edges and explicit CDN, Armor and
+certificate estimates are synchronized. See `gcp-edge-security.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`

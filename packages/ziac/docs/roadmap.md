@@ -966,3 +966,32 @@ executed tests, 702 passed, one credential-gated skip, and zero failures,
 pending tests, leaks or logged errors. The provider catalog reports 132 managed
 resources. Full release, migration and root TypeScript gates are recorded in
 the M69 implementation plan.
+
+M70 is locally complete and awaiting authenticated edge qualification. Eight
+managed resources add Cloud CDN backend buckets, Cloud Armor policies, SSL
+policies, Certificate Manager DNS authorizations, managed certificates, maps,
+entries and certificate-map-aware HTTPS proxies.
+
+`ProtectedCdnBucket` and `ManagedCertificateMap` provide the opinionated layer.
+The provider resumes Compute and generic Google operations, uses current
+fingerprints with bounded conflict retries and rejects noncanonical imports.
+Permission synthesis follows Certificate Manager's exact `certs`, `certmaps`,
+`certmapentries` and `dnsauthorizations` permissions, including use authority
+introduced by graph wiring. Property-aware Cloud Asset mapping distinguishes
+certificate-map proxies from legacy HTTPS proxies.
+
+Canvas artifacts expose cache, Armor, TLS, DNS and certificate-selection
+semantics. CDN egress, fill, lookup, Armor requests and certificate months are
+explicit configuration estimates. The local receipt proves apply, import,
+refresh/no-op and retention-aware cleanup. The fail-closed
+`scripts/qualify-edge-security.sh` additionally requires active issuance,
+proxy attachment, a cache hit and an Armor denial. See
+`docs/gcp-edge-security.md`.
+
+The M70 local Testing v2 package gate is complete with 717 discovered and
+executed tests, 716 passed, one credential-gated skip, and zero failures,
+pending tests, leaks or logged errors. The provider catalog reports 140 managed
+resources. Public examples, fresh-project and monorepo scaffolds, the Testing
+v2 migration guard, root TypeScript checks, static secret checks, the non-root
+arm64 container probe and the full release gate all pass. Authenticated edge
+qualification remains explicitly external and fail-closed.

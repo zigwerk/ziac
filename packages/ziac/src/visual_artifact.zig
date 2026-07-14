@@ -186,6 +186,7 @@ fn appendResource(
     try appendRunWorkloadDetails(output, allocator, item.node);
     try appendComputeWorkloadDetails(output, allocator, item.node);
     try appendNetworkDeliveryDetails(output, allocator, item.node);
+    try appendEdgeSecurityDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -442,6 +443,48 @@ fn appendNetworkDeliveryDetails(output: *std.ArrayList(u8), allocator: std.mem.A
     try appendOptionalStorageBool(output, allocator, node, "disabled", "disabled");
     try appendOptionalStorageBool(output, allocator, node, "all_ports", "all_ports");
     try appendOptionalStorageBool(output, allocator, node, "allow_global_access", "allow_global_access");
+    try output.append(allocator, '}');
+}
+
+fn appendEdgeSecurityDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.compute.BackendBucket"))
+        "backend_bucket"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.SecurityPolicy"))
+        "security_policy"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.SslPolicy"))
+        "ssl_policy"
+    else if (std.mem.eql(u8, node.type_name, "gcp.certificatemanager.DnsAuthorization"))
+        "dns_authorization"
+    else if (std.mem.eql(u8, node.type_name, "gcp.certificatemanager.Certificate"))
+        "certificate"
+    else if (std.mem.eql(u8, node.type_name, "gcp.certificatemanager.CertificateMap"))
+        "certificate_map"
+    else if (std.mem.eql(u8, node.type_name, "gcp.certificatemanager.CertificateMapEntry"))
+        "certificate_map_entry"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.CertificateMapTargetHttpsProxy"))
+        "target_https_proxy"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"edge_security\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "cache_mode", "cache_mode");
+    try appendOptionalStorageString(output, allocator, node, "compression_mode", "compression_mode");
+    try appendOptionalStorageString(output, allocator, node, "policy_type", "policy_type");
+    try appendOptionalStorageString(output, allocator, node, "minimum_tls_version", "minimum_tls_version");
+    try appendOptionalStorageString(output, allocator, node, "profile", "profile");
+    try appendOptionalStorageString(output, allocator, node, "domain", "domain");
+    try appendOptionalStorageString(output, allocator, node, "scope", "certificate_scope");
+    try appendOptionalStorageString(output, allocator, node, "matcher_kind", "matcher_kind");
+    try appendOptionalStorageString(output, allocator, node, "matcher_value", "matcher_value");
+    try appendOptionalStorageString(output, allocator, node, "quic_override", "quic_override");
+    try appendOptionalStorageInteger(output, allocator, node, "default_ttl_seconds", "default_ttl_seconds");
+    try appendOptionalStorageInteger(output, allocator, node, "max_ttl_seconds", "max_ttl_seconds");
+    try appendStorageListCount(output, allocator, node, "rules", "rule_count");
+    try appendStorageListCount(output, allocator, node, "domains", "domain_count");
+    try appendStorageListCount(output, allocator, node, "certificates", "certificate_count");
+    try appendOptionalStorageBool(output, allocator, node, "enable_cdn", "enable_cdn");
+    try appendOptionalStorageBool(output, allocator, node, "negative_caching", "negative_caching");
     try output.append(allocator, '}');
 }
 
@@ -1013,11 +1056,23 @@ fn isGlobalType(type_name: []const u8) bool {
         std.mem.eql(u8, type_name, "gcp.compute.TargetHttpsProxy") or
         std.mem.eql(u8, type_name, "gcp.compute.TargetHttpProxy") or
         std.mem.eql(u8, type_name, "gcp.compute.ManagedSslCertificate") or
+        std.mem.eql(u8, type_name, "gcp.compute.BackendBucket") or
+        std.mem.eql(u8, type_name, "gcp.compute.SecurityPolicy") or
+        std.mem.eql(u8, type_name, "gcp.compute.SslPolicy") or
+        std.mem.eql(u8, type_name, "gcp.compute.CertificateMapTargetHttpsProxy") or
+        std.mem.startsWith(u8, type_name, "gcp.certificatemanager.") or
         std.mem.eql(u8, type_name, "gcp.compute.Image") or
         std.mem.eql(u8, type_name, "gcp.compute.InstanceTemplate");
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.compute.BackendBucket") and std.mem.eql(u8, to_type, "gcp.storage.Bucket")) return "cache_origin";
+    if (std.mem.eql(u8, from_type, "gcp.compute.BackendBucket") and std.mem.eql(u8, to_type, "gcp.compute.SecurityPolicy")) return "security_enforcement";
+    if (std.mem.eql(u8, from_type, "gcp.certificatemanager.Certificate") and std.mem.eql(u8, to_type, "gcp.certificatemanager.DnsAuthorization")) return "dns_authorization";
+    if ((std.mem.eql(u8, from_type, "gcp.certificatemanager.CertificateMapEntry") and
+        (std.mem.eql(u8, to_type, "gcp.certificatemanager.Certificate") or std.mem.eql(u8, to_type, "gcp.certificatemanager.CertificateMap"))) or
+        (std.mem.eql(u8, from_type, "gcp.compute.CertificateMapTargetHttpsProxy") and std.mem.eql(u8, to_type, "gcp.certificatemanager.CertificateMap"))) return "certificate_selection";
+    if (std.mem.eql(u8, from_type, "gcp.compute.CertificateMapTargetHttpsProxy") and std.mem.eql(u8, to_type, "gcp.compute.SslPolicy")) return "tls_policy";
     if (std.mem.eql(u8, from_type, "gcp.pubsub.Subscription") and std.mem.eql(u8, to_type, "gcp.pubsub.Topic")) return "event";
     if (std.mem.eql(u8, from_type, "gcp.eventarc.Trigger") and
         (std.mem.eql(u8, to_type, "gcp.pubsub.Topic") or std.mem.eql(u8, to_type, "gcp.run.Service"))) return "event";

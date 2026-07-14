@@ -38,6 +38,7 @@ pub const Api = enum {
     api_gateway,
     identity_toolkit,
     parameter_manager,
+    certificate_manager,
 };
 
 pub const Endpoints = struct {
@@ -71,6 +72,7 @@ pub const Endpoints = struct {
     api_gateway: []const u8 = "https://apigateway.googleapis.com",
     identity_toolkit: []const u8 = "https://identitytoolkit.googleapis.com",
     parameter_manager: []const u8 = "https://parametermanager.googleapis.com",
+    certificate_manager: []const u8 = "https://certificatemanager.googleapis.com",
 
     pub fn get(self: Endpoints, api: Api) []const u8 {
         return switch (api) {
@@ -104,6 +106,7 @@ pub const Endpoints = struct {
             .api_gateway => self.api_gateway,
             .identity_toolkit => self.identity_toolkit,
             .parameter_manager => self.parameter_manager,
+            .certificate_manager => self.certificate_manager,
         };
     }
 };

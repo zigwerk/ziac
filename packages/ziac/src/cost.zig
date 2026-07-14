@@ -219,6 +219,22 @@ pub const NetworkDeliveryEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const EdgeSecurityEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8 = "global",
+    cache_egress_sku_id: []const u8 = "",
+    cache_fill_sku_id: []const u8 = "",
+    cache_lookup_sku_id: []const u8 = "",
+    armor_request_sku_id: []const u8 = "",
+    certificate_sku_id: []const u8 = "",
+    cache_egress_gib: u64 = 0,
+    cache_fill_gib: u64 = 0,
+    cache_lookup_requests: u64 = 0,
+    armor_requests: u64 = 0,
+    certificate_months: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -684,6 +700,18 @@ pub fn networkDeliveryConfigurationEstimate(
     try appendUsage(&usage, &count, input.forwarding_rule_sku_id, input.region, input.forwarding_rule_hours);
     try appendUsage(&usage, &count, input.data_processed_sku_id, input.region, input.data_processed_gib);
     try appendUsage(&usage, &count, input.health_probe_sku_id, input.region, input.health_probes);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn edgeSecurityConfigurationEstimate(prices: []const SkuPrice, input: EdgeSecurityEstimateInput) !ResourceCost {
+    var usage: [5]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.cache_egress_sku_id, input.region, input.cache_egress_gib);
+    try appendUsage(&usage, &count, input.cache_fill_sku_id, input.region, input.cache_fill_gib);
+    try appendUsage(&usage, &count, input.cache_lookup_sku_id, input.region, input.cache_lookup_requests);
+    try appendUsage(&usage, &count, input.armor_request_sku_id, input.region, input.armor_requests);
+    try appendUsage(&usage, &count, input.certificate_sku_id, input.region, input.certificate_months);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }

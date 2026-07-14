@@ -657,6 +657,39 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Networks.Use", .permission = "compute.networks.use" },
         .{ .suffix = "Subnetworks.Use", .permission = "compute.subnetworks.use" },
         .{ .suffix = "Disks.Use", .permission = "compute.disks.use" },
+        .{ .suffix = "BackendBuckets.Get", .permission = "compute.backendBuckets.get" },
+        .{ .suffix = "BackendBuckets.Insert", .permission = "compute.backendBuckets.create" },
+        .{ .suffix = "BackendBuckets.Patch", .permission = "compute.backendBuckets.update" },
+        .{ .suffix = "BackendBuckets.SetSecurityPolicy", .permission = "compute.backendBuckets.setSecurityPolicy" },
+        .{ .suffix = "BackendBuckets.Delete", .permission = "compute.backendBuckets.delete" },
+        .{ .suffix = "SecurityPolicies.Get", .permission = "compute.securityPolicies.get" },
+        .{ .suffix = "SecurityPolicies.Insert", .permission = "compute.securityPolicies.create" },
+        .{ .suffix = "SecurityPolicies.Patch", .permission = "compute.securityPolicies.update" },
+        .{ .suffix = "SecurityPolicies.Delete", .permission = "compute.securityPolicies.delete" },
+        .{ .suffix = "SslPolicies.Get", .permission = "compute.sslPolicies.get" },
+        .{ .suffix = "SslPolicies.Insert", .permission = "compute.sslPolicies.create" },
+        .{ .suffix = "SslPolicies.Patch", .permission = "compute.sslPolicies.update" },
+        .{ .suffix = "SslPolicies.Delete", .permission = "compute.sslPolicies.delete" },
+        .{ .suffix = "SslPolicies.Use", .permission = "compute.sslPolicies.use" },
+        .{ .suffix = "TargetHttpsProxies.Get", .permission = "compute.targetHttpsProxies.get" },
+        .{ .suffix = "TargetHttpsProxies.Insert", .permission = "compute.targetHttpsProxies.create" },
+        .{ .suffix = "TargetHttpsProxies.Delete", .permission = "compute.targetHttpsProxies.delete" },
+        .{ .suffix = "UrlMaps.Use", .permission = "compute.urlMaps.use" },
+        .{ .suffix = "DnsAuthorizations.GetDnsAuthorization", .permission = "certificatemanager.dnsauthorizations.get" },
+        .{ .suffix = "DnsAuthorizations.CreateDnsAuthorization", .permission = "certificatemanager.dnsauthorizations.create" },
+        .{ .suffix = "DnsAuthorizations.DeleteDnsAuthorization", .permission = "certificatemanager.dnsauthorizations.delete" },
+        .{ .suffix = "DnsAuthorizations.UseDnsAuthorization", .permission = "certificatemanager.dnsauthorizations.use" },
+        .{ .suffix = "Certificates.GetCertificate", .permission = "certificatemanager.certs.get" },
+        .{ .suffix = "Certificates.CreateCertificate", .permission = "certificatemanager.certs.create" },
+        .{ .suffix = "Certificates.DeleteCertificate", .permission = "certificatemanager.certs.delete" },
+        .{ .suffix = "Certificates.UseCertificate", .permission = "certificatemanager.certs.use" },
+        .{ .suffix = "CertificateMaps.GetCertificateMap", .permission = "certificatemanager.certmaps.get" },
+        .{ .suffix = "CertificateMaps.CreateCertificateMap", .permission = "certificatemanager.certmaps.create" },
+        .{ .suffix = "CertificateMaps.DeleteCertificateMap", .permission = "certificatemanager.certmaps.delete" },
+        .{ .suffix = "CertificateMaps.UseCertificateMap", .permission = "certificatemanager.certmaps.use" },
+        .{ .suffix = "CertificateMapEntries.GetCertificateMapEntry", .permission = "certificatemanager.certmapentries.get" },
+        .{ .suffix = "CertificateMapEntries.CreateCertificateMapEntry", .permission = "certificatemanager.certmapentries.create" },
+        .{ .suffix = "CertificateMapEntries.DeleteCertificateMapEntry", .permission = "certificatemanager.certmapentries.delete" },
     };
     for (mappings) |mapping| if (std.mem.endsWith(u8, method, mapping.suffix)) return mapping.permission;
     return null;
@@ -1187,6 +1220,55 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionBackendServices.Use" },
         .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.RegionTargetHttpProxies.Use" },
     };
+    const compute_backend_bucket = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.BackendBuckets.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.BackendBuckets.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.BackendBuckets.Patch" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.BackendBuckets.SetSecurityPolicy" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.BackendBuckets.Delete" },
+    };
+    const compute_security_policy = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SecurityPolicies.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SecurityPolicies.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SecurityPolicies.Patch" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SecurityPolicies.Delete" },
+    };
+    const compute_ssl_policy = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SslPolicies.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SslPolicies.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SslPolicies.Patch" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SslPolicies.Delete" },
+    };
+    const compute_certificate_map_proxy = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.TargetHttpsProxies.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.TargetHttpsProxies.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.TargetHttpsProxies.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.UrlMaps.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SslPolicies.Use" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.CertificateMaps.UseCertificateMap" },
+    };
+    const certificate_dns_authorization = [_]RpcUsage{
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.DnsAuthorizations.GetDnsAuthorization" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.DnsAuthorizations.CreateDnsAuthorization" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.DnsAuthorizations.DeleteDnsAuthorization" },
+    };
+    const certificate = [_]RpcUsage{
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.Certificates.GetCertificate" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.Certificates.CreateCertificate" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.Certificates.DeleteCertificate" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.DnsAuthorizations.UseDnsAuthorization" },
+    };
+    const certificate_map = [_]RpcUsage{
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.CertificateMaps.GetCertificateMap" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.CertificateMaps.CreateCertificateMap" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.CertificateMaps.DeleteCertificateMap" },
+    };
+    const certificate_map_entry = [_]RpcUsage{
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.CertificateMapEntries.GetCertificateMapEntry" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.CertificateMapEntries.CreateCertificateMapEntry" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.CertificateMapEntries.DeleteCertificateMapEntry" },
+        .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.Certificates.UseCertificate" },
+    };
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
@@ -1284,6 +1366,14 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionUrlMap")) return &compute_region_url_map;
     if (std.mem.eql(u8, type_name, "gcp.compute.RegionTargetHttpProxy")) return &compute_region_http_proxy;
     if (std.mem.eql(u8, type_name, "gcp.compute.ForwardingRule")) return &compute_forwarding_rule;
+    if (std.mem.eql(u8, type_name, "gcp.compute.BackendBucket")) return &compute_backend_bucket;
+    if (std.mem.eql(u8, type_name, "gcp.compute.SecurityPolicy")) return &compute_security_policy;
+    if (std.mem.eql(u8, type_name, "gcp.compute.SslPolicy")) return &compute_ssl_policy;
+    if (std.mem.eql(u8, type_name, "gcp.compute.CertificateMapTargetHttpsProxy")) return &compute_certificate_map_proxy;
+    if (std.mem.eql(u8, type_name, "gcp.certificatemanager.DnsAuthorization")) return &certificate_dns_authorization;
+    if (std.mem.eql(u8, type_name, "gcp.certificatemanager.Certificate")) return &certificate;
+    if (std.mem.eql(u8, type_name, "gcp.certificatemanager.CertificateMap")) return &certificate_map;
+    if (std.mem.eql(u8, type_name, "gcp.certificatemanager.CertificateMapEntry")) return &certificate_map_entry;
     if (std.mem.startsWith(u8, type_name, "gcp.compute.")) return &compute_generic;
     if (std.mem.eql(u8, type_name, "gcp.dns.RecordSet")) return &dns;
     return &.{};

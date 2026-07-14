@@ -217,7 +217,7 @@ isolated serializer tests.
 
 - [x] M68 Compute instance, disk, image, template and managed instance group.
 - [x] M69 firewalls, routes, health checks, regional/internal load balancing.
-- [ ] M70 Cloud CDN, backend buckets, Cloud Armor and Certificate Manager.
+- [x] M70 Cloud CDN, backend buckets, Cloud Armor and Certificate Manager.
 - [ ] M71 VPN, HA VPN, peering, Network Connectivity Center and service networking.
 - [ ] M72 GKE clusters, node pools, fleets, workload identity, Functions v2 and
   Batch.
