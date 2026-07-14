@@ -1,4 +1,8 @@
 comptime {
+    _ = @import("gcp_connectivity_test.zig");
+    _ = @import("gcp_connectivity_live_provider_test.zig");
+    _ = @import("gcp_connectivity_components_test.zig");
+    _ = @import("gcp_connectivity_product_test.zig");
     _ = @import("gcp_edge_security_test.zig");
     _ = @import("gcp_edge_security_live_provider_test.zig");
     _ = @import("gcp_edge_security_product_test.zig");

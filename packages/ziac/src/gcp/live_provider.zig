@@ -5,6 +5,7 @@ const application_services_provider = @import("application_services_provider.zig
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const compute_provider = @import("compute_provider.zig");
 const compute_workloads_provider = @import("compute_workloads_provider.zig");
+const connectivity_provider = @import("connectivity_provider.zig");
 const edge_security_provider = @import("edge_security_provider.zig");
 const network_delivery_provider = @import("network_delivery_provider.zig");
 const dns_provider = @import("dns_provider.zig");
@@ -74,10 +75,12 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.BackendService",
     "gcp.compute.CertificateMapTargetHttpsProxy",
     "gcp.compute.Disk",
+    "gcp.compute.ExternalVpnGateway",
     "gcp.compute.Firewall",
     "gcp.compute.ForwardingRule",
     "gcp.compute.GlobalAddress",
     "gcp.compute.GlobalForwardingRule",
+    "gcp.compute.HaVpnGateway",
     "gcp.compute.HealthCheck",
     "gcp.compute.HttpRedirectUrlMap",
     "gcp.compute.Image",
@@ -87,6 +90,7 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.InternalAddress",
     "gcp.compute.ManagedSslCertificate",
     "gcp.compute.Network",
+    "gcp.compute.NetworkPeering",
     "gcp.compute.PrivateServiceRange",
     "gcp.compute.PscAddress",
     "gcp.compute.PscEndpoint",
@@ -101,6 +105,8 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.RegionalAddress",
     "gcp.compute.Route",
     "gcp.compute.Router",
+    "gcp.compute.RouterBgpPeer",
+    "gcp.compute.RouterInterface",
     "gcp.compute.RouterNat",
     "gcp.compute.SecurityPolicy",
     "gcp.compute.SslPolicy",
@@ -108,6 +114,7 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.TargetHttpProxy",
     "gcp.compute.TargetHttpsProxy",
     "gcp.compute.UrlMap",
+    "gcp.compute.VpnTunnel",
     "gcp.dns.ManagedZone",
     "gcp.dns.RecordSet",
     "gcp.eventarc.Trigger",
@@ -141,6 +148,9 @@ pub const managed_type_names = [_][]const u8{
     "gcp.identity.TenantOAuthIdpConfig",
     "gcp.kms.CryptoKey",
     "gcp.kms.KeyRing",
+    "gcp.networkconnectivity.Hub",
+    "gcp.networkconnectivity.ServiceConnectionPolicy",
+    "gcp.networkconnectivity.Spoke",
     "gcp.parametermanager.Parameter",
     "gcp.parametermanager.ParameterVersion",
     "gcp.parametermanager.Template",
@@ -230,6 +240,7 @@ pub const LiveProvider = struct {
         if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().read(context, node, null);
         if (run_iam_provider.supports(node)) return self.runIamHandler().read(context, node, null);
         if (network_provider.supports(node)) return self.networkHandler().read(context, node, null);
+        if (connectivity_provider.supports(node)) return self.connectivityHandler().read(context, node, null);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().read(context, node, null);
         if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().read(context, node, null);
         if (edge_security_provider.supports(node)) return self.edgeSecurityHandler().read(context, node, null);
@@ -266,6 +277,7 @@ pub const LiveProvider = struct {
         if (iam_provider.supports(node)) return iam_provider.Handler.diff(context, node, observed);
         if (iam_admin_provider.supports(node)) return iam_admin_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
+        if (connectivity_provider.supports(node)) return connectivity_provider.Handler.diff(context, node, observed);
         if (compute_workloads_provider.supports(node)) return compute_workloads_provider.Handler.diff(context, node, observed);
         if (network_delivery_provider.supports(node)) return network_delivery_provider.Handler.diff(context, node, observed);
         if (edge_security_provider.supports(node)) return edge_security_provider.Handler.diff(context, node, observed);
@@ -315,6 +327,7 @@ pub const LiveProvider = struct {
         if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().create(context, node);
         if (run_iam_provider.supports(node)) return self.runIamHandler().create(context, node);
         if (network_provider.supports(node)) return self.networkHandler().create(context, node);
+        if (connectivity_provider.supports(node)) return self.connectivityHandler().create(context, node);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().create(context, node);
         if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().create(context, node);
         if (edge_security_provider.supports(node)) return self.edgeSecurityHandler().create(context, node);
@@ -353,6 +366,7 @@ pub const LiveProvider = struct {
         if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().update(context, node, observed);
         if (run_iam_provider.supports(node)) return self.runIamHandler().update(context, node, observed.physical_id);
         if (network_provider.supports(node)) return self.networkHandler().update(context, node, observed.physical_id);
+        if (connectivity_provider.supports(node)) return self.connectivityHandler().update(context, node, observed);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().update(context, node, observed);
         if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().update(context, node, observed);
         if (edge_security_provider.supports(node)) return self.edgeSecurityHandler().update(context, node, observed);
@@ -393,6 +407,7 @@ pub const LiveProvider = struct {
         if (run_workloads_provider.supports(node)) return self.runWorkloadsHandler().delete(context, node, physical_id);
         if (run_iam_provider.supports(node)) return self.runIamHandler().delete(context, node, physical_id);
         if (network_provider.supports(node)) return self.networkHandler().delete(context, node, physical_id);
+        if (connectivity_provider.supports(node)) return self.connectivityHandler().delete(context, node, physical_id);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().delete(context, node, physical_id);
         if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().delete(context, node, physical_id);
         if (edge_security_provider.supports(node)) return self.edgeSecurityHandler().delete(context, node, physical_id);
@@ -518,6 +533,7 @@ pub const LiveProvider = struct {
                 .present => |present| present,
             };
         }
+        if (connectivity_provider.supports(node)) return self.connectivityHandler().importResource(context, node, physical_id);
         if (compute_workloads_provider.supports(node)) return self.computeWorkloadsHandler().importResource(context, node, physical_id);
         if (network_delivery_provider.supports(node)) return self.networkDeliveryHandler().importResource(context, node, physical_id);
         if (edge_security_provider.supports(node)) return self.edgeSecurityHandler().importResource(context, node, physical_id);
@@ -1253,6 +1269,15 @@ pub const LiveProvider = struct {
             .client = self.client,
             .operation_policy = self.operation_policy,
             .conflict_retries = self.compute_conflict_retries,
+        };
+    }
+
+    fn connectivityHandler(self: *LiveProvider) connectivity_provider.Handler {
+        return .{
+            .client = self.client,
+            .operation_policy = self.operation_policy,
+            .conflict_retries = self.compute_conflict_retries,
+            .secret_source = self.secret_source,
         };
     }
 

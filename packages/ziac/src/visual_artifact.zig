@@ -187,6 +187,7 @@ fn appendResource(
     try appendComputeWorkloadDetails(output, allocator, item.node);
     try appendNetworkDeliveryDetails(output, allocator, item.node);
     try appendEdgeSecurityDetails(output, allocator, item.node);
+    try appendConnectivityDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -485,6 +486,46 @@ fn appendEdgeSecurityDetails(output: *std.ArrayList(u8), allocator: std.mem.Allo
     try appendStorageListCount(output, allocator, node, "certificates", "certificate_count");
     try appendOptionalStorageBool(output, allocator, node, "enable_cdn", "enable_cdn");
     try appendOptionalStorageBool(output, allocator, node, "negative_caching", "negative_caching");
+    try output.append(allocator, '}');
+}
+
+fn appendConnectivityDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.compute.HaVpnGateway"))
+        "ha_vpn_gateway"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.ExternalVpnGateway"))
+        "external_vpn_gateway"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.VpnTunnel"))
+        "vpn_tunnel"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RouterInterface"))
+        "router_interface"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.RouterBgpPeer"))
+        "bgp_peer"
+    else if (std.mem.eql(u8, node.type_name, "gcp.compute.NetworkPeering"))
+        "network_peering"
+    else if (std.mem.eql(u8, node.type_name, "gcp.networkconnectivity.Hub"))
+        "hub"
+    else if (std.mem.eql(u8, node.type_name, "gcp.networkconnectivity.Spoke"))
+        "spoke"
+    else if (std.mem.eql(u8, node.type_name, "gcp.networkconnectivity.ServiceConnectionPolicy"))
+        "service_connection_policy"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"connectivity\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "region", "region");
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "stack_type", "stack_type");
+    try appendOptionalStorageString(output, allocator, node, "redundancy_type", "redundancy_type");
+    try appendOptionalStorageString(output, allocator, node, "link_kind", "link_kind");
+    try appendOptionalStorageString(output, allocator, node, "topology", "topology");
+    try appendOptionalStorageString(output, allocator, node, "service_class", "service_class");
+    try appendOptionalStorageString(output, allocator, node, "producer_location", "producer_location");
+    try appendOptionalStorageInteger(output, allocator, node, "peer_asn", "peer_asn");
+    try appendOptionalStorageInteger(output, allocator, node, "route_priority", "route_priority");
+    try appendStorageListCount(output, allocator, node, "interfaces", "interface_count");
+    try appendStorageListCount(output, allocator, node, "links", "link_count");
+    try appendStorageListCount(output, allocator, node, "subnetworks", "subnetwork_count");
+    try appendOptionalStorageBool(output, allocator, node, "site_to_site_data_transfer", "site_to_site_data_transfer");
     try output.append(allocator, '}');
 }
 
@@ -1060,6 +1101,9 @@ fn isGlobalType(type_name: []const u8) bool {
         std.mem.eql(u8, type_name, "gcp.compute.SecurityPolicy") or
         std.mem.eql(u8, type_name, "gcp.compute.SslPolicy") or
         std.mem.eql(u8, type_name, "gcp.compute.CertificateMapTargetHttpsProxy") or
+        std.mem.eql(u8, type_name, "gcp.compute.ExternalVpnGateway") or
+        std.mem.eql(u8, type_name, "gcp.compute.NetworkPeering") or
+        std.mem.eql(u8, type_name, "gcp.networkconnectivity.Hub") or
         std.mem.startsWith(u8, type_name, "gcp.certificatemanager.") or
         std.mem.eql(u8, type_name, "gcp.compute.Image") or
         std.mem.eql(u8, type_name, "gcp.compute.InstanceTemplate");
@@ -1073,6 +1117,13 @@ fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []c
         (std.mem.eql(u8, to_type, "gcp.certificatemanager.Certificate") or std.mem.eql(u8, to_type, "gcp.certificatemanager.CertificateMap"))) or
         (std.mem.eql(u8, from_type, "gcp.compute.CertificateMapTargetHttpsProxy") and std.mem.eql(u8, to_type, "gcp.certificatemanager.CertificateMap"))) return "certificate_selection";
     if (std.mem.eql(u8, from_type, "gcp.compute.CertificateMapTargetHttpsProxy") and std.mem.eql(u8, to_type, "gcp.compute.SslPolicy")) return "tls_policy";
+    if ((std.mem.eql(u8, from_type, "gcp.compute.VpnTunnel") and
+        (std.mem.eql(u8, to_type, "gcp.compute.HaVpnGateway") or std.mem.eql(u8, to_type, "gcp.compute.ExternalVpnGateway") or std.mem.eql(u8, to_type, "gcp.compute.Router"))) or
+        (std.mem.eql(u8, from_type, "gcp.compute.RouterInterface") and std.mem.eql(u8, to_type, "gcp.compute.VpnTunnel"))) return "vpn_attachment";
+    if (std.mem.eql(u8, from_type, "gcp.compute.RouterBgpPeer") and
+        (std.mem.eql(u8, to_type, "gcp.compute.RouterInterface") or std.mem.eql(u8, to_type, "gcp.compute.Router"))) return "bgp_session";
+    if (std.mem.eql(u8, from_type, "gcp.networkconnectivity.Spoke") and std.mem.eql(u8, to_type, "gcp.networkconnectivity.Hub")) return "hub_membership";
+    if (std.mem.eql(u8, from_type, "gcp.networkconnectivity.Spoke") and std.mem.eql(u8, to_type, "gcp.compute.VpnTunnel")) return "hub_attachment";
     if (std.mem.eql(u8, from_type, "gcp.pubsub.Subscription") and std.mem.eql(u8, to_type, "gcp.pubsub.Topic")) return "event";
     if (std.mem.eql(u8, from_type, "gcp.eventarc.Trigger") and
         (std.mem.eql(u8, to_type, "gcp.pubsub.Topic") or std.mem.eql(u8, to_type, "gcp.run.Service"))) return "event";

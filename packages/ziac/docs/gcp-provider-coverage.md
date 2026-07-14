@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 123 managed GCP resource types.
+The current deterministic provider gate contains 149 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -352,6 +352,23 @@ Canvas cache-origin, security-enforcement, DNS-authorization,
 certificate-selection and TLS-policy edges and explicit CDN, Armor and
 certificate estimates are synchronized. See `gcp-edge-security.md`.
 
+### Hybrid and cross-network connectivity
+
+M71 adds nine managed connectivity resources across Compute and Network
+Connectivity: HA and external VPN gateways, VPN tunnels, Cloud Router
+interfaces and BGP peers, reciprocal VPC peering entries, NCC hubs and spokes,
+and PSC service connection policies.
+
+`HaVpnConnection`, `BidirectionalVpcPeering`, `VpcConnectivityMesh` and
+`PrivateServiceConnectivityPolicy` provide the opinionated layer. VPN secrets
+are resolved only for mutation. Router children preserve unowned siblings with
+fingerprint retries, peering uses native action methods, and NCC updates use
+etags and exact field masks.
+
+Cloud Asset adoption, exact connectivity permissions, VPN/BGP/NCC canvas edges
+and explicit VPN tunnel, NCC spoke and data-transfer estimates are
+synchronized. See `gcp-connectivity.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`
@@ -368,9 +385,8 @@ M56-M62 adds the provider catalog and generation spine, then completes:
 4. general additive and authoritative IAM semantics;
 5. one integrated authenticated application-platform qualification.
 
-The subsequent waves cover broader application services, Compute Engine, GKE,
-networking, Cloud Armor, Certificate
-Manager, Monitoring, Logging, Cloud Build/Deploy, organization governance,
+The subsequent waves cover GKE, Functions, Batch, Monitoring, Logging, Cloud
+Build/Deploy, organization governance,
 security, analytics, integration and stable Vertex AI resources.
 
 See `roadmap.md` for programme status. The source repository also contains the

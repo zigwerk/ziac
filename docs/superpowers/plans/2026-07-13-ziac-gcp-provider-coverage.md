@@ -218,7 +218,7 @@ isolated serializer tests.
 - [x] M68 Compute instance, disk, image, template and managed instance group.
 - [x] M69 firewalls, routes, health checks, regional/internal load balancing.
 - [x] M70 Cloud CDN, backend buckets, Cloud Armor and Certificate Manager.
-- [ ] M71 VPN, HA VPN, peering, Network Connectivity Center and service networking.
+- [x] M71 VPN, HA VPN, peering, Network Connectivity Center and service networking.
 - [ ] M72 GKE clusters, node pools, fleets, workload identity, Functions v2 and
   Batch.
 
@@ -286,3 +286,22 @@ Testing v2 package gate reports 703 discovered/executed tests, 702 passed, one
 credential-gated skip, and zero failures, pending tests, leaks or logged
 errors. Authenticated backend health and private probes remain a disposable-
 project gate and are not represented as local proof.
+
+## M71 Evidence
+
+M71 is locally complete with 149 managed resources. Nine connectivity types
+cover HA and external VPN gateways, VPN tunnels, router interfaces and BGP
+peers, VPC peering, Network Connectivity Center hubs and spokes, and Private
+Service Connect service-connection policies. The provider resumes Compute and
+generic operations, resolves VPN secrets only in mutation scope, preserves
+unowned router children under fingerprint-safe retries, and uses native
+peering actions plus NCC etags and field masks.
+
+Four opinionated components provide HA VPN, bidirectional peering, VPC mesh and
+PSC policy without hiding ownership. Exact API and IAM synthesis, supported
+Cloud Asset identities, canvas topology, explicit configuration estimates,
+installed documentation and the fail-closed qualification runner are
+synchronized. The Testing v2 package gate reports 737 discovered/executed
+tests, 736 passed, one credential-gated skip, and zero failures, pending tests,
+leaks or logged errors. Authenticated tunnel, route and NCC qualification
+remains a disposable-project gate and is not represented as local proof.

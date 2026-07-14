@@ -40,6 +40,13 @@ pub const sources = [_]Source{
         .document_sha256 = "a845b96dfef3ecd5eae8022be598b8622a18e9e1be707b2c2bf7a938ef5a3713",
     },
     .{
+        .id = "networkconnectivity:v1",
+        .version = "v1",
+        .revision = "20260701",
+        .discovery_url = "https://networkconnectivity.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "a785c3a0736931b120a76a2e694f71b5cee6d49471bec8f1c049dac594029b8c",
+    },
+    .{
         .id = "parametermanager:v1",
         .version = "v1",
         .revision = "20260629",

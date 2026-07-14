@@ -655,6 +655,7 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "ForwardingRules.Insert", .permission = "compute.forwardingRules.create" },
         .{ .suffix = "ForwardingRules.Delete", .permission = "compute.forwardingRules.delete" },
         .{ .suffix = "Networks.Use", .permission = "compute.networks.use" },
+        .{ .suffix = "Networks.Get", .permission = "compute.networks.get" },
         .{ .suffix = "Subnetworks.Use", .permission = "compute.subnetworks.use" },
         .{ .suffix = "Disks.Use", .permission = "compute.disks.use" },
         .{ .suffix = "BackendBuckets.Get", .permission = "compute.backendBuckets.get" },
@@ -675,6 +676,37 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "TargetHttpsProxies.Insert", .permission = "compute.targetHttpsProxies.create" },
         .{ .suffix = "TargetHttpsProxies.Delete", .permission = "compute.targetHttpsProxies.delete" },
         .{ .suffix = "UrlMaps.Use", .permission = "compute.urlMaps.use" },
+        .{ .suffix = "ExternalVpnGateways.Get", .permission = "compute.externalVpnGateways.get" },
+        .{ .suffix = "ExternalVpnGateways.Insert", .permission = "compute.externalVpnGateways.create" },
+        .{ .suffix = "ExternalVpnGateways.Delete", .permission = "compute.externalVpnGateways.delete" },
+        .{ .suffix = "ExternalVpnGateways.Use", .permission = "compute.externalVpnGateways.use" },
+        .{ .suffix = "VpnGateways.Get", .permission = "compute.vpnGateways.get" },
+        .{ .suffix = "VpnGateways.Insert", .permission = "compute.vpnGateways.create" },
+        .{ .suffix = "VpnGateways.Delete", .permission = "compute.vpnGateways.delete" },
+        .{ .suffix = "VpnGateways.Use", .permission = "compute.vpnGateways.use" },
+        .{ .suffix = "VpnTunnels.Get", .permission = "compute.vpnTunnels.get" },
+        .{ .suffix = "VpnTunnels.Insert", .permission = "compute.vpnTunnels.create" },
+        .{ .suffix = "VpnTunnels.Delete", .permission = "compute.vpnTunnels.delete" },
+        .{ .suffix = "VpnTunnels.Use", .permission = "compute.vpnTunnels.use" },
+        .{ .suffix = "Routers.Get", .permission = "compute.routers.get" },
+        .{ .suffix = "Routers.Insert", .permission = "compute.routers.create" },
+        .{ .suffix = "Routers.Patch", .permission = "compute.routers.update" },
+        .{ .suffix = "Routers.Delete", .permission = "compute.routers.delete" },
+        .{ .suffix = "Networks.AddPeering", .permission = "compute.networks.addPeering" },
+        .{ .suffix = "Networks.UpdatePeering", .permission = "compute.networks.updatePeering" },
+        .{ .suffix = "Networks.RemovePeering", .permission = "compute.networks.removePeering" },
+        .{ .suffix = "Hubs.GetHub", .permission = "networkconnectivity.hubs.get" },
+        .{ .suffix = "Hubs.CreateHub", .permission = "networkconnectivity.hubs.create" },
+        .{ .suffix = "Hubs.UpdateHub", .permission = "networkconnectivity.hubs.update" },
+        .{ .suffix = "Hubs.DeleteHub", .permission = "networkconnectivity.hubs.delete" },
+        .{ .suffix = "Spokes.GetSpoke", .permission = "networkconnectivity.spokes.get" },
+        .{ .suffix = "Spokes.CreateSpoke", .permission = "networkconnectivity.spokes.create" },
+        .{ .suffix = "Spokes.UpdateSpoke", .permission = "networkconnectivity.spokes.update" },
+        .{ .suffix = "Spokes.DeleteSpoke", .permission = "networkconnectivity.spokes.delete" },
+        .{ .suffix = "ServiceConnectionPolicies.GetServiceConnectionPolicy", .permission = "networkconnectivity.serviceConnectionPolicies.get" },
+        .{ .suffix = "ServiceConnectionPolicies.CreateServiceConnectionPolicy", .permission = "networkconnectivity.serviceConnectionPolicies.create" },
+        .{ .suffix = "ServiceConnectionPolicies.UpdateServiceConnectionPolicy", .permission = "networkconnectivity.serviceConnectionPolicies.update" },
+        .{ .suffix = "ServiceConnectionPolicies.DeleteServiceConnectionPolicy", .permission = "networkconnectivity.serviceConnectionPolicies.delete" },
         .{ .suffix = "DnsAuthorizations.GetDnsAuthorization", .permission = "certificatemanager.dnsauthorizations.get" },
         .{ .suffix = "DnsAuthorizations.CreateDnsAuthorization", .permission = "certificatemanager.dnsauthorizations.create" },
         .{ .suffix = "DnsAuthorizations.DeleteDnsAuthorization", .permission = "certificatemanager.dnsauthorizations.delete" },
@@ -1247,6 +1279,58 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.SslPolicies.Use" },
         .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.CertificateMaps.UseCertificateMap" },
     };
+    const compute_ha_vpn_gateway = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.VpnGateways.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.VpnGateways.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.VpnGateways.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+    };
+    const compute_external_vpn_gateway = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.ExternalVpnGateways.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.ExternalVpnGateways.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.ExternalVpnGateways.Delete" },
+    };
+    const compute_vpn_tunnel = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.VpnTunnels.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.VpnTunnels.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.VpnTunnels.Delete" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.VpnGateways.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.ExternalVpnGateways.Use" },
+    };
+    const compute_router = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Routers.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Routers.Insert" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Routers.Patch" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Routers.Delete" },
+    };
+    const compute_network_peering = [_]RpcUsage{
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Get" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.AddPeering" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.UpdatePeering" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.RemovePeering" },
+    };
+    const connectivity_hub = [_]RpcUsage{
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.Hubs.GetHub" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.Hubs.CreateHub" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.Hubs.UpdateHub" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.Hubs.DeleteHub" },
+    };
+    const connectivity_spoke = [_]RpcUsage{
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.Spokes.GetSpoke" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.Spokes.CreateSpoke" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.Spokes.UpdateSpoke" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.Spokes.DeleteSpoke" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.VpnTunnels.Use" },
+    };
+    const connectivity_service_policy = [_]RpcUsage{
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.ServiceConnectionPolicies.GetServiceConnectionPolicy" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.ServiceConnectionPolicies.CreateServiceConnectionPolicy" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.ServiceConnectionPolicies.UpdateServiceConnectionPolicy" },
+        .{ .service = "networkconnectivity.googleapis.com", .method = "google.cloud.networkconnectivity.v1.ServiceConnectionPolicies.DeleteServiceConnectionPolicy" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Networks.Use" },
+        .{ .service = "compute.googleapis.com", .method = "google.cloud.compute.v1.Subnetworks.Use" },
+    };
     const certificate_dns_authorization = [_]RpcUsage{
         .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.DnsAuthorizations.GetDnsAuthorization" },
         .{ .service = "certificatemanager.googleapis.com", .method = "google.cloud.certificatemanager.v1.DnsAuthorizations.CreateDnsAuthorization" },
@@ -1370,6 +1454,17 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.compute.SecurityPolicy")) return &compute_security_policy;
     if (std.mem.eql(u8, type_name, "gcp.compute.SslPolicy")) return &compute_ssl_policy;
     if (std.mem.eql(u8, type_name, "gcp.compute.CertificateMapTargetHttpsProxy")) return &compute_certificate_map_proxy;
+    if (std.mem.eql(u8, type_name, "gcp.compute.HaVpnGateway")) return &compute_ha_vpn_gateway;
+    if (std.mem.eql(u8, type_name, "gcp.compute.ExternalVpnGateway")) return &compute_external_vpn_gateway;
+    if (std.mem.eql(u8, type_name, "gcp.compute.VpnTunnel")) return &compute_vpn_tunnel;
+    if (std.mem.eql(u8, type_name, "gcp.compute.Router") or
+        std.mem.eql(u8, type_name, "gcp.compute.RouterNat") or
+        std.mem.eql(u8, type_name, "gcp.compute.RouterInterface") or
+        std.mem.eql(u8, type_name, "gcp.compute.RouterBgpPeer")) return &compute_router;
+    if (std.mem.eql(u8, type_name, "gcp.compute.NetworkPeering")) return &compute_network_peering;
+    if (std.mem.eql(u8, type_name, "gcp.networkconnectivity.Hub")) return &connectivity_hub;
+    if (std.mem.eql(u8, type_name, "gcp.networkconnectivity.Spoke")) return &connectivity_spoke;
+    if (std.mem.eql(u8, type_name, "gcp.networkconnectivity.ServiceConnectionPolicy")) return &connectivity_service_policy;
     if (std.mem.eql(u8, type_name, "gcp.certificatemanager.DnsAuthorization")) return &certificate_dns_authorization;
     if (std.mem.eql(u8, type_name, "gcp.certificatemanager.Certificate")) return &certificate;
     if (std.mem.eql(u8, type_name, "gcp.certificatemanager.CertificateMap")) return &certificate_map;

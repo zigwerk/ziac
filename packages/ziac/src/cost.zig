@@ -235,6 +235,20 @@ pub const EdgeSecurityEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const ConnectivityEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8 = "global",
+    vpn_tunnel_sku_id: []const u8 = "",
+    ncc_hybrid_spoke_sku_id: []const u8 = "",
+    ncc_vpc_spoke_sku_id: []const u8 = "",
+    ncc_data_transfer_sku_id: []const u8 = "",
+    vpn_tunnel_hours: u64 = 0,
+    ncc_hybrid_spoke_hours: u64 = 0,
+    ncc_vpc_spoke_hours: u64 = 0,
+    ncc_data_transfer_gib: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -712,6 +726,17 @@ pub fn edgeSecurityConfigurationEstimate(prices: []const SkuPrice, input: EdgeSe
     try appendUsage(&usage, &count, input.cache_lookup_sku_id, input.region, input.cache_lookup_requests);
     try appendUsage(&usage, &count, input.armor_request_sku_id, input.region, input.armor_requests);
     try appendUsage(&usage, &count, input.certificate_sku_id, input.region, input.certificate_months);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn connectivityConfigurationEstimate(prices: []const SkuPrice, input: ConnectivityEstimateInput) !ResourceCost {
+    var usage: [4]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.vpn_tunnel_sku_id, input.region, input.vpn_tunnel_hours);
+    try appendUsage(&usage, &count, input.ncc_hybrid_spoke_sku_id, input.region, input.ncc_hybrid_spoke_hours);
+    try appendUsage(&usage, &count, input.ncc_vpc_spoke_sku_id, input.region, input.ncc_vpc_spoke_hours);
+    try appendUsage(&usage, &count, input.ncc_data_transfer_sku_id, input.region, input.ncc_data_transfer_gib);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }

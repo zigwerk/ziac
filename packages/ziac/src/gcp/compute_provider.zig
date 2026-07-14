@@ -69,7 +69,8 @@ pub const Handler = struct {
             .noop
         else switch (resource_kind) {
             .backend_service, .url_map, .redirect_url_map, .target_http_proxy, .target_https_proxy => if (sameIdentity(node.inputs, observed.observed_inputs)) .update else .replace,
-            .network, .subnetwork, .router, .regional_address, .psc_address, .global_address, .regional_neg, .managed_ssl_certificate, .global_forwarding_rule, .psc_endpoint => .replace,
+            .router => if (sameIdentity(node.inputs, observed.observed_inputs)) .update else .replace,
+            .network, .subnetwork, .regional_address, .psc_address, .global_address, .regional_neg, .managed_ssl_certificate, .global_forwarding_rule, .psc_endpoint => .replace,
         };
         const reasons: []const []const u8 = if (diff_kind == .noop) &.{} else &.{"Compute desired state differs from observed resource"};
         return provider_mod.DiffResult.init(context.allocator, diff_kind, reasons);
@@ -98,7 +99,7 @@ pub const Handler = struct {
     ) ProviderError!provider_mod.ResourceResult {
         const resource_kind = kind(node) orelse return error.InvalidConfiguration;
         switch (resource_kind) {
-            .backend_service, .url_map, .redirect_url_map, .target_http_proxy, .target_https_proxy => {},
+            .router, .backend_service, .url_map, .redirect_url_map, .target_http_proxy, .target_https_proxy => {},
             else => return error.InvalidConfiguration,
         }
         try validatePhysicalId(context.allocator, node, resource_kind, physical_id);
@@ -383,6 +384,10 @@ fn normalizedInputsAlloc(
         .router => {
             try normalized.put(arena, "network", try normalizedStringInput(context, node, "network", try requiredJsonString(remote, "network"), arena));
             try normalized.put(arena, "region", .{ .string = try requiredString(node.inputs, "region") });
+            const bgp = if (remote.get("bgp")) |present| asObject(present) orelse return error.ProviderBug else null;
+            try normalized.put(arena, "bgp_asn", .{ .integer = if (bgp) |present| try requiredJsonInteger(present, "asn") else 0 });
+            try normalized.put(arena, "advertise_mode", .{ .string = if (bgp) |present| asString(present.get("advertiseMode")) orelse "DEFAULT" else "DEFAULT" });
+            try normalized.put(arena, "advertised_groups", try jsonStringArrayOrEmpty(arena, if (bgp) |present| present.get("advertisedGroups") else null));
         },
         .regional_address => {
             try normalized.put(arena, "address_type", .{ .string = try requiredJsonString(remote, "addressType") });
@@ -494,7 +499,17 @@ fn desiredBodyAlloc(
             try body.put(arena, "network", .{ .string = try resolveStringValue(context, try requiredValue(node.inputs, "network")) });
             try body.put(arena, "privateIpGoogleAccess", .{ .bool = try requiredBoolean(node.inputs, "private_ip_google_access") });
         },
-        .router => try body.put(arena, "network", .{ .string = try resolveStringValue(context, try requiredValue(node.inputs, "network")) }),
+        .router => {
+            try body.put(arena, "network", .{ .string = try resolveStringValue(context, try requiredValue(node.inputs, "network")) });
+            const asn = try requiredInteger(node.inputs, "bgp_asn");
+            if (asn != 0) {
+                var bgp: std.json.ObjectMap = .empty;
+                try bgp.put(arena, "asn", .{ .integer = asn });
+                try bgp.put(arena, "advertiseMode", .{ .string = try requiredString(node.inputs, "advertise_mode") });
+                try bgp.put(arena, "advertisedGroups", try stringListJson(arena, try requiredValue(node.inputs, "advertised_groups")));
+                try body.put(arena, "bgp", .{ .object = bgp });
+            }
+        },
         .regional_address => {
             try body.put(arena, "addressType", .{ .string = try requiredString(node.inputs, "address_type") });
             try body.put(arena, "networkTier", .{ .string = try requiredString(node.inputs, "network_tier") });
@@ -612,6 +627,7 @@ fn mergeUpdateBodyAlloc(
     const desired_object = asObject(desired.value) orelse return error.ProviderBug;
     const arena = remote.arena.allocator();
     const managed_fields: []const []const u8 = switch (resource_kind) {
+        .router => &.{ "name", "network", "bgp" },
         .backend_service => &.{ "name", "protocol", "loadBalancingScheme", "backends", "outlierDetection" },
         .url_map => &.{ "name", "defaultService" },
         .redirect_url_map => &.{ "name", "defaultUrlRedirect" },
@@ -920,6 +936,14 @@ fn durationSeconds(object: std.json.ObjectMap, name: []const u8) ProviderError!i
 fn requiredObject(object: std.json.ObjectMap, name: []const u8) ProviderError!std.json.ObjectMap {
     const found = object.get(name) orelse return error.ProviderBug;
     return asObject(found) orelse error.ProviderBug;
+}
+
+fn jsonStringArrayOrEmpty(allocator: std.mem.Allocator, maybe_value: ?std.json.Value) ProviderError!std.json.Value {
+    var result = std.json.Array.init(allocator);
+    const present = maybe_value orelse return .{ .array = result };
+    const items = asArray(present) orelse return error.ProviderBug;
+    for (items.items) |item| try result.append(.{ .string = asString(item) orelse return error.ProviderBug });
+    return .{ .array = result };
 }
 
 fn requiredJsonString(object: std.json.ObjectMap, name: []const u8) ProviderError![]const u8 {

@@ -7,6 +7,7 @@ const value = @import("../value.zig");
 pub const BuildError = config_mod.ValidationError || std.mem.Allocator.Error || error{
     DuplicateField,
     InvalidCidr,
+    InvalidAsn,
     InvalidMinPorts,
     InvalidName,
     OutputNotKnown,
@@ -83,7 +84,12 @@ pub const RouterArgs = struct {
     name: []const u8,
     region: []const u8,
     network: output.Output([]const u8, .public),
+    bgp_asn: ?u32 = null,
+    advertise_mode: RouterAdvertisementMode = .default,
+    advertised_groups: []const []const u8 = &.{},
 };
+
+pub const RouterAdvertisementMode = enum { default, custom };
 
 pub const Router = struct {
     pub const Outputs = struct {
@@ -97,7 +103,14 @@ pub const Router = struct {
         try provider.validate();
         try validateName(args.name);
         if (args.region.len == 0) return error.MissingRegion;
+        if (args.bgp_asn) |asn| try validatePrivateAsn(asn);
+        if (args.advertise_mode == .default and args.advertised_groups.len > 0) return error.InvalidAsn;
+        var groups = try stringListValueOwned(allocator, args.advertised_groups);
+        defer groups.deinit(allocator);
         const fields = [_]value.Field{
+            .{ .name = "advertise_mode", .value = .{ .string = if (args.advertise_mode == .custom) "CUSTOM" else "DEFAULT" } },
+            .{ .name = "advertised_groups", .value = groups },
+            .{ .name = "bgp_asn", .value = .{ .integer = args.bgp_asn orelse 0 } },
             .{ .name = "name", .value = .{ .string = args.name } },
             .{ .name = "network", .value = try outputValue(args.network) },
             .{ .name = "project_id", .value = .{ .string = provider.project_id } },
@@ -232,6 +245,20 @@ fn outputValue(result: output.Output([]const u8, .public)) BuildError!value.Valu
         } },
         .unknown_reason => error.OutputNotKnown,
     };
+}
+
+fn stringListValueOwned(allocator: std.mem.Allocator, strings: []const []const u8) BuildError!value.Value {
+    const items = try allocator.alloc(value.Value, strings.len);
+    defer allocator.free(items);
+    for (strings, 0..) |string, index| items[index] = .{ .string = string };
+    return value.Value.initOwned(allocator, .{ .list = items }) catch |err| switch (err) {
+        error.DuplicateField => unreachable,
+        error.OutOfMemory => error.OutOfMemory,
+    };
+}
+
+fn validatePrivateAsn(asn: u32) BuildError!void {
+    if (!((asn >= 64_512 and asn <= 65_534) or (asn >= 4_200_000_000 and asn <= 4_294_967_294))) return error.InvalidAsn;
 }
 
 fn validateName(name: []const u8) BuildError!void {

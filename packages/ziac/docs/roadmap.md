@@ -995,3 +995,30 @@ resources. Public examples, fresh-project and monorepo scaffolds, the Testing
 v2 migration guard, root TypeScript checks, static secret checks, the non-root
 arm64 container probe and the full release gate all pass. Authenticated edge
 qualification remains explicitly external and fail-closed.
+
+M71 is locally complete and awaiting authenticated hybrid-connectivity
+qualification. Nine managed resources add HA and external VPN gateways, VPN
+tunnels, router interfaces and BGP peers, VPC peering, Network Connectivity
+Center hubs and spokes, and Private Service Connect service-connection
+policies.
+
+`HaVpnConnection`, `BidirectionalVpcPeering`, `VpcConnectivityMesh` and
+`PrivateServiceConnectivityPolicy` provide the opinionated layer. The provider
+resumes global, regional and generic Google operations; mutates router children
+with current fingerprints and bounded conflict retry; preserves unowned
+siblings; invokes native peering actions; and applies NCC field masks and
+etags. VPN pre-shared keys are resolved only inside mutation scope and never
+enter desired or observed state.
+
+Exact Compute and Network Connectivity permissions, Cloud Asset adoption,
+VPN/BGP/NCC canvas semantics and explicit configuration estimates are
+synchronized. The local receipt proves apply, import, refresh/no-op and
+retention-aware cleanup. The fail-closed `scripts/qualify-connectivity.sh`
+requires established tunnels, learned router routes, active NCC resources and
+an observed PSC policy before it can pass. See `docs/gcp-connectivity.md`.
+
+The M71 local Testing v2 package gate is complete with 737 discovered and
+executed tests, 736 passed, one credential-gated skip, and zero failures,
+pending tests, leaks or logged errors. The provider catalog reports 149 managed
+resources. Authenticated connectivity qualification remains explicitly
+external and fail-closed.

@@ -427,6 +427,20 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionInstanceGroupManager" else "gcp.compute.InstanceGroupManager"
     else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Autoscaler"))
         if (std.mem.indexOf(u8, name, "/regions/") != null) "gcp.compute.RegionAutoscaler" else "gcp.compute.Autoscaler"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/VpnGateway"))
+        "gcp.compute.HaVpnGateway"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/ExternalVpnGateway"))
+        "gcp.compute.ExternalVpnGateway"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/VpnTunnel"))
+        "gcp.compute.VpnTunnel"
+    else if (std.mem.eql(u8, asset_type, "compute.googleapis.com/Router"))
+        "gcp.compute.Router"
+    else if (std.mem.eql(u8, asset_type, "networkconnectivity.googleapis.com/Hub"))
+        "gcp.networkconnectivity.Hub"
+    else if (std.mem.eql(u8, asset_type, "networkconnectivity.googleapis.com/Spoke"))
+        "gcp.networkconnectivity.Spoke"
+    else if (std.mem.eql(u8, asset_type, "networkconnectivity.googleapis.com/ServiceConnectionPolicy"))
+        "gcp.networkconnectivity.ServiceConnectionPolicy"
     else
         "gcp.asset.Resource";
     return allocator.dupe(u8, mapped);
@@ -535,6 +549,9 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "certificatemanager.googleapis.com/Certificate", .prefix = "//certificatemanager.googleapis.com/" },
         .{ .asset_type = "certificatemanager.googleapis.com/CertificateMap", .prefix = "//certificatemanager.googleapis.com/" },
         .{ .asset_type = "certificatemanager.googleapis.com/CertificateMapEntry", .prefix = "//certificatemanager.googleapis.com/" },
+        .{ .asset_type = "networkconnectivity.googleapis.com/Hub", .prefix = "//networkconnectivity.googleapis.com/" },
+        .{ .asset_type = "networkconnectivity.googleapis.com/ServiceConnectionPolicy", .prefix = "//networkconnectivity.googleapis.com/" },
+        .{ .asset_type = "networkconnectivity.googleapis.com/Spoke", .prefix = "//networkconnectivity.googleapis.com/" },
     };
     for (service_prefixes) |entry| if (std.mem.eql(u8, asset_type, entry.asset_type)) {
         if (!std.mem.startsWith(u8, name, entry.prefix) or name.len == entry.prefix.len) return error.InvalidCloudAssetResponse;
