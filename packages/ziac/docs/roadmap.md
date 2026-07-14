@@ -1070,3 +1070,21 @@ resources. Public examples, installation checks, migration, root TypeScript
 and static secret gates pass. `scripts/qualify-monitoring.sh` remains the
 fail-closed authenticated boundary and does not infer alert or notification
 delivery from object existence.
+
+M74 is locally complete and awaiting authenticated Cloud Logging
+qualification. Five managed resources add protected log buckets, restricted
+views, typed sinks, project exclusions and counter or distribution log metrics.
+
+`ApplicationLogPlatform` composes storage, access slices, routing, volume
+controls and derived signals. The provider checkpoints asynchronous bucket
+operations, applies exact update masks, preserves generated sink writer
+identities and rejects unsafe one-way or immutable transitions. Permission
+synthesis, supported Cloud Asset adoption, canvas relationships and explicit
+ingestion, retention and metric estimates are synchronized. See
+`docs/gcp-logging.md`.
+
+The M74 local Testing v2 package gate is complete with 790 discovered and
+executed tests, 789 passed, one credential-gated skip, and zero failures,
+pending tests, leaks or logged errors. The provider catalog reports 167 managed
+resources. `scripts/qualify-logging.sh` remains the fail-closed authenticated
+boundary for real sink routing, view visibility and derived metric evidence.

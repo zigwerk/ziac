@@ -225,7 +225,7 @@ isolated serializer tests.
 ## M73-M76: Operations And Delivery
 
 - [x] M73 Monitoring alerts, uptime checks, channels, dashboards and SLOs.
-- [ ] M74 Logging sinks, buckets, views, exclusions and log metrics.
+- [x] M74 Logging sinks, buckets, views, exclusions and log metrics.
 - [ ] M75 Cloud Build triggers/connections/worker pools and Artifact policies.
 - [ ] M76 Cloud Deploy pipelines, targets and automation.
 
@@ -346,3 +346,19 @@ errors. Public examples, installed-client scaffolds, migration, root
 TypeScript and static secret checks pass. Authenticated endpoint, incident,
 notification and SLO-window evidence remains a fail-closed disposable-project
 gate and is not represented as local proof.
+
+## M74 Evidence
+
+M74 is locally complete with 167 managed resources. Five Cloud Logging types
+cover protected buckets, restricted views, typed sinks and exclusions, and
+counter or distribution log metrics. The provider checkpoints asynchronous
+bucket operations, preserves generated sink writer identities, applies exact
+update masks and enforces one-way bucket and immutable metric transitions.
+
+`ApplicationLogPlatform` composes storage, views, routing, exclusions and
+derived metrics. Exact API and permission synthesis, supported Cloud Asset
+adoption, logging canvas relationships and explicit ingestion, retention and
+metric estimates are synchronized. The local Testing v2 gate discovers and
+executes 790 tests: 789 pass, one credential-gated test skips, and none fail or
+remain pending; no leaks or logged errors are reported. The authenticated
+`scripts/qualify-logging.sh` receipt remains external and fail-closed.

@@ -381,6 +381,14 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.container.Cluster"
     else if (std.mem.eql(u8, asset_type, "container.googleapis.com/NodePool"))
         "gcp.container.NodePool"
+    else if (std.mem.eql(u8, asset_type, "logging.googleapis.com/LogBucket"))
+        "gcp.logging.Bucket"
+    else if (std.mem.eql(u8, asset_type, "logging.googleapis.com/LogView"))
+        "gcp.logging.View"
+    else if (std.mem.eql(u8, asset_type, "logging.googleapis.com/LogMetric"))
+        "gcp.logging.Metric"
+    else if (std.mem.eql(u8, asset_type, "logging.googleapis.com/LogSink"))
+        "gcp.logging.Sink"
     else if (std.mem.eql(u8, asset_type, "monitoring.googleapis.com/AlertPolicy"))
         "gcp.monitoring.AlertPolicy"
     else if (std.mem.eql(u8, asset_type, "monitoring.googleapis.com/Dashboard"))
@@ -570,6 +578,10 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "cloudfunctions.googleapis.com/CloudFunction", .prefix = "//cloudfunctions.googleapis.com/" },
         .{ .asset_type = "container.googleapis.com/Cluster", .prefix = "//container.googleapis.com/" },
         .{ .asset_type = "container.googleapis.com/NodePool", .prefix = "//container.googleapis.com/" },
+        .{ .asset_type = "logging.googleapis.com/LogBucket", .prefix = "//logging.googleapis.com/" },
+        .{ .asset_type = "logging.googleapis.com/LogView", .prefix = "//logging.googleapis.com/" },
+        .{ .asset_type = "logging.googleapis.com/LogMetric", .prefix = "//logging.googleapis.com/" },
+        .{ .asset_type = "logging.googleapis.com/LogSink", .prefix = "//logging.googleapis.com/" },
         .{ .asset_type = "monitoring.googleapis.com/AlertPolicy", .prefix = "//monitoring.googleapis.com/" },
         .{ .asset_type = "monitoring.googleapis.com/Dashboard", .prefix = "//monitoring.googleapis.com/" },
         .{ .asset_type = "monitoring.googleapis.com/NotificationChannel", .prefix = "//monitoring.googleapis.com/" },

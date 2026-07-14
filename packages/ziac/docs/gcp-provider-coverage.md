@@ -382,6 +382,20 @@ synthesis, official Cloud Asset identities, observability canvas edges and
 free-allotment-aware uptime/alert estimates are synchronized. See
 `gcp-monitoring.md`.
 
+### Logging storage and routing
+
+M74 adds five managed Cloud Logging resources: protected log buckets,
+restricted views, typed sinks, project exclusions and counter or distribution
+log metrics. `ApplicationLogPlatform` composes a same-project logging plane
+without hiding destination IAM or mutating Google's reserved sinks.
+
+The adapter resumes asynchronous bucket operations, preserves generated sink
+writer identities, applies exact update masks and enforces one-way lock,
+analytics and immutable metric-schema transitions. Permission synthesis,
+supported Cloud Asset identities, canvas routing and derivation edges, and
+explicit ingestion, retention and metric estimates are synchronized. See
+`gcp-logging.md`.
+
 ### Security and orchestration
 
 - `gcp.kms.KeyRing`

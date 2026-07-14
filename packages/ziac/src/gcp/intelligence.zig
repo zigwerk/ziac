@@ -334,6 +334,26 @@ pub fn rolloutAllowed(signal: RolloutSignal, gate: RolloutGate) bool {
 
 fn permissionForMethod(method: []const u8) ?[]const u8 {
     const mappings = [_]struct { suffix: []const u8, permission: []const u8 }{
+        .{ .suffix = "ConfigServiceV2.GetBucket", .permission = "logging.buckets.get" },
+        .{ .suffix = "ConfigServiceV2.CreateBucketAsync", .permission = "logging.buckets.create" },
+        .{ .suffix = "ConfigServiceV2.UpdateBucketAsync", .permission = "logging.buckets.update" },
+        .{ .suffix = "ConfigServiceV2.DeleteBucket", .permission = "logging.buckets.delete" },
+        .{ .suffix = "ConfigServiceV2.GetView", .permission = "logging.views.get" },
+        .{ .suffix = "ConfigServiceV2.CreateView", .permission = "logging.views.create" },
+        .{ .suffix = "ConfigServiceV2.UpdateView", .permission = "logging.views.update" },
+        .{ .suffix = "ConfigServiceV2.DeleteView", .permission = "logging.views.delete" },
+        .{ .suffix = "ConfigServiceV2.GetSink", .permission = "logging.sinks.get" },
+        .{ .suffix = "ConfigServiceV2.CreateSink", .permission = "logging.sinks.create" },
+        .{ .suffix = "ConfigServiceV2.UpdateSink", .permission = "logging.sinks.update" },
+        .{ .suffix = "ConfigServiceV2.DeleteSink", .permission = "logging.sinks.delete" },
+        .{ .suffix = "ConfigServiceV2.GetExclusion", .permission = "logging.exclusions.get" },
+        .{ .suffix = "ConfigServiceV2.CreateExclusion", .permission = "logging.exclusions.create" },
+        .{ .suffix = "ConfigServiceV2.UpdateExclusion", .permission = "logging.exclusions.update" },
+        .{ .suffix = "ConfigServiceV2.DeleteExclusion", .permission = "logging.exclusions.delete" },
+        .{ .suffix = "MetricsServiceV2.GetLogMetric", .permission = "logging.logMetrics.get" },
+        .{ .suffix = "MetricsServiceV2.CreateLogMetric", .permission = "logging.logMetrics.create" },
+        .{ .suffix = "MetricsServiceV2.UpdateLogMetric", .permission = "logging.logMetrics.update" },
+        .{ .suffix = "MetricsServiceV2.DeleteLogMetric", .permission = "logging.logMetrics.delete" },
         .{ .suffix = "AlertPolicyService.GetAlertPolicy", .permission = "monitoring.alertPolicies.get" },
         .{ .suffix = "AlertPolicyService.CreateAlertPolicy", .permission = "monitoring.alertPolicies.create" },
         .{ .suffix = "AlertPolicyService.UpdateAlertPolicy", .permission = "monitoring.alertPolicies.update" },
@@ -786,6 +806,36 @@ pub fn jobExecutionUsages() []const RpcUsage {
 }
 
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
+    const logging_bucket = [_]RpcUsage{
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.GetBucket" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.CreateBucketAsync" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.UpdateBucketAsync" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.DeleteBucket" },
+    };
+    const logging_view = [_]RpcUsage{
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.GetView" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.CreateView" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.UpdateView" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.DeleteView" },
+    };
+    const logging_sink = [_]RpcUsage{
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.GetSink" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.CreateSink" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.UpdateSink" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.DeleteSink" },
+    };
+    const logging_exclusion = [_]RpcUsage{
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.GetExclusion" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.CreateExclusion" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.UpdateExclusion" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.ConfigServiceV2.DeleteExclusion" },
+    };
+    const logging_metric = [_]RpcUsage{
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.MetricsServiceV2.GetLogMetric" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.MetricsServiceV2.CreateLogMetric" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.MetricsServiceV2.UpdateLogMetric" },
+        .{ .service = "logging.googleapis.com", .method = "google.logging.v2.MetricsServiceV2.DeleteLogMetric" },
+    };
     const monitoring_alert_policy = [_]RpcUsage{
         .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.AlertPolicyService.GetAlertPolicy" },
         .{ .service = "monitoring.googleapis.com", .method = "google.monitoring.v3.AlertPolicyService.CreateAlertPolicy" },
@@ -1485,6 +1535,11 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const dns = [_]RpcUsage{
         .{ .service = "dns.googleapis.com", .method = "dns.changes.create" },
     };
+    if (std.mem.eql(u8, type_name, "gcp.logging.Bucket")) return &logging_bucket;
+    if (std.mem.eql(u8, type_name, "gcp.logging.View")) return &logging_view;
+    if (std.mem.eql(u8, type_name, "gcp.logging.Sink")) return &logging_sink;
+    if (std.mem.eql(u8, type_name, "gcp.logging.Exclusion")) return &logging_exclusion;
+    if (std.mem.eql(u8, type_name, "gcp.logging.Metric")) return &logging_metric;
     if (std.mem.eql(u8, type_name, "gcp.monitoring.AlertPolicy")) return &monitoring_alert_policy;
     if (std.mem.eql(u8, type_name, "gcp.monitoring.UptimeCheck")) return &monitoring_uptime_check;
     if (std.mem.eql(u8, type_name, "gcp.monitoring.NotificationChannel")) return &monitoring_channel;

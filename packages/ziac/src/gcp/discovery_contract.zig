@@ -68,6 +68,13 @@ pub const sources = [_]Source{
         .document_sha256 = "a845b96dfef3ecd5eae8022be598b8622a18e9e1be707b2c2bf7a938ef5a3713",
     },
     .{
+        .id = "logging:v2",
+        .version = "v2",
+        .revision = "20260706",
+        .discovery_url = "https://logging.googleapis.com/$discovery/rest?version=v2",
+        .document_sha256 = "7b9427e591ffd255ad8579a471200f9045cf5b72446f5dfa7fc648e761dc5e7d",
+    },
+    .{
         .id = "monitoring:v1",
         .version = "v1",
         .revision = "20260705",

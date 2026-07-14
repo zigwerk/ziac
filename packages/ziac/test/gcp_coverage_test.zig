@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 162), managed_count);
+    try std.testing.expectEqual(@as(usize, 167), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -190,6 +190,20 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     try std.testing.expect(monitoring_service.capabilities.visual);
     try std.testing.expect(monitoring_service.capabilities.cost);
 
+    const log_bucket = ziac.gcp.coverage.find("gcp.logging.Bucket") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M74", log_bucket.milestone);
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.logging, log_bucket.service);
+    try std.testing.expect(log_bucket.capabilities.update);
+    try std.testing.expect(log_bucket.capabilities.estate);
+    try std.testing.expect(log_bucket.capabilities.visual);
+    try std.testing.expect(log_bucket.capabilities.cost);
+
+    const project_exclusion = ziac.gcp.coverage.find("gcp.logging.Exclusion") orelse return error.TestExpectedEqual;
+    try std.testing.expect(project_exclusion.capabilities.update);
+    try std.testing.expect(!project_exclusion.capabilities.estate);
+    try std.testing.expect(project_exclusion.capabilities.visual);
+    try std.testing.expect(project_exclusion.capabilities.cost);
+
     try std.testing.expect(ziac.gcp.coverage.find("gcp.not.a.Resource") == null);
 }
 
@@ -215,6 +229,7 @@ test "GCP provider coverage reports are deterministic filterable and provenance 
     try std.testing.expect(std.mem.indexOf(u8, json_first, "networkconnectivity:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "monitoring:v1") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "monitoring:v3") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json_first, "logging:v2") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "gcp.storage.Bucket") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_first, "gcp.pubsub.Topic") == null);
 

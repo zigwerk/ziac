@@ -190,6 +190,7 @@ fn appendResource(
     try appendConnectivityDetails(output, allocator, item.node);
     try appendContainerPlatformDetails(output, allocator, item.node);
     try appendMonitoringDetails(output, allocator, item.node);
+    try appendLoggingDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
     try appendFirestoreDetails(output, allocator, item.node);
     try appendCloudSqlDetails(output, allocator, item.node);
@@ -594,6 +595,36 @@ fn appendMonitoringDetails(output: *std.ArrayList(u8), allocator: std.mem.Alloca
     try appendStorageListCount(output, allocator, node, "conditions", "condition_count");
     try appendStorageListCount(output, allocator, node, "notification_channels", "notification_channel_count");
     try appendStorageListCount(output, allocator, node, "tiles", "tile_count");
+    try output.append(allocator, '}');
+}
+
+fn appendLoggingDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.logging.Bucket"))
+        "bucket"
+    else if (std.mem.eql(u8, node.type_name, "gcp.logging.View"))
+        "view"
+    else if (std.mem.eql(u8, node.type_name, "gcp.logging.Sink"))
+        "sink"
+    else if (std.mem.eql(u8, node.type_name, "gcp.logging.Exclusion"))
+        "exclusion"
+    else if (std.mem.eql(u8, node.type_name, "gcp.logging.Metric"))
+        "metric"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"logging\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "filter", "filter");
+    try appendOptionalStorageString(output, allocator, node, "metric_kind", "metric_kind");
+    try appendOptionalStorageString(output, allocator, node, "value_type", "value_type");
+    try appendOptionalStorageInteger(output, allocator, node, "retention_days", "retention_days");
+    try appendOptionalStorageBool(output, allocator, node, "analytics_enabled", "analytics_enabled");
+    try appendOptionalStorageBool(output, allocator, node, "locked", "locked");
+    try appendOptionalStorageBool(output, allocator, node, "disabled", "disabled");
+    try appendStorageListCount(output, allocator, node, "restricted_fields", "restricted_field_count");
+    try appendStorageListCount(output, allocator, node, "indexes", "index_count");
+    try appendStorageListCount(output, allocator, node, "exclusions", "exclusion_count");
+    try appendStorageListCount(output, allocator, node, "labels", "label_count");
     try output.append(allocator, '}');
 }
 
@@ -1178,6 +1209,9 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.logging.View") and std.mem.eql(u8, to_type, "gcp.logging.Bucket")) return "log_view";
+    if (std.mem.eql(u8, from_type, "gcp.logging.Sink") and std.mem.eql(u8, to_type, "gcp.logging.Bucket")) return "log_route";
+    if (std.mem.eql(u8, from_type, "gcp.logging.Metric") and std.mem.eql(u8, to_type, "gcp.logging.Bucket")) return "log_metric";
     if (std.mem.eql(u8, from_type, "gcp.monitoring.ServiceLevelObjective") and std.mem.eql(u8, to_type, "gcp.monitoring.Service")) return "service_slo";
     if (std.mem.eql(u8, from_type, "gcp.monitoring.UptimeCheck") and std.mem.eql(u8, to_type, "gcp.monitoring.Service")) return "probe_target";
     if (std.mem.eql(u8, from_type, "gcp.monitoring.AlertPolicy") and std.mem.eql(u8, to_type, "gcp.monitoring.UptimeCheck")) return "policy_evaluation";
