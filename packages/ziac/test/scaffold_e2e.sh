@@ -23,6 +23,8 @@ test -x "$(dirname "${ziac_bin}")/../share/ziac/scripts/qualify-container-platfo
 test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-monitoring.md"
 test -x "$(dirname "${ziac_bin}")/../share/ziac/scripts/qualify-monitoring.sh"
 test -x "$(dirname "${ziac_bin}")/../share/ziac/scripts/qualify-data-engineering.sh"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-event-integration.md"
+test -x "$(dirname "${ziac_bin}")/../share/ziac/scripts/qualify-event-integration.sh"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/dashboard/dist/index.html"
 test -f "$(dirname "${ziac_bin}")/../share/zigeffect/src/zigeffect.zig"
 mkdir -p "${workspace}/global-api"

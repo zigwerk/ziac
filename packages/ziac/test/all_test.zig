@@ -149,6 +149,11 @@ comptime {
     _ = @import("gcp_scheduler_test.zig");
     _ = @import("gcp_tasks_test.zig");
     _ = @import("gcp_eventarc_test.zig");
+    _ = @import("gcp_eventarc_advanced_test.zig");
+    _ = @import("gcp_connectors_test.zig");
+    _ = @import("gcp_eventarc_advanced_live_provider_test.zig");
+    _ = @import("gcp_connectors_live_provider_test.zig");
+    _ = @import("gcp_event_integration_iam_test.zig");
     _ = @import("gcp_async_components_test.zig");
     _ = @import("gcp_delivery_policy_test.zig");
     _ = @import("gcp_tasks_live_provider_test.zig");
@@ -217,4 +222,8 @@ comptime {
     _ = @import("gcp_container_service_test.zig");
     _ = @import("gcp_zig_service_test.zig");
     _ = @import("gcp_live_provider_test.zig");
+    _ = @import("gcp_event_integration_actions_test.zig");
+    _ = @import("gcp_event_integration_components_test.zig");
+    _ = @import("gcp_event_integration_product_test.zig");
+    _ = @import("gcp_event_integration_qualification_test.zig");
 }

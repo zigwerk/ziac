@@ -1021,6 +1021,54 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "Dataform.DeleteWorkflowConfig", .permission = "dataform.workflowConfigs.delete" },
         .{ .suffix = "Dataform.CreateCompilationResult", .permission = "dataform.compilationResults.create" },
         .{ .suffix = "Dataform.CreateWorkflowInvocation", .permission = "dataform.workflowInvocations.create" },
+        .{ .suffix = "EventarcMessageBuses.Get", .permission = "eventarc.messageBuses.get" },
+        .{ .suffix = "EventarcMessageBuses.Create", .permission = "eventarc.messageBuses.create" },
+        .{ .suffix = "EventarcMessageBuses.Update", .permission = "eventarc.messageBuses.update" },
+        .{ .suffix = "EventarcMessageBuses.Delete", .permission = "eventarc.messageBuses.delete" },
+        .{ .suffix = "EventarcMessageBuses.GetIamPolicy", .permission = "eventarc.messageBuses.getIamPolicy" },
+        .{ .suffix = "EventarcMessageBuses.SetIamPolicy", .permission = "eventarc.messageBuses.setIamPolicy" },
+        .{ .suffix = "EventarcPipelines.Get", .permission = "eventarc.pipelines.get" },
+        .{ .suffix = "EventarcPipelines.Create", .permission = "eventarc.pipelines.create" },
+        .{ .suffix = "EventarcPipelines.Update", .permission = "eventarc.pipelines.update" },
+        .{ .suffix = "EventarcPipelines.Delete", .permission = "eventarc.pipelines.delete" },
+        .{ .suffix = "EventarcPipelines.GetIamPolicy", .permission = "eventarc.pipelines.getIamPolicy" },
+        .{ .suffix = "EventarcPipelines.SetIamPolicy", .permission = "eventarc.pipelines.setIamPolicy" },
+        .{ .suffix = "EventarcEnrollments.Get", .permission = "eventarc.enrollments.get" },
+        .{ .suffix = "EventarcEnrollments.Create", .permission = "eventarc.enrollments.create" },
+        .{ .suffix = "EventarcEnrollments.Update", .permission = "eventarc.enrollments.update" },
+        .{ .suffix = "EventarcEnrollments.Delete", .permission = "eventarc.enrollments.delete" },
+        .{ .suffix = "EventarcEnrollments.GetIamPolicy", .permission = "eventarc.enrollments.getIamPolicy" },
+        .{ .suffix = "EventarcEnrollments.SetIamPolicy", .permission = "eventarc.enrollments.setIamPolicy" },
+        .{ .suffix = "EventarcGoogleApiSources.Get", .permission = "eventarc.googleApiSources.get" },
+        .{ .suffix = "EventarcGoogleApiSources.Create", .permission = "eventarc.googleApiSources.create" },
+        .{ .suffix = "EventarcGoogleApiSources.Update", .permission = "eventarc.googleApiSources.update" },
+        .{ .suffix = "EventarcGoogleApiSources.Delete", .permission = "eventarc.googleApiSources.delete" },
+        .{ .suffix = "EventarcGoogleApiSources.GetIamPolicy", .permission = "eventarc.googleApiSources.getIamPolicy" },
+        .{ .suffix = "EventarcGoogleApiSources.SetIamPolicy", .permission = "eventarc.googleApiSources.setIamPolicy" },
+        .{ .suffix = "EventarcPublishing.Publish", .permission = "eventarc.messageBuses.publish" },
+        .{ .suffix = "ConnectorsConnections.Get", .permission = "connectors.connections.get" },
+        .{ .suffix = "ConnectorsConnections.Create", .permission = "connectors.connections.create" },
+        .{ .suffix = "ConnectorsConnections.Update", .permission = "connectors.connections.update" },
+        .{ .suffix = "ConnectorsConnections.Delete", .permission = "connectors.connections.delete" },
+        .{ .suffix = "ConnectorsConnections.GetIamPolicy", .permission = "connectors.connections.getIamPolicy" },
+        .{ .suffix = "ConnectorsConnections.SetIamPolicy", .permission = "connectors.connections.setIamPolicy" },
+        .{ .suffix = "ConnectorsConnections.RepairEventing", .permission = "connectors.connections.update" },
+        .{ .suffix = "ConnectorsConnections.RefreshSchema", .permission = "connectors.connections.update" },
+        .{ .suffix = "ConnectorsEndpointAttachments.Get", .permission = "connectors.endpointAttachments.get" },
+        .{ .suffix = "ConnectorsEndpointAttachments.Create", .permission = "connectors.endpointAttachments.create" },
+        .{ .suffix = "ConnectorsEndpointAttachments.Update", .permission = "connectors.endpointAttachments.update" },
+        .{ .suffix = "ConnectorsEndpointAttachments.Delete", .permission = "connectors.endpointAttachments.delete" },
+        .{ .suffix = "ConnectorsEventSubscriptions.Get", .permission = "connectors.eventSubscriptions.get" },
+        .{ .suffix = "ConnectorsEventSubscriptions.Create", .permission = "connectors.eventSubscriptions.create" },
+        .{ .suffix = "ConnectorsEventSubscriptions.Update", .permission = "connectors.eventSubscriptions.update" },
+        .{ .suffix = "ConnectorsEventSubscriptions.Delete", .permission = "connectors.eventSubscriptions.delete" },
+        .{ .suffix = "ConnectorsEventSubscriptions.Retry", .permission = "connectors.eventSubscriptions.retry" },
+        .{ .suffix = "ConnectorsManagedZones.Get", .permission = "connectors.managedZones.get" },
+        .{ .suffix = "ConnectorsManagedZones.Create", .permission = "connectors.managedZones.create" },
+        .{ .suffix = "ConnectorsManagedZones.Update", .permission = "connectors.managedZones.update" },
+        .{ .suffix = "ConnectorsManagedZones.Delete", .permission = "connectors.managedZones.delete" },
+        .{ .suffix = "ConnectorsRegionalSettings.Get", .permission = "connectors.regionalSettings.get" },
+        .{ .suffix = "ConnectorsRegionalSettings.Update", .permission = "connectors.regionalSettings.update" },
     };
     for (mappings) |mapping| if (std.mem.endsWith(u8, method, mapping.suffix)) return mapping.permission;
     return null;
@@ -1096,6 +1144,16 @@ pub fn dataEngineeringActionUsages() []const RpcUsage {
     return &usages;
 }
 
+pub fn eventIntegrationActionUsages() []const RpcUsage {
+    const usages = [_]RpcUsage{
+        .{ .service = "eventarcpublishing.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcPublishing.Publish" },
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsConnections.RepairEventing" },
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEventSubscriptions.Retry" },
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsConnections.RefreshSchema" },
+    };
+    return &usages;
+}
+
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     const data_pipeline = [_]RpcUsage{
         .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.GetPipeline" },
@@ -1163,6 +1221,47 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
         .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.CreateWorkflowConfig" },
         .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.UpdateWorkflowConfig" },
         .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.DeleteWorkflowConfig" },
+    };
+    const eventarc_bus = [_]RpcUsage{
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcMessageBuses.Get" },    .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcMessageBuses.Create" },
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcMessageBuses.Update" }, .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcMessageBuses.Delete" },
+    };
+    const eventarc_bus_iam = [_]RpcUsage{ .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcMessageBuses.GetIamPolicy" }, .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcMessageBuses.SetIamPolicy" } };
+    const eventarc_pipeline = [_]RpcUsage{
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcPipelines.Get" },    .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcPipelines.Create" },
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcPipelines.Update" }, .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcPipelines.Delete" },
+    };
+    const eventarc_pipeline_iam = [_]RpcUsage{ .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcPipelines.GetIamPolicy" }, .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcPipelines.SetIamPolicy" } };
+    const eventarc_enrollment = [_]RpcUsage{
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcEnrollments.Get" },    .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcEnrollments.Create" },
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcEnrollments.Update" }, .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcEnrollments.Delete" },
+    };
+    const eventarc_enrollment_iam = [_]RpcUsage{ .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcEnrollments.GetIamPolicy" }, .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcEnrollments.SetIamPolicy" } };
+    const eventarc_google_api_source = [_]RpcUsage{
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcGoogleApiSources.Get" },    .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcGoogleApiSources.Create" },
+        .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcGoogleApiSources.Update" }, .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcGoogleApiSources.Delete" },
+    };
+    const eventarc_google_api_source_iam = [_]RpcUsage{ .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcGoogleApiSources.GetIamPolicy" }, .{ .service = "eventarc.googleapis.com", .method = "google.cloud.eventarc.v1.EventarcGoogleApiSources.SetIamPolicy" } };
+    const connectors_connection = [_]RpcUsage{
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsConnections.Get" },    .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsConnections.Create" },
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsConnections.Update" }, .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsConnections.Delete" },
+    };
+    const connectors_connection_iam = [_]RpcUsage{ .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsConnections.GetIamPolicy" }, .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsConnections.SetIamPolicy" } };
+    const connectors_endpoint = [_]RpcUsage{
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEndpointAttachments.Get" },    .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEndpointAttachments.Create" },
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEndpointAttachments.Update" }, .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEndpointAttachments.Delete" },
+    };
+    const connectors_subscription = [_]RpcUsage{
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEventSubscriptions.Get" },    .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEventSubscriptions.Create" },
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEventSubscriptions.Update" }, .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsEventSubscriptions.Delete" },
+    };
+    const connectors_zone = [_]RpcUsage{
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsManagedZones.Get" },    .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsManagedZones.Create" },
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsManagedZones.Update" }, .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsManagedZones.Delete" },
+    };
+    const connectors_settings = [_]RpcUsage{
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsRegionalSettings.Get" },
+        .{ .service = "connectors.googleapis.com", .method = "google.cloud.connectors.v1.ConnectorsRegionalSettings.Update" },
     };
     const scc_source = [_]RpcUsage{
         .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.ListSources" },
@@ -2266,6 +2365,20 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.dataform.WorkspaceIamMember")) return &dataform_workspace_iam;
     if (std.mem.eql(u8, type_name, "gcp.dataform.ReleaseConfig")) return &dataform_release;
     if (std.mem.eql(u8, type_name, "gcp.dataform.WorkflowConfig")) return &dataform_workflow;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.MessageBus")) return &eventarc_bus;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.MessageBusIamMember")) return &eventarc_bus_iam;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.Pipeline")) return &eventarc_pipeline;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.PipelineIamMember")) return &eventarc_pipeline_iam;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.Enrollment")) return &eventarc_enrollment;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.EnrollmentIamMember")) return &eventarc_enrollment_iam;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.GoogleApiSource")) return &eventarc_google_api_source;
+    if (std.mem.eql(u8, type_name, "gcp.eventarc.GoogleApiSourceIamMember")) return &eventarc_google_api_source_iam;
+    if (std.mem.eql(u8, type_name, "gcp.connectors.Connection")) return &connectors_connection;
+    if (std.mem.eql(u8, type_name, "gcp.connectors.ConnectionIamMember")) return &connectors_connection_iam;
+    if (std.mem.eql(u8, type_name, "gcp.connectors.EndpointAttachment")) return &connectors_endpoint;
+    if (std.mem.eql(u8, type_name, "gcp.connectors.EventSubscription")) return &connectors_subscription;
+    if (std.mem.eql(u8, type_name, "gcp.connectors.ManagedZone")) return &connectors_zone;
+    if (std.mem.eql(u8, type_name, "gcp.connectors.RegionalSettings")) return &connectors_settings;
     if (std.mem.eql(u8, type_name, "gcp.kms.KeyRing")) return &kms_key_ring;
     if (std.mem.eql(u8, type_name, "gcp.kms.CryptoKey")) return &kms_crypto_key;
     if (std.mem.eql(u8, type_name, "gcp.kms.CryptoKeyVersion")) return &kms_version;
@@ -2363,6 +2476,8 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/dataflow.worker", .permission = "dataflow.jobs.get" },
         .{ .role = "roles/dataform.editor", .permission = "dataform.repositories.readFile" },
         .{ .role = "roles/dataproc.editor", .permission = "dataproc.clusters.use" },
+        .{ .role = "roles/eventarc.publisher", .permission = "eventarc.messageBuses.publish" },
+        .{ .role = "roles/connectors.invoker", .permission = "connectors.connections.executeSqlQuery" },
         .{ .role = "roles/iam.serviceAccountUser", .permission = "iam.serviceAccounts.actAs" },
         .{ .role = "roles/iam.workloadIdentityUser", .permission = "iam.serviceAccounts.getAccessToken" },
         .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },

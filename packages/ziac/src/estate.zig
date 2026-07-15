@@ -317,6 +317,24 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.tasks.Queue"
     else if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/Trigger"))
         "gcp.eventarc.Trigger"
+    else if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/MessageBus"))
+        "gcp.eventarc.MessageBus"
+    else if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/Pipeline"))
+        "gcp.eventarc.Pipeline"
+    else if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/Enrollment"))
+        "gcp.eventarc.Enrollment"
+    else if (std.mem.eql(u8, asset_type, "eventarc.googleapis.com/GoogleApiSource"))
+        "gcp.eventarc.GoogleApiSource"
+    else if (std.mem.eql(u8, asset_type, "connectors.googleapis.com/Connection"))
+        "gcp.connectors.Connection"
+    else if (std.mem.eql(u8, asset_type, "connectors.googleapis.com/EndpointAttachment"))
+        "gcp.connectors.EndpointAttachment"
+    else if (std.mem.eql(u8, asset_type, "connectors.googleapis.com/EventSubscription"))
+        "gcp.connectors.EventSubscription"
+    else if (std.mem.eql(u8, asset_type, "connectors.googleapis.com/ManagedZone"))
+        "gcp.connectors.ManagedZone"
+    else if (std.mem.eql(u8, asset_type, "connectors.googleapis.com/RegionalSettings"))
+        "gcp.connectors.RegionalSettings"
     else if (std.mem.eql(u8, asset_type, "iam.googleapis.com/ServiceAccount"))
         "gcp.iam.ServiceAccount"
     else if (std.mem.eql(u8, asset_type, "iam.googleapis.com/Role"))
@@ -654,6 +672,15 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
     }
     const service_prefixes = [_]struct { asset_type: []const u8, prefix: []const u8 }{
         .{ .asset_type = "workflows.googleapis.com/Workflow", .prefix = "//workflows.googleapis.com/" },
+        .{ .asset_type = "eventarc.googleapis.com/MessageBus", .prefix = "//eventarc.googleapis.com/" },
+        .{ .asset_type = "eventarc.googleapis.com/Pipeline", .prefix = "//eventarc.googleapis.com/" },
+        .{ .asset_type = "eventarc.googleapis.com/Enrollment", .prefix = "//eventarc.googleapis.com/" },
+        .{ .asset_type = "eventarc.googleapis.com/GoogleApiSource", .prefix = "//eventarc.googleapis.com/" },
+        .{ .asset_type = "connectors.googleapis.com/Connection", .prefix = "//connectors.googleapis.com/" },
+        .{ .asset_type = "connectors.googleapis.com/EndpointAttachment", .prefix = "//connectors.googleapis.com/" },
+        .{ .asset_type = "connectors.googleapis.com/EventSubscription", .prefix = "//connectors.googleapis.com/" },
+        .{ .asset_type = "connectors.googleapis.com/ManagedZone", .prefix = "//connectors.googleapis.com/" },
+        .{ .asset_type = "connectors.googleapis.com/RegionalSettings", .prefix = "//connectors.googleapis.com/" },
         .{ .asset_type = "dataproc.googleapis.com/Cluster", .prefix = "//dataproc.googleapis.com/" },
         .{ .asset_type = "dataproc.googleapis.com/AutoscalingPolicy", .prefix = "//dataproc.googleapis.com/" },
         .{ .asset_type = "dataproc.googleapis.com/WorkflowTemplate", .prefix = "//dataproc.googleapis.com/" },

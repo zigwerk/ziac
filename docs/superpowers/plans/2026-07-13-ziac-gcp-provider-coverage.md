@@ -239,7 +239,7 @@ isolated serializer tests.
 ## M81+: Analytics, Integration And AI
 
 - [x] M81 Data Pipelines, Dataflow actions, Dataproc and Dataform.
-- [ ] M82 Eventarc Advanced and Integration Connectors.
+- [x] M82 Eventarc Advanced and Integration Connectors.
 - [ ] M83 stable Vertex AI platform resources.
 - [ ] Keep preview resources opt-in and attach explicit migration policy.
 - [ ] Continue descriptor-driven expansion until every supported public GCP
@@ -453,3 +453,26 @@ canvas metadata and explicit cost availability are synchronized. The Testing v2
 gate reports 919 discovered/executed tests, 918 passed, one credential-gated
 skip, and zero failures, pending tests, leaks or logged errors. Authenticated
 qualification remains fail-closed and excludes all workload execution actions.
+
+## M82 Evidence
+
+M82 is locally complete with 237 managed resources. Fourteen event-integration
+types cover Eventarc Advanced message buses, pipelines, enrollments, Google API
+sources and additive IAM, plus Integration Connectors connections, endpoint
+attachments, event subscriptions, managed zones, regional settings and
+additive connection IAM.
+
+`AdvancedEventRoute`, `PrivateConnector` and `ConnectorEventBridge` provide the
+opinionated layer. Both providers checkpoint Google operations; Eventarc uses
+exact masks and etags; regional connector settings are update-only; connector
+credentials remain Secret Manager references; and policy-v3 IAM preserves
+unrelated bindings. Publish, repair, retry and schema refresh are target- and
+payload-bound actions outside ordinary reconciliation.
+
+Exact deployer/runtime authority, nine supported Cloud Asset identities, typed
+canvas metadata, explicit Eventarc and connector usage estimates, installed
+docs, a public example and a fail-closed live runner are synchronized. The
+Testing v2 package gate discovers and executes 941 tests: 940 pass, one
+credential-gated test skips, and none fail or remain pending; no leaks or logged
+errors are reported. Authenticated qualification remains an external
+disposable-project gate and excludes all governed runtime actions.

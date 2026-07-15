@@ -8,6 +8,9 @@ const data_pipelines_provider = @import("data_pipelines_provider.zig");
 const dataform_provider = @import("dataform_provider.zig");
 const dataproc_provider = @import("dataproc_provider.zig");
 const data_engineering_iam_provider = @import("data_engineering_iam_provider.zig");
+const eventarc_advanced_provider = @import("eventarc_advanced_provider.zig");
+const connectors_provider = @import("connectors_provider.zig");
+const event_integration_iam_provider = @import("event_integration_iam_provider.zig");
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const container_platform_provider = @import("container_platform_provider.zig");
 const monitoring_provider = @import("monitoring_provider.zig");
@@ -144,6 +147,12 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.TargetHttpsProxy",
     "gcp.compute.UrlMap",
     "gcp.compute.VpnTunnel",
+    "gcp.connectors.Connection",
+    "gcp.connectors.ConnectionIamMember",
+    "gcp.connectors.EndpointAttachment",
+    "gcp.connectors.EventSubscription",
+    "gcp.connectors.ManagedZone",
+    "gcp.connectors.RegionalSettings",
     "gcp.container.Cluster",
     "gcp.container.NodePool",
     "gcp.dataform.ReleaseConfig",
@@ -166,6 +175,14 @@ pub const managed_type_names = [_][]const u8{
     "gcp.deploy.Target",
     "gcp.dns.ManagedZone",
     "gcp.dns.RecordSet",
+    "gcp.eventarc.Enrollment",
+    "gcp.eventarc.EnrollmentIamMember",
+    "gcp.eventarc.GoogleApiSource",
+    "gcp.eventarc.GoogleApiSourceIamMember",
+    "gcp.eventarc.MessageBus",
+    "gcp.eventarc.MessageBusIamMember",
+    "gcp.eventarc.Pipeline",
+    "gcp.eventarc.PipelineIamMember",
     "gcp.eventarc.Trigger",
     "gcp.firestore.BackupSchedule",
     "gcp.firestore.Database",
@@ -331,6 +348,9 @@ pub const LiveProvider = struct {
         if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().read(context, node, null);
         if (dataform_provider.Handler.supports(node)) return self.dataformHandler().read(context, node, null);
         if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().read(context, node, null);
+        if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().read(context, node, null);
+        if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().read(context, node, null);
+        if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().read(context, node, null);
         if (isType(node, artifact_repository_type)) return self.readArtifactRepository(context, node, null);
         if (isType(node, secret_type)) return self.readSecret(context, node, null);
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
@@ -389,6 +409,9 @@ pub const LiveProvider = struct {
         if (dataproc_provider.Handler.supports(node)) return dataproc_provider.Handler.diff(context, node, observed);
         if (dataform_provider.Handler.supports(node)) return dataform_provider.Handler.diff(context, node, observed);
         if (data_engineering_iam_provider.Handler.supports(node)) return data_engineering_iam_provider.Handler.diff(context, node, observed);
+        if (eventarc_advanced_provider.Handler.supports(node)) return eventarc_advanced_provider.Handler.diff(context, node, observed);
+        if (connectors_provider.Handler.supports(node)) return connectors_provider.Handler.diff(context, node, observed);
+        if (event_integration_iam_provider.Handler.supports(node)) return event_integration_iam_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (connectivity_provider.supports(node)) return connectivity_provider.Handler.diff(context, node, observed);
         if (container_platform_provider.supports(node)) return container_platform_provider.Handler.diff(context, node, observed);
@@ -448,6 +471,9 @@ pub const LiveProvider = struct {
         if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().create(context, node);
         if (dataform_provider.Handler.supports(node)) return self.dataformHandler().create(context, node);
         if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().create(context, node);
+        if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().create(context, node);
+        if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().create(context, node);
+        if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().create(context, node);
         if (isType(node, artifact_repository_type)) return self.createArtifactRepository(context, node);
         if (isType(node, secret_type)) return self.createSecret(context, node);
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
@@ -503,6 +529,9 @@ pub const LiveProvider = struct {
         if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().update(context, node, observed);
         if (dataform_provider.Handler.supports(node)) return self.dataformHandler().update(context, node, observed);
         if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().update(context, node, observed);
+        if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().update(context, node, observed);
+        if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().update(context, node, observed);
+        if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().update(context, node, observed);
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed);
         if (isType(node, secret_version_type)) return self.updateSecretVersion(context, node, observed.physical_id);
@@ -558,6 +587,9 @@ pub const LiveProvider = struct {
         if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().delete(context, node, physical_id);
         if (dataform_provider.Handler.supports(node)) return self.dataformHandler().delete(context, node, physical_id);
         if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().delete(context, node, physical_id);
+        if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().delete(context, node, physical_id);
+        if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().delete(context, node, physical_id);
+        if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().delete(context, node, physical_id);
         if (isType(node, artifact_repository_type)) return self.deleteArtifactRepository(context, physical_id);
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.removeSecretVersion(context, node, physical_id);
@@ -649,6 +681,9 @@ pub const LiveProvider = struct {
         if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().importResource(context, node, physical_id);
         if (dataform_provider.Handler.supports(node)) return self.dataformHandler().importResource(context, node, physical_id);
         if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().importResource(context, node, physical_id);
+        if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().importResource(context, node, physical_id);
+        if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().importResource(context, node, physical_id);
+        if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().importResource(context, node, physical_id);
         if (isType(node, artifact_repository_type)) {
             const result = try self.readArtifactRepository(context, node, physical_id);
             return switch (result) {
@@ -1544,6 +1579,18 @@ pub const LiveProvider = struct {
     }
 
     fn dataEngineeringIamHandler(self: *LiveProvider) data_engineering_iam_provider.Handler {
+        return .{ .client = self.client };
+    }
+
+    fn eventarcAdvancedHandler(self: *LiveProvider) eventarc_advanced_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn connectorsHandler(self: *LiveProvider) connectors_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn eventIntegrationIamHandler(self: *LiveProvider) event_integration_iam_provider.Handler {
         return .{ .client = self.client };
     }
 

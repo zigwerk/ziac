@@ -103,6 +103,13 @@ pub const sources = [_]Source{
         .document_sha256 = "d14b88ee486ca3e49897b737a45717141d2003a9782571d0b96a66f26af0fd12",
     },
     .{
+        .id = "connectors:v1",
+        .version = "v1",
+        .revision = "20260701",
+        .discovery_url = "https://connectors.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "b23c2352fcefc564827e05f2ab953507307e795d1d6dd7c711e44e76ac13ebb8",
+    },
+    .{
         .id = "container:v1",
         .version = "v1",
         .revision = "20260630",
@@ -143,6 +150,13 @@ pub const sources = [_]Source{
         .revision = "20260630",
         .discovery_url = "https://dns.googleapis.com/discovery/v1/apis/dns/v1/rest",
         .document_sha256 = "39b1f648d4fa0824cfc0e8ee19101ddfeda12a53dc3ee3d8c1869a8dae0aeba6",
+    },
+    .{
+        .id = "eventarc:v1",
+        .version = "v1",
+        .revision = "20260706",
+        .discovery_url = "https://eventarc.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "c71e50f2d1dd6161eafb10394ba850ecff12204d7df2ffd2d39e0e3f5265e91c",
     },
     .{
         .id = "gkehub:v1",

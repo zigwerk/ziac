@@ -230,6 +230,7 @@ pub fn build(b: *std.Build) void {
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "governed-project-boundary", "examples/governed_project_boundary.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "security-foundation", "examples/security_foundation.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "data-engineering", "examples/data_engineering.zig");
+    addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "event-integration", "examples/event_integration.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "analytics-warehouse", "examples/analytics_warehouse.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "document-store", "examples/document_store.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "managed-postgres", "examples/managed_postgres.zig");

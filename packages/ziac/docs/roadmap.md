@@ -1262,3 +1262,27 @@ public example, installed documentation and fail-closed authenticated runner are
 present. The Testing v2 package gate discovers and executes 919 tests: 918 pass,
 one credential-gated test skips, and none fail or remain pending; no leaks or
 logged errors are reported. The catalog reports 223 managed resources.
+
+M82 is locally implementation-complete and awaiting authenticated disposable-
+project qualification. Fourteen managed resources add Eventarc Advanced
+message buses, pipelines, enrollments and Google API sources with additive IAM;
+and Integration Connectors connections, PSC endpoint attachments, event
+subscriptions, managed zones, regional settings and additive IAM.
+
+`AdvancedEventRoute`, `PrivateConnector` and `ConnectorEventBridge` compile
+event routing and private connector topology. Event publishing, connector
+eventing repair, subscription retry and schema refresh are payload-bound
+governed actions and never run during ordinary reconciliation. Provider
+adapters use canonical regional identities, resumable operations, exact update
+masks, etags, deterministic request IDs, retained cleanup and policy-v3 IAM.
+
+Exact API and permission synthesis, nine supported Cloud Asset identities,
+event/network canvas relationships and explicit cost assumptions are
+synchronized. Eventarc Advanced estimates separate bus, pipeline and transform
+event volume; Integration Connectors estimates separate active nodes and data
+processed. See `docs/gcp-event-integration.md`. The deterministic qualification
+receipt, public example, installed documentation and fail-closed authenticated
+runner are present. The Testing v2 package gate discovers and executes 941
+tests: 940 pass, one credential-gated test skips, and none fail or remain
+pending; no leaks or logged errors are reported. The catalog reports 237
+managed resources.

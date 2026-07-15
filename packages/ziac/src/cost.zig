@@ -96,6 +96,32 @@ pub const EventarcEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const EventarcAdvancedEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    bus_events_sku_id: []const u8 = "",
+    pipeline_events_sku_id: []const u8 = "",
+    transformation_sku_id: []const u8 = "",
+    bus_events: u64 = 0,
+    pipeline_events: u64 = 0,
+    transformation_operations: u64 = 0,
+    observed_at_millis: u64,
+};
+
+pub const ConnectorEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    google_node_sku_id: []const u8 = "",
+    third_party_node_sku_id: []const u8 = "",
+    processed_data_sku_id: []const u8 = "",
+    google_node_hours: u64 = 0,
+    free_google_node_hours: u64 = 0,
+    third_party_node_hours: u64 = 0,
+    processed_gib: u64 = 0,
+    free_processed_gib: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const BigqueryEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8,
@@ -630,6 +656,26 @@ pub fn eventarcConfigurationEstimate(
         usage[count] = .{ .sku_id = input.transport_sku_id, .region = input.region, .quantity = input.transport_gib };
         count += 1;
     }
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn eventarcAdvancedConfigurationEstimate(prices: []const SkuPrice, input: EventarcAdvancedEstimateInput) !ResourceCost {
+    var usage: [3]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.bus_events_sku_id, input.region, input.bus_events);
+    try appendUsage(&usage, &count, input.pipeline_events_sku_id, input.region, input.pipeline_events);
+    try appendUsage(&usage, &count, input.transformation_sku_id, input.region, input.transformation_operations);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn connectorConfigurationEstimate(prices: []const SkuPrice, input: ConnectorEstimateInput) !ResourceCost {
+    var usage: [3]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.google_node_sku_id, input.region, input.google_node_hours -| input.free_google_node_hours);
+    try appendUsage(&usage, &count, input.third_party_node_sku_id, input.region, input.third_party_node_hours);
+    try appendUsage(&usage, &count, input.processed_data_sku_id, input.region, input.processed_gib -| input.free_processed_gib);
+    if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
 }
 

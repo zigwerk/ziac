@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 223), managed_count);
+    try std.testing.expectEqual(@as(usize, 237), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -44,6 +44,18 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     try std.testing.expectEqualStrings("M81", data_pipeline.milestone);
     try std.testing.expectEqual(ziac.gcp.coverage.Service.data_pipelines, data_pipeline.service);
     try std.testing.expect(data_pipeline.capabilities.cost);
+
+    const message_bus = ziac.gcp.coverage.find("gcp.eventarc.MessageBus") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M82", message_bus.milestone);
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.eventarc, message_bus.service);
+    try std.testing.expect(message_bus.capabilities.cost);
+
+    const connection = ziac.gcp.coverage.find("gcp.connectors.Connection") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.connectors, connection.service);
+    try std.testing.expect(connection.capabilities.import_resource);
+
+    const regional_settings = ziac.gcp.coverage.find("gcp.connectors.RegionalSettings") orelse return error.TestExpectedEqual;
+    try std.testing.expect(!regional_settings.capabilities.delete_resource);
 
     const dataproc_cluster = ziac.gcp.coverage.find("gcp.dataproc.Cluster") orelse return error.TestExpectedEqual;
     try std.testing.expectEqual(ziac.gcp.coverage.Service.dataproc, dataproc_cluster.service);

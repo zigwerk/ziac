@@ -123,6 +123,21 @@ test("parser preserves explicit IAM authority metadata", () => {
   expect(() => parseZiacVisualArtifact(raw)).toThrow("resources[0].iam.ownership");
 });
 
+test("parser preserves bounded Eventarc and Connectors canvas metadata", () => {
+  const raw = JSON.parse(sampleJson());
+  raw.resources[0].event_integration = {
+    kind: "connector_connection",
+    location: "europe-west1",
+    connector_version: "salesforce/1",
+    min_nodes: 1,
+    max_nodes: 2,
+  };
+  const parsed = parseZiacVisualArtifact(raw);
+  expect(parsed.resources[0]?.event_integration).toEqual(raw.resources[0].event_integration);
+  raw.resources[0].event_integration.kind = "arbitrary_connector";
+  expect(() => parseZiacVisualArtifact(raw)).toThrow("resources[0].event_integration.kind");
+});
+
 test("estate ownership defaults to managed and filters existing infrastructure without dangling graph data", () => {
   const raw = JSON.parse(sampleJson());
   raw.resources.push({

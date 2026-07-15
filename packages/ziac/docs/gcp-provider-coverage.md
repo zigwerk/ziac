@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 223 managed GCP resource types.
+The current deterministic provider gate contains 237 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -516,6 +516,15 @@ edges and first-free active pipeline pricing are synchronized. See
 - `gcp.kms.KeyRing`
 - `gcp.kms.CryptoKey`
 - `gcp.scheduler.Job`
+
+### Event integration
+
+M82 adds Eventarc Advanced message buses, pipelines, enrollments and Google API
+sources, plus Integration Connectors connections, PSC endpoint attachments,
+event subscriptions, managed zones and regional settings. Additive IAM is
+available at resource boundaries. `AdvancedEventRoute`, `PrivateConnector` and
+`ConnectorEventBridge` compile production topology while publish, repair, retry
+and schema refresh remain governed actions. See `gcp-event-integration.md`.
 
 ## Next Application-Platform Tranche
 

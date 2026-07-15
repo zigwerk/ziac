@@ -54,6 +54,10 @@ export type ZiacDataEngineeringDetails = Record<string, unknown> & {
   kind: "dataflow_pipeline" | "dataproc_cluster" | "dataproc_autoscaling_policy" | "dataproc_workflow_template" | "dataform_repository" | "dataform_workspace" | "dataform_release_config" | "dataform_workflow_config" | "data_engineering_iam";
 };
 
+export type ZiacEventIntegrationDetails = Record<string, unknown> & {
+  kind: "message_bus" | "event_pipeline" | "enrollment" | "google_api_source" | "connector_connection" | "connector_psc_endpoint" | "connector_event_subscription" | "connector_managed_zone" | "connector_regional_settings" | "event_integration_iam";
+};
+
 export type ZiacVisualResource = {
   id: string;
   provider: ZiacProvider;
@@ -69,6 +73,7 @@ export type ZiacVisualResource = {
   cost?: ZiacResourceCost;
   iam?: ZiacIamDetails;
   data_engineering?: ZiacDataEngineeringDetails;
+  event_integration?: ZiacEventIntegrationDetails;
   inputs: Record<string, unknown>;
   lifecycle: {
     protect: boolean;
@@ -481,6 +486,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
   const cost = value.cost === undefined ? undefined : parseCost(value.cost, index);
   const iam = value.iam === undefined ? undefined : parseIam(value.iam, index);
   const dataEngineering = value.data_engineering === undefined ? undefined : parseDataEngineering(value.data_engineering, index);
+  const eventIntegration = value.event_integration === undefined ? undefined : parseEventIntegration(value.event_integration, index);
   if (ownership !== "managed" && discovery === undefined) {
     throw new Error(`resources[${index}].discovery is required for ${ownership} resources`);
   }
@@ -499,6 +505,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
     ...(cost ? { cost } : {}),
     ...(iam ? { iam } : {}),
     ...(dataEngineering ? { data_engineering: dataEngineering } : {}),
+    ...(eventIntegration ? { event_integration: eventIntegration } : {}),
     inputs,
     lifecycle: {
       protect: booleanValue(lifecycle.protect, "lifecycle.protect"),
@@ -558,6 +565,16 @@ function parseDataEngineering(raw: unknown, index: number): ZiacDataEngineeringD
   return {
     ...value,
     kind: enumValue(value.kind, `${path}.kind`, ["dataflow_pipeline", "dataproc_cluster", "dataproc_autoscaling_policy", "dataproc_workflow_template", "dataform_repository", "dataform_workspace", "dataform_release_config", "dataform_workflow_config", "data_engineering_iam"]),
+  };
+}
+
+function parseEventIntegration(raw: unknown, index: number): ZiacEventIntegrationDetails {
+  const path = `resources[${index}].event_integration`;
+  const value = objectValue(raw, path);
+  assertRedacted(value, path);
+  return {
+    ...value,
+    kind: enumValue(value.kind, `${path}.kind`, ["message_bus", "event_pipeline", "enrollment", "google_api_source", "connector_connection", "connector_psc_endpoint", "connector_event_subscription", "connector_managed_zone", "connector_regional_settings", "event_integration_iam"]),
   };
 }
 

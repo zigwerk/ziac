@@ -196,6 +196,7 @@ fn appendResource(
     try appendGovernanceDetails(output, allocator, item.node);
     try appendSecurityFoundationDetails(output, allocator, item.node);
     try appendDataEngineeringDetails(output, allocator, item.node);
+    try appendEventIntegrationDetails(output, allocator, item.node);
     try appendOrganizationFoundationDetails(output, allocator, item.node);
     try appendKmsSecretDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
@@ -376,6 +377,43 @@ fn appendDataEngineeringDetails(output: *std.ArrayList(u8), allocator: std.mem.A
     try appendNestedDataEngineeringInteger(output, allocator, node, "worker", "min_instances", "min_worker_instances");
     try appendNestedDataEngineeringInteger(output, allocator, node, "worker", "max_instances", "max_worker_instances");
     try appendNamedUnsigned(output, allocator, "dag_edge_count", dataEngineeringDagEdgeCount(node), true);
+    try output.append(allocator, '}');
+}
+
+fn appendEventIntegrationDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.eventarc.MessageBus"))
+        "message_bus"
+    else if (std.mem.eql(u8, node.type_name, "gcp.eventarc.Pipeline"))
+        "event_pipeline"
+    else if (std.mem.eql(u8, node.type_name, "gcp.eventarc.Enrollment"))
+        "enrollment"
+    else if (std.mem.eql(u8, node.type_name, "gcp.eventarc.GoogleApiSource"))
+        "google_api_source"
+    else if (std.mem.eql(u8, node.type_name, "gcp.connectors.Connection"))
+        "connector_connection"
+    else if (std.mem.eql(u8, node.type_name, "gcp.connectors.EndpointAttachment"))
+        "connector_psc_endpoint"
+    else if (std.mem.eql(u8, node.type_name, "gcp.connectors.EventSubscription"))
+        "connector_event_subscription"
+    else if (std.mem.eql(u8, node.type_name, "gcp.connectors.ManagedZone"))
+        "connector_managed_zone"
+    else if (std.mem.eql(u8, node.type_name, "gcp.connectors.RegionalSettings"))
+        "connector_regional_settings"
+    else if (std.mem.startsWith(u8, node.type_name, "gcp.eventarc.") or std.mem.startsWith(u8, node.type_name, "gcp.connectors."))
+        "event_integration_iam"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"event_integration\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "connector_version", "connector_version");
+    try appendOptionalStorageString(output, allocator, node, "event_type_id", "event_type_id");
+    try appendOptionalStorageString(output, allocator, node, "egress_mode", "egress_mode");
+    try appendOptionalStorageString(output, allocator, node, "logging_severity", "logging_severity");
+    try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
+    try appendOptionalStorageBool(output, allocator, node, "suspended", "suspended");
+    try appendNestedDataEngineeringInteger(output, allocator, node, "node_config", "min_nodes", "min_nodes");
+    try appendNestedDataEngineeringInteger(output, allocator, node, "node_config", "max_nodes", "max_nodes");
     try output.append(allocator, '}');
 }
 

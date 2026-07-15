@@ -118,6 +118,36 @@ test "Eventarc estimates separate chargeable events from Pub/Sub transport" {
     try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
 }
 
+test "Eventarc Advanced and Connectors estimates preserve explicit usage and free allowances" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "eventarc-bus", .region = "europe-west1", .unit = "event", .unit_quantity = 1_000_000, .unit_price_micros = 1_000_000 },
+        .{ .sku_id = "eventarc-pipeline", .region = "europe-west1", .unit = "event", .unit_quantity = 1_000_000, .unit_price_micros = 500_000 },
+        .{ .sku_id = "connector-node", .region = "europe-west1", .unit = "hour", .unit_quantity = 1, .unit_price_micros = 700_000 },
+        .{ .sku_id = "connector-data", .region = "europe-west1", .unit = "GiBy", .unit_quantity = 1, .unit_price_micros = 10_000_000 },
+    };
+    const events = try ziac.cost.eventarcAdvancedConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.eventarc.MessageBus.europe-west1.application-events",
+        .region = "europe-west1",
+        .bus_events_sku_id = "eventarc-bus",
+        .pipeline_events_sku_id = "eventarc-pipeline",
+        .bus_events = 2_000_000,
+        .pipeline_events = 2_000_000,
+        .observed_at_millis = 1,
+    });
+    try std.testing.expectEqual(@as(?i64, 3_000_000), events.amount_micros);
+    const connector = try ziac.cost.connectorConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.connectors.Connection.europe-west1.crm",
+        .region = "europe-west1",
+        .third_party_node_sku_id = "connector-node",
+        .processed_data_sku_id = "connector-data",
+        .third_party_node_hours = 10,
+        .processed_gib = 25,
+        .free_processed_gib = 20,
+        .observed_at_millis = 1,
+    });
+    try std.testing.expectEqual(@as(?i64, 57_000_000), connector.amount_micros);
+}
+
 test "Cloud Run Job estimates derive bounded compute usage from execution assumptions" {
     const prices = [_]ziac.cost.SkuPrice{
         .{ .sku_id = "run-job-cpu", .region = "europe-west1", .unit = "vCPU-second", .unit_quantity = 1, .unit_price_micros = 24 },
