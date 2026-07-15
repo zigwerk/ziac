@@ -238,9 +238,9 @@ isolated serializer tests.
 
 ## M81+: Analytics, Integration And AI
 
-- [ ] Prioritize stable provisioning resources from Dataflow, Dataproc, Dataform,
-  Eventarc Advanced, Integration Connectors and Vertex AI using estate telemetry
-  and user requests.
+- [x] M81 Data Pipelines, Dataflow actions, Dataproc and Dataform.
+- [ ] M82 Eventarc Advanced and Integration Connectors.
+- [ ] M83 stable Vertex AI platform resources.
 - [ ] Keep preview resources opt-in and attach explicit migration policy.
 - [ ] Continue descriptor-driven expansion until every supported public GCP
   resource is either managed, intentionally observed-only, or carries a visible
@@ -435,3 +435,21 @@ logged errors are reported. Public examples pass. The fail-closed
 `scripts/qualify-security-foundation.sh` runner requires ADC, a disposable
 project and exact confirmation, proves second-state import/no-op, and excludes
 CA transitions and certificate revocation from automatic execution.
+
+## M81 Evidence
+
+M81 is locally complete with 223 managed resources. Thirteen data-engineering
+types cover recurring Data Pipelines templates, Dataproc clusters, autoscaling,
+workflow DAGs and additive IAM, plus Dataform repositories, workspaces,
+release/workflow configs and additive IAM. Dataflow launch remains a governed
+action rather than mutable desired state.
+
+`ScheduledDataflowPipeline`, `DataprocWorkflowPlatform` and
+`DataformReleasePipeline` compile the opinionated layer. Dataproc operations
+resume from checkpoints, mutable resources use exact masks or versions, nested
+Dataform identity is canonical, and policy-v3 IAM preserves unrelated bindings.
+Exact API/runtime authority, seven supported Cloud Asset identities, typed
+canvas metadata and explicit cost availability are synchronized. The Testing v2
+gate reports 919 discovered/executed tests, 918 passed, one credential-gated
+skip, and zero failures, pending tests, leaks or logged errors. Authenticated
+qualification remains fail-closed and excludes all workload execution actions.

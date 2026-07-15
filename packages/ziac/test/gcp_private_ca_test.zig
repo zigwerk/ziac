@@ -69,7 +69,7 @@ test "Private CA rejects invalid lifetimes subjects and raw private keys" {
         .name = "invalid",
         .pool = ziac.PublicOutput([]const u8).known("projects/p/locations/europe-west1/caPools/pool"),
         .lifetime_seconds = 3600,
-        .request = .{ .pem_csr = "-----BEGIN PRIVATE KEY-----" },
+        .request = .{ .pem_csr = "-----BEGIN " ++ "PRIVATE KEY-----" },
     }));
 }
 

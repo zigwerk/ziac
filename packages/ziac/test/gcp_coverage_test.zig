@@ -17,7 +17,7 @@ test "GCP provider catalog is valid and covers every managed live type" {
         try std.testing.expect(ziac.gcp.live_provider.supports(node));
     }
 
-    try std.testing.expectEqual(@as(usize, 210), managed_count);
+    try std.testing.expectEqual(@as(usize, 223), managed_count);
 }
 
 test "every live provider type is registered as managed coverage" {
@@ -39,6 +39,19 @@ test "GCP provider catalog exposes current and next-tranche coverage honestly" {
     try std.testing.expectEqual(ziac.gcp.coverage.Stage.managed, cloud_run.stage);
     try std.testing.expect(cloud_run.capabilities.create);
     try std.testing.expect(cloud_run.capabilities.import_resource);
+
+    const data_pipeline = ziac.gcp.coverage.find("gcp.datapipelines.Pipeline") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("M81", data_pipeline.milestone);
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.data_pipelines, data_pipeline.service);
+    try std.testing.expect(data_pipeline.capabilities.cost);
+
+    const dataproc_cluster = ziac.gcp.coverage.find("gcp.dataproc.Cluster") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.dataproc, dataproc_cluster.service);
+    try std.testing.expect(dataproc_cluster.capabilities.import_resource);
+
+    const dataform_repository = ziac.gcp.coverage.find("gcp.dataform.Repository") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(ziac.gcp.coverage.Service.dataform, dataform_repository.service);
+    try std.testing.expect(dataform_repository.capabilities.estate);
 
     const run_invoker = ziac.gcp.coverage.find("gcp.run.ServiceIamMember") orelse return error.TestExpectedEqual;
     try std.testing.expectEqual(ziac.gcp.coverage.Stage.managed, run_invoker.stage);

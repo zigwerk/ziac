@@ -7,6 +7,7 @@ pub const Origin = enum {
 };
 
 pub const Confidence = enum {
+    unavailable,
     explicit_usage,
     billing_partial_month,
     billing_complete,
@@ -352,6 +353,33 @@ pub const SecurityFoundationEstimateInput = struct {
     active_devops_ca_months: u64 = 0,
     active_enterprise_ca_months: u64 = 0,
     issued_certificates: u64 = 0,
+    observed_at_millis: u64,
+};
+
+pub const DataflowEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    worker_vcpu_sku_id: []const u8 = "",
+    worker_memory_sku_id: []const u8 = "",
+    shuffle_sku_id: []const u8 = "",
+    streaming_engine_sku_id: []const u8 = "",
+    persistent_disk_sku_id: []const u8 = "",
+    worker_vcpu_hours: u64 = 0,
+    worker_memory_gib_hours: u64 = 0,
+    shuffle_gib: u64 = 0,
+    streaming_engine_units: u64 = 0,
+    persistent_disk_gib_hours: u64 = 0,
+    observed_at_millis: u64,
+};
+
+pub const DataprocClusterEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    management_sku_id: []const u8 = "",
+    compute_vcpu_sku_id: []const u8 = "",
+    disk_sku_id: []const u8 = "",
+    cluster_vcpu_hours: u64 = 0,
+    disk_gib_hours: u64 = 0,
     observed_at_millis: u64,
 };
 
@@ -928,6 +956,39 @@ pub fn securityFoundationConfigurationEstimate(prices: []const SkuPrice, input: 
     try appendUsage(&usage, &count, input.private_ca_certificate_sku_id, input.region, input.issued_certificates);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn dataflowConfigurationEstimate(prices: []const SkuPrice, input: DataflowEstimateInput) !ResourceCost {
+    var usage: [5]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.worker_vcpu_sku_id, input.region, input.worker_vcpu_hours);
+    try appendUsage(&usage, &count, input.worker_memory_sku_id, input.region, input.worker_memory_gib_hours);
+    try appendUsage(&usage, &count, input.shuffle_sku_id, input.region, input.shuffle_gib);
+    try appendUsage(&usage, &count, input.streaming_engine_sku_id, input.region, input.streaming_engine_units);
+    try appendUsage(&usage, &count, input.persistent_disk_sku_id, input.region, input.persistent_disk_gib_hours);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn dataprocClusterConfigurationEstimate(prices: []const SkuPrice, input: DataprocClusterEstimateInput) !ResourceCost {
+    var usage: [3]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.management_sku_id, "global", input.cluster_vcpu_hours);
+    try appendUsage(&usage, &count, input.compute_vcpu_sku_id, input.region, input.cluster_vcpu_hours);
+    try appendUsage(&usage, &count, input.disk_sku_id, input.region, input.disk_gib_hours);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn dataformConfigurationEstimate(resource_id: []const u8, observed_at_millis: u64) !ResourceCost {
+    try validateIdentity(resource_id, observed_at_millis);
+    return .{
+        .resource_id = resource_id,
+        .origin = .configuration_estimate,
+        .amount_micros = 0,
+        .confidence = .explicit_usage,
+        .provenance = .{ .observed_at_millis = observed_at_millis },
+    };
 }
 
 pub fn binaryAuthorizationConfigurationEstimate(resource_id: []const u8, observed_at_millis: u64) !ResourceCost {

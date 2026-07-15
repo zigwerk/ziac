@@ -195,6 +195,7 @@ fn appendResource(
     try appendCloudDeployDetails(output, allocator, item.node);
     try appendGovernanceDetails(output, allocator, item.node);
     try appendSecurityFoundationDetails(output, allocator, item.node);
+    try appendDataEngineeringDetails(output, allocator, item.node);
     try appendOrganizationFoundationDetails(output, allocator, item.node);
     try appendKmsSecretDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
@@ -228,11 +229,13 @@ fn appendConfigurationCost(
     try appendNamedString(output, allocator, "schema", "ziac.resource-cost.v1", false);
     try appendNamedString(output, allocator, "origin", "configuration_estimate", true);
     try appendNamedString(output, allocator, "currency", "USD", true);
-    if (isNoChargeFoundationType(node.type_name))
+    const no_charge = isNoChargeFoundationType(node.type_name) or std.mem.startsWith(u8, node.type_name, "gcp.dataform.");
+    if (no_charge)
         try output.appendSlice(allocator, ",\"amount_micros\":0")
     else
         try output.appendSlice(allocator, ",\"amount_micros\":null");
-    try appendNamedString(output, allocator, "confidence", "explicit_usage", true);
+    try appendNamedString(output, allocator, "confidence", if (no_charge) "explicit_usage" else "unavailable", true);
+    try appendNamedString(output, allocator, "basis", if (std.mem.startsWith(u8, node.type_name, "gcp.dataform.")) "service_no_charge" else if (no_charge) "documented_no_charge" else "usage_assumptions_required", true);
     try appendNamedUnsigned(output, allocator, "observed_at_millis", observed_at_millis, true);
     try appendNamedBool(output, allocator, "is_billing_export", false, true);
     try output.append(allocator, '}');
@@ -240,6 +243,7 @@ fn appendConfigurationCost(
 
 fn isNoChargeFoundationType(type_name: []const u8) bool {
     return std.mem.startsWith(u8, type_name, "gcp.resourcemanager.") or
+        std.mem.startsWith(u8, type_name, "gcp.iam.") or
         std.mem.startsWith(u8, type_name, "gcp.orgpolicy.") or
         std.mem.startsWith(u8, type_name, "gcp.tags.") or
         std.mem.startsWith(u8, type_name, "gcp.accesscontextmanager.") or
@@ -328,6 +332,77 @@ fn appendSecurityFoundationDetails(output: *std.ArrayList(u8), allocator: std.me
     try appendOptionalStorageString(output, allocator, node, "removal_policy", "removal_policy");
     try appendStorageListCount(output, allocator, node, "public_keys", "public_key_count");
     try output.append(allocator, '}');
+}
+
+fn appendDataEngineeringDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.datapipelines.Pipeline"))
+        "dataflow_pipeline"
+    else if (std.mem.eql(u8, node.type_name, "gcp.dataproc.Cluster"))
+        "dataproc_cluster"
+    else if (std.mem.eql(u8, node.type_name, "gcp.dataproc.AutoscalingPolicy"))
+        "dataproc_autoscaling_policy"
+    else if (std.mem.eql(u8, node.type_name, "gcp.dataproc.WorkflowTemplate"))
+        "dataproc_workflow_template"
+    else if (std.mem.eql(u8, node.type_name, "gcp.dataform.Repository"))
+        "dataform_repository"
+    else if (std.mem.eql(u8, node.type_name, "gcp.dataform.Workspace"))
+        "dataform_workspace"
+    else if (std.mem.eql(u8, node.type_name, "gcp.dataform.ReleaseConfig"))
+        "dataform_release_config"
+    else if (std.mem.eql(u8, node.type_name, "gcp.dataform.WorkflowConfig"))
+        "dataform_workflow_config"
+    else if (std.mem.startsWith(u8, node.type_name, "gcp.dataproc.") or std.mem.startsWith(u8, node.type_name, "gcp.dataform."))
+        "data_engineering_iam"
+    else
+        return;
+
+    try output.appendSlice(allocator, ",\"data_engineering\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "pipeline_type", "pipeline_type");
+    try appendOptionalStorageString(output, allocator, node, "image_version", "image_version");
+    try appendOptionalStorageString(output, allocator, node, "git_commitish", "git_commitish");
+    try appendOptionalStorageString(output, allocator, node, "cron_schedule", "cron_schedule");
+    try appendOptionalStorageString(output, allocator, node, "time_zone", "time_zone");
+    try appendOptionalStorageString(output, allocator, node, "repository_name", "repository_name");
+    try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
+    try appendOptionalStorageBool(output, allocator, node, "disabled", "disabled");
+    try appendOptionalStorageBool(output, allocator, node, "component_gateway", "component_gateway");
+    try appendStorageListCount(output, allocator, node, "jobs", "job_count");
+    try appendStorageListCount(output, allocator, node, "included_tags", "included_tag_count");
+    try appendNestedDataEngineeringValue(output, allocator, node, "schedule", "cron", "schedule");
+    try appendNestedDataEngineeringValue(output, allocator, node, "schedule", "time_zone", "schedule_time_zone");
+    try appendNestedDataEngineeringValue(output, allocator, node, "placement", "kind", "placement_kind");
+    try appendNestedDataEngineeringInteger(output, allocator, node, "worker", "instances", "worker_instances");
+    try appendNestedDataEngineeringInteger(output, allocator, node, "worker", "min_instances", "min_worker_instances");
+    try appendNestedDataEngineeringInteger(output, allocator, node, "worker", "max_instances", "max_worker_instances");
+    try appendNamedUnsigned(output, allocator, "dag_edge_count", dataEngineeringDagEdgeCount(node), true);
+    try output.append(allocator, '}');
+}
+
+fn appendNestedDataEngineeringValue(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode, object_name: []const u8, field_name: []const u8, output_name: []const u8) !void {
+    const object = objectField(node.inputs, object_name) orelse return;
+    if (object != .object) return;
+    const field = objectFieldFromFields(object.object, field_name) orelse return;
+    if (field == .string and field.string.len > 0) try appendNamedString(output, allocator, output_name, field.string, true);
+}
+
+fn appendNestedDataEngineeringInteger(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode, object_name: []const u8, field_name: []const u8, output_name: []const u8) !void {
+    const object = objectField(node.inputs, object_name) orelse return;
+    if (object != .object) return;
+    const field = objectFieldFromFields(object.object, field_name) orelse return;
+    if (field == .integer and field.integer >= 0) try appendNamedUnsigned(output, allocator, output_name, @as(u64, @intCast(field.integer)), true);
+}
+
+fn dataEngineeringDagEdgeCount(node: resource.ResourceNode) usize {
+    const jobs = objectField(node.inputs, "jobs") orelse return 0;
+    if (jobs != .list) return 0;
+    var count: usize = 0;
+    for (jobs.list) |job| {
+        if (job != .object) continue;
+        const prerequisites = objectFieldFromFields(job.object, "prerequisite_step_ids") orelse continue;
+        if (prerequisites == .list) count += prerequisites.list.len;
+    }
+    return count;
 }
 
 fn appendNestedListCount(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode, object_name: []const u8, list_name: []const u8, output_name: []const u8) !void {

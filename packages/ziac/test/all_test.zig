@@ -1,4 +1,13 @@
 comptime {
+    _ = @import("gcp_data_pipelines_live_provider_test.zig");
+    _ = @import("gcp_data_engineering_actions_test.zig");
+    _ = @import("gcp_data_engineering_components_test.zig");
+    _ = @import("gcp_data_engineering_qualification_test.zig");
+    _ = @import("gcp_dataform_live_provider_test.zig");
+    _ = @import("gcp_dataproc_live_provider_test.zig");
+    _ = @import("gcp_data_pipelines_test.zig");
+    _ = @import("gcp_dataform_test.zig");
+    _ = @import("gcp_dataproc_test.zig");
     _ = @import("gcp_security_foundation_qualification_test.zig");
     _ = @import("gcp_governance_orgpolicy_test.zig");
     _ = @import("gcp_governance_tags_test.zig");

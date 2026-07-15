@@ -4,6 +4,10 @@ const bigquery_provider = @import("bigquery_provider.zig");
 const application_services_provider = @import("application_services_provider.zig");
 const build_delivery_provider = @import("build_delivery_provider.zig");
 const cloud_deploy_provider = @import("cloud_deploy_provider.zig");
+const data_pipelines_provider = @import("data_pipelines_provider.zig");
+const dataform_provider = @import("dataform_provider.zig");
+const dataproc_provider = @import("dataproc_provider.zig");
+const data_engineering_iam_provider = @import("data_engineering_iam_provider.zig");
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const container_platform_provider = @import("container_platform_provider.zig");
 const monitoring_provider = @import("monitoring_provider.zig");
@@ -142,6 +146,19 @@ pub const managed_type_names = [_][]const u8{
     "gcp.compute.VpnTunnel",
     "gcp.container.Cluster",
     "gcp.container.NodePool",
+    "gcp.dataform.ReleaseConfig",
+    "gcp.dataform.Repository",
+    "gcp.dataform.RepositoryIamMember",
+    "gcp.dataform.WorkflowConfig",
+    "gcp.dataform.Workspace",
+    "gcp.dataform.WorkspaceIamMember",
+    "gcp.datapipelines.Pipeline",
+    "gcp.dataproc.AutoscalingPolicy",
+    "gcp.dataproc.AutoscalingPolicyIamMember",
+    "gcp.dataproc.Cluster",
+    "gcp.dataproc.ClusterIamMember",
+    "gcp.dataproc.WorkflowTemplate",
+    "gcp.dataproc.WorkflowTemplateIamMember",
     "gcp.deploy.Automation",
     "gcp.deploy.CustomTargetType",
     "gcp.deploy.DeliveryPipeline",
@@ -310,6 +327,10 @@ pub const LiveProvider = struct {
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().read(context, node, null);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().read(context, node, null);
         if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().read(context, node, null);
+        if (data_pipelines_provider.Handler.supports(node)) return self.dataPipelinesHandler().read(context, node, null);
+        if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().read(context, node, null);
+        if (dataform_provider.Handler.supports(node)) return self.dataformHandler().read(context, node, null);
+        if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().read(context, node, null);
         if (isType(node, artifact_repository_type)) return self.readArtifactRepository(context, node, null);
         if (isType(node, secret_type)) return self.readSecret(context, node, null);
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
@@ -364,6 +385,10 @@ pub const LiveProvider = struct {
         if (iam_admin_provider.supports(node)) return iam_admin_provider.Handler.diff(context, node, observed);
         if (build_delivery_provider.Handler.supports(node)) return build_delivery_provider.Handler.diff(context, node, observed);
         if (cloud_deploy_provider.Handler.supports(node)) return cloud_deploy_provider.Handler.diff(context, node, observed);
+        if (data_pipelines_provider.Handler.supports(node)) return data_pipelines_provider.Handler.diff(context, node, observed);
+        if (dataproc_provider.Handler.supports(node)) return dataproc_provider.Handler.diff(context, node, observed);
+        if (dataform_provider.Handler.supports(node)) return dataform_provider.Handler.diff(context, node, observed);
+        if (data_engineering_iam_provider.Handler.supports(node)) return data_engineering_iam_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (connectivity_provider.supports(node)) return connectivity_provider.Handler.diff(context, node, observed);
         if (container_platform_provider.supports(node)) return container_platform_provider.Handler.diff(context, node, observed);
@@ -419,6 +444,10 @@ pub const LiveProvider = struct {
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().create(context, node);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().create(context, node);
         if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().create(context, node);
+        if (data_pipelines_provider.Handler.supports(node)) return self.dataPipelinesHandler().create(context, node);
+        if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().create(context, node);
+        if (dataform_provider.Handler.supports(node)) return self.dataformHandler().create(context, node);
+        if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().create(context, node);
         if (isType(node, artifact_repository_type)) return self.createArtifactRepository(context, node);
         if (isType(node, secret_type)) return self.createSecret(context, node);
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
@@ -470,6 +499,10 @@ pub const LiveProvider = struct {
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().update(context, node, observed);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().update(context, node, observed);
         if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().update(context, node, observed);
+        if (data_pipelines_provider.Handler.supports(node)) return self.dataPipelinesHandler().update(context, node, observed);
+        if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().update(context, node, observed);
+        if (dataform_provider.Handler.supports(node)) return self.dataformHandler().update(context, node, observed);
+        if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().update(context, node, observed);
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed);
         if (isType(node, secret_version_type)) return self.updateSecretVersion(context, node, observed.physical_id);
@@ -521,6 +554,10 @@ pub const LiveProvider = struct {
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().delete(context, node, physical_id);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().delete(context, node, physical_id);
         if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().delete(context, node, physical_id);
+        if (data_pipelines_provider.Handler.supports(node)) return self.dataPipelinesHandler().delete(context, node, physical_id);
+        if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().delete(context, node, physical_id);
+        if (dataform_provider.Handler.supports(node)) return self.dataformHandler().delete(context, node, physical_id);
+        if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().delete(context, node, physical_id);
         if (isType(node, artifact_repository_type)) return self.deleteArtifactRepository(context, physical_id);
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.removeSecretVersion(context, node, physical_id);
@@ -608,6 +645,10 @@ pub const LiveProvider = struct {
         }
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().importResource(context, node, physical_id);
         if (cloud_deploy_provider.Handler.supports(node)) return self.cloudDeployHandler().importResource(context, node, physical_id);
+        if (data_pipelines_provider.Handler.supports(node)) return self.dataPipelinesHandler().importResource(context, node, physical_id);
+        if (dataproc_provider.Handler.supports(node)) return self.dataprocHandler().importResource(context, node, physical_id);
+        if (dataform_provider.Handler.supports(node)) return self.dataformHandler().importResource(context, node, physical_id);
+        if (data_engineering_iam_provider.Handler.supports(node)) return self.dataEngineeringIamHandler().importResource(context, node, physical_id);
         if (isType(node, artifact_repository_type)) {
             const result = try self.readArtifactRepository(context, node, physical_id);
             return switch (result) {
@@ -1488,6 +1529,22 @@ pub const LiveProvider = struct {
 
     fn cloudDeployHandler(self: *LiveProvider) cloud_deploy_provider.Handler {
         return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn dataPipelinesHandler(self: *LiveProvider) data_pipelines_provider.Handler {
+        return .{ .client = self.client };
+    }
+
+    fn dataprocHandler(self: *LiveProvider) dataproc_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn dataformHandler(self: *LiveProvider) dataform_provider.Handler {
+        return .{ .client = self.client };
+    }
+
+    fn dataEngineeringIamHandler(self: *LiveProvider) data_engineering_iam_provider.Handler {
+        return .{ .client = self.client };
     }
 
     fn cloudBuildHandler(self: *LiveProvider) cloud_build_provider.Handler {

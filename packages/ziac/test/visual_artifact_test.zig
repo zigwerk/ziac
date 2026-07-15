@@ -365,3 +365,42 @@ test "visual artifact projects security foundation semantics and trust edges" {
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"kind\":\"admission_attestor\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"amount_micros\":0") != null);
 }
+
+test "visual artifact projects data engineering topology and honest cost availability" {
+    const provider = ziac.gcp.ProviderConfig{ .project_id = "analytics-prod", .primary_region = "europe-west1", .service_regions = &.{"europe-west1"} };
+    var dataproc = try ziac.gcp.DataprocWorkflowPlatform.build(std.testing.allocator, provider, .{
+        .autoscaling = .{ .name = "balanced", .region = "europe-west1", .worker = .{ .min_instances = 2, .max_instances = 10 } },
+        .cluster = .{ .name = "analytics", .region = "europe-west1", .master = .{ .machine_type = "n2-standard-4", .disk_size_gb = 100 }, .worker = .{ .machine_type = "n2-standard-4", .disk_size_gb = 100, .instances = 2 } },
+        .workflow = .{ .name = "daily-orders", .region = "europe-west1", .placement = .{ .cluster_selector = .{ .labels = &.{.{ .key = "env", .value = "prod" }} } }, .jobs = &.{.{ .id = "extract", .job = .{ .pyspark = .{ .main_python_file_uri = "gs://jobs/extract.py" } } }} },
+        .operators = &.{"group:data@example.com"},
+    });
+    defer dataproc.deinit();
+    const placeholder = ziac.PublicOutput([]const u8).known("projects/analytics-prod/locations/europe-west1/repositories/placeholder");
+    var dataform = try ziac.gcp.DataformReleasePipeline.build(std.testing.allocator, provider, .{
+        .repository = .{ .name = "analytics", .location = "europe-west1" },
+        .release = .{ .name = "production", .repository = placeholder, .git_commitish = "main" },
+        .workflow = .{ .name = "production", .repository = placeholder, .release_config = ziac.PublicOutput([]const u8).known("projects/analytics-prod/locations/europe-west1/repositories/placeholder/releaseConfigs/placeholder") },
+        .workspace_name = "development",
+        .operators = &.{"group:data@example.com"},
+    });
+    defer dataform.deinit();
+    try dataproc.graph.appendGraph(&dataform.graph);
+
+    var artifact = try ziac.visual_artifact.serializeAlloc(std.testing.allocator, &dataproc.graph, null, .{
+        .stack = "data-platform",
+        .stage = "prod",
+        .created_at_millis = 42,
+    });
+    defer artifact.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"data_engineering\":{\"kind\":\"dataproc_cluster\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"data_engineering\":{\"kind\":\"dataproc_autoscaling_policy\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"data_engineering\":{\"kind\":\"dataproc_workflow_template\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"job_count\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"data_engineering\":{\"kind\":\"dataform_repository\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"data_engineering\":{\"kind\":\"dataform_release_config\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"data_engineering\":{\"kind\":\"dataform_workflow_config\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"confidence\":\"unavailable\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"basis\":\"usage_assumptions_required\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"basis\":\"service_no_charge\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"kind\":\"output\"") != null);
+}

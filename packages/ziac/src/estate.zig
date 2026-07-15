@@ -335,6 +335,20 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.bigquery.Reservation"
     else if (std.mem.eql(u8, asset_type, "firestore.googleapis.com/Database"))
         "gcp.firestore.Database"
+    else if (std.mem.eql(u8, asset_type, "dataproc.googleapis.com/Cluster"))
+        "gcp.dataproc.Cluster"
+    else if (std.mem.eql(u8, asset_type, "dataproc.googleapis.com/AutoscalingPolicy"))
+        "gcp.dataproc.AutoscalingPolicy"
+    else if (std.mem.eql(u8, asset_type, "dataproc.googleapis.com/WorkflowTemplate"))
+        "gcp.dataproc.WorkflowTemplate"
+    else if (std.mem.eql(u8, asset_type, "dataform.googleapis.com/Repository"))
+        "gcp.dataform.Repository"
+    else if (std.mem.eql(u8, asset_type, "dataform.googleapis.com/Workspace"))
+        "gcp.dataform.Workspace"
+    else if (std.mem.eql(u8, asset_type, "dataform.googleapis.com/ReleaseConfig"))
+        "gcp.dataform.ReleaseConfig"
+    else if (std.mem.eql(u8, asset_type, "dataform.googleapis.com/WorkflowConfig"))
+        "gcp.dataform.WorkflowConfig"
     else if (std.mem.eql(u8, asset_type, "spanner.googleapis.com/Instance"))
         "gcp.spanner.Instance"
     else if (std.mem.eql(u8, asset_type, "spanner.googleapis.com/Database"))
@@ -640,6 +654,13 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
     }
     const service_prefixes = [_]struct { asset_type: []const u8, prefix: []const u8 }{
         .{ .asset_type = "workflows.googleapis.com/Workflow", .prefix = "//workflows.googleapis.com/" },
+        .{ .asset_type = "dataproc.googleapis.com/Cluster", .prefix = "//dataproc.googleapis.com/" },
+        .{ .asset_type = "dataproc.googleapis.com/AutoscalingPolicy", .prefix = "//dataproc.googleapis.com/" },
+        .{ .asset_type = "dataproc.googleapis.com/WorkflowTemplate", .prefix = "//dataproc.googleapis.com/" },
+        .{ .asset_type = "dataform.googleapis.com/Repository", .prefix = "//dataform.googleapis.com/" },
+        .{ .asset_type = "dataform.googleapis.com/Workspace", .prefix = "//dataform.googleapis.com/" },
+        .{ .asset_type = "dataform.googleapis.com/ReleaseConfig", .prefix = "//dataform.googleapis.com/" },
+        .{ .asset_type = "dataform.googleapis.com/WorkflowConfig", .prefix = "//dataform.googleapis.com/" },
         .{ .asset_type = "apigateway.googleapis.com/Api", .prefix = "//apigateway.googleapis.com/" },
         .{ .asset_type = "apigateway.googleapis.com/ApiConfig", .prefix = "//apigateway.googleapis.com/" },
         .{ .asset_type = "apigateway.googleapis.com/Gateway", .prefix = "//apigateway.googleapis.com/" },

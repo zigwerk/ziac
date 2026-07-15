@@ -339,6 +339,67 @@ test "security foundation graphs synthesize exact SCC Binary Authorization and P
     try std.testing.expect(requirements.hasPermission("privateca.caPools.delete"));
 }
 
+test "data engineering graphs and governed actions synthesize exact APIs and authority" {
+    const provider = ziac.gcp.ProviderConfig{
+        .project_id = "analytics-prod",
+        .primary_region = "europe-west1",
+        .service_regions = &.{"europe-west1"},
+    };
+    var pipeline = try ziac.gcp.ScheduledDataflowPipeline.build(std.testing.allocator, provider, .{
+        .pipeline = .{
+            .name = "daily-orders",
+            .location = "europe-west1",
+            .display_name = "Daily-orders",
+            .pipeline_type = .batch,
+            .workload = .{ .flex_template = .{ .container_spec_gcs_path = "gs://templates/orders.json" } },
+            .schedule = .{ .cron = "0 4 * * *", .time_zone = "Europe/London" },
+            .scheduler_service_account_email = "scheduler@analytics-prod.iam.gserviceaccount.com",
+        },
+        .scheduler_member = "serviceAccount:scheduler@analytics-prod.iam.gserviceaccount.com",
+        .worker_member = "serviceAccount:worker@analytics-prod.iam.gserviceaccount.com",
+    });
+    defer pipeline.deinit();
+    var pipeline_requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &pipeline.graph);
+    defer pipeline_requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(pipeline_requirements.apis, "datapipelines.googleapis.com"));
+    try std.testing.expect(pipeline_requirements.hasPermission("datapipelines.pipelines.create"));
+
+    var dataproc = try ziac.gcp.DataprocWorkflowPlatform.build(std.testing.allocator, provider, .{
+        .autoscaling = .{ .name = "balanced", .region = "europe-west1", .worker = .{ .min_instances = 2, .max_instances = 10 } },
+        .cluster = .{ .name = "analytics", .region = "europe-west1", .master = .{ .machine_type = "n2-standard-4", .disk_size_gb = 100 }, .worker = .{ .machine_type = "n2-standard-4", .disk_size_gb = 100, .instances = 2 } },
+        .workflow = .{ .name = "daily-orders", .region = "europe-west1", .placement = .{ .cluster_selector = .{ .labels = &.{.{ .key = "env", .value = "prod" }} } }, .jobs = &.{.{ .id = "extract", .job = .{ .pyspark = .{ .main_python_file_uri = "gs://jobs/extract.py" } } }} },
+        .operators = &.{"group:data@example.com"},
+    });
+    defer dataproc.deinit();
+    var dataproc_requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &dataproc.graph);
+    defer dataproc_requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(dataproc_requirements.apis, "dataproc.googleapis.com"));
+    try std.testing.expect(dataproc_requirements.hasPermission("dataproc.clusters.create"));
+    try std.testing.expect(dataproc_requirements.hasPermission("dataproc.workflowTemplates.create"));
+
+    const placeholder = ziac.PublicOutput([]const u8).known("projects/analytics-prod/locations/europe-west1/repositories/placeholder");
+    var dataform = try ziac.gcp.DataformReleasePipeline.build(std.testing.allocator, provider, .{
+        .repository = .{ .name = "analytics", .location = "europe-west1" },
+        .release = .{ .name = "production", .repository = placeholder, .git_commitish = "main" },
+        .workflow = .{ .name = "production", .repository = placeholder, .release_config = ziac.PublicOutput([]const u8).known("projects/analytics-prod/locations/europe-west1/repositories/placeholder/releaseConfigs/placeholder") },
+        .workspace_name = "development",
+        .operators = &.{"group:data@example.com"},
+    });
+    defer dataform.deinit();
+    var dataform_requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &dataform.graph);
+    defer dataform_requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(dataform_requirements.apis, "dataform.googleapis.com"));
+    try std.testing.expect(dataform_requirements.hasPermission("dataform.repositories.create"));
+    try std.testing.expect(dataform_requirements.hasPermission("dataform.workflowConfigs.create"));
+
+    var action_requirements = try ziac.gcp.intelligence.synthesize(std.testing.allocator, ziac.gcp.intelligence.dataEngineeringActionUsages());
+    defer action_requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(action_requirements.apis, "dataflow.googleapis.com"));
+    try std.testing.expect(action_requirements.hasPermission("dataflow.jobs.create"));
+    try std.testing.expect(action_requirements.hasPermission("dataproc.clusters.start"));
+    try std.testing.expect(action_requirements.hasPermission("dataform.workflowInvocations.create"));
+}
+
 test "topology advice respects residency and Cockroach locality without mutating policy" {
     const intelligence = ziac.gcp.intelligence;
     var advice = try intelligence.adviseTopology(std.testing.allocator, .{

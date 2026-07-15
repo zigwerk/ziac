@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 210 managed GCP resource types.
+The current deterministic provider gate contains 223 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -88,6 +88,23 @@ governed actions and cannot occur during ordinary reconciliation. Exact
 deployer/runtime authority, Cloud Asset identity, security canvas edges and
 explicit cost assumptions are synchronized. See
 `gcp-security-foundations.md`.
+
+### Dataflow, Dataproc and Dataform
+
+M81 adds thirteen managed resources for recurring Data Pipelines templates,
+Dataproc clusters, autoscaling, workflow DAGs and resource IAM, plus Dataform
+repositories, workspaces, releases, workflows and resource IAM. Dataflow launch
+is deliberately a governed action rather than desired state.
+
+`ScheduledDataflowPipeline`, `DataprocWorkflowPlatform` and
+`DataformReleasePipeline` provide the opinionated layer. Dataproc operations are
+resumable, mutable resources carry exact masks or versions, and all five IAM
+surfaces preserve unrelated policy-v3 bindings. Nine target-bound actions keep
+workload execution out of ordinary reconciliation. Exact API/runtime authority,
+seven supported Cloud Asset identities, data-platform canvas metadata and
+explicit Dataflow/Dataproc usage assumptions are synchronized. Dataform's own
+service cost is reported as zero while downstream BigQuery cost remains
+separate. See `gcp-data-engineering.md`.
 
 ### KMS and Secret Manager security lifecycle
 

@@ -224,3 +224,39 @@ test "estate scan maps security foundations to managed identities" {
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.binaryauthorization.Attestor") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.privateca.CaPool") != null);
 }
+
+test "estate scan maps supported Dataproc and Dataform assets without inventing Data Pipelines adoption" {
+    var client = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer client.deinit();
+    try client.addPage(
+        \\{"results":[
+        \\{"name":"//dataproc.googleapis.com/projects/acme-prod/regions/europe-west1/clusters/analytics","assetType":"dataproc.googleapis.com/Cluster","project":"projects/123","location":"europe-west1","displayName":"analytics"},
+        \\{"name":"//dataproc.googleapis.com/projects/acme-prod/regions/europe-west1/autoscalingPolicies/balanced","assetType":"dataproc.googleapis.com/AutoscalingPolicy","project":"projects/123","location":"europe-west1","displayName":"balanced"},
+        \\{"name":"//dataproc.googleapis.com/projects/acme-prod/regions/europe-west1/workflowTemplates/daily-orders","assetType":"dataproc.googleapis.com/WorkflowTemplate","project":"projects/123","location":"europe-west1","displayName":"daily-orders"},
+        \\{"name":"//dataform.googleapis.com/projects/acme-prod/locations/europe-west1/repositories/analytics","assetType":"dataform.googleapis.com/Repository","project":"projects/123","location":"europe-west1","displayName":"analytics"},
+        \\{"name":"//dataform.googleapis.com/projects/acme-prod/locations/europe-west1/repositories/analytics/workspaces/development","assetType":"dataform.googleapis.com/Workspace","project":"projects/123","location":"europe-west1","displayName":"development"},
+        \\{"name":"//dataform.googleapis.com/projects/acme-prod/locations/europe-west1/repositories/analytics/releaseConfigs/production","assetType":"dataform.googleapis.com/ReleaseConfig","project":"projects/123","location":"europe-west1","displayName":"production"},
+        \\{"name":"//dataform.googleapis.com/projects/acme-prod/locations/europe-west1/repositories/analytics/workflowConfigs/production","assetType":"dataform.googleapis.com/WorkflowConfig","project":"projects/123","location":"europe-west1","displayName":"production-workflow"},
+        \\{"name":"//datapipelines.googleapis.com/projects/acme-prod/locations/europe-west1/pipelines/daily-orders","assetType":"datapipelines.googleapis.com/Pipeline","project":"projects/123","location":"europe-west1","displayName":"daily-orders-pipeline"}
+        \\]}
+    );
+    var scan = try ziac.estate.scanAlloc(std.testing.allocator, client.client(), .{
+        .identity = .{ .provider = .google, .verified = true, .subject = "subject" },
+        .entitlement = .pro,
+        .connection = .{ .status = .connected, .project_id = "acme-prod" },
+        .observed_at_millis = 1_783_764_000_000,
+    });
+    defer scan.deinit();
+
+    try std.testing.expectEqual(@as(usize, 8), scan.resource_count);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.dataproc.Cluster") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.dataproc.AutoscalingPolicy") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.dataproc.WorkflowTemplate") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.dataform.Repository") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.dataform.Workspace") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.dataform.ReleaseConfig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.dataform.WorkflowConfig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"logical_id\":\"daily-orders-pipeline\",\"scope\":\"regional\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"type\":\"gcp.datapipelines.Pipeline\"") == null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/locations/europe-west1/repositories/analytics/workflowConfigs/production\"") != null);
+}

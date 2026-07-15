@@ -971,6 +971,56 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "CertificateAuthorityService.SetCaPoolIamPolicy", .permission = "privateca.caPools.setIamPolicy" },
         .{ .suffix = "CertificateAuthorityService.GetCertificateTemplateIamPolicy", .permission = "privateca.certificateTemplates.getIamPolicy" },
         .{ .suffix = "CertificateAuthorityService.SetCertificateTemplateIamPolicy", .permission = "privateca.certificateTemplates.setIamPolicy" },
+        .{ .suffix = "DataPipelines.GetPipeline", .permission = "datapipelines.pipelines.get" },
+        .{ .suffix = "DataPipelines.CreatePipeline", .permission = "datapipelines.pipelines.create" },
+        .{ .suffix = "DataPipelines.UpdatePipeline", .permission = "datapipelines.pipelines.update" },
+        .{ .suffix = "DataPipelines.DeletePipeline", .permission = "datapipelines.pipelines.delete" },
+        .{ .suffix = "DataPipelines.RunPipeline", .permission = "datapipelines.pipelines.run" },
+        .{ .suffix = "DataPipelines.StopPipeline", .permission = "datapipelines.pipelines.stop" },
+        .{ .suffix = "Dataflow.LaunchFlexTemplate", .permission = "dataflow.jobs.create" },
+        .{ .suffix = "DataprocClusters.GetCluster", .permission = "dataproc.clusters.get" },
+        .{ .suffix = "DataprocClusters.CreateCluster", .permission = "dataproc.clusters.create" },
+        .{ .suffix = "DataprocClusters.UpdateCluster", .permission = "dataproc.clusters.update" },
+        .{ .suffix = "DataprocClusters.DeleteCluster", .permission = "dataproc.clusters.delete" },
+        .{ .suffix = "DataprocClusters.GetIamPolicy", .permission = "dataproc.clusters.getIamPolicy" },
+        .{ .suffix = "DataprocClusters.SetIamPolicy", .permission = "dataproc.clusters.setIamPolicy" },
+        .{ .suffix = "DataprocAutoscalingPolicies.Get", .permission = "dataproc.autoscalingPolicies.get" },
+        .{ .suffix = "DataprocAutoscalingPolicies.Create", .permission = "dataproc.autoscalingPolicies.create" },
+        .{ .suffix = "DataprocAutoscalingPolicies.Update", .permission = "dataproc.autoscalingPolicies.update" },
+        .{ .suffix = "DataprocAutoscalingPolicies.Delete", .permission = "dataproc.autoscalingPolicies.delete" },
+        .{ .suffix = "DataprocAutoscalingPolicies.GetIamPolicy", .permission = "dataproc.autoscalingPolicies.getIamPolicy" },
+        .{ .suffix = "DataprocAutoscalingPolicies.SetIamPolicy", .permission = "dataproc.autoscalingPolicies.setIamPolicy" },
+        .{ .suffix = "DataprocWorkflowTemplates.Get", .permission = "dataproc.workflowTemplates.get" },
+        .{ .suffix = "DataprocWorkflowTemplates.Create", .permission = "dataproc.workflowTemplates.create" },
+        .{ .suffix = "DataprocWorkflowTemplates.Update", .permission = "dataproc.workflowTemplates.update" },
+        .{ .suffix = "DataprocWorkflowTemplates.Delete", .permission = "dataproc.workflowTemplates.delete" },
+        .{ .suffix = "DataprocWorkflowTemplates.GetIamPolicy", .permission = "dataproc.workflowTemplates.getIamPolicy" },
+        .{ .suffix = "DataprocWorkflowTemplates.SetIamPolicy", .permission = "dataproc.workflowTemplates.setIamPolicy" },
+        .{ .suffix = "DataprocActions.StartCluster", .permission = "dataproc.clusters.start" },
+        .{ .suffix = "DataprocActions.StopCluster", .permission = "dataproc.clusters.stop" },
+        .{ .suffix = "DataprocActions.RepairCluster", .permission = "dataproc.clusters.update" },
+        .{ .suffix = "DataprocActions.InstantiateWorkflow", .permission = "dataproc.workflowTemplates.instantiate" },
+        .{ .suffix = "Dataform.GetRepository", .permission = "dataform.repositories.get" },
+        .{ .suffix = "Dataform.CreateRepository", .permission = "dataform.repositories.create" },
+        .{ .suffix = "Dataform.UpdateRepository", .permission = "dataform.repositories.update" },
+        .{ .suffix = "Dataform.DeleteRepository", .permission = "dataform.repositories.delete" },
+        .{ .suffix = "Dataform.GetRepositoryIamPolicy", .permission = "dataform.repositories.getIamPolicy" },
+        .{ .suffix = "Dataform.SetRepositoryIamPolicy", .permission = "dataform.repositories.setIamPolicy" },
+        .{ .suffix = "Dataform.GetWorkspace", .permission = "dataform.workspaces.get" },
+        .{ .suffix = "Dataform.CreateWorkspace", .permission = "dataform.workspaces.create" },
+        .{ .suffix = "Dataform.DeleteWorkspace", .permission = "dataform.workspaces.delete" },
+        .{ .suffix = "Dataform.GetWorkspaceIamPolicy", .permission = "dataform.workspaces.getIamPolicy" },
+        .{ .suffix = "Dataform.SetWorkspaceIamPolicy", .permission = "dataform.workspaces.setIamPolicy" },
+        .{ .suffix = "Dataform.GetReleaseConfig", .permission = "dataform.releaseConfigs.get" },
+        .{ .suffix = "Dataform.CreateReleaseConfig", .permission = "dataform.releaseConfigs.create" },
+        .{ .suffix = "Dataform.UpdateReleaseConfig", .permission = "dataform.releaseConfigs.update" },
+        .{ .suffix = "Dataform.DeleteReleaseConfig", .permission = "dataform.releaseConfigs.delete" },
+        .{ .suffix = "Dataform.GetWorkflowConfig", .permission = "dataform.workflowConfigs.get" },
+        .{ .suffix = "Dataform.CreateWorkflowConfig", .permission = "dataform.workflowConfigs.create" },
+        .{ .suffix = "Dataform.UpdateWorkflowConfig", .permission = "dataform.workflowConfigs.update" },
+        .{ .suffix = "Dataform.DeleteWorkflowConfig", .permission = "dataform.workflowConfigs.delete" },
+        .{ .suffix = "Dataform.CreateCompilationResult", .permission = "dataform.compilationResults.create" },
+        .{ .suffix = "Dataform.CreateWorkflowInvocation", .permission = "dataform.workflowInvocations.create" },
     };
     for (mappings) |mapping| if (std.mem.endsWith(u8, method, mapping.suffix)) return mapping.permission;
     return null;
@@ -1031,7 +1081,89 @@ pub fn jobExecutionUsages() []const RpcUsage {
     return &usages;
 }
 
+pub fn dataEngineeringActionUsages() []const RpcUsage {
+    const usages = [_]RpcUsage{
+        .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.RunPipeline" },
+        .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.StopPipeline" },
+        .{ .service = "dataflow.googleapis.com", .method = "google.dataflow.v1b3.Dataflow.LaunchFlexTemplate" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocActions.StartCluster" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocActions.StopCluster" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocActions.RepairCluster" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocActions.InstantiateWorkflow" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.CreateCompilationResult" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.CreateWorkflowInvocation" },
+    };
+    return &usages;
+}
+
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
+    const data_pipeline = [_]RpcUsage{
+        .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.GetPipeline" },
+        .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.CreatePipeline" },
+        .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.UpdatePipeline" },
+        .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.DeletePipeline" },
+    };
+    const dataproc_cluster = [_]RpcUsage{
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocClusters.GetCluster" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocClusters.CreateCluster" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocClusters.UpdateCluster" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocClusters.DeleteCluster" },
+    };
+    const dataproc_cluster_iam = [_]RpcUsage{
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocClusters.GetIamPolicy" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocClusters.SetIamPolicy" },
+    };
+    const dataproc_autoscaling = [_]RpcUsage{
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocAutoscalingPolicies.Get" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocAutoscalingPolicies.Create" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocAutoscalingPolicies.Update" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocAutoscalingPolicies.Delete" },
+    };
+    const dataproc_autoscaling_iam = [_]RpcUsage{
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocAutoscalingPolicies.GetIamPolicy" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocAutoscalingPolicies.SetIamPolicy" },
+    };
+    const dataproc_workflow = [_]RpcUsage{
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocWorkflowTemplates.Get" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocWorkflowTemplates.Create" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocWorkflowTemplates.Update" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocWorkflowTemplates.Delete" },
+    };
+    const dataproc_workflow_iam = [_]RpcUsage{
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocWorkflowTemplates.GetIamPolicy" },
+        .{ .service = "dataproc.googleapis.com", .method = "google.cloud.dataproc.v1.DataprocWorkflowTemplates.SetIamPolicy" },
+    };
+    const dataform_repository = [_]RpcUsage{
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.GetRepository" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.CreateRepository" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.UpdateRepository" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.DeleteRepository" },
+    };
+    const dataform_repository_iam = [_]RpcUsage{
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.GetRepositoryIamPolicy" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.SetRepositoryIamPolicy" },
+    };
+    const dataform_workspace = [_]RpcUsage{
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.GetWorkspace" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.CreateWorkspace" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.DeleteWorkspace" },
+    };
+    const dataform_workspace_iam = [_]RpcUsage{
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.GetWorkspaceIamPolicy" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.SetWorkspaceIamPolicy" },
+    };
+    const dataform_release = [_]RpcUsage{
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.GetReleaseConfig" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.CreateReleaseConfig" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.UpdateReleaseConfig" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.DeleteReleaseConfig" },
+    };
+    const dataform_workflow = [_]RpcUsage{
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.GetWorkflowConfig" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.CreateWorkflowConfig" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.UpdateWorkflowConfig" },
+        .{ .service = "dataform.googleapis.com", .method = "google.cloud.dataform.v1beta1.Dataform.DeleteWorkflowConfig" },
+    };
     const scc_source = [_]RpcUsage{
         .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.ListSources" },
         .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.CreateSource" },
@@ -2121,6 +2253,19 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.parametermanager.ParameterVersion")) return &parameter_version;
     if (std.mem.eql(u8, type_name, "gcp.parametermanager.Template")) return &parameter_template;
     if (std.mem.eql(u8, type_name, "gcp.parametermanager.TemplateVersion")) return &parameter_template_version;
+    if (std.mem.eql(u8, type_name, "gcp.datapipelines.Pipeline")) return &data_pipeline;
+    if (std.mem.eql(u8, type_name, "gcp.dataproc.Cluster")) return &dataproc_cluster;
+    if (std.mem.eql(u8, type_name, "gcp.dataproc.ClusterIamMember")) return &dataproc_cluster_iam;
+    if (std.mem.eql(u8, type_name, "gcp.dataproc.AutoscalingPolicy")) return &dataproc_autoscaling;
+    if (std.mem.eql(u8, type_name, "gcp.dataproc.AutoscalingPolicyIamMember")) return &dataproc_autoscaling_iam;
+    if (std.mem.eql(u8, type_name, "gcp.dataproc.WorkflowTemplate")) return &dataproc_workflow;
+    if (std.mem.eql(u8, type_name, "gcp.dataproc.WorkflowTemplateIamMember")) return &dataproc_workflow_iam;
+    if (std.mem.eql(u8, type_name, "gcp.dataform.Repository")) return &dataform_repository;
+    if (std.mem.eql(u8, type_name, "gcp.dataform.RepositoryIamMember")) return &dataform_repository_iam;
+    if (std.mem.eql(u8, type_name, "gcp.dataform.Workspace")) return &dataform_workspace;
+    if (std.mem.eql(u8, type_name, "gcp.dataform.WorkspaceIamMember")) return &dataform_workspace_iam;
+    if (std.mem.eql(u8, type_name, "gcp.dataform.ReleaseConfig")) return &dataform_release;
+    if (std.mem.eql(u8, type_name, "gcp.dataform.WorkflowConfig")) return &dataform_workflow;
     if (std.mem.eql(u8, type_name, "gcp.kms.KeyRing")) return &kms_key_ring;
     if (std.mem.eql(u8, type_name, "gcp.kms.CryptoKey")) return &kms_crypto_key;
     if (std.mem.eql(u8, type_name, "gcp.kms.CryptoKeyVersion")) return &kms_version;
@@ -2214,6 +2359,11 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/cloudsql.instanceUser", .permission = "cloudsql.instances.login" },
         .{ .role = "roles/cloudkms.cryptoKeyDecrypter", .permission = "cloudkms.cryptoKeyVersions.useToDecrypt" },
         .{ .role = "roles/cloudkms.cryptoKeyEncrypterDecrypter", .permission = "cloudkms.cryptoKeyVersions.useToDecrypt" },
+        .{ .role = "roles/dataflow.developer", .permission = "dataflow.jobs.create" },
+        .{ .role = "roles/dataflow.worker", .permission = "dataflow.jobs.get" },
+        .{ .role = "roles/dataform.editor", .permission = "dataform.repositories.readFile" },
+        .{ .role = "roles/dataproc.editor", .permission = "dataproc.clusters.use" },
+        .{ .role = "roles/iam.serviceAccountUser", .permission = "iam.serviceAccounts.actAs" },
         .{ .role = "roles/iam.workloadIdentityUser", .permission = "iam.serviceAccounts.getAccessToken" },
         .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },
         .{ .role = "roles/pubsub.subscriber", .permission = "pubsub.subscriptions.consume" },

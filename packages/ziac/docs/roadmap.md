@@ -1238,3 +1238,27 @@ errors are reported. The catalog reports 210 managed resources. Public examples
 pass. The fail-closed authenticated runner requires ADC, a disposable project
 and exact confirmation, proves second-state import/no-op, retains security
 resources, and excludes CA transitions and certificate revocation.
+
+M81 is locally implementation-complete and awaiting authenticated disposable-
+project qualification. Thirteen managed resources add recurring Data Pipelines
+templates; Dataproc clusters, autoscaling, workflow DAGs and additive IAM; and
+Dataform repositories, workspaces, release/workflow configs and additive IAM.
+
+`ScheduledDataflowPipeline`, `DataprocWorkflowPlatform` and
+`DataformReleasePipeline` compile a 14-resource data platform with exact
+scheduler, worker and operator authority. Dataproc cluster operations resume
+from checkpoints; updates use exact masks or observed versions; Dataform nested
+identities are canonical; and policy-v3 IAM preserves unrelated bindings.
+Pipeline run/stop, Flex Template launch, Dataproc state/workflow actions and
+Dataform compilation/invocation are target-bound capabilities excluded from
+ordinary reconciliation.
+
+Exact API and permission synthesis, seven supported Cloud Asset identities,
+data-engineering canvas topology and honest cost provenance are synchronized.
+Dataflow and Dataproc require explicit runtime usage before an estimate appears;
+Dataform is a no-charge service with downstream BigQuery spend kept separate.
+See `docs/gcp-data-engineering.md`. The deterministic qualification receipt,
+public example, installed documentation and fail-closed authenticated runner are
+present. The Testing v2 package gate discovers and executes 919 tests: 918 pass,
+one credential-gated test skips, and none fail or remain pending; no leaks or
+logged errors are reported. The catalog reports 223 managed resources.

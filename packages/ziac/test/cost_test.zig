@@ -209,3 +209,52 @@ test "security foundation estimates separate priced CA usage from no-charge admi
     try std.testing.expectEqual(@as(?i64, 0), admission.amount_micros);
     try std.testing.expectEqual(ziac.cost.Confidence.explicit_usage, admission.confidence);
 }
+
+test "data engineering estimates require explicit runtime usage and keep Dataform service cost separate" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "dataflow-vcpu", .region = "europe-west1", .unit = "vCPU-hour", .unit_quantity = 1, .unit_price_micros = 69_000 },
+        .{ .sku_id = "dataflow-memory", .region = "europe-west1", .unit = "GiB-hour", .unit_quantity = 1, .unit_price_micros = 3_557 },
+        .{ .sku_id = "dataflow-shuffle", .region = "europe-west1", .unit = "GiB", .unit_quantity = 1, .unit_price_micros = 18_000 },
+        .{ .sku_id = "dataproc-management", .region = "global", .unit = "vCPU-hour", .unit_quantity = 1, .unit_price_micros = 10_000 },
+        .{ .sku_id = "compute-vcpu", .region = "europe-west1", .unit = "vCPU-hour", .unit_quantity = 1, .unit_price_micros = 31_611 },
+        .{ .sku_id = "persistent-disk", .region = "europe-west1", .unit = "GiB-hour", .unit_quantity = 1, .unit_price_micros = 55 },
+    };
+    const dataflow = try ziac.cost.dataflowConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.datapipelines.Pipeline.europe-west1.daily-orders",
+        .region = "europe-west1",
+        .worker_vcpu_sku_id = "dataflow-vcpu",
+        .worker_memory_sku_id = "dataflow-memory",
+        .shuffle_sku_id = "dataflow-shuffle",
+        .worker_vcpu_hours = 100,
+        .worker_memory_gib_hours = 400,
+        .shuffle_gib = 50,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 9_222_800), dataflow.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Confidence.explicit_usage, dataflow.confidence);
+
+    const dataproc = try ziac.cost.dataprocClusterConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.dataproc.Cluster.europe-west1.analytics",
+        .region = "europe-west1",
+        .management_sku_id = "dataproc-management",
+        .compute_vcpu_sku_id = "compute-vcpu",
+        .disk_sku_id = "persistent-disk",
+        .cluster_vcpu_hours = 100,
+        .disk_gib_hours = 1_000,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 4_216_100), dataproc.amount_micros);
+
+    const dataform = try ziac.cost.dataformConfigurationEstimate("gcp.dataform.Repository.europe-west1.analytics", 1_000);
+    try std.testing.expectEqual(@as(?i64, 0), dataform.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Confidence.explicit_usage, dataform.confidence);
+
+    try std.testing.expectError(error.InvalidUsageAssumption, ziac.cost.dataflowConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.datapipelines.Pipeline.europe-west1.daily-orders",
+        .region = "europe-west1",
+        .worker_vcpu_sku_id = "dataflow-vcpu",
+        .worker_memory_sku_id = "dataflow-memory",
+        .shuffle_sku_id = "dataflow-shuffle",
+        .observed_at_millis = 1_000,
+    }));
+}

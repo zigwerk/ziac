@@ -36,7 +36,8 @@ export type ZiacResourceCost = {
   origin: "configuration_estimate" | "projected_month_end" | "actual_billed";
   currency: string;
   amount_micros: number | null;
-  confidence: "explicit_usage" | "billing_partial_month" | "billing_complete";
+  confidence: "unavailable" | "explicit_usage" | "billing_partial_month" | "billing_complete";
+  basis?: "usage_assumptions_required" | "documented_no_charge" | "service_no_charge";
   observed_at_millis: number;
   is_billing_export: boolean;
 };
@@ -47,6 +48,10 @@ export type ZiacIamDetails = {
   role?: string;
   condition_title?: string;
   principal_count: number;
+};
+
+export type ZiacDataEngineeringDetails = Record<string, unknown> & {
+  kind: "dataflow_pipeline" | "dataproc_cluster" | "dataproc_autoscaling_policy" | "dataproc_workflow_template" | "dataform_repository" | "dataform_workspace" | "dataform_release_config" | "dataform_workflow_config" | "data_engineering_iam";
 };
 
 export type ZiacVisualResource = {
@@ -63,6 +68,7 @@ export type ZiacVisualResource = {
   discovery?: ZiacResourceDiscovery;
   cost?: ZiacResourceCost;
   iam?: ZiacIamDetails;
+  data_engineering?: ZiacDataEngineeringDetails;
   inputs: Record<string, unknown>;
   lifecycle: {
     protect: boolean;
@@ -474,6 +480,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
     : parseDiscovery(value.discovery, index);
   const cost = value.cost === undefined ? undefined : parseCost(value.cost, index);
   const iam = value.iam === undefined ? undefined : parseIam(value.iam, index);
+  const dataEngineering = value.data_engineering === undefined ? undefined : parseDataEngineering(value.data_engineering, index);
   if (ownership !== "managed" && discovery === undefined) {
     throw new Error(`resources[${index}].discovery is required for ${ownership} resources`);
   }
@@ -491,6 +498,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
     ...(discovery ? { discovery } : {}),
     ...(cost ? { cost } : {}),
     ...(iam ? { iam } : {}),
+    ...(dataEngineering ? { data_engineering: dataEngineering } : {}),
     inputs,
     lifecycle: {
       protect: booleanValue(lifecycle.protect, "lifecycle.protect"),
@@ -527,15 +535,29 @@ function parseCost(raw: unknown, index: number): ZiacResourceCost {
   const amount = value.amount_micros === null ? null : integerValue(value.amount_micros, `${path}.amount_micros`);
   const origin = enumValue(value.origin, `${path}.origin`, ["configuration_estimate", "projected_month_end", "actual_billed"]);
   const billingExport = booleanValue(value.is_billing_export, `${path}.is_billing_export`);
+  const basis = value.basis === undefined
+    ? undefined
+    : enumValue(value.basis, `${path}.basis`, ["usage_assumptions_required", "documented_no_charge", "service_no_charge"]);
   if ((origin === "actual_billed" || origin === "projected_month_end") && !billingExport) throw new Error(`${path} actual cost requires billing export provenance`);
   return {
     schema: enumValue(value.schema, `${path}.schema`, ["ziac.resource-cost.v1"]),
     origin,
     currency,
     amount_micros: amount,
-    confidence: enumValue(value.confidence, `${path}.confidence`, ["explicit_usage", "billing_partial_month", "billing_complete"]),
+    confidence: enumValue(value.confidence, `${path}.confidence`, ["unavailable", "explicit_usage", "billing_partial_month", "billing_complete"]),
+    ...(basis ? { basis } : {}),
     observed_at_millis: integerValue(value.observed_at_millis, `${path}.observed_at_millis`),
     is_billing_export: billingExport,
+  };
+}
+
+function parseDataEngineering(raw: unknown, index: number): ZiacDataEngineeringDetails {
+  const path = `resources[${index}].data_engineering`;
+  const value = objectValue(raw, path);
+  assertRedacted(value, path);
+  return {
+    ...value,
+    kind: enumValue(value.kind, `${path}.kind`, ["dataflow_pipeline", "dataproc_cluster", "dataproc_autoscaling_policy", "dataproc_workflow_template", "dataform_repository", "dataform_workspace", "dataform_release_config", "dataform_workflow_config", "data_engineering_iam"]),
   };
 }
 
