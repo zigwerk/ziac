@@ -341,6 +341,20 @@ pub const KmsSecretEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const SecurityFoundationEstimateInput = struct {
+    resource_id: []const u8,
+    region: []const u8,
+    security_command_center_sku_id: []const u8 = "",
+    private_ca_devops_sku_id: []const u8 = "",
+    private_ca_enterprise_sku_id: []const u8 = "",
+    private_ca_certificate_sku_id: []const u8 = "",
+    security_command_center_months: u64 = 0,
+    active_devops_ca_months: u64 = 0,
+    active_enterprise_ca_months: u64 = 0,
+    issued_certificates: u64 = 0,
+    observed_at_millis: u64,
+};
+
 pub const ApplicationServicesEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8 = "global",
@@ -903,6 +917,28 @@ pub fn kmsSecretConfigurationEstimate(prices: []const SkuPrice, input: KmsSecret
     try appendUsage(&usage, &count, input.secret_access_sku_id, "global", input.secret_access_operations);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn securityFoundationConfigurationEstimate(prices: []const SkuPrice, input: SecurityFoundationEstimateInput) !ResourceCost {
+    var usage: [4]UsageAssumption = undefined;
+    var count: usize = 0;
+    try appendUsage(&usage, &count, input.security_command_center_sku_id, "global", input.security_command_center_months);
+    try appendUsage(&usage, &count, input.private_ca_devops_sku_id, input.region, input.active_devops_ca_months);
+    try appendUsage(&usage, &count, input.private_ca_enterprise_sku_id, input.region, input.active_enterprise_ca_months);
+    try appendUsage(&usage, &count, input.private_ca_certificate_sku_id, input.region, input.issued_certificates);
+    if (count == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn binaryAuthorizationConfigurationEstimate(resource_id: []const u8, observed_at_millis: u64) !ResourceCost {
+    try validateIdentity(resource_id, observed_at_millis);
+    return .{
+        .resource_id = resource_id,
+        .origin = .configuration_estimate,
+        .amount_micros = 0,
+        .confidence = .explicit_usage,
+        .provenance = .{ .observed_at_millis = observed_at_millis },
+    };
 }
 
 pub fn organizationFoundationEstimate(resource_id: []const u8, observed_at_millis: u64) !ResourceCost {

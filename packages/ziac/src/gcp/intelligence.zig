@@ -925,6 +925,52 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "CertificateMapEntries.GetCertificateMapEntry", .permission = "certificatemanager.certmapentries.get" },
         .{ .suffix = "CertificateMapEntries.CreateCertificateMapEntry", .permission = "certificatemanager.certmapentries.create" },
         .{ .suffix = "CertificateMapEntries.DeleteCertificateMapEntry", .permission = "certificatemanager.certmapentries.delete" },
+        .{ .suffix = "SecurityCenter.GetSource", .permission = "securitycenter.sources.get" },
+        .{ .suffix = "SecurityCenter.ListSources", .permission = "securitycenter.sources.list" },
+        .{ .suffix = "SecurityCenter.CreateSource", .permission = "securitycenter.sources.create" },
+        .{ .suffix = "SecurityCenter.UpdateSource", .permission = "securitycenter.sources.update" },
+        .{ .suffix = "SecurityCenter.GetNotificationConfig", .permission = "securitycenter.notificationConfigs.get" },
+        .{ .suffix = "SecurityCenter.CreateNotificationConfig", .permission = "securitycenter.notificationConfigs.create" },
+        .{ .suffix = "SecurityCenter.UpdateNotificationConfig", .permission = "securitycenter.notificationConfigs.update" },
+        .{ .suffix = "SecurityCenter.DeleteNotificationConfig", .permission = "securitycenter.notificationConfigs.delete" },
+        .{ .suffix = "SecurityCenter.GetMuteConfig", .permission = "securitycenter.muteConfigs.get" },
+        .{ .suffix = "SecurityCenter.CreateMuteConfig", .permission = "securitycenter.muteConfigs.create" },
+        .{ .suffix = "SecurityCenter.UpdateMuteConfig", .permission = "securitycenter.muteConfigs.update" },
+        .{ .suffix = "SecurityCenter.DeleteMuteConfig", .permission = "securitycenter.muteConfigs.delete" },
+        .{ .suffix = "SecurityCenter.GetBigQueryExport", .permission = "securitycenter.bigQueryExports.get" },
+        .{ .suffix = "SecurityCenter.CreateBigQueryExport", .permission = "securitycenter.bigQueryExports.create" },
+        .{ .suffix = "SecurityCenter.UpdateBigQueryExport", .permission = "securitycenter.bigQueryExports.update" },
+        .{ .suffix = "SecurityCenter.DeleteBigQueryExport", .permission = "securitycenter.bigQueryExports.delete" },
+        .{ .suffix = "SecurityCenter.GetResourceValueConfig", .permission = "securitycenter.resourceValueConfigs.get" },
+        .{ .suffix = "SecurityCenter.BatchCreateResourceValueConfigs", .permission = "securitycenter.resourceValueConfigs.create" },
+        .{ .suffix = "SecurityCenter.UpdateResourceValueConfig", .permission = "securitycenter.resourceValueConfigs.update" },
+        .{ .suffix = "SecurityCenter.DeleteResourceValueConfig", .permission = "securitycenter.resourceValueConfigs.delete" },
+        .{ .suffix = "BinaryAuthorization.GetPolicy", .permission = "binaryauthorization.policy.get" },
+        .{ .suffix = "BinaryAuthorization.UpdatePolicy", .permission = "binaryauthorization.policy.update" },
+        .{ .suffix = "BinaryAuthorization.GetAttestor", .permission = "binaryauthorization.attestors.get" },
+        .{ .suffix = "BinaryAuthorization.CreateAttestor", .permission = "binaryauthorization.attestors.create" },
+        .{ .suffix = "BinaryAuthorization.UpdateAttestor", .permission = "binaryauthorization.attestors.update" },
+        .{ .suffix = "BinaryAuthorization.DeleteAttestor", .permission = "binaryauthorization.attestors.delete" },
+        .{ .suffix = "BinaryAuthorization.GetAttestorIamPolicy", .permission = "binaryauthorization.attestors.getIamPolicy" },
+        .{ .suffix = "BinaryAuthorization.SetAttestorIamPolicy", .permission = "binaryauthorization.attestors.setIamPolicy" },
+        .{ .suffix = "CertificateAuthorityService.GetCaPool", .permission = "privateca.caPools.get" },
+        .{ .suffix = "CertificateAuthorityService.CreateCaPool", .permission = "privateca.caPools.create" },
+        .{ .suffix = "CertificateAuthorityService.UpdateCaPool", .permission = "privateca.caPools.update" },
+        .{ .suffix = "CertificateAuthorityService.DeleteCaPool", .permission = "privateca.caPools.delete" },
+        .{ .suffix = "CertificateAuthorityService.GetCertificateAuthority", .permission = "privateca.certificateAuthorities.get" },
+        .{ .suffix = "CertificateAuthorityService.CreateCertificateAuthority", .permission = "privateca.certificateAuthorities.create" },
+        .{ .suffix = "CertificateAuthorityService.UpdateCertificateAuthority", .permission = "privateca.certificateAuthorities.update" },
+        .{ .suffix = "CertificateAuthorityService.GetCertificateTemplate", .permission = "privateca.certificateTemplates.get" },
+        .{ .suffix = "CertificateAuthorityService.CreateCertificateTemplate", .permission = "privateca.certificateTemplates.create" },
+        .{ .suffix = "CertificateAuthorityService.UpdateCertificateTemplate", .permission = "privateca.certificateTemplates.update" },
+        .{ .suffix = "CertificateAuthorityService.DeleteCertificateTemplate", .permission = "privateca.certificateTemplates.delete" },
+        .{ .suffix = "CertificateAuthorityService.GetCertificate", .permission = "privateca.certificates.get" },
+        .{ .suffix = "CertificateAuthorityService.CreateCertificate", .permission = "privateca.certificates.create" },
+        .{ .suffix = "CertificateAuthorityService.UpdateCertificate", .permission = "privateca.certificates.update" },
+        .{ .suffix = "CertificateAuthorityService.GetCaPoolIamPolicy", .permission = "privateca.caPools.getIamPolicy" },
+        .{ .suffix = "CertificateAuthorityService.SetCaPoolIamPolicy", .permission = "privateca.caPools.setIamPolicy" },
+        .{ .suffix = "CertificateAuthorityService.GetCertificateTemplateIamPolicy", .permission = "privateca.certificateTemplates.getIamPolicy" },
+        .{ .suffix = "CertificateAuthorityService.SetCertificateTemplateIamPolicy", .permission = "privateca.certificateTemplates.setIamPolicy" },
     };
     for (mappings) |mapping| if (std.mem.endsWith(u8, method, mapping.suffix)) return mapping.permission;
     return null;
@@ -960,6 +1006,10 @@ fn conditionalRpcUsage(node: resource.ResourceNode) ?RpcUsage {
         return .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.DeleteServicePerimeter" };
     if (std.mem.eql(u8, node.type_name, "gcp.accesscontextmanager.GcpUserAccessBinding") and governance_delete)
         return .{ .service = "accesscontextmanager.googleapis.com", .method = "google.identity.accesscontextmanager.v1.AccessContextManager.DeleteGcpUserAccessBinding" };
+    if (std.mem.eql(u8, node.type_name, "gcp.privateca.CaPool") and governance_delete)
+        return .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.DeleteCaPool" };
+    if (std.mem.eql(u8, node.type_name, "gcp.privateca.CertificateTemplate") and governance_delete)
+        return .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.DeleteCertificateTemplate" };
     return null;
 }
 
@@ -982,6 +1032,77 @@ pub fn jobExecutionUsages() []const RpcUsage {
 }
 
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
+    const scc_source = [_]RpcUsage{
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.ListSources" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.CreateSource" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.UpdateSource" },
+    };
+    const scc_notification = [_]RpcUsage{
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.GetNotificationConfig" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.CreateNotificationConfig" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.UpdateNotificationConfig" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.DeleteNotificationConfig" },
+    };
+    const scc_mute = [_]RpcUsage{
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.GetMuteConfig" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.CreateMuteConfig" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.UpdateMuteConfig" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.DeleteMuteConfig" },
+    };
+    const scc_bigquery = [_]RpcUsage{
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.GetBigQueryExport" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.CreateBigQueryExport" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.UpdateBigQueryExport" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.DeleteBigQueryExport" },
+    };
+    const scc_resource_value = [_]RpcUsage{
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.GetResourceValueConfig" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.BatchCreateResourceValueConfigs" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.UpdateResourceValueConfig" },
+        .{ .service = "securitycenter.googleapis.com", .method = "google.cloud.securitycenter.v2.SecurityCenter.DeleteResourceValueConfig" },
+    };
+    const binary_policy = [_]RpcUsage{
+        .{ .service = "binaryauthorization.googleapis.com", .method = "google.cloud.binaryauthorization.v1.BinaryAuthorization.GetPolicy" },
+        .{ .service = "binaryauthorization.googleapis.com", .method = "google.cloud.binaryauthorization.v1.BinaryAuthorization.UpdatePolicy" },
+    };
+    const binary_attestor = [_]RpcUsage{
+        .{ .service = "binaryauthorization.googleapis.com", .method = "google.cloud.binaryauthorization.v1.BinaryAuthorization.GetAttestor" },
+        .{ .service = "binaryauthorization.googleapis.com", .method = "google.cloud.binaryauthorization.v1.BinaryAuthorization.CreateAttestor" },
+        .{ .service = "binaryauthorization.googleapis.com", .method = "google.cloud.binaryauthorization.v1.BinaryAuthorization.UpdateAttestor" },
+        .{ .service = "binaryauthorization.googleapis.com", .method = "google.cloud.binaryauthorization.v1.BinaryAuthorization.DeleteAttestor" },
+    };
+    const binary_attestor_iam = [_]RpcUsage{
+        .{ .service = "binaryauthorization.googleapis.com", .method = "google.cloud.binaryauthorization.v1.BinaryAuthorization.GetAttestorIamPolicy" },
+        .{ .service = "binaryauthorization.googleapis.com", .method = "google.cloud.binaryauthorization.v1.BinaryAuthorization.SetAttestorIamPolicy" },
+    };
+    const private_ca_pool = [_]RpcUsage{
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.GetCaPool" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.CreateCaPool" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.UpdateCaPool" },
+    };
+    const private_ca_authority = [_]RpcUsage{
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.GetCertificateAuthority" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.CreateCertificateAuthority" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.UpdateCertificateAuthority" },
+    };
+    const private_ca_template = [_]RpcUsage{
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.GetCertificateTemplate" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.CreateCertificateTemplate" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.UpdateCertificateTemplate" },
+    };
+    const private_ca_certificate = [_]RpcUsage{
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.GetCertificate" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.CreateCertificate" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.UpdateCertificate" },
+    };
+    const private_ca_pool_iam = [_]RpcUsage{
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.GetCaPoolIamPolicy" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.SetCaPoolIamPolicy" },
+    };
+    const private_ca_template_iam = [_]RpcUsage{
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.GetCertificateTemplateIamPolicy" },
+        .{ .service = "privateca.googleapis.com", .method = "google.cloud.security.privateca.v1.CertificateAuthorityService.SetCertificateTemplateIamPolicy" },
+    };
     const build_connection = [_]RpcUsage{
         .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.GetConnection" },
         .{ .service = "cloudbuild.googleapis.com", .method = "google.devtools.cloudbuild.v2.RepositoryManager.CreateConnection" },
@@ -2010,6 +2131,20 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.secret.SecretIamMember")) return &secret_iam;
     if (std.mem.eql(u8, type_name, "gcp.resourcemanager.Folder")) return &organization_folder;
     if (std.mem.eql(u8, type_name, "gcp.resourcemanager.Project")) return &organization_project;
+    if (std.mem.eql(u8, type_name, "gcp.securitycenter.Source")) return &scc_source;
+    if (std.mem.eql(u8, type_name, "gcp.securitycenter.NotificationConfig")) return &scc_notification;
+    if (std.mem.eql(u8, type_name, "gcp.securitycenter.MuteConfig")) return &scc_mute;
+    if (std.mem.eql(u8, type_name, "gcp.securitycenter.BigQueryExport")) return &scc_bigquery;
+    if (std.mem.eql(u8, type_name, "gcp.securitycenter.ResourceValueConfig")) return &scc_resource_value;
+    if (std.mem.eql(u8, type_name, "gcp.binaryauthorization.Policy")) return &binary_policy;
+    if (std.mem.eql(u8, type_name, "gcp.binaryauthorization.Attestor")) return &binary_attestor;
+    if (std.mem.eql(u8, type_name, "gcp.binaryauthorization.AttestorIamMember")) return &binary_attestor_iam;
+    if (std.mem.eql(u8, type_name, "gcp.privateca.CaPool")) return &private_ca_pool;
+    if (std.mem.eql(u8, type_name, "gcp.privateca.CertificateAuthority")) return &private_ca_authority;
+    if (std.mem.eql(u8, type_name, "gcp.privateca.CertificateTemplate")) return &private_ca_template;
+    if (std.mem.eql(u8, type_name, "gcp.privateca.Certificate")) return &private_ca_certificate;
+    if (std.mem.eql(u8, type_name, "gcp.privateca.CaPoolIamMember")) return &private_ca_pool_iam;
+    if (std.mem.eql(u8, type_name, "gcp.privateca.CertificateTemplateIamMember")) return &private_ca_template_iam;
     if (std.mem.eql(u8, type_name, "gcp.resourcemanager.Lien")) return &organization_lien;
     if (std.mem.eql(u8, type_name, "gcp.billing.ProjectBillingAssociation")) return &project_billing;
     if (std.mem.eql(u8, type_name, "gcp.serviceusage.ServiceIdentity")) return &service_identity;
@@ -2073,6 +2208,7 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/datastore.user", .permission = "datastore.entities.create" },
         .{ .role = "roles/datastore.viewer", .permission = "datastore.entities.get" },
         .{ .role = "roles/bigquery.connectionUser", .permission = "bigquery.connections.use" },
+        .{ .role = "roles/binaryauthorization.attestorsVerifier", .permission = "binaryauthorization.attestors.verifyImageAttested" },
         .{ .role = "roles/cloudtasks.enqueuer", .permission = "cloudtasks.tasks.create" },
         .{ .role = "roles/cloudsql.client", .permission = "cloudsql.instances.connect" },
         .{ .role = "roles/cloudsql.instanceUser", .permission = "cloudsql.instances.login" },
@@ -2081,6 +2217,7 @@ fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
         .{ .role = "roles/iam.workloadIdentityUser", .permission = "iam.serviceAccounts.getAccessToken" },
         .{ .role = "roles/pubsub.publisher", .permission = "pubsub.topics.publish" },
         .{ .role = "roles/pubsub.subscriber", .permission = "pubsub.subscriptions.consume" },
+        .{ .role = "roles/privateca.certificateRequester", .permission = "privateca.certificates.create" },
         .{ .role = "roles/run.invoker", .permission = "run.routes.invoke" },
         .{ .role = "roles/workflows.invoker", .permission = "workflows.executions.create" },
         .{ .role = "roles/parametermanager.parameterAccessor", .permission = "parametermanager.parameterVersions.render" },

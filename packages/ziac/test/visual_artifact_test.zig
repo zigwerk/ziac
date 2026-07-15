@@ -342,3 +342,26 @@ fn fixtureGraph() !ziac.ResourceGraph {
     );
     return graph;
 }
+
+test "visual artifact projects security foundation semantics and trust edges" {
+    var policy = try ziac.gcp.TrustedArtifactPolicy.build(std.testing.allocator, .{
+        .project_id = "security-prod",
+        .primary_region = "europe-west1",
+    }, .{
+        .name = "runtime",
+        .project = ziac.PublicOutput([]const u8).known("projects/security-prod"),
+        .note = ziac.PublicOutput([]const u8).known("projects/security-prod/notes/release-attestations"),
+        .public_keys = &.{.{ .key = .{ .pgp = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nYWJj\n-----END PGP PUBLIC KEY BLOCK-----" } }},
+    });
+    defer policy.deinit();
+    var artifact = try ziac.visual_artifact.serializeAlloc(std.testing.allocator, &policy.graph, null, .{
+        .stack = "security",
+        .stage = "prod",
+        .created_at_millis = 0,
+    });
+    defer artifact.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"kind\":\"artifact_attestor\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"kind\":\"admission_policy\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"kind\":\"admission_attestor\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, artifact.bytes, "\"amount_micros\":0") != null);
+}

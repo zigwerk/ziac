@@ -373,6 +373,28 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.secret.Secret"
     else if (std.mem.eql(u8, asset_type, "secretmanager.googleapis.com/SecretVersion"))
         "gcp.secret.SecretVersion"
+    else if (std.mem.eql(u8, asset_type, "securitycenter.googleapis.com/Source"))
+        "gcp.securitycenter.Source"
+    else if (std.mem.eql(u8, asset_type, "securitycenter.googleapis.com/NotificationConfig"))
+        "gcp.securitycenter.NotificationConfig"
+    else if (std.mem.eql(u8, asset_type, "securitycenter.googleapis.com/MuteConfig"))
+        "gcp.securitycenter.MuteConfig"
+    else if (std.mem.eql(u8, asset_type, "securitycenter.googleapis.com/BigQueryExport"))
+        "gcp.securitycenter.BigQueryExport"
+    else if (std.mem.eql(u8, asset_type, "securitycenter.googleapis.com/ResourceValueConfig"))
+        "gcp.securitycenter.ResourceValueConfig"
+    else if (std.mem.eql(u8, asset_type, "binaryauthorization.googleapis.com/Policy"))
+        "gcp.binaryauthorization.Policy"
+    else if (std.mem.eql(u8, asset_type, "binaryauthorization.googleapis.com/Attestor"))
+        "gcp.binaryauthorization.Attestor"
+    else if (std.mem.eql(u8, asset_type, "privateca.googleapis.com/CaPool"))
+        "gcp.privateca.CaPool"
+    else if (std.mem.eql(u8, asset_type, "privateca.googleapis.com/CertificateAuthority"))
+        "gcp.privateca.CertificateAuthority"
+    else if (std.mem.eql(u8, asset_type, "privateca.googleapis.com/CertificateTemplate"))
+        "gcp.privateca.CertificateTemplate"
+    else if (std.mem.eql(u8, asset_type, "privateca.googleapis.com/Certificate"))
+        "gcp.privateca.Certificate"
     else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/Folder"))
         "gcp.resourcemanager.Folder"
     else if (std.mem.eql(u8, asset_type, "cloudresourcemanager.googleapis.com/Project"))
@@ -630,6 +652,17 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "cloudkms.googleapis.com/CryptoKeyVersion", .prefix = "//cloudkms.googleapis.com/" },
         .{ .asset_type = "secretmanager.googleapis.com/Secret", .prefix = "//secretmanager.googleapis.com/" },
         .{ .asset_type = "secretmanager.googleapis.com/SecretVersion", .prefix = "//secretmanager.googleapis.com/" },
+        .{ .asset_type = "securitycenter.googleapis.com/Source", .prefix = "//securitycenter.googleapis.com/" },
+        .{ .asset_type = "securitycenter.googleapis.com/NotificationConfig", .prefix = "//securitycenter.googleapis.com/" },
+        .{ .asset_type = "securitycenter.googleapis.com/MuteConfig", .prefix = "//securitycenter.googleapis.com/" },
+        .{ .asset_type = "securitycenter.googleapis.com/BigQueryExport", .prefix = "//securitycenter.googleapis.com/" },
+        .{ .asset_type = "securitycenter.googleapis.com/ResourceValueConfig", .prefix = "//securitycenter.googleapis.com/" },
+        .{ .asset_type = "binaryauthorization.googleapis.com/Policy", .prefix = "//binaryauthorization.googleapis.com/" },
+        .{ .asset_type = "binaryauthorization.googleapis.com/Attestor", .prefix = "//binaryauthorization.googleapis.com/" },
+        .{ .asset_type = "privateca.googleapis.com/CaPool", .prefix = "//privateca.googleapis.com/" },
+        .{ .asset_type = "privateca.googleapis.com/CertificateAuthority", .prefix = "//privateca.googleapis.com/" },
+        .{ .asset_type = "privateca.googleapis.com/CertificateTemplate", .prefix = "//privateca.googleapis.com/" },
+        .{ .asset_type = "privateca.googleapis.com/Certificate", .prefix = "//privateca.googleapis.com/" },
         .{ .asset_type = "cloudresourcemanager.googleapis.com/Folder", .prefix = "//cloudresourcemanager.googleapis.com/" },
         .{ .asset_type = "cloudresourcemanager.googleapis.com/Project", .prefix = "//cloudresourcemanager.googleapis.com/" },
         .{ .asset_type = "cloudresourcemanager.googleapis.com/Lien", .prefix = "//cloudresourcemanager.googleapis.com/" },

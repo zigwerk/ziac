@@ -40,6 +40,13 @@ pub const sources = [_]Source{
         .document_sha256 = "a1d4bccc0c316e9de358a7289fffcd91fb29dbc6b44bf3f9a1e10b9474440296",
     },
     .{
+        .id = "binaryauthorization:v1",
+        .version = "v1",
+        .revision = "20260703",
+        .discovery_url = "https://binaryauthorization.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "d1200ac1c6c0fa48969db1c2298c5f1806c6c08334bd16b4f496c4f2e0bc9cbb",
+    },
+    .{
         .id = "cloudbilling:v1",
         .version = "v1",
         .revision = "20260710",
@@ -166,6 +173,13 @@ pub const sources = [_]Source{
         .document_sha256 = "670701cb42522540ae5af279318d8db584cbc442953d6873ebeed15b8fdd526b",
     },
     .{
+        .id = "privateca:v1",
+        .version = "v1",
+        .revision = "20260629",
+        .discovery_url = "https://privateca.googleapis.com/$discovery/rest?version=v1",
+        .document_sha256 = "662081545e79d34242c1e373228225eebc2182378c39e45d752ab19b1e4b3050",
+    },
+    .{
         .id = "redis:v1",
         .version = "v1",
         .revision = "20260707",
@@ -178,6 +192,13 @@ pub const sources = [_]Source{
         .revision = "20260705",
         .discovery_url = "https://secretmanager.googleapis.com/$discovery/rest?version=v1",
         .document_sha256 = "f04b20cabd72df1a41c311153a2d674fff9f7b6299d84c426da3a925c68c7131",
+    },
+    .{
+        .id = "securitycenter:v2",
+        .version = "v2",
+        .revision = "20260710",
+        .discovery_url = "https://securitycenter.googleapis.com/$discovery/rest?version=v2",
+        .document_sha256 = "91e993e41abb8bbd2ab9d9bfd767a546068f5f2db527f26dfcb94feae26c1e1a",
     },
     .{
         .id = "servicenetworking:v1",

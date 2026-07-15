@@ -184,3 +184,28 @@ test "Cloud Billing adapters parse catalog prices and normalized detailed export
     try std.testing.expect(std.mem.indexOf(u8, query, "cost_micros") != null);
     try std.testing.expect(std.mem.indexOf(u8, query, "credit_micros") != null);
 }
+
+test "security foundation estimates separate priced CA usage from no-charge admission policy" {
+    const prices = [_]ziac.cost.SkuPrice{
+        .{ .sku_id = "private-ca-enterprise", .region = "europe-west1", .unit = "ca-month", .unit_quantity = 1, .unit_price_micros = 100_000_000 },
+        .{ .sku_id = "private-ca-certificate", .region = "europe-west1", .unit = "certificate", .unit_quantity = 1, .unit_price_micros = 300_000 },
+    };
+    const estimate = try ziac.cost.securityFoundationConfigurationEstimate(&prices, .{
+        .resource_id = "gcp.privateca.CaPool.europe-west1.application-trust",
+        .region = "europe-west1",
+        .private_ca_enterprise_sku_id = "private-ca-enterprise",
+        .private_ca_certificate_sku_id = "private-ca-certificate",
+        .active_enterprise_ca_months = 1,
+        .issued_certificates = 10,
+        .observed_at_millis = 1_000,
+    });
+    try std.testing.expectEqual(@as(?i64, 103_000_000), estimate.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Origin.configuration_estimate, estimate.origin);
+
+    const admission = try ziac.cost.binaryAuthorizationConfigurationEstimate(
+        "gcp.binaryauthorization.Policy.global.application-images",
+        1_000,
+    );
+    try std.testing.expectEqual(@as(?i64, 0), admission.amount_micros);
+    try std.testing.expectEqual(ziac.cost.Confidence.explicit_usage, admission.confidence);
+}

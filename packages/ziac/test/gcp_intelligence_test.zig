@@ -297,6 +297,48 @@ test "governance graphs synthesize exact Org Policy Tags and Access Context auth
     try std.testing.expect(requirements.hasPermission("accesscontextmanager.servicePerimeters.delete"));
 }
 
+test "security foundation graphs synthesize exact SCC Binary Authorization and Private CA authority" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    const provider = ziac.gcp.ProviderConfig{ .project_id = "security-prod", .primary_region = "europe-west1" };
+    var notification = try ziac.gcp.securitycenter.NotificationConfig.build(std.testing.allocator, provider, .{
+        .name = "critical-findings",
+        .parent = ziac.PublicOutput([]const u8).known("organizations/123456789"),
+        .location = "global",
+        .pubsub_topic = ziac.PublicOutput([]const u8).known("projects/security-prod/topics/security-findings"),
+        .filter = "severity=\"CRITICAL\"",
+    });
+    defer notification.deinit(std.testing.allocator);
+    var policy = try ziac.gcp.binary_authorization.Policy.build(std.testing.allocator, provider, .{
+        .name = "runtime-admission",
+        .project = ziac.PublicOutput([]const u8).known("projects/security-prod"),
+        .default_rule = .{ .evaluation = .always_allow, .enforcement = .audit_only },
+    });
+    defer policy.deinit(std.testing.allocator);
+    var pool = try ziac.gcp.private_ca.CaPool.build(std.testing.allocator, provider, .{
+        .name = "workload-trust",
+        .project = ziac.PublicOutput([]const u8).known("projects/security-prod"),
+        .location = "europe-west1",
+        .tier = .enterprise,
+        .maximum_lifetime_seconds = 2_592_000,
+        .removal_policy = .delete,
+    });
+    defer pool.deinit(std.testing.allocator);
+    try graph.addResource(notification.node);
+    try graph.addResource(policy.node);
+    try graph.addResource(pool.node);
+
+    var requirements = try ziac.gcp.intelligence.synthesizeGraph(std.testing.allocator, &graph);
+    defer requirements.deinit(std.testing.allocator);
+    try std.testing.expect(contains(requirements.apis, "securitycenter.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "binaryauthorization.googleapis.com"));
+    try std.testing.expect(contains(requirements.apis, "privateca.googleapis.com"));
+    try std.testing.expect(requirements.hasPermission("securitycenter.notificationConfigs.create"));
+    try std.testing.expect(requirements.hasPermission("binaryauthorization.policy.update"));
+    try std.testing.expect(requirements.hasPermission("privateca.caPools.create"));
+    try std.testing.expect(requirements.hasPermission("privateca.caPools.delete"));
+}
+
 test "topology advice respects residency and Cockroach locality without mutating policy" {
     const intelligence = ziac.gcp.intelligence;
     var advice = try intelligence.adviseTopology(std.testing.allocator, .{

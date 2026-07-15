@@ -9,6 +9,9 @@ const container_platform_provider = @import("container_platform_provider.zig");
 const monitoring_provider = @import("monitoring_provider.zig");
 const organization_provider = @import("organization_provider.zig");
 const governance_provider = @import("governance_provider.zig");
+const securitycenter_provider = @import("securitycenter_provider.zig");
+const binary_authorization_provider = @import("binary_authorization_provider.zig");
+const private_ca_provider = @import("private_ca_provider.zig");
 const logging_provider = @import("logging_provider.zig");
 const compute_provider = @import("compute_provider.zig");
 const compute_workloads_provider = @import("compute_workloads_provider.zig");
@@ -80,6 +83,9 @@ pub const managed_type_names = [_][]const u8{
     "gcp.bigquery.TableIamMember",
     "gcp.bigquery.View",
     "gcp.billing.ProjectBillingAssociation",
+    "gcp.binaryauthorization.Attestor",
+    "gcp.binaryauthorization.AttestorIamMember",
+    "gcp.binaryauthorization.Policy",
     "gcp.certificatemanager.Certificate",
     "gcp.certificatemanager.CertificateMap",
     "gcp.certificatemanager.CertificateMapEntry",
@@ -201,6 +207,12 @@ pub const managed_type_names = [_][]const u8{
     "gcp.parametermanager.ParameterVersion",
     "gcp.parametermanager.Template",
     "gcp.parametermanager.TemplateVersion",
+    "gcp.privateca.CaPool",
+    "gcp.privateca.CaPoolIamMember",
+    "gcp.privateca.Certificate",
+    "gcp.privateca.CertificateAuthority",
+    "gcp.privateca.CertificateTemplate",
+    "gcp.privateca.CertificateTemplateIamMember",
     "gcp.project.Service",
     "gcp.pubsub.Schema",
     "gcp.pubsub.Snapshot",
@@ -223,6 +235,11 @@ pub const managed_type_names = [_][]const u8{
     "gcp.secret.Secret",
     "gcp.secret.SecretIamMember",
     "gcp.secret.SecretVersion",
+    "gcp.securitycenter.BigQueryExport",
+    "gcp.securitycenter.MuteConfig",
+    "gcp.securitycenter.NotificationConfig",
+    "gcp.securitycenter.ResourceValueConfig",
+    "gcp.securitycenter.Source",
     "gcp.servicenetworking.Connection",
     "gcp.serviceusage.ServiceIdentity",
     "gcp.spanner.Backup",
@@ -286,6 +303,9 @@ pub const LiveProvider = struct {
         if (isType(node, service_account_type)) return self.readServiceAccount(context, node, null);
         if (organization_provider.Handler.supports(node)) return self.organizationHandler().read(context, node, null);
         if (governance_provider.Handler.supports(node)) return self.governanceHandler().read(context, node, null);
+        if (securitycenter_provider.Handler.supports(node)) return self.securityCenterHandler().read(context, node, null);
+        if (binary_authorization_provider.Handler.supports(node)) return self.binaryAuthorizationHandler().read(context, node, null);
+        if (private_ca_provider.Handler.supports(node)) return self.privateCaHandler().read(context, node, null);
         if (iam_provider.supports(node)) return self.iamHandler().read(context, node, null);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().read(context, node, null);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().read(context, node, null);
@@ -335,6 +355,9 @@ pub const LiveProvider = struct {
         if (isType(node, cloud_run_service_type)) return run_provider.Handler.diff(context, node, observed);
         if (organization_provider.Handler.supports(node)) return organization_provider.Handler.diff(context, node, observed);
         if (governance_provider.Handler.supports(node)) return governance_provider.Handler.diff(context, node, observed);
+        if (securitycenter_provider.Handler.supports(node)) return securitycenter_provider.Handler.diff(context, node, observed);
+        if (binary_authorization_provider.Handler.supports(node)) return binary_authorization_provider.Handler.diff(context, node, observed);
+        if (private_ca_provider.Handler.supports(node)) return private_ca_provider.Handler.diff(context, node, observed);
         if (run_workloads_provider.supports(node)) return run_workloads_provider.Handler.diff(context, node, observed);
         if (run_iam_provider.supports(node)) return run_iam_provider.Handler.diff(context, node, observed);
         if (iam_provider.supports(node)) return iam_provider.Handler.diff(context, node, observed);
@@ -389,6 +412,9 @@ pub const LiveProvider = struct {
         if (isType(node, service_account_type)) return self.createServiceAccount(context, node);
         if (organization_provider.Handler.supports(node)) return self.organizationHandler().create(context, node);
         if (governance_provider.Handler.supports(node)) return self.governanceHandler().create(context, node);
+        if (securitycenter_provider.Handler.supports(node)) return self.securityCenterHandler().create(context, node);
+        if (binary_authorization_provider.Handler.supports(node)) return self.binaryAuthorizationHandler().create(context, node);
+        if (private_ca_provider.Handler.supports(node)) return self.privateCaHandler().create(context, node);
         if (iam_provider.supports(node)) return self.iamHandler().create(context, node);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().create(context, node);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().create(context, node);
@@ -437,6 +463,9 @@ pub const LiveProvider = struct {
         if (isType(node, service_account_type)) return self.updateServiceAccount(context, node, observed.physical_id);
         if (organization_provider.Handler.supports(node)) return self.organizationHandler().update(context, node, observed);
         if (governance_provider.Handler.supports(node)) return self.governanceHandler().update(context, node, observed);
+        if (securitycenter_provider.Handler.supports(node)) return self.securityCenterHandler().update(context, node, observed);
+        if (binary_authorization_provider.Handler.supports(node)) return self.binaryAuthorizationHandler().update(context, node, observed);
+        if (private_ca_provider.Handler.supports(node)) return self.privateCaHandler().update(context, node, observed);
         if (iam_provider.supports(node)) return self.iamHandler().update(context, node, observed.physical_id);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().update(context, node, observed);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().update(context, node, observed);
@@ -485,6 +514,9 @@ pub const LiveProvider = struct {
         if (isType(node, service_account_type)) return self.deleteServiceAccount(context, physical_id);
         if (organization_provider.Handler.supports(node)) return self.organizationHandler().delete(context, node, physical_id);
         if (governance_provider.Handler.supports(node)) return self.governanceHandler().delete(context, node, physical_id);
+        if (securitycenter_provider.Handler.supports(node)) return self.securityCenterHandler().delete(context, node, physical_id);
+        if (binary_authorization_provider.Handler.supports(node)) return self.binaryAuthorizationHandler().delete(context, node, physical_id);
+        if (private_ca_provider.Handler.supports(node)) return self.privateCaHandler().delete(context, node, physical_id);
         if (iam_provider.supports(node)) return self.iamHandler().delete(context, node, physical_id);
         if (iam_admin_provider.supports(node)) return self.iamAdminHandler().delete(context, node, physical_id);
         if (build_delivery_provider.Handler.supports(node)) return self.buildDeliveryHandler().delete(context, node, physical_id);
@@ -543,6 +575,9 @@ pub const LiveProvider = struct {
         }
         if (organization_provider.Handler.supports(node)) return self.organizationHandler().importResource(context, node, physical_id);
         if (governance_provider.Handler.supports(node)) return self.governanceHandler().importResource(context, node, physical_id);
+        if (securitycenter_provider.Handler.supports(node)) return self.securityCenterHandler().importResource(context, node, physical_id);
+        if (binary_authorization_provider.Handler.supports(node)) return self.binaryAuthorizationHandler().importResource(context, node, physical_id);
+        if (private_ca_provider.Handler.supports(node)) return self.privateCaHandler().importResource(context, node, physical_id);
         if (isType(node, project_service_type)) {
             const result = try self.readProjectService(context, node);
             return switch (result) {
@@ -1330,6 +1365,18 @@ pub const LiveProvider = struct {
     }
 
     fn governanceHandler(self: *LiveProvider) governance_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn securityCenterHandler(self: *LiveProvider) securitycenter_provider.Handler {
+        return .{ .client = self.client };
+    }
+
+    fn binaryAuthorizationHandler(self: *LiveProvider) binary_authorization_provider.Handler {
+        return .{ .client = self.client };
+    }
+
+    fn privateCaHandler(self: *LiveProvider) private_ca_provider.Handler {
         return .{ .client = self.client, .operation_policy = self.operation_policy };
     }
 

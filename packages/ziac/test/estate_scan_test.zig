@@ -201,3 +201,26 @@ test "estate scan maps Firestore databases without claiming unsupported child di
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.firestore.Database") != null);
     try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "\"physical_id\":\"projects/acme-prod/databases/documents\"") != null);
 }
+
+test "estate scan maps security foundations to managed identities" {
+    var client = ziac.estate.ScriptedClient.init(std.testing.allocator);
+    defer client.deinit();
+    try client.addPage(
+        \\{"results":[
+        \\{"name":"//securitycenter.googleapis.com/organizations/123/locations/global/notificationConfigs/critical","assetType":"securitycenter.googleapis.com/NotificationConfig","project":"projects/123","location":"global","displayName":"critical"},
+        \\{"name":"//binaryauthorization.googleapis.com/projects/acme-prod/attestors/release","assetType":"binaryauthorization.googleapis.com/Attestor","project":"projects/123","location":"global","displayName":"release"},
+        \\{"name":"//privateca.googleapis.com/projects/acme-prod/locations/europe-west1/caPools/workload","assetType":"privateca.googleapis.com/CaPool","project":"projects/123","location":"europe-west1","displayName":"workload"}
+        \\]}
+    );
+    var scan = try ziac.estate.scanAlloc(std.testing.allocator, client.client(), .{
+        .identity = .{ .provider = .google, .verified = true, .subject = "subject" },
+        .entitlement = .pro,
+        .connection = .{ .status = .connected, .project_id = "acme-prod" },
+        .observed_at_millis = 1_783_764_000_000,
+    });
+    defer scan.deinit();
+    try std.testing.expectEqual(@as(usize, 3), scan.resource_count);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.securitycenter.NotificationConfig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.binaryauthorization.Attestor") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scan.artifact, "gcp.privateca.CaPool") != null);
+}

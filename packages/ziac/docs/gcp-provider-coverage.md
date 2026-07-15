@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 196 managed GCP resource types.
+The current deterministic provider gate contains 210 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -71,6 +71,23 @@ VPC Service Controls membership while consuming shared organization-wide tag
 and access roots as typed outputs. Exact permission synthesis, Cloud Asset
 identity, named governance canvas edges and explicit zero-dollar management
 estimates are synchronized. See `gcp-governance-boundary.md`.
+
+### Security Command Center, Binary Authorization and Private CA
+
+M80 adds fourteen managed resources across Security Command Center v2, Binary
+Authorization v1 and Certificate Authority Service v1. Finding routes, static
+and dynamic mute policy, resource-value policy, image admission, attestors,
+private trust pools, authorities, templates, certificates and exact IAM are
+typed and importable.
+
+`SecurityFindingPipeline`, `TrustedArtifactPolicy` and
+`PrivateCertificateAuthority` compose common security-platform graphs. Private
+CA operations are resumable; etags and exact masks protect synchronous updates;
+unrelated IAM is preserved. CA state transitions and certificate revocation are
+governed actions and cannot occur during ordinary reconciliation. Exact
+deployer/runtime authority, Cloud Asset identity, security canvas edges and
+explicit cost assumptions are synchronized. See
+`gcp-security-foundations.md`.
 
 ### KMS and Secret Manager security lifecycle
 

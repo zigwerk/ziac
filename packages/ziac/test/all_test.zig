@@ -1,10 +1,19 @@
 comptime {
+    _ = @import("gcp_security_foundation_qualification_test.zig");
     _ = @import("gcp_governance_orgpolicy_test.zig");
     _ = @import("gcp_governance_tags_test.zig");
     _ = @import("gcp_governance_access_test.zig");
     _ = @import("gcp_governance_live_provider_test.zig");
     _ = @import("gcp_governance_components_test.zig");
     _ = @import("gcp_governance_product_test.zig");
+    _ = @import("gcp_securitycenter_test.zig");
+    _ = @import("gcp_binary_authorization_test.zig");
+    _ = @import("gcp_private_ca_test.zig");
+    _ = @import("gcp_private_ca_live_provider_test.zig");
+    _ = @import("gcp_security_foundation_components_test.zig");
+    _ = @import("gcp_private_ca_actions_test.zig");
+    _ = @import("gcp_securitycenter_live_provider_test.zig");
+    _ = @import("gcp_binary_authorization_live_provider_test.zig");
     _ = @import("gcp_kms_secret_actions_test.zig");
     _ = @import("gcp_kms_secret_product_test.zig");
     _ = @import("gcp_kms_live_provider_test.zig");

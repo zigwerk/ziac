@@ -194,6 +194,7 @@ fn appendResource(
     try appendBuildDeliveryDetails(output, allocator, item.node);
     try appendCloudDeployDetails(output, allocator, item.node);
     try appendGovernanceDetails(output, allocator, item.node);
+    try appendSecurityFoundationDetails(output, allocator, item.node);
     try appendOrganizationFoundationDetails(output, allocator, item.node);
     try appendKmsSecretDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
@@ -242,6 +243,7 @@ fn isNoChargeFoundationType(type_name: []const u8) bool {
         std.mem.startsWith(u8, type_name, "gcp.orgpolicy.") or
         std.mem.startsWith(u8, type_name, "gcp.tags.") or
         std.mem.startsWith(u8, type_name, "gcp.accesscontextmanager.") or
+        std.mem.startsWith(u8, type_name, "gcp.binaryauthorization.") or
         std.mem.eql(u8, type_name, "gcp.billing.ProjectBillingAssociation") or
         std.mem.eql(u8, type_name, "gcp.serviceusage.ServiceIdentity") or
         std.mem.eql(u8, type_name, "gcp.project.Service");
@@ -283,6 +285,48 @@ fn appendGovernanceDetails(output: *std.ArrayList(u8), allocator: std.mem.Alloca
     try appendNestedListCount(output, allocator, node, "dry_run_spec", "rules", "dry_run_rule_count");
     try appendNestedListCount(output, allocator, node, "status", "restricted_services", "restricted_service_count");
     try appendNestedListCount(output, allocator, node, "dry_run", "restricted_services", "dry_run_restricted_service_count");
+    try output.append(allocator, '}');
+}
+
+fn appendSecurityFoundationDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.securitycenter.Source"))
+        "finding_source"
+    else if (std.mem.eql(u8, node.type_name, "gcp.securitycenter.NotificationConfig"))
+        "finding_notification"
+    else if (std.mem.eql(u8, node.type_name, "gcp.securitycenter.MuteConfig"))
+        "finding_mute"
+    else if (std.mem.eql(u8, node.type_name, "gcp.securitycenter.BigQueryExport"))
+        "finding_export"
+    else if (std.mem.eql(u8, node.type_name, "gcp.securitycenter.ResourceValueConfig"))
+        "resource_value"
+    else if (std.mem.eql(u8, node.type_name, "gcp.binaryauthorization.Policy"))
+        "admission_policy"
+    else if (std.mem.eql(u8, node.type_name, "gcp.binaryauthorization.Attestor"))
+        "artifact_attestor"
+    else if (std.mem.eql(u8, node.type_name, "gcp.binaryauthorization.AttestorIamMember"))
+        "attestor_iam"
+    else if (std.mem.eql(u8, node.type_name, "gcp.privateca.CaPool"))
+        "trust_pool"
+    else if (std.mem.eql(u8, node.type_name, "gcp.privateca.CertificateAuthority"))
+        "certificate_issuer"
+    else if (std.mem.eql(u8, node.type_name, "gcp.privateca.CertificateTemplate"))
+        "certificate_template"
+    else if (std.mem.eql(u8, node.type_name, "gcp.privateca.Certificate"))
+        "issued_certificate"
+    else if (std.mem.eql(u8, node.type_name, "gcp.privateca.CaPoolIamMember") or
+        std.mem.eql(u8, node.type_name, "gcp.privateca.CertificateTemplateIamMember"))
+        "private_ca_iam"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"security\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "filter", "filter");
+    try appendOptionalStorageString(output, allocator, node, "config_type", "mute_type");
+    try appendOptionalStorageString(output, allocator, node, "tier", "tier");
+    try appendOptionalStorageString(output, allocator, node, "authority_type", "authority_type");
+    try appendOptionalStorageString(output, allocator, node, "key_algorithm", "key_algorithm");
+    try appendOptionalStorageString(output, allocator, node, "removal_policy", "removal_policy");
+    try appendStorageListCount(output, allocator, node, "public_keys", "public_key_count");
     try output.append(allocator, '}');
 }
 
@@ -337,6 +381,8 @@ fn iamEdgeDetails(role: []const u8) ?IamEdgeDetails {
         .{ .role = "roles/cloudsql.instanceUser", .access = "login", .permission = "cloudsql.instances.login" },
         .{ .role = "roles/cloudkms.cryptoKeyDecrypter", .access = "decrypt", .permission = "cloudkms.cryptoKeyVersions.useToDecrypt" },
         .{ .role = "roles/cloudkms.cryptoKeyEncrypterDecrypter", .access = "read_write", .permission = "cloudkms.cryptoKeyVersions.useToEncrypt" },
+        .{ .role = "roles/binaryauthorization.attestorsVerifier", .access = "verify", .permission = "binaryauthorization.attestors.verifyImageAttested" },
+        .{ .role = "roles/privateca.certificateRequester", .access = "issue", .permission = "privateca.certificates.create" },
         .{ .role = "roles/datastore.user", .access = "read_write", .permission = "datastore.entities.create" },
         .{ .role = "roles/datastore.viewer", .access = "read", .permission = "datastore.entities.get" },
         .{ .role = "roles/iam.workloadIdentityUser", .access = "invoke", .permission = "iam.serviceAccounts.getAccessToken" },
@@ -437,7 +483,9 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         std.mem.startsWith(u8, node.type_name, "gcp.artifact.") or
         std.mem.startsWith(u8, node.type_name, "gcp.deploy.") or
         std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
-        std.mem.startsWith(u8, node.type_name, "gcp.eventarc."))
+        std.mem.startsWith(u8, node.type_name, "gcp.eventarc.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.privateca.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.securitycenter."))
     {
         const location = objectField(node.inputs, "location") orelse return null;
         return if (location == .string) location.string else null;
@@ -1418,6 +1466,12 @@ fn resourceScope(node: resource.ResourceNode, regions: []const []const u8) []con
         std.mem.eql(u8, node.type_name, "gcp.tags.TagHold") or
         std.mem.startsWith(u8, node.type_name, "gcp.accesscontextmanager.")) return "organization";
     if (std.mem.eql(u8, node.type_name, "gcp.tags.TagBinding")) return "project";
+    if (std.mem.startsWith(u8, node.type_name, "gcp.securitycenter.")) {
+        const parent = objectString(node, "parent") orelse objectString(node, "organization") orelse return "hierarchy";
+        if (std.mem.startsWith(u8, parent, "organizations/")) return "organization";
+        if (std.mem.startsWith(u8, parent, "folders/")) return "folder";
+        return "project";
+    }
     if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Folder")) return "folder";
     if (std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Project") or
         std.mem.eql(u8, node.type_name, "gcp.resourcemanager.Lien") or
@@ -1452,6 +1506,12 @@ fn isGlobalType(type_name: []const u8) bool {
 }
 
 fn edgeKind(from_node: ?resource.ResourceNode, to_id: []const u8, from_type: []const u8, to_type: []const u8) []const u8 {
+    if (std.mem.eql(u8, from_type, "gcp.securitycenter.NotificationConfig") and std.mem.eql(u8, to_type, "gcp.pubsub.Topic")) return "finding_notification";
+    if (std.mem.eql(u8, from_type, "gcp.securitycenter.BigQueryExport") and std.mem.eql(u8, to_type, "gcp.bigquery.Dataset")) return "finding_export";
+    if (std.mem.eql(u8, from_type, "gcp.binaryauthorization.Policy") and std.mem.eql(u8, to_type, "gcp.binaryauthorization.Attestor")) return "admission_attestor";
+    if (std.mem.eql(u8, from_type, "gcp.privateca.CertificateAuthority") and std.mem.eql(u8, to_type, "gcp.privateca.CaPool")) return "trust_pool";
+    if (std.mem.eql(u8, from_type, "gcp.privateca.Certificate") and std.mem.eql(u8, to_type, "gcp.privateca.CertificateTemplate")) return "certificate_template";
+    if (std.mem.eql(u8, from_type, "gcp.privateca.Certificate") and std.mem.eql(u8, to_type, "gcp.privateca.CertificateAuthority")) return "certificate_issuer";
     if (std.mem.eql(u8, from_type, "gcp.orgpolicy.Policy") and
         (std.mem.eql(u8, to_type, "gcp.resourcemanager.Project") or std.mem.eql(u8, to_type, "gcp.resourcemanager.Folder"))) return "policy_scope";
     if (std.mem.eql(u8, from_type, "gcp.tags.TagValue") and std.mem.eql(u8, to_type, "gcp.tags.TagKey")) return "tag_membership";

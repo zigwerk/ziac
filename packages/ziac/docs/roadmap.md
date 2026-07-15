@@ -1213,3 +1213,28 @@ root TypeScript checks, static secret checks and non-root arm64 container probe
 pass. The authenticated runner requires ADC, an explicit disposable scope and
 exact confirmation, performs second-state import/no-op proof, and retains
 governance resources for operator-owned cleanup.
+
+M80 is locally complete and awaiting authenticated disposable-project
+qualification. Fourteen managed resources add Security Command Center v2
+sources, finding routes, mutes, exports and resource-value policy; Binary
+Authorization project policy, attestors and additive IAM; and Private CA pools,
+authorities, templates, certificates and additive IAM.
+
+`SecurityFindingPipeline`, `TrustedArtifactPolicy` and
+`PrivateCertificateAuthority` compile optional SCC policy, image admission and
+retained workload trust into one graph. Exact masks, etags, operation resume,
+immutable replacement, additive IAM and server outputs are covered. CA state
+transitions and certificate revocation require payload-bound governed actions
+and never occur during ordinary reconciliation.
+
+Permission synthesis separates security deployer authority from runtime
+attestor verification and certificate requests. Supported Cloud Asset identity,
+security-specific canvas relationships and explicit SCC/Private CA cost
+assumptions are synchronized. See `docs/gcp-security-foundations.md`.
+
+The M80 Testing v2 package gate discovers and executes 898 tests: 897 pass, one
+credential-gated test skips, and none fail or remain pending; no leaks or logged
+errors are reported. The catalog reports 210 managed resources. Public examples
+pass. The fail-closed authenticated runner requires ADC, a disposable project
+and exact confirmation, proves second-state import/no-op, retains security
+resources, and excludes CA transitions and certificate revocation.

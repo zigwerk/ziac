@@ -234,7 +234,7 @@ isolated serializer tests.
 - [x] M77 KMS IAM/version lifecycle, Secret Manager replication/rotation/IAM.
 - [x] M78 folders, projects, billing association, service identities and liens.
 - [x] M79 organization policy, tags, access policies and VPC Service Controls.
-- [ ] M80 Security Command Center, Binary Authorization and CA Service.
+- [x] M80 Security Command Center, Binary Authorization and CA Service.
 
 ## M81+: Analytics, Integration And AI
 
@@ -411,3 +411,27 @@ leaks or logged errors are reported. Examples, installation, migration, root
 TypeScript and the complete release gate pass, including the Linux arm64
 non-root container probe. Authenticated release/rollout proof remains an
 external disposable-project gate and is not represented as local evidence.
+
+## M80 Evidence
+
+M80 is locally complete with 210 managed resources. Fourteen security types
+cover Security Command Center sources, notification routes, mutes, BigQuery
+exports and resource-value policy; Binary Authorization project policy,
+attestors and additive IAM; and Private CA pools, authorities, templates,
+certificates and additive IAM.
+
+`SecurityFindingPipeline`, `TrustedArtifactPolicy` and
+`PrivateCertificateAuthority` provide the opinionated layer. The provider uses
+exact masks and etags, checkpoints Private CA operations, preserves unrelated
+IAM, retains permanent and high-consequence resources, and moves CA state
+changes and certificate revocation behind payload-bound governed actions.
+Exact deployer/runtime permissions, supported Cloud Asset identities, security
+canvas relationships and explicit SCC/Private CA usage estimates are
+synchronized.
+
+The Testing v2 package gate discovers and executes 898 tests: 897 pass, one
+credential-gated test skips, and none fail or remain pending; no leaks or
+logged errors are reported. Public examples pass. The fail-closed
+`scripts/qualify-security-foundation.sh` runner requires ADC, a disposable
+project and exact confirmation, proves second-state import/no-op, and excludes
+CA transitions and certificate revocation from automatic execution.
