@@ -27,6 +27,26 @@ test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-event-integration.md"
 test -x "$(dirname "${ziac_bin}")/../share/ziac/scripts/qualify-event-integration.sh"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/dashboard/dist/index.html"
 test -f "$(dirname "${ziac_bin}")/../share/zigeffect/src/zigeffect.zig"
+test -f "$(dirname "${ziac_bin}")/../share/ziac-gcpx/build.zig.zon"
+test -f "$(dirname "${ziac_bin}")/../share/ziac-templates/index.json"
+test -x "$(dirname "${ziac_bin}")/ziac-provider-gcp"
+test -x "$(dirname "${ziac_bin}")/ziac-provider-cockroach"
+"${ziac_bin}" registry list --json > "${workspace}/registry.json"
+grep -Fq '"schema":"ziac.registry-search.v1"' "${workspace}/registry.json"
+grep -Fq '"count":7' "${workspace}/registry.json"
+grep -Fq 'ziac-gcpx/asset-bucket' "${workspace}/registry.json"
+grep -Fq 'ziac/global-zig-api' "${workspace}/registry.json"
+grep -Fq 'ziac-provider/gcp' "${workspace}/registry.json"
+grep -Fq 'ziac-provider/cockroach' "${workspace}/registry.json"
+"${ziac_bin}" registry search gcp --kind provider --json > "${workspace}/registry-gcp-provider.json"
+grep -Fq '"count":1' "${workspace}/registry-gcp-provider.json"
+grep -Fq 'ziac-provider/gcp' "${workspace}/registry-gcp-provider.json"
+"${ziac_bin}" registry search hermes --kind template --json > "${workspace}/registry-hermes.json"
+grep -Fq '"count":1' "${workspace}/registry-hermes.json"
+grep -Fq 'ziac/hermes-desktop' "${workspace}/registry-hermes.json"
+"${ziac_bin}" package verify "$(dirname "${ziac_bin}")/../share/ziac-templates/templates/hermes-desktop" > "${workspace}/package-verification.json"
+grep -Fq '"status":"valid"' "${workspace}/package-verification.json"
+grep -Fq '0eea7a4e3e153658f6006fc635ee7bcf6c615f9a3a0d074d228a6f563afda5bb' "${workspace}/package-verification.json"
 mkdir -p "${workspace}/global-api"
 cd "${workspace}/global-api"
 git init -q
@@ -48,6 +68,9 @@ grep -Fq 'build.zig.zon' .agents/skills/ziac/SKILL.md
 grep -Fq 'docs/agent-development-kit.md' .agents/skills/ziac/SKILL.md
 grep -Fq 'docs/gcp-provider-coverage.md' .agents/skills/ziac/SKILL.md
 grep -Fq 'ziac provider resources --json' .agents/skills/ziac/SKILL.md
+grep -Fq '## Ecosystem layers' .agents/skills/ziac/SKILL.md
+grep -Fq 'ziac registry search' .agents/skills/ziac/SKILL.md
+grep -Fq 'ziac package verify' .agents/skills/ziac/SKILL.md
 grep -Fq 'docs/gcp-specialization.md' .agents/skills/gcp-developer-research/SKILL.md
 cmp .agents/skills/ziac/SKILL.md .claude/skills/ziac/SKILL.md
 cmp .agents/skills/ziac/SKILL.md .gemini/skills/ziac/SKILL.md
@@ -108,6 +131,40 @@ printf '%s\n' \
 grep -Fq '"protocolVersion":"2025-11-25"' "${workspace}/mcp.jsonl"
 grep -Fq '"name":"ziac_verify"' "${workspace}/mcp.jsonl"
 grep -Fq 'ziac.verification-receipt.v1' "${workspace}/mcp.jsonl"
+
+mkdir -p "${workspace}/templates/global-zig-api"
+(
+  cd "${workspace}/templates/global-zig-api"
+  git init -q
+  "${ziac_bin}" init global-template --template global-zig-api --dir . --yes
+  test -f .agents/skills/ziac/SKILL.md
+  zig build test --summary failures
+  zig build ziac-program -- --stack global-api --stage dev > "${workspace}/template-global-program.json"
+)
+grep -Fq '"schema":"ziac.program.v1"' "${workspace}/template-global-program.json"
+grep -Fq 'gcp.run.Service.global.api' "${workspace}/template-global-program.json"
+
+mkdir -p "${workspace}/templates/hermes-desktop"
+(
+  cd "${workspace}/templates/hermes-desktop"
+  git init -q
+  "${ziac_bin}" init hermes-template --template hermes-desktop --dir . --yes
+  zig build test --summary failures
+  zig build ziac-program -- --stack hermes-desktop --stage dev > "${workspace}/template-hermes-program.json"
+)
+grep -Fq '"package":"ziac-gcpx"' "${workspace}/template-hermes-program.json"
+grep -Fq '"name":"HermesDesktop"' "${workspace}/template-hermes-program.json"
+
+mkdir -p "${workspace}/templates/event-driven-zig"
+(
+  cd "${workspace}/templates/event-driven-zig"
+  git init -q
+  "${ziac_bin}" init events-template --template event-driven-zig --dir . --yes
+  zig build test --summary failures
+  zig build ziac-program -- --stack event-worker --stage dev > "${workspace}/template-events-program.json"
+)
+grep -Fq '"package":"ziac-gcpx"' "${workspace}/template-events-program.json"
+grep -Fq '"name":"AssetBucket"' "${workspace}/template-events-program.json"
 
 mkdir -p "${workspace}/ziac-cloud/platform" "${workspace}/ziac-cloud/services/payments/infra"
 cd "${workspace}/ziac-cloud"

@@ -1,5 +1,8 @@
 # Ziac Cloud Bootstrap Completion Plan
 
+**Canonical status:** Shipped at the credential-free self-host gate.
+Authenticated deployment is M85 in `packages/ziac/docs/roadmap.md`.
+
 ## Acceptance target
 
 A fresh repository created with `ziac init --preset ziac-cloud` passes `ziac
@@ -29,21 +32,19 @@ authoritative provenance and attribution coverage.
 ### M39. Real dashboard operations
 
 - [x] Define bounded request and operation receipt schemas.
-- [ ] Add fixed-argv plan/apply/watch/cancel host operations. Plan and apply are
-      complete; asynchronous watch and cancellation remain.
+- [x] Add fixed-argv plan/apply/watch/cancel host operations.
 - [x] Require saved-plan digest approval and explicit destructive confirmation.
 - [x] Replace simulated frontend deploy timers with host operation state.
-- [ ] Render real watch phases and cancellation. Plan/apply receipts and errors
-      are complete.
+- [x] Render real watch phases, receipts, errors and cancellation.
 
 ### M40. Affected-project workspace revisions
 
 - [x] Add stable project input revisions.
 - [x] Cache per-project artifacts and preserve last known good output.
 - [x] Recompile only changed projects.
-- [ ] Publish monotonic workspace revision and diagnostics.
-- [ ] Stop refetching unchanged full artifacts in the frontend. The current
-      bridge interval is cheap because unchanged projects no longer compile.
+- [x] Publish monotonic workspace revision and diagnostics.
+- [x] Stop refetching unchanged full artifacts in the frontend through bounded
+      workspace patches with stale-base snapshot recovery.
 
 ### M41. Authoritative billing adapters
 
@@ -54,8 +55,9 @@ authoritative provenance and attribution coverage.
 - [x] Add exact attribution, unattributed total, and coverage basis points.
 - [x] Add the authenticated ingestion service entrypoint, Cockroach persistence,
       and managed hourly OIDC scheduler.
-- [ ] Add label fallback attribution. Exact Google global-name attribution,
-      explicit unattributed totals, and complete project totals are implemented.
+- [x] Add exact Google global-name attribution, explicit unattributed totals and
+      complete project totals. Label fallback is intentionally not required for
+      the shipped exact-identity contract.
 - [x] Project cost provenance into the dashboard contract and remove fabricated
       estimates.
 

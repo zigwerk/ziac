@@ -1,0 +1,12 @@
+{
+  "schema": "ziac.registry.v1",
+  "packages": [
+    { "name": "ziac-provider/cockroach", "version": "0.1.0", "kind": "provider", "summary": "CockroachDB Cloud and SQL resources for Ziac", "path": "providers/cockroach", "manifest_sha256": "125dec87d826925b5a0ec49e920493e53d18c082d736c0341914d09d7fb3f480", "qualification": "verified" },
+    { "name": "ziac-provider/gcp", "version": "0.1.0", "kind": "provider", "summary": "The official Google Cloud provider for Ziac", "path": "providers/gcp", "manifest_sha256": "17363a5995f9d9e8313194e104623477276dae7845903bbae745d4820739e31a", "qualification": "official" },
+    { "name": "ziac-gcpx/asset-bucket", "version": "0.1.0", "kind": "component", "summary": "A governed versioned Cloud Storage bucket and IAM graph", "path": "components/asset-bucket", "manifest_sha256": "66a60519ef2ed3a41617362258b381437650ed9e6bbaeffb6d74311e8d735b95", "qualification": "official" },
+    { "name": "ziac-gcpx/hermes-desktop", "version": "0.1.0", "kind": "component", "summary": "An OAuth-gated Hermes Desktop backend on Compute Engine", "path": "components/hermes-desktop", "manifest_sha256": "fbdbd78c1f14bb43135a2f8adfb1a9b6ea2eac2583febdf4ae80c690e421a236", "qualification": "official" },
+    { "name": "ziac/event-driven-zig", "version": "0.1.0", "kind": "template", "summary": "A Zig event worker foundation with Storage and Pub/Sub", "path": "templates/event-driven-zig", "manifest_sha256": "0f4b583efa228ceee8cc92dbc37b0c13b48e31f471b7175ed2fe4f5c2890e3ba", "qualification": "official" },
+    { "name": "ziac/global-zig-api", "version": "0.1.0", "kind": "template", "summary": "A source-built Zig API on globally routed Cloud Run", "path": "templates/global-zig-api", "manifest_sha256": "f24358ef8b8b98945a4e2910c749331fefb7e533759728f1d4033ab2f3e5579c", "qualification": "official" },
+    { "name": "ziac/hermes-desktop", "version": "0.1.0", "kind": "template", "summary": "A low-cost Hermes Desktop backend on Compute Engine", "path": "templates/hermes-desktop", "manifest_sha256": "0eea7a4e3e153658f6006fc635ee7bcf6c615f9a3a0d074d228a6f563afda5bb", "qualification": "official" }
+  ]
+}

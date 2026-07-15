@@ -39,6 +39,42 @@
       ]
     },
     {
+      "id": "gcp-hermes-compute",
+      "command": "bash scripts/qualify-hermes-compute.sh",
+      "authenticated": true,
+      "required_environment": [
+        "ZIAC_HERMES_WORKSPACE",
+        "ZIAC_LIVE_PROJECT",
+        "ZIAC_HERMES_REGION",
+        "ZIAC_HERMES_ZONE",
+        "ZIAC_HERMES_IMAGE",
+        "HERMES_DOMAIN",
+        "HERMES_DNS_ZONE",
+        "HERMES_OAUTH_CLIENT_ID",
+        "HERMES_ENV_FILE",
+        "ZIAC_HERMES_DESTRUCTIVE_CONFIRMATION"
+      ],
+      "safety_constraints": [
+        "ZIAC_LIVE_PROJECT ends in -ziac-disposable",
+        "exact destructive confirmation phrase",
+        "IAP-only SSH ingress",
+        "public ingress limited to TCP 80 and 443",
+        "Hermes ports bound to localhost",
+        "Nous OAuth gate required",
+        "automatic destroy trap"
+      ],
+      "evidence": [
+        "pinned Hermes image",
+        "reserved public address and DNS",
+        "valid HTTPS and advertised Nous OAuth",
+        "unauthenticated WebSocket denied",
+        "IAP recovery and localhost listeners",
+        "restart persistence",
+        "restored no-op plan",
+        "empty cleanup inventory"
+      ]
+    },
+    {
       "id": "cockroach-cloud-sql",
       "command": "zig build test --summary all",
       "authenticated": true,

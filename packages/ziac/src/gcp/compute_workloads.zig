@@ -248,6 +248,7 @@ pub const NetworkInterface = struct {
     subnetwork: ?output.Output([]const u8, .public) = null,
     private_ip: []const u8 = "",
     external_access: bool = false,
+    external_ip: ?output.Output([]const u8, .public) = null,
     nic_type: []const u8 = "GVNIC",
     stack_type: []const u8 = "IPV4_ONLY",
 };
@@ -723,6 +724,7 @@ fn validateInstanceControls(
     if ((std.mem.eql(u8, provisioning_model, "SPOT") or confidential) and !std.mem.eql(u8, maintenance, "TERMINATE")) return error.InvalidUpdatePolicy;
     for (interfaces, 0..) |interface, index| {
         if (interface.private_ip.len > 64 or std.mem.indexOfAny(u8, interface.private_ip, "\x00\r\n ") != null) return error.InvalidNetwork;
+        if (interface.external_ip != null and !interface.external_access) return error.InvalidNetwork;
         if (!std.mem.eql(u8, interface.nic_type, "GVNIC") and !std.mem.eql(u8, interface.nic_type, "VIRTIO_NET")) return error.InvalidNetwork;
         if (!std.mem.eql(u8, interface.stack_type, "IPV4_ONLY") and !std.mem.eql(u8, interface.stack_type, "IPV4_IPV6")) return error.InvalidNetwork;
         for (interfaces[0..index]) |previous| if (std.meta.eql(previous.network, interface.network) and std.meta.eql(previous.subnetwork, interface.subnetwork)) return error.DuplicateNetworkInterface;
@@ -779,8 +781,10 @@ fn networkInterfacesValueOwned(allocator: std.mem.Allocator, interfaces: []const
     for (interfaces, 0..) |interface, index| {
         const network = try publicOutputValue(interface.network);
         const subnetwork = try optionalPublicOutputValue(interface.subnetwork);
+        const external_ip = try optionalPublicOutputValue(interface.external_ip);
         const fields = [_]value.Field{
             .{ .name = "external_access", .value = .{ .boolean = interface.external_access } },
+            .{ .name = "external_ip", .value = external_ip },
             .{ .name = "network", .value = network },
             .{ .name = "nic_type", .value = .{ .string = interface.nic_type } },
             .{ .name = "private_ip", .value = .{ .string = interface.private_ip } },

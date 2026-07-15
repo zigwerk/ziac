@@ -1,1314 +1,450 @@
 # Ziac Roadmap
 
-Ziac is being delivered against the authoritative end-to-end design and
-implementation plan:
-
-- `docs/superpowers/specs/2026-07-10-ziac-e2e-delivery-design.md`
-- `docs/superpowers/plans/2026-07-10-ziac-e2e-delivery.md`
-
-The roadmap is acceptance-gated. A milestone is complete only when its stated
-automated and live tests pass.
-
-## Current Readiness
-
-- Package scaffold, graph, local state, CLI, fake provider, and executable:
-  implemented and tested.
-- GCP config, Artifact Registry, Cloud Run, networking, global load balancing,
-  public DNS, private DNS, and PSC resource builders: implemented with native
-  provider lifecycles and scripted conformance coverage.
-- Engine V2 canonical values, owned desired/state records, provider lifecycle,
-  refresh planning, and dependency-ordered bounded execution: implemented and
-  tested.
-- Engine V2 checkpoint/resume, atomic state persistence, writer locking,
-  refresh/import/unlock, and JSON command receipts: implemented and tested.
-- Lineage, serial, canonical desired-graph, and operation-integrity plan
-  preconditions: implemented and tested before provider access.
-- Comptime app bindings, scoped outputs, and provider-set validation: implemented
-  and compile-fail tested.
-- Production HTTP transport contract: implemented and tested with owned headers,
-  typed failures, cancellation, body limits, `Retry-After`, and credential
-  redaction.
-- Native Google ADC, authenticated Google REST/LRO clients, and the
-  version-pinned CockroachDB Cloud client: implemented and scripted-transport
-  tested without credential leakage.
-- Live GCP provider calls, raw global-routing resources, and the high-level
-  global component are implemented behind explicit safety gates. The
-  CockroachDB existing-cluster, protected cluster provisioning, SQL user,
-  database, grants, migrations, native verified-TLS, and multi-region Private
-  Service Connect slices are implemented. GCS state, saved plans, source builds,
-  canary rollback, and the credential-free release gate are implemented;
-  authenticated cloud acceptance remains pending external configuration.
-- Google RPC specialization M9 is implemented: pinned descriptor ingestion,
-  semantic contract snapshots and upgrade diffs, AIP-aware Cloud Run updates,
-  native multi-region architecture selection, graph-derived IAM/preflight,
-  topology and rollout intelligence, and fail-closed gRPC qualification.
-
-## M0: Integration And Architecture
-
-- Integrate the plan-only GCP foundation.
-- Freeze alpha and beta product scope.
-- Record the Engine V2, comptime, GCP, CockroachDB, build, state, and operations
-  architecture.
-
-Gate: authoritative design and executable implementation plan are committed,
-and the integrated baseline passes all Ziac tests and builds.
-
-## M1: Engine V2 (Complete)
-
-- Canonical resource values and input hashes.
-- Retained desired resource inputs.
-- Versioned state with physical IDs, observed values, outputs, and operation
-  handles.
-- Provider read/diff/create/update/delete/import lifecycle.
-- Refresh-aware planning and removed-resource deletion.
-- Topological zigeffect execution, reverse destroy, checkpoints, and resume.
-- Atomic local state and writer locking.
-
-Gate: a fake remote system passes create/update/replace/delete/import, drift, and
-interrupted-resume integration tests.
-
-## M2: Comptime Contracts (Complete)
-
-- Typed public and secret outputs: implemented and tested.
-- Automatic dependency derivation from output references: implemented and
-  tested.
-- Canonical provider-output inputs and state-backed provider resolution:
-  implemented and exercised by Cloud DNS global-address wiring.
-- App `Env` and binding validation: implemented and compile-fail tested.
-- Provider-set validation: implemented and compile-fail tested.
-- Stable compile-fail diagnostics: all required fixtures enforced by
-  `zig build test`.
-
-Gate: valid fixtures compile and invalid binding/provider/output fixtures fail
-with their expected Ziac diagnostic codes.
-
-## M3: Transport And Authentication (Complete)
-
-- Owned HTTP response headers, structured errors, timeout, cancellation, and
-  `Retry-After` support: complete.
-- Native Google Application Default Credentials and token caching: complete.
-- Google REST and long-running operation client: complete.
-- Version-pinned CockroachDB Cloud API client: complete.
-- `ziac auth doctor`: complete.
-
-Gate: Google and Cockroach scripted transport suites pass without leaking
-credentials.
-
-## M4: Live GCP Primitives
-
-- Project API enablement: scripted lifecycle complete; live gate pending.
-- IAM service accounts and bindings: scripted lifecycle complete; live gate
-  pending.
-- Artifact Registry: scripted lifecycle complete; live gate pending.
-- Secret Manager: scripted metadata, version, and IAM lifecycle complete; live
-  gate pending.
-- Cloud Run v2: scripted full-runtime lifecycle complete; live gate pending.
-- Live provider selection and disposable-project guard: complete; authenticated
-  smoke pending configured ADC and project.
-
-Gate: an existing image completes create/read/update/noop/destroy in one Cloud
-Run region with real physical state and outputs.
-
-## M5: Global ContainerService
-
-- Global address, serverless NEGs, backend service, URL map, HTTPS proxy, and
-  forwarding rule scripted lifecycles: complete.
-- Managed TLS, explicit certificate readiness, optional HTTP-to-HTTPS redirect,
-  and existing-zone Cloud DNS record sets: scripted lifecycles complete.
-- `ziac.gcp.global.ContainerService`: deterministic graph and example complete.
-- Premium-tier, unique-region, restricted Cloud Run ingress, and production
-  warm-instance/probe policy: implemented and tested.
-- Serverless NEG outlier detection for cross-region error reduction:
-  implemented, normalized, and enabled by the component.
-- Authenticated certificate readiness and regional failover/failback: live gate
-  harness implemented; configured live execution pending.
-
-Gate: a live two-region HTTPS service remains available during a tested regional
-failure and destroys in reverse dependency order.
-
-## M6: CockroachDB
-
-- Secret-reference provider config: complete.
-- Existing-cluster topology, endpoint outputs, retained ownership, and scripted
-  refresh/import lifecycle: complete.
-- Idempotent SQL users, generated GCP Secret Manager connection bindings, and
-  persisted-secret retry convergence: complete.
-- Direct VPC egress, static NAT addresses, and narrow public allowlists:
-  complete with scripted GCP/Cockroach lifecycles; authenticated live execution
-  pending.
-- Database, exact grants, immutable migrations, transaction retry handling,
-  concurrent serialization, high-level application database composition, and
-  native pooled SQL/TLS runtime: complete, including a disposable secure local
-  CockroachDB gate.
-- Protected Basic, Standard, and Advanced cluster provisioning: scripted
-  lifecycle complete; authenticated creation pending configured credentials.
-- GCP Private Service Connect address and endpoint lifecycles, Cockroach
-  endpoint-service enablement and connection acceptance, VPC-bound private DNS,
-  per-region Cloud Run Direct VPC bindings, and the high-level private graph:
-  complete with scripted provider and composition tests; authenticated regional
-  data-path execution remains pending.
-
-Gate: the global Cloud Run sample reads and writes CockroachDB over TLS without
-secret plaintext in state or artifacts.
-
-## M7: ZigService
-
-- Deterministic source archives and build digests: complete with native
-  sorted tar/gzip output, normalized metadata, mandatory secret/state/cache
-  exclusions, additive `.ziacignore` globs, no-follow reads, symlink rejection,
-  generated-file collision checks, and bounded source/archive sizes.
-- Cloud Build to Artifact Registry immutable image pipeline: complete.
-- `ziac.gcp.global.ZigService`: complete.
-- Typed app environment wiring into the global service: complete, including
-  provider/project validation for Secret Manager references.
-- Generated Zig 0.16.0 musl recipe: verified for amd64 and arm64 in pinned
-  distroless nonroot containers with startup and liveness probes.
-
-Remaining gate: authenticated source deployment must take a clean Zig source
-checkout to an updated, globally routed service with a working CockroachDB
-binding. The local source-to-container and complete graph gates pass; external
-GCP/Cockroach credentials, project, domain, and DNS zone are not configured in
-this checkout.
-
-## M8: Production Operations
-
-- GCS remote state with generation locking: complete, including expiring
-  writer leases, checkpoint renewal, fail-closed ADC selection, and verified
-  local migration.
-- Immutable saved plans and digest-specific destructive approval: complete,
-  including create-exclusive artifacts, current-graph validation, executor
-  confirmation, and secret-reference-only persistence.
-- Keyless GitHub WIF and isolated preview stages: complete, including native
-  GitHub external-account ADC, repository-bound stage names, scoped GCP/DNS
-  identities, saved-plan workflow template, and production-proof cleanup.
-- Canary regional rollouts, revision readiness, guarded digest rollback,
-  interruption recovery, and quota/rate diagnostics: complete.
-- Credential-free release gate, complete production example, strict live-test
-  manifest, and public operator documentation: complete.
-- Clean-checkout automated verification and authenticated end-to-end execution:
-  final gate.
-
-Gate: all automated suites and the configured live end-to-end workflow pass,
-including regional failover, database TLS, update, interruption recovery, import,
-protected data retention, and secret leak scanning.
-
-## M9: Google RPC And GCP Intelligence
-
-- Pinned Google protobuf/AIP method descriptor kernel: complete for Cloud Run.
-- Validated resource-template expansion and conservative transport selection:
-  complete.
-- Cloud Run provider migration to descriptor-owned REST bindings: complete.
-- Deterministic proto lock, descriptor-set generator, and semantic upgrade diff:
-  complete with a 25-file descriptor closure and generated snapshot.
-- AIP-aware field ownership, update masks, etags, validate-only, request IDs,
-  LRO/readiness state, typed status causes, and partial-read safety: complete as
-  reusable kernels; Cloud Run consumes masks, etags, and readiness directly.
-- Bounded unary gRPC framing, trailers, deadlines, capability audit, and REST
-  parity contract: complete. No HTTP/2 adapter is enabled until it passes the
-  complete audit; REST transcoding remains the production transport.
-- Native Cloud Run global multi-region realization with automatic fallback to a
-  controlled fleet for PSC, regional bindings, or canary control: complete.
-- IAM, org policy, quota, billing, residency, latency, Cockroach locality,
-  asset drift, service health, and SLO preflight/intelligence: deterministic
-  graph-derived kernels complete.
-
-Deterministic gate: complete. A pinned proto reproduces its lock and semantic
-snapshot; upgrade facts produce a breaking/non-breaking diff; automatic
-topology proves native and fleet paths; preflight catches IAM, API, region,
-quota, org-policy, and topology defects before mutation; incomplete gRPC
-adapters fail closed.
-
-External acceptance: a future qualified HTTP/2 adapter must prove REST/gRPC
-parity in a disposable project. Authenticated org-policy, quota, Cloud Asset,
-Monitoring, regional failover, and Cockroach data-path evidence still requires
-the live environment declared by `release/live-tests.json`.
-
-## M10: Visual Infrastructure Workbench (Complete)
-
-- Deterministic, redacted `ziac.visual.v1` exporter for desired graphs and
-  plans: complete.
-- Generated three-region Cloud Run, global load balancer, DNS, and CockroachDB
-  fixture: complete.
-- Strict browser parser, graph identity, malformed-reference rejection, region
-  catalogue, truth modes, and shared filters: complete.
-- Cloudcraft-style orthographic Three.js topology with a square grid, raised
-  global/regional/VPC/data planes, beveled resource blocks, semantic routes,
-  synchronized selection, architecture/network/VPC/dependency modes, and
-  accessible resource navigation: complete.
-- Planar contour-following topology traces with deterministic edge ports,
-  right-angle channels, translucent pastel semantics, neutral dashed
-  dependencies, flat arrowheads, and canvas-aligned IAM badges: complete.
-- Intrinsic resource-face identity (type, name, canonical ID), region/VPC slab
-  decals, exact object grounding, and resource/scope hover intelligence with
-  health, uptime, connection counts, and explicitly estimated expense:
-  complete.
-- Capacity-aware plane sizing, multi-row region placement, deterministic node
-  packing, dynamic grid/camera bounds, and non-overlap contracts through 12
-  regions and 48-resource expanded fixtures: complete.
-- Official Google Cloud product/category icon catalogue and top-face resource
-  artwork with provider-safe fallbacks: complete.
-- Product-family zones inside every slab, including deterministic Cloud Run,
-  Storage, networking, security, serverless, database, and provider grouping:
-  complete.
-- Backward-compatible visual access metadata plus same-slab read/write/invoke/
-  admin routes and permission badges: complete in the artifact parser, scene
-  model, renderer, and representative permission fixture.
-- Cloud-estate ownership hierarchy with a GCP account moat, nested global VPC
-  around regional slabs, peer third-party account placement, and hoverable
-  account/network intelligence: complete.
-- Model-owned account/network label footprints with reserved front gutters and
-  checked non-overlap against every contained slab and locality: complete.
-- Cockroach Cloud account block with exact declared-region locality tiles,
-  primary/replica roles, and one canonical cluster resource: complete.
-- Projection-aware isometric/top-down camera fitting and context-first narrow
-  overview zoom for complete account-boundary framing: complete.
-- Compact GCP-console-style command shell, tabbed resource investigation, and
-  deployment/live-log/agent dock: complete.
-- Annotated density refinement with 40px/34px command chrome, a 38px tool rail,
-  unified agent command strip, dense causal event table, and polished 108px
-  rollout dock: complete and desktop/mobile browser verified.
-- Monochrome MapLibre and deck.gl world map with Cloud Run/Cockroach locality,
-  anycast front-door overlay, inferred route arcs, semantic-only accents,
-  provenance, and accessible region controls: complete.
-- Responsive desktop/mobile behavior and causal Workbench compatibility:
-  automated and browser verified.
-
-Gate: the generated Ziac artifact passes Zig and TypeScript contract tests;
-Topology and Global Map render nonblank at desktop and mobile viewports;
-selection and filters remain synchronized; the existing causal Workbench suite
-and production build pass.
-
-## M11: Agent Contract And Authority
-
-Status: Complete. Deterministic package tests cover the contract, authority,
-durable session statechart, redacted artifacts and JSON-first CLI.
-
-- Strict `ziac.project.v1` requirements, acceptance, environment and adaptation
-  contract.
-- Capability envelopes with project/stage/provider/action/expiry boundaries.
-- Create, update, delete, region, cost, deadline and approval autonomy budgets.
-- Durable agent session state machine and versioned status/next/query/explain/
-  handoff artifacts.
-- `ziac agent` CLI backed by the same public kernel used by MCP and Workbench.
-
-Gate: an agent can orient, identify the next accepted action, query the graph
-and hand off with complete redacted evidence and no terminal parsing.
-
-## M12: Hybrid Hot-Reload Development
-
-Status: Complete. Manifest-owned build/process commands, deterministic source
-digests, the native watcher, supervised generations, readiness probes, stable
-reverse proxy, structured CLI events and failed-generation preservation are
-implemented and covered by a real child-process/proxy E2E.
-
-- `.dev` phase and explicit local/cloud/mock/proxy/skip/remote-only resource
-  adaptation.
-- Local Zig build/watch, supervised generations, stable reverse proxy, health
-  promotion, draining and failed-reload rollback.
-- Typed local public/secret bindings and local verified-TLS Cockroach strategy.
-- Incremental change classification, affected-subgraph planning, cancellation
-  and newest-save convergence.
-- `ziac dev` with structured events and automatic smoke verification.
-
-Gate: a local service hot swaps behind one stable URL; failed builds and failed
-readiness preserve the prior healthy generation; unchanged infrastructure makes
-zero provider calls.
-
-## M13: Unified Causal Logs
-
-Status: Complete. The bounded redacted store, durable JSONL session format,
-identity filters, causal explanations, authenticated Cloud Logging adapter,
-owned polling cursor, live CLI ingestion and reactive Workbench feed are
-implemented.
-
-- Bounded redacted `ziac.log.v1` events for compiler, process, proxy, provider,
-  Cloud Run, load balancer, Cockroach, checks, agents and repairs.
-- Stable event/parent/session/trace/resource/revision identities.
-- Local multiplexing, Cloud Logging cursor ingestion, suppression/drop evidence,
-  `tail`, `logs` and `explain`.
-- Live Workbench session, timeline, filters and investigation panels.
-
-Gate: local reload and scripted cloud failures share one ordered causal stream,
-redact sentinels, and remain queryable from CLI and Workbench.
-
-## M14: Fast Immutable Watch Deploy
-
-Status: Complete. Deterministic OCI planning, missing-blob-only registry
-pushes, content-addressed caching, pinned base locks, newest-save convergence,
-capability guardrails, no-traffic readiness promotion, CLI event streaming and
-measured timing/SLO receipts are implemented.
-
-- Deterministic Zig binary OCI layer/config/manifest planning against pinned
-  cached base images.
-- Registry blob negotiation and missing-blob-only upload contract.
-- Code-only `deploy --watch` path with coalescing, cancellation, tagged/no-
-  traffic verification and development traffic promotion.
-- Timed SLO receipts and strict production/capability guardrails.
-
-Gate: rapid saves deploy only the newest immutable digest, unchanged blobs are
-not uploaded, and production cannot use the watch path without exact authority.
-
-## M15: Governed Agent Tools And Infrastructure Testing
-
-Status: Complete. The deterministic scenario catalog, replay receipts,
-immutable repair proposals, MCP authority registry, response contracts,
-generated agent guidance and shared CLI/MCP simulation, proposal and declared
-verification kernel are implemented. Exact-plan apply remains in the existing
-digest/capability/approval executor and cannot be expanded by an agent tool.
-
-- Deterministic region, quota, IAM, stale-etag, interrupted-apply, LRO,
-  Cockroach-locality, secret-rotation, reload and rollback scenarios.
-- Saved evidence-backed repair proposals and requirement verification.
-- Read-only-first MCP adapter, then proposal, verification, exact-plan apply and
-  handoff tools over the same kernel.
-- Generated Codex and Claude skills with no implicit authority.
-
-Gate: CLI and MCP artifacts agree, scenarios replay exactly, proposals cannot
-mutate, and apply remains digest/capability/approval gated.
-
-## M16: Ephemeral Environments And Closed-Loop Operations
-
-Status: In progress. Repository-bound leases, WIF/state/budget projection,
-expiry, idempotent cleanup, correlated Cloud Run/Cockroach diagnosis, repair
-proposal and closed verification are complete; live provider wiring,
-Workbench presentation and final qualification remain open.
-
-- TTL-bound repository stages, WIF identity, isolated GCS state, cost/resource
-  budgets, heartbeat, expiry and automatic production-proof cleanup.
-- Correlated application Env, binding, secret, identity, IAM, Cloud Run,
-  load-balancer, PSC and Cockroach evidence.
-- Cloud Run-to-Cockroach missing-IAM diagnosis, saved repair, simulation,
-  verification and portable handoff acceptance.
-
-Gate: an expired environment cannot mutate, cleanup converges idempotently, the
-broken binding is repaired entirely through structured causal evidence, and all
-deterministic release gates pass. Authenticated latency, log-tail, regional
-failover and data-path qualification remains separately declared.
-
-## M17: Existing GCP Estate Visualization
-
-Status: In progress. The read-only Workbench vertical slice, S256 PKCE contract,
-independent control-plane identity/Pro/connection resolution, authenticated
-Cloud Asset Inventory adapter, bounded scanner, CLI command, fixed-argv desktop
-host launch and artifact refetch are implemented. A deployed subscription and
-Google callback service plus authenticated disposable-project qualification
-remain open.
-
-- Backward-compatible `managed`, `observed`, and `referenced` ownership in the
-  redacted visual artifact: complete.
-- Graph-safe `Ziac`, `Existing`, and `Combined` filtering across canvas, map,
-  selection, routes, regions, navigator, and inspector: complete.
-- Observed Three.js resource identity, neutral ownership accents, discovery
-  provenance, and read-only inspector treatment: complete.
-- Fail-closed Google identity, Pro entitlement, and GCP connection projection:
-  complete at the Workbench/host contract boundary.
-- Connected estate fixture covering managed global services plus existing Cloud
-  Run, Cloud SQL, Storage, VPC, load balancing, and Compute resources: complete.
-- Control-plane identity/subscription/connection client, installed-app PKCE,
-  paginated Cloud Asset Inventory scanning, provider mapping and read-only
-  artifact generation: complete.
-- Deploying the callback/subscription service and qualifying a paid user against
-  a disposable customer project: pending external environment configuration.
-- Scheduled scans, asset feeds, cost attribution, code generation, and
-  zero-change adoption: deferred to subsequent milestones.
-
-Gate: a paid authenticated user scans a disposable project through the Zig
-host, receives a redacted observation artifact with no credentials, and sees
-existing and managed resources remain graph-correct and mutation-isolated.
-
-## M18-M25: Product Completion Programme
-
-Status: In progress. The authoritative design and execution checklist are:
-
-- `docs/superpowers/specs/2026-07-12-ziac-product-completion-design.md`
-- `docs/superpowers/plans/2026-07-12-ziac-product-completion.md`
-
-The programme closes the remaining boundary between the engine and a usable
-product: user-project compilation and scaffolding, the standalone live dashboard
-host, a standards-compliant and capability-safe MCP server, native cloud watch
-deployment, the Estate Pro control plane, pricing and billing attribution, one
-authenticated source-to-global-Cloud-Run-to-Cockroach qualification, and beta
-release packaging.
-
-M18 user-project compilation and installed-client packaging are complete at the
-credential-free gate. `zig build --prefix <prefix>` installs the CLI, dashboard
-host, MCP server, control-plane executable, dashboard bundle, and relocatable
-Ziac/ZigEffect package sources. Bare `ziac init` initializes the current Git
-repository, derives a stable project name, and generates a real
-`gcp.global.ZigService`, Testing v2, fixed program compiler, MCP configurations,
-and matching project-local skills for Codex, Claude Code, and Gemini CLI.
-An isolated-prefix acceptance gate uses a fresh Zig global cache to run tests,
-`ziac check`, plan, fake apply, no-op replay, dashboard artifact generation,
-the installed dashboard host, and installed MCP verification without a path back
-to the source checkout.
-
-M19 standalone dashboard hosting is complete locally. The Ziac package owns the
-native host and every `ziac_*` bridge binding. User project graphs produce real
-redacted visual artifacts through `ziac dashboard`; missing hosts fail visibly
-instead of selecting fixtures, live files refetch, and heavyweight canvas/map
-engines are lazy chunks. The native server and generated-project artifact path
-are release-gated.
-
-M20 agent protocol and process authority are complete locally. Ziac serves MCP
-`2025-11-25` over bounded newline-delimited stdio, advertises only implemented
-tools, and ships generated harness configuration. Acceptance checks are fixed
-argv, legacy shell strings are non-executable, process authority is distinct
-from read authority, and verification receipts bind both command and manifest
-digests. Hostile shell, traversal and capability tests are release-gated.
-
-M21 rapid development is complete at the credential-free implementation gate.
-The standalone CLI now wires `deploy --watch` to a graph-derived, project-bound
-Cloud Run v2 runtime instead of a scripted-only adapter. A watch rollout must
-name an immutable image and an integrity-checked saved plan; it preserves the
-current template, pins traffic to the prior revision, waits on the LRO, proves
-the candidate revision healthy, then promotes that exact revision. Cross-project
-targets, mutable images, production stages, destructive plans, stale graph
-digests and self-asserted plan digests fail closed. Phase receipts are persisted
-to the same causal log session consumed by the dashboard. Existing native local
-watch still provides stable-proxy hot reload and failed-generation preservation.
-Authenticated Cloud Run latency evidence remains in M24 rather than being
-misreported as locally proven.
-
-M22 Estate Pro has a useful deterministic kernel but is not yet a complete paid
-product. The server-side authorization kernel hashes bearer assertions, enforces Google-subject ownership and Pro
-expiry, resolves only connected projects, revokes immediately, and writes
-append-only audit events without credential metadata. The Google OAuth adapter
-performs PKCE code exchange and verifies OIDC audience, issuer, nonce, expiry,
-subject and email before exposing a zeroing grant to the callback coordinator.
-The callback consumes a challenge through an injected one-time verifier, sends
-the refresh token directly to a credential vault, stores only a session digest,
-and returns the new assertion once. The Cockroach production schema covers
-accounts, sessions, entitlements, encrypted credentials, challenges and audit.
-The installed `ziac-estate-control-plane` process composes the native verified-
-TLS Cockroach repository, atomic challenge store, secure random issuer, Google
-OAuth exchange, Cloud Run ADC, Cloud KMS vault and bounded HTTP server. It
-refuses startup when any production dependency is missing. A paid identity scan
-against a disposable project remains an M24 authenticated qualification item.
-
-Production blockers retained for M26-M28:
-
-- KMS encryption must send `plaintextCrc32c` and verify both request and response
-  integrity instead of requiring a verification flag for a checksum it omitted.
-- A first-time account must exist before foreign-keyed credential persistence.
-- OAuth challenges need cleanup, rate limiting, and recoverable failure states.
-- No production endpoint currently creates and preflights a GCP connection.
-- Stored Google refresh credentials are not yet decrypted and exchanged for the
-  short-lived access token used by a hosted scan; the CLI scanner still needs ADC.
-- Production entitlements are read-only; billing webhooks, operator grants,
-  renewal, cancellation, replay protection, and signed local feature leases are
-  not implemented.
-- The dashboard access action is not yet connected to the hosted OAuth flow.
-
-M23 cost intelligence has completed its credential-free provider and attribution
-gate. The shared cost contract now
-distinguishes configuration estimates, projected month-end cost and actual
-billed cost at the type level. Estimates require explicit SKU, region, unit and
-usage assumptions; actuals include exported credits; projections can derive only
-from actual billing data; and missing usage returns unavailable rather than a
-fabricated range. The authenticated adapter now paginates Cloud Billing Catalog
-SKUs, preserves every tier, currency and effective time, submits and resumes
-BigQuery jobs, parses integer micros without floating-point loss, and emits exact
-attributed and unattributed totals with coverage basis points. The dashboard no
-longer invents type-based price ranges; absent billing telemetry is explicitly
-unavailable. A Cockroach migration owns billing sources, runs and attributed
-resource costs. Scheduling and the first authenticated customer export remain a
-live qualification item.
-
-No milestone is described as externally qualified until its authenticated live
-gate has produced a complete redacted evidence bundle. Credential-free code
-completion and external qualification remain separate roadmap states.
-
-## M26-M40: Local-First SaaS And Self-Hosting Programme
-
-Status: In progress. The authoritative architecture and complete remaining
-execution programme are:
-
-- `docs/superpowers/specs/2026-07-12-ziac-local-first-saas-self-hosting-design.md`
-- `docs/superpowers/plans/2026-07-12-ziac-local-first-saas-self-hosting.md`
-
-The programme preserves the local dashboard as the primary developer product
-while adding a hosted intelligence plane for subscriptions, Google connections,
-scheduled estate discovery, actual billing data, history, teams, and reports.
-It covers production-blocker closure, customer connection lifecycle, signed
-feature leases, realtime graph revisions, real dashboard operations, scheduled
-estate snapshots, honest cost intelligence, customer and internal admin portals,
-Ziac's typed self-host bootstrap and production stacks, organization features,
-reports and adoption, unified authenticated qualification, and private beta.
-
-The immediate client-install gate is complete. M35-M36 now have a typed
-credential-free self-host implementation: `ziac init --preset ziac-cloud`
-creates independent bootstrap, Cockroach data, control-plane and billing
-projects, all four compile through the installed CLI, and one root dashboard
-merges them. Bootstrap
-owns required APIs, retained GCS state, retained Cloud KMS resources and deployer
-IAM, a retained Artifact Registry repository, and credential containers. The data project owns the Cockroach database,
-SQL user, grants, generated Secret Manager connection version, and ordered
-control-plane/billing migrations. The control plane compiles as a global Cloud
-Run service and billing as a private authenticated service with its own native
-worker, exact global-name attribution, Cockroach run persistence, and an hourly
-Cloud Scheduler OIDC trigger. The qualification builds both hosted Linux images
-in Cloud Build and resolves immutable Artifact Registry digests. The authenticated
-qualification script applies bootstrap from local state, migrates it to GCS,
-deploys data and both hosted services, probes health, queries the configured
-detailed export, forces the managed scheduler, and requires a successful worker
-attempt. Missing credentials produce exit 77 and an explicit skip receipt.
-
-M26 production blocker closure and M27 hosted GCP connection lifecycle remain
-the next hosted-service hardening slices. M39 remains the decisive
-end-to-end gate: a clean external project signs in, scans, edits, watches the
-local canvas update, deploys globally, reads and writes Cockroach, receives honest
-cost data, revokes access, and cleans up while Ziac's own hosted plane is deployed
-from Ziac code.
-
-## M41-M46: Monorepo Workspace Dashboard
-
-Status: Complete at the credential-free local product gate. The authoritative
-design and implementation record are:
-
-- `docs/superpowers/specs/2026-07-12-ziac-monorepo-workspace-dashboard-design.md`
-- `docs/superpowers/plans/2026-07-12-ziac-monorepo-workspace-dashboard.md`
-
-Ziac now treats a Git root as a workspace containing one or more independently
-deployable projects. Recursive bounded discovery ignores generated, VCS and
-dependency trees, sorts projects deterministically, and rejects duplicate stable
-project identities. Every compiler runs from its owning directory and uses the
-dashboard target declared by its project manifest.
-
-One root command emits `ziac.workspace-visual.v1` atomically, launches one local
-host, and refreshes through fixed argv without shell evaluation. The dashboard
-namespaces colliding resource identities by project, validates explicit
-cross-project links, renders one physical topology, and offers project
-multi-selection with selected, dependency and connected slices. All existing
-provider, region, health, operation and estate filters remain graph-safe.
-
-Interactive initialization confirms the inferred workspace setup, generated
-projects declare their visualization target, and Codex, Claude Code and Gemini
-receive the same monorepo-aware skill at both project and Git roots. The installed
-client E2E creates two nested projects and compiles them into one workspace
-artifact without a source-checkout escape hatch.
-
-The workspace compiler now hashes only each manifest and its declared source
-roots, caches project artifacts by target-aware revision, recompiles only changed
-projects, and preserves the last known good child artifact on a failed compile.
-The native host now checks declared input revisions on a bounded local interval;
-the browser no longer polls complete artifacts. Changed input triggers the
-target-aware affected-project compiler and emits a monotonic
-`ziac.workspace-patch.v1` containing only complete changed project slices,
-removals, ordering and links. Stale bases fall back to one snapshot reload.
-OS-specific FSEvents/inotify adapters remain an optional latency optimization;
-they no longer require a protocol or frontend redesign.
-
-## M47-M52: Ziac Cloud Bootstrap Completion
-
-Status: Credential-free implementation complete; authenticated qualification
-pending operator credentials. The authoritative design and execution record are:
-
-- `docs/superpowers/specs/2026-07-12-ziac-cloud-bootstrap-completion-design.md`
-- `docs/superpowers/plans/2026-07-12-ziac-cloud-bootstrap-completion.md`
-
-The local dashboard now invokes fixed-argv Ziac plans through the native host,
-saves plans beneath the workspace, displays exact operation counts and digest,
-and requires explicit digest approval before apply. Browser requests cannot
-choose an executable, working directory, plan path or shell command. Live watch
-deploys are now host-supervised asynchronous operations with opaque IDs, real
-phase projection, bounded redacted output, status lookup, and capability-scoped
-cancellation. The deployment dock renders only those phases and retained causal
-events; the removed timer and percentage demonstration is no longer presented
-as evidence.
-
-The completion gate is `zig build self-host-gate`. The live gate is
-`packages/ziac/scripts/qualify-ziac-cloud.sh`; it cannot be marked passed until
-run against the intended GCP project, Cockroach cluster, DNS zone and detailed
-billing export.
-
-## M53-M54: Official GCP Research And Realtime Agent Loop
-
-Status: Complete at the credential-free local product gate.
-
-`ziac init` now scaffolds one consistent `gcp-developer-research` skill and a
-read-only `gcp-developer-researcher` for Codex, Claude Code, and Gemini. Project
-and root-safe harness configuration targets Google's official Developer
-Knowledge MCP endpoint with `search_documents` and `get_documents` only. The
-API key is referenced through `DEVELOPERKNOWLEDGE_API_KEY` and never generated,
-persisted, logged, or embedded. The research protocol ranks exact references,
-guides, release notes, and concepts; reports Ziac implications and confidence;
-and labels inference. Public Preview availability is explicit.
-
-The local agent loop now has one truthful path from save to canvas and deploy:
-declared-input revision detection, affected-project compilation, monotonic
-project patches, stale snapshot recovery, saved-plan approval, asynchronous
-watch execution, compact status polling, causal event rendering, and scoped
-cancellation. Deterministic tests cover scaffold consistency, root safety,
-patch replacement/removal/staleness, browser validation, real child-process
-supervision, and source revision changes. Live GCP behavior remains governed by
-the authenticated M39 qualification rather than inferred from local proof.
-
-## M55: Relocatable Agent Development Kit
-
-Status: Complete at the credential-free install gate.
-
-The installed Ziac prefix now carries the CLI, MCP server, dashboard host and
-assets, required package sources, protobuf and provider contracts, examples,
-scripts, and the complete Ziac documentation tree. Generated skills resolve the
-Ziac dependency from `build.zig.zon` and use that relocatable package directory
-as their local implementation knowledge root. They never depend on the original
-source checkout or an author-specific path.
-
-Local documentation defines the behavior shipped in the installed Ziac version.
-The GCP researcher compares that baseline with current official Developer
-Knowledge before recommending provider changes. API keys, ADC, cloud authority,
-and paid-service entitlements remain operator-owned inputs and are not bundled
-or persisted by the installer.
-
-## M56-M81+: Comprehensive GCP Provider Coverage
-
-Status: In progress. The authoritative architecture and giant execution roadmap
-are:
-
-- `docs/superpowers/specs/2026-07-13-ziac-gcp-provider-coverage-design.md`
-- `docs/superpowers/plans/2026-07-13-ziac-gcp-provider-coverage.md`
-
-Ziac's provider boundary is now broad practical Google Cloud coverage, not only
-Cloud Run and global load balancing. The programme combines generated Google
-resource primitives, hardened Ziac resources and opinionated architecture
-components. Every resource carries a machine-readable support stage and
-capability record, and managed support remains distinct from authenticated live
-qualification.
-
-M56-M62 is the application-platform tranche: provider catalog and generation
-spine, general Cloud Storage, Pub/Sub, Cloud Tasks, Eventarc, Cloud Run jobs and
-worker pools, general IAM semantics, and one integrated authenticated gate.
-M63-M80 then cover data services, compute, networking, GKE, operations, delivery,
-security, governance and organization resources. M81+ continues stable analytics,
-integration and AI resource expansion from pinned Google contracts and measured
-user demand.
-
-The definition of done includes typed declarations, full lifecycle and import,
-AIP-aware drift, IAM/preflight, estate mapping, canvas semantics, honest cost,
-agent documentation and authenticated disposable-project evidence. A serializer
-or observed Cloud Asset kind alone does not count as provider coverage.
-
-M56 is complete. The installed `ziac provider resources` command introduced the
-versioned managed catalog and visible planned surface as deterministic JSON or
-Markdown. After M61 it reports 62 managed types, with service filtering,
-bidirectional dispatcher parity, pinned proto/Discovery provenance and semantic
-upgrade-diff artifacts. Generated skills point agents at the same installed
-reference.
-
-M57 is locally complete and awaiting only authenticated disposable-project
-qualification. General buckets now include typed multi-rule lifecycle, CORS,
-retention, soft delete, CMEK, metageneration-safe updates, dual-form import and
-explicit guarded cleanup. Exact conditional IAM preserves unrelated policy.
-Generation-pinned immutable objects, estate identity, storage inspector facts,
-explicit capacity/operation/egress estimates and `AssetBucket`, `UploadBucket`
-and `StaticAssetBucket` components are covered by deterministic provider tests.
-The installed current-state reference is `docs/gcp-provider-coverage.md`.
-
-M58 is locally complete and awaiting authenticated publish/delivery/retry and
-cleanup qualification. Topics, schemas, subscriptions, snapshots and exact
-conditional topic/subscription IAM now have full deterministic lifecycle and
-import coverage. `gcp.run.ServiceIamMember` adds resource-scoped, etag-safe
-Cloud Run IAM. `ZigSubscriber` compiles a dedicated OIDC identity, source and
-dead-letter topics, push subscription, exact Run invoker access, Pub/Sub
-service-agent forwarding access and explicit publisher members into one graph.
-Permission synthesis, Cloud Asset identity, event edges, inspector metadata,
-official icons and configuration-based cost assumptions are synchronized. See
-`docs/gcp-pubsub.md` for the contract and its custom-audience limitation.
-
-M59 is locally complete and awaiting authenticated enqueue, event delivery and
-cleanup qualification. Cloud Tasks queues now cover dispatch, retry, routing,
-logging and queue-level OIDC/OAuth identity with exact etag-safe IAM. Eventarc
-triggers cover filters, channels, service identity, transport ownership and all
-supported writable destination families through resumable long-running
-operations. Remote responses are normalized for drift, including output-backed
-transport topics. `ZigTaskWorker` and `EventPipeline`, graph-derived act-as and
-product permissions, Cloud Asset identity, canvas metadata, deterministic
-delivery decisions and explicit Tasks/Eventarc cost assumptions pass the local
-gate. See `docs/gcp-tasks-eventarc.md`.
-
-M60 is locally complete and awaiting authenticated migration Job, parallel Job,
-scheduled OAuth invocation, cancellation and Worker Pool rollout qualification.
-Jobs and Worker Pools now use typed multi-container declarations, normalized
-CRUD/import, resumable Cloud Run long-running operations, etag concurrency,
-governed execution receipts and dedicated high-level components. Exact Run,
-Scheduler and act-as preflight, Cloud Asset identity, distinct canvas groups and
-explicit compute-duration estimates are synchronized. Executions and revisions
-remain observed children rather than managed resources. See
-`docs/gcp-cloud-run-workloads.md`.
-
-The M60 local Testing v2 gate is complete with 564 discovered/executed tests,
-563 passed, one credential-gated skip, and zero failures, pending tests, leaks
-or logged errors. Dashboard tests, typecheck, production build and the Testing
-v2 migration guard also pass.
-
-M61 is locally complete and awaiting authenticated project, folder and
-organization qualification. Project, folder and organization
-member/binding/policy families, service-account IAM, custom roles and Workload
-Identity Federation pools and OIDC providers now have typed declarations,
-normalized import and conflict-safe lifecycles. Member, binding and policy
-ownership cannot overlap in one graph. Conditional policy uses version 3 and
-bounded etag retries; unrelated concurrent edits survive deterministic mutation
-tests. Soft-deleted roles and federation resources recover through Google's
-native undelete flow before reconciliation.
-
-Permission intelligence separates deployer and runtime authority with resource
-and operation provenance, emits custom-role proposals and calls native
-`testIamPermissions` endpoints. Cloud Asset discovery maps IAM identities to the
-same managed physical IDs. The workbench renders ownership, conditions, blast
-radius and permission-bearing IAM edges. See `docs/gcp-iam.md`.
-
-The M61 local Testing v2 gate is complete with 585 discovered and executed
-tests, 584 passed, one credential-gated skip, and zero failures, pending tests,
-leaks or logged errors. The provider catalog reports 62 managed resources.
-
-M62 is locally complete and awaiting the disposable-project service exercise.
-`ziac.gcp.ApplicationPlatform` now composes a private Cloud Run API, upload
-bucket, Pub/Sub push/dead-letter path, Cloud Tasks queue, Eventarc trigger,
-scheduled Job, Worker Pool and dedicated identities into one deterministic
-graph. A valid application binding fixture proves the compile-time boundary.
-The integrated lifecycle test applies the graph, imports every resource into an
-empty second state, refreshes to a no-op plan and destroys under explicit
-authority while retained resources remain present at the provider boundary.
-
-Visual artifacts attach configuration-estimate provenance and IAM permission
-edges without implying billing-export data. The local qualification receipt is
-always unauthenticated. `scripts/qualify-application-platform.sh` separately
-requires ADC, an immutable image and a project ending in `-ziac-disposable`, and
-otherwise emits a structured skip. See `docs/gcp-application-platform.md`.
-
-The M62 local Testing v2 gate is complete with 588 discovered and executed
-tests, 587 passed, one credential-gated skip, and zero failures, pending tests,
-leaks or logged errors. All public examples compile, including the integrated
-application-platform example.
-
-M63 is locally complete and awaiting authenticated BigQuery qualification.
-Thirteen managed resource types now cover datasets, tables, views, routines,
-connections, reservations, capacity commitments, assignments and scoped IAM.
-The handwritten adapter uses method-correct BigQuery v2 PATCH/PUT operations,
-`If-Match` preconditions, Connection/Reservation field masks, normalized import,
-remote semantic drift detection, retained data defaults and explicit destructive
-authority. Capacity commitments remain protected, retained and opt-in.
-
-`ziac.gcp.AnalyticsWarehouse` composes a governed dataset with tables, views,
-routines and least-privilege readers/writers. API and permission synthesis,
-Cloud Asset identity, observed/managed reconciliation, canvas metadata, IAM
-edge semantics and explicit query/storage/slot estimates are synchronized. The
-local qualification applies the graph, imports it into an empty state, refreshes
-to no-op and performs retention-aware cleanup. `scripts/qualify-bigquery.sh`
-requires ADC and a project ending in `-ziac-disposable`, rejects commitment
-purchases and emits exit 77 when credentials are absent. See
-`docs/gcp-bigquery.md`.
-
-The M63 local Testing v2 gate is complete with 602 discovered and executed
-tests, 601 passed, one credential-gated skip, and zero failures, pending tests,
-leaks or logged errors. The provider catalog reports 75 managed resources and
-the public analytics-warehouse example compiles.
-
-M64 is locally complete and awaiting authenticated Firestore qualification.
-Five managed resource types cover Database, Index, Field, BackupSchedule and
-database IAM. The handwritten Firestore Admin v1 adapter persists and resumes
-long-running operations, preserves server-assigned index and schedule names,
-uses database etags for compare-and-swap mutation, reverts field overrides
-without deleting document data and normalizes remote output-only state before
-drift comparison. Databases are protected and retained by default.
-
-`ziac.gcp.DocumentStore` composes a database with typed indexes, TTL and index
-field overrides, one daily and one weekly backup schedule, and exact
-reader/writer IAM. API and permission synthesis, Cloud Asset database identity,
-canvas topology and IAM edges, and explicit document operation, storage and
-backup cost assumptions are synchronized. The local qualification applies the
-graph, imports it into an empty second state, refreshes to no-op and performs
-retention-aware cleanup. `scripts/qualify-firestore.sh` requires ADC and a
-project ending in `-ziac-disposable`; otherwise it emits a structured exit-77
-skip. See `docs/gcp-firestore.md`.
-
-The M64 local Testing v2 gate is complete with 615 discovered and executed
-tests, 614 passed, one credential-gated skip, and zero failures, pending tests,
-leaks or logged errors. The provider catalog reports 80 managed resources and
-the public document-store example compiles.
-
-M65 is locally complete and awaiting authenticated Cloud SQL qualification.
-Five managed resource types cover PostgreSQL primary instances, read replicas,
-databases, built-in and IAM users, and client certificates. The handwritten
-Cloud SQL Admin v1 adapter checkpoints Operations, resumes interrupted work,
-uses `settingsVersion` for compare-and-swap updates, canonicalizes flags and
-authorized networks, rejects unsupported private-IP removal and persists
-passwords and one-time private keys only through secret-safe boundaries.
-
-`ziac.gcp.ManagedPostgres` composes a protected primary, databases, users,
-replicas, exact login/client IAM and an optional Secret Manager-backed client
-certificate. Private Services Access remains explicit: the component refuses a
-private primary without a declared connectivity dependency and never creates a
-hidden VPC or peering mutation. API/permission synthesis, Cloud Asset instance
-identity, canvas topology and IAM edges, and explicit compute/storage/backup/
-egress estimates are synchronized. `scripts/qualify-cloud-sql.sh` requires ADC,
-Cloud SQL Auth Proxy, PostgreSQL client tools and a project ending in
-`-ziac-disposable`; otherwise it emits a structured exit-77 skip. See
-`docs/gcp-cloud-sql.md`.
-
-The M65 local Testing v2 gate is complete with 631 discovered and executed
-tests, 630 passed, one credential-gated skip, and zero failures, pending tests,
-leaks or logged errors. The provider catalog reports 85 managed resources and
-the public managed-postgres example compiles.
-
-M66 is locally complete and awaiting authenticated Spanner and Memorystore data
-path qualification. Eleven managed resource types cover Spanner instances,
-databases, backups, backup schedules and additive instance/database IAM;
-classic Redis, Redis Cluster and ACL policies; and explicit Compute global
-private-service ranges plus Service Networking connections.
-
-`ziac.gcp.PrivateServiceAccess` owns the visible peering boundary,
-`ziac.gcp.SpannerDatabase` composes retained data, backups and exact runtime
-access, and tagged `ziac.gcp.MemorystoreCache` keeps classic Redis and Cluster
-topologies disjoint. The lifecycle adapters resume Google LROs, normalize
-remote defaults, enforce immutable and destructive boundaries, and persist
-one-time Redis AUTH only into a declared Secret Manager version.
-
-Permission synthesis distinguishes Compute global-address authority, Spanner's
-two-permission backup creation and conditional Secret Manager writes. Cloud
-Asset adoption maps only Google-supported identities; unsupported Spanner
-backup schedules and Redis ACL policies remain generic observed assets. Canvas
-metadata and explicit Spanner compute/storage/backup and Memorystore
-capacity/egress estimates are synchronized. The installed example and
-`scripts/qualify-data-services.sh` document the VPC-connected remote proof. See
-`docs/gcp-spanner-memorystore.md`.
-
-The M66 local Testing v2 gate is complete with 656 discovered and executed
-tests, 655 passed, one credential-gated skip, and zero failures, pending tests,
-leaks or logged errors. The release gate completed 131/131 steps, the provider
-catalog reports 96 managed resources and the public data-services example
-compiles.
-
-M67 is locally complete and awaiting authenticated Workflows, API Gateway,
-Identity Platform and Parameter Manager qualification. Eighteen managed
-resource types cover Workflows, API/config/gateway and scoped IAM, the protected
-Identity project singleton, tenants, project/tenant OIDC and SAML, tenant IAM,
-and Parameter Manager parameters/templates with immutable versions.
-
-`ziac.gcp.WorkflowProgram`, `ziac.gcp.ManagedApiGateway`, tagged
-`ziac.gcp.IdentityRealm` and tagged `ziac.gcp.ParameterBundle` provide the
-opinionated layer. Hardened adapters resume long-running operations, preserve
-etags and immutable identities, reject singleton deletion, resolve secrets only
-inside mutation scopes and verify declared SHA-256 values before sending API
-documents or parameter payloads.
-
-Permission synthesis derives all four APIs, exact deployer methods and separate
-Workflows/Parameter Manager runtime access. Cloud Asset adoption maps only
-Google-supported types; Parameter Manager templates remain generic observed
-assets. Canvas metadata, IAM edges and explicit catalog-backed Workflows step,
-API Gateway call and Identity MAU estimates are synchronized. The local receipt
-proves apply/import/refresh/no-op/retention-aware cleanup. The fail-closed
-`scripts/qualify-application-services.sh` requires ADC, explicit probe names
-and a project ending in `-ziac-disposable`. See
-`docs/gcp-application-services.md`.
-
-The M67 local Testing v2 gate is complete with 671 discovered and executed
-tests, 670 passed, one credential-gated skip, and zero failures, pending tests,
-leaks or logged errors. The release gate completed 134/134 steps, the provider
-catalog reports 114 managed resources and the public application-services
-example compiles through the relocatable install gate.
-
-M68 is locally complete and awaiting authenticated Compute Engine
-qualification. Nine managed types cover zonal and regional persistent disks,
-images, instances, immutable instance templates, zonal and regional managed
-instance groups, and zonal and regional autoscalers. The handwritten adapter
-checkpoints global, regional and zonal operations, grows disks through native
-resize, uses current fingerprints for managed-group patches, normalizes remote
-label edits, and treats images, instances and templates conservatively as
-replacement resources.
-
-Startup scripts cross a typed secret boundary: only a reference and SHA-256
-remain in desired state, the payload is resolved and verified only for a
-mutation, and the transient request body is zeroed. Instance deletion
-protection is explicitly cleared before an authorized delete. `VirtualMachine`
-and tagged `ManagedInstanceFleet` compose the opinionated layer without hidden
-disk deletion or mixed regional/zonal identities.
-
-Permission synthesis, supported Cloud Asset identities, observed/managed
-reconciliation, canvas workload metadata, and explicit CPU, memory,
-accelerator, disk and image configuration estimates are synchronized. The
-installed example and `scripts/qualify-compute-workloads.sh` document the
-remote proof boundary. See `docs/gcp-compute-workloads.md`.
-
-The M68 local Testing v2 gate is complete with 688 discovered and executed
-tests, 687 passed, one credential-gated skip, and zero failures, pending tests,
-leaks or logged errors. The full release gate, public examples, Testing v2
-migration guard and root TypeScript checks pass. The provider catalog reports
-123 managed resources.
-
-M69 is locally complete and awaiting authenticated private-network
-qualification. Nine managed types cover firewalls, routes, global and regional
-health checks, internal addresses, regional backend services, regional URL
-maps and HTTP proxies, and internal forwarding rules. The handwritten adapter
-checkpoints global and regional operations, uses current fingerprints for
-mutable policy, retries bounded compare-and-swap conflicts and replaces routes,
-VIPs and frontends when their immutable identity changes.
-
-`NetworkPolicy` composes explicit policy without invented ingress or routes.
-`InternalPassthroughLoadBalancer` and
-`RegionalInternalApplicationLoadBalancer` provide typed private L4 and L7
-paths, and require the application and proxy-only subnet relationships to be
-visible in the graph. Permission synthesis uses Google's distinct regional IAM
-permissions. Cloud Asset adoption is property-aware so ambiguous addresses and
-forwarding rules remain observed rather than being claimed as managed internal
-resources.
-
-Canvas metadata exposes policy, health and frontend configuration with private-
-traffic and health-probe edges. Forwarding-rule hours, processed data and probe
-costs remain explicit configuration estimates. The local receipt proves apply,
-second-state import, refresh/no-op and cleanup. The installed example and
-`scripts/qualify-network-delivery.sh` document the remote boundary, which must
-observe healthy L4/L7 backends and successful private probes before passing.
-See `docs/gcp-network-delivery.md`.
-
-The M69 local Testing v2 package gate is complete with 703 discovered and
-executed tests, 702 passed, one credential-gated skip, and zero failures,
-pending tests, leaks or logged errors. The provider catalog reports 132 managed
-resources. Full release, migration and root TypeScript gates are recorded in
-the M69 implementation plan.
-
-M70 is locally complete and awaiting authenticated edge qualification. Eight
-managed resources add Cloud CDN backend buckets, Cloud Armor policies, SSL
-policies, Certificate Manager DNS authorizations, managed certificates, maps,
-entries and certificate-map-aware HTTPS proxies.
-
-`ProtectedCdnBucket` and `ManagedCertificateMap` provide the opinionated layer.
-The provider resumes Compute and generic Google operations, uses current
-fingerprints with bounded conflict retries and rejects noncanonical imports.
-Permission synthesis follows Certificate Manager's exact `certs`, `certmaps`,
-`certmapentries` and `dnsauthorizations` permissions, including use authority
-introduced by graph wiring. Property-aware Cloud Asset mapping distinguishes
-certificate-map proxies from legacy HTTPS proxies.
-
-Canvas artifacts expose cache, Armor, TLS, DNS and certificate-selection
-semantics. CDN egress, fill, lookup, Armor requests and certificate months are
-explicit configuration estimates. The local receipt proves apply, import,
-refresh/no-op and retention-aware cleanup. The fail-closed
-`scripts/qualify-edge-security.sh` additionally requires active issuance,
-proxy attachment, a cache hit and an Armor denial. See
-`docs/gcp-edge-security.md`.
-
-The M70 local Testing v2 package gate is complete with 717 discovered and
-executed tests, 716 passed, one credential-gated skip, and zero failures,
-pending tests, leaks or logged errors. The provider catalog reports 140 managed
-resources. Public examples, fresh-project and monorepo scaffolds, the Testing
-v2 migration guard, root TypeScript checks, static secret checks, the non-root
-arm64 container probe and the full release gate all pass. Authenticated edge
-qualification remains explicitly external and fail-closed.
-
-M71 is locally complete and awaiting authenticated hybrid-connectivity
-qualification. Nine managed resources add HA and external VPN gateways, VPN
-tunnels, router interfaces and BGP peers, VPC peering, Network Connectivity
-Center hubs and spokes, and Private Service Connect service-connection
-policies.
-
-`HaVpnConnection`, `BidirectionalVpcPeering`, `VpcConnectivityMesh` and
-`PrivateServiceConnectivityPolicy` provide the opinionated layer. The provider
-resumes global, regional and generic Google operations; mutates router children
-with current fingerprints and bounded conflict retry; preserves unowned
-siblings; invokes native peering actions; and applies NCC field masks and
-etags. VPN pre-shared keys are resolved only inside mutation scope and never
-enter desired or observed state.
-
-Exact Compute and Network Connectivity permissions, Cloud Asset adoption,
-VPN/BGP/NCC canvas semantics and explicit configuration estimates are
-synchronized. The local receipt proves apply, import, refresh/no-op and
-retention-aware cleanup. The fail-closed `scripts/qualify-connectivity.sh`
-requires established tunnels, learned router routes, active NCC resources and
-an observed PSC policy before it can pass. See `docs/gcp-connectivity.md`.
-
-The M71 local Testing v2 package gate is complete with 737 discovered and
-executed tests, 736 passed, one credential-gated skip, and zero failures,
-pending tests, leaks or logged errors. The provider catalog reports 149 managed
-resources. Authenticated connectivity qualification remains explicitly
-external and fail-closed.
-
-M72 is locally complete and awaiting authenticated container-platform
-qualification. Seven managed resources add Standard and Autopilot GKE
-clusters, explicit node pools, Fleet and memberships, Cloud Run functions v2,
-additive function IAM and immutable Batch jobs.
-
-`GkePlatform` composes a dedicated workload identity, typed Standard node pools
-or Autopilot, optional Fleet registration and exact Kubernetes Workload
-Identity members. `ZigFunction` and `ZigBatchJob` compose dedicated runtime
-identities with explicit invocation and execution semantics. Standard cluster
-creation removes the implicit default node pool so Ziac does not leave an
-unowned node group behind.
-
-The provider resumes native Container and generic Google operations, chooses
-field-specific GKE update actions, preserves unrelated Function IAM bindings
-under policy etags and treats submitted Batch jobs as immutable. Permission
-synthesis, Cloud Asset adoption, canvas relationships and eight explicit cost
-dimensions are synchronized. See `docs/gcp-container-platform.md`.
-
-The M72 local Testing v2 package gate is complete with 759 discovered and
-executed tests, 758 passed, one credential-gated skip, and zero failures,
-pending tests, leaks or logged errors. The provider catalog reports 156 managed
-resources. Public examples, installation checks, migration, root TypeScript
-and static secret gates pass. `scripts/qualify-container-platform.sh` remains
-the fail-closed authenticated boundary for GKE, Fleet, Function and Batch
-runtime evidence.
-
-M73 is locally complete and awaiting authenticated Monitoring qualification.
-Six managed resources add alert policies, uptime checks, notification channels,
-mosaic dashboards, monitored services and service-level objectives.
-
-`ServiceObservability` composes one service, availability and optional latency
-SLOs, a host-scoped endpoint probe, notification-aware alert and operations
-dashboard. The provider preserves Google's server-generated IDs, applies exact
-update masks, resolves write-only channel/probe credentials only during
-mutation and retries dashboard updates with the latest etag.
-
-Exact Monitoring permissions, four official Cloud Asset adoption identities,
-canvas observability edges and explicit uptime/alert estimates are
-synchronized. See `docs/gcp-monitoring.md`.
-
-The M73 local Testing v2 package gate is complete with 775 discovered and
-executed tests, 774 passed, one credential-gated skip, and zero failures,
-pending tests, leaks or logged errors. The provider catalog reports 162 managed
-resources. Public examples, installation checks, migration, root TypeScript
-and static secret gates pass. `scripts/qualify-monitoring.sh` remains the
-fail-closed authenticated boundary and does not infer alert or notification
-delivery from object existence.
-
-M74 is locally complete and awaiting authenticated Cloud Logging
-qualification. Five managed resources add protected log buckets, restricted
-views, typed sinks, project exclusions and counter or distribution log metrics.
-
-`ApplicationLogPlatform` composes storage, access slices, routing, volume
-controls and derived signals. The provider checkpoints asynchronous bucket
-operations, applies exact update masks, preserves generated sink writer
-identities and rejects unsafe one-way or immutable transitions. Permission
-synthesis, supported Cloud Asset adoption, canvas relationships and explicit
-ingestion, retention and metric estimates are synchronized. See
-`docs/gcp-logging.md`.
-
-The M74 local Testing v2 package gate is complete with 790 discovered and
-executed tests, 789 passed, one credential-gated skip, and zero failures,
-pending tests, leaks or logged errors. The provider catalog reports 167 managed
-resources. `scripts/qualify-logging.sh` remains the fail-closed authenticated
-boundary for real sink routing, view visibility and derived metric evidence.
-
-M75 is locally complete and awaiting authenticated Cloud Build and Artifact
-Registry qualification. Six new managed resources add Cloud Build source
-connections, linked repositories, repository-event triggers, private worker
-pools, retained Artifact Registry project settings and regional VPC Service
-Controls configuration. The existing Artifact Registry repository is upgraded
-to every standard format, canonical cleanup policies, CMEK and scanning.
-
-`ZigBuildPipeline` composes source, private execution, triggering and protected
-artifact storage. The provider checkpoints long-running operations, applies
-exact masks and etags, keeps SCM credentials out of state and evidence, detects
-remote semantic drift and blocks reversal of finalized Artifact Registry
-redirection. Permission synthesis, supported Cloud Asset adoption, canvas
-relationships and explicit build, disk, storage, transfer and scan estimates
-are synchronized. See `docs/gcp-build-delivery.md`.
-
-The M75 local Testing v2 package gate is complete with 806 discovered and
-executed tests, 805 passed, one credential-gated skip, and zero failures,
-pending tests, leaks or logged errors. The provider catalog reports 173 managed
-resources. Public examples, installed distribution, migration, root TypeScript
-and static secret gates pass. `scripts/qualify-build-delivery.sh` remains the
-fail-closed authenticated boundary for real SCM, successful build, import
-no-op and cleanup evidence.
-
-M76 is locally complete and awaiting authenticated Cloud Deploy qualification.
-Five managed resources add delivery pipelines, typed runtime targets, custom
-target types, automations and deploy policies. Releases, rollouts, automation
-runs and job runs remain governed actions or observed execution history.
-
-`GlobalCloudRunDelivery` composes regional Cloud Run targets, serial and canary
-progression, repair automation and production freezes. The provider checkpoints
-long-running operations, applies exact masks and current etags, detects semantic
-drift and replaces target-runtime changes. Governed release and recovery actions
-require payload-bound capability digests. Permission synthesis, Cloud Asset
-ownership, delivery canvas edges and first-free pipeline cost estimates are
-synchronized. See `docs/gcp-cloud-deploy.md`.
-
-The M76 local Testing v2 gate discovers and executes 821 tests: 820 pass, one
-credential-gated test skips, and none fail or remain pending; no leaks or logged
-errors are reported. The catalog reports 178 managed resources. Public examples,
-installed distribution, migration, root TypeScript and the full release gate
-pass. `scripts/qualify-cloud-deploy.sh` remains the fail-closed authenticated
-boundary for real release, rollout, import no-op and cleanup evidence.
-
-M77 is locally complete and awaiting authenticated KMS and Secret Manager
-qualification. Three new managed resources complete the existing security
-surface: KMS key-ring IAM, key IAM and Google-assigned cryptographic key
-versions. Existing key rings, keys, secrets, secret versions and secret IAM are
-hardened around the current Google contracts.
-
-The lifecycle adapter normalizes purpose-compatible key templates, exact
-rotation masks, reversible version state, Secret Manager replication, topics,
-rotation, aliases, annotations and etags. Key rings, keys, key versions and
-secrets are retained by default. Secret versions retain or disable on removal.
-Irreversible KMS scheduling/restoration and secret-version destruction are
-separate target-bound actions with capability digests, state refresh and
-receipts.
-
-Exact API and IAM synthesis, supported Cloud Asset identities, multi-region
-secret topology, CMEK and IAM edges, explicit key/version/access cost
-assumptions, installed documentation and the fail-closed qualification runner
-are synchronized. See `docs/gcp-kms-secret-manager.md`.
-
-The M77 Testing v2 package gate discovers and executes 835 tests: 834 pass,
-one credential-gated test skips, and none fail or remain pending; no leaks or
-logged errors are reported. The 181-resource catalog, public examples,
-relocatable installation, migration guard, root TypeScript checks, static
-secret checks, non-root arm64 container probe and complete release gate pass.
-`scripts/qualify-kms-secret.sh` remains the fail-closed authenticated boundary
-and never promotes its local receipt to live Google Cloud evidence.
-
-M78 is locally complete and awaiting authenticated disposable-organization
-qualification. Five managed resources add folders, projects, liens, project
-billing associations and Google-managed service identities. The
-`ProjectFoundation` component compiles hierarchy, billing, API enablement and
-service agents into one retained-first graph. Its logical identities remain
-collision-free when several project foundations share one monorepo canvas.
-
-The provider checkpoints Resource Manager and Service Usage operations, adopts
-server-assigned numeric identities, moves projects through Google's native
-method, applies exact masks with etags, and keeps optional project display names
-outside ownership when omitted. Hierarchy deletion, lien removal and billing
-detach all require declaration-level intent plus explicit operation authority.
-Service identities remain undeletable.
-
-Exact deployer permissions, pinned Resource Manager, Cloud Billing and Service
-Usage Discovery contracts, Cloud Asset hierarchy identity, topology edges and
-zero-dollar management estimates are synchronized. See
-`docs/gcp-organization-foundation.md`.
-
-The M78 Testing v2 package gate discovers and executes 855 tests: 854 pass,
-one credential-gated test skips, and none fail or remain pending; no leaks or
-logged errors are reported. The catalog reports 186 managed resources.
-`scripts/qualify-organization-foundation.sh` remains the fail-closed boundary
-for live project creation, billing attachment, second-state import/no-op and
-explicit disposable-project cleanup.
-
-M79 is locally complete and awaiting authenticated disposable-governance-scope
-qualification. Ten managed resources add Organization Policy v2 policies and
-custom constraints, Resource Manager v3 tag keys, values, bindings and holds,
-and Access Context Manager v1 policies, levels, service perimeters and user
-access bindings.
-
-The provider preserves enforced and dry-run policy as distinct state, applies
-spec etags and exact masks, adopts Google-assigned tag and binding identities,
-uses parent-list discovery where Google exposes no direct read, and checkpoints
-Access Context Manager and Resource Manager operations. Governance resources
-retain by default; deletion requires declaration intent plus destructive
-authority, with an additional cascade declaration for access-policy removal.
-
-`GovernedProjectBoundary` composes project policy, tag assignment and VPC
-Service Controls membership while consuming shared organization roots as typed
-outputs. Exact API and permission synthesis, pinned Discovery contracts, Cloud
-Asset identity, governance-specific canvas edges, zero-dollar management
-estimates, local qualification evidence, installed documentation and the
-fail-closed runner are synchronized. See `docs/gcp-governance-boundary.md`.
-
-The M79 Testing v2 package gate discovers and executes 874 tests: 873 pass, one
-credential-gated test skips, and none fail or remain pending; no leaks or logged
-errors are reported. The catalog reports 196 managed resources. Public examples
-include `governed-project-boundary`; the complete release gate, migration guard,
-root TypeScript checks, static secret checks and non-root arm64 container probe
-pass. The authenticated runner requires ADC, an explicit disposable scope and
-exact confirmation, performs second-state import/no-op proof, and retains
-governance resources for operator-owned cleanup.
-
-M80 is locally complete and awaiting authenticated disposable-project
-qualification. Fourteen managed resources add Security Command Center v2
-sources, finding routes, mutes, exports and resource-value policy; Binary
-Authorization project policy, attestors and additive IAM; and Private CA pools,
-authorities, templates, certificates and additive IAM.
-
-`SecurityFindingPipeline`, `TrustedArtifactPolicy` and
-`PrivateCertificateAuthority` compile optional SCC policy, image admission and
-retained workload trust into one graph. Exact masks, etags, operation resume,
-immutable replacement, additive IAM and server outputs are covered. CA state
-transitions and certificate revocation require payload-bound governed actions
-and never occur during ordinary reconciliation.
-
-Permission synthesis separates security deployer authority from runtime
-attestor verification and certificate requests. Supported Cloud Asset identity,
-security-specific canvas relationships and explicit SCC/Private CA cost
-assumptions are synchronized. See `docs/gcp-security-foundations.md`.
-
-The M80 Testing v2 package gate discovers and executes 898 tests: 897 pass, one
-credential-gated test skips, and none fail or remain pending; no leaks or logged
-errors are reported. The catalog reports 210 managed resources. Public examples
-pass. The fail-closed authenticated runner requires ADC, a disposable project
-and exact confirmation, proves second-state import/no-op, retains security
-resources, and excludes CA transitions and certificate revocation.
-
-M81 is locally implementation-complete and awaiting authenticated disposable-
-project qualification. Thirteen managed resources add recurring Data Pipelines
-templates; Dataproc clusters, autoscaling, workflow DAGs and additive IAM; and
-Dataform repositories, workspaces, release/workflow configs and additive IAM.
-
-`ScheduledDataflowPipeline`, `DataprocWorkflowPlatform` and
-`DataformReleasePipeline` compile a 14-resource data platform with exact
-scheduler, worker and operator authority. Dataproc cluster operations resume
-from checkpoints; updates use exact masks or observed versions; Dataform nested
-identities are canonical; and policy-v3 IAM preserves unrelated bindings.
-Pipeline run/stop, Flex Template launch, Dataproc state/workflow actions and
-Dataform compilation/invocation are target-bound capabilities excluded from
-ordinary reconciliation.
-
-Exact API and permission synthesis, seven supported Cloud Asset identities,
-data-engineering canvas topology and honest cost provenance are synchronized.
-Dataflow and Dataproc require explicit runtime usage before an estimate appears;
-Dataform is a no-charge service with downstream BigQuery spend kept separate.
-See `docs/gcp-data-engineering.md`. The deterministic qualification receipt,
-public example, installed documentation and fail-closed authenticated runner are
-present. The Testing v2 package gate discovers and executes 919 tests: 918 pass,
-one credential-gated test skips, and none fail or remain pending; no leaks or
-logged errors are reported. The catalog reports 223 managed resources.
-
-M82 is locally implementation-complete and awaiting authenticated disposable-
-project qualification. Fourteen managed resources add Eventarc Advanced
-message buses, pipelines, enrollments and Google API sources with additive IAM;
-and Integration Connectors connections, PSC endpoint attachments, event
-subscriptions, managed zones, regional settings and additive IAM.
-
-`AdvancedEventRoute`, `PrivateConnector` and `ConnectorEventBridge` compile
-event routing and private connector topology. Event publishing, connector
-eventing repair, subscription retry and schema refresh are payload-bound
-governed actions and never run during ordinary reconciliation. Provider
-adapters use canonical regional identities, resumable operations, exact update
-masks, etags, deterministic request IDs, retained cleanup and policy-v3 IAM.
-
-Exact API and permission synthesis, nine supported Cloud Asset identities,
-event/network canvas relationships and explicit cost assumptions are
-synchronized. Eventarc Advanced estimates separate bus, pipeline and transform
-event volume; Integration Connectors estimates separate active nodes and data
-processed. See `docs/gcp-event-integration.md`. The deterministic qualification
-receipt, public example, installed documentation and fail-closed authenticated
-runner are present. The Testing v2 package gate discovers and executes 941
-tests: 940 pass, one credential-gated test skips, and none fail or remain
-pending; no leaks or logged errors are reported. The catalog reports 237
-managed resources.
-
-M83 is locally implementation-complete and awaiting authenticated disposable-
-project qualification. Sixteen managed resources add stable-v1 Vertex AI
-datasets, models, prediction endpoints, vector indexes and endpoints, feature
-groups and features, online stores and views, Tensorboards, metadata stores and
-additive policy-v3 IAM wherever Google exposes native resource IAM.
-
-`OnlinePredictionPlatform`, `VectorSearchPlatform` and `FeaturePlatform`
-compile prediction, vector serving and feature topology. Model and index
-deployment, pipeline submission/cancellation and feature-view sync are seven
-payload-bound governed actions excluded from ordinary reconciliation. Regional
-provider adapters use exact masks, etags, resumable operations, immutable
-replacement and retained cleanup against the pinned `aiplatform:v1` revision
-`20260704` contract.
-
-Exact API and permission synthesis, nine official Cloud Asset identities,
-Vertex-specific canvas metadata and explicit usage-plus-rate cost estimates are
-synchronized. Feature and FeatureView remain generic observed assets because
-Cloud Asset Inventory does not expose them. See `docs/gcp-vertex-ai.md`. The
-deterministic qualification receipt, public example, installed documentation
-and fail-closed authenticated runner are present. The catalog reports 253
-managed resources. The Testing v2 package gate discovers and executes 959
-tests: 958 pass, one credential-gated test skips, and none fail or remain
-pending; no leaks or logged errors are reported. Examples, release checks, the
-non-root arm64 container probe, migration guard, dashboard tests/build/typecheck
-and root TypeScript gate pass.
+This is Ziac's only forward roadmap. Work shipped through M83 is recorded in
+[`shipped.md`](shipped.md); dated designs and implementation plans are retained
+as evidence rather than competing status sources.
+
+- **Roadmap date:** 2026-07-15
+- **Current baseline:** 253 managed GCP resource types, a versioned isolated
+  provider RPC boundary, and a complete local Testing v2 receipt with 974
+  executed tests
+- **Immediate objective:** turn broad credential-free implementation into a
+  qualified, self-hosted and externally usable private beta
+
+## Status Rules
+
+- **Planned:** accepted work that has not met its exit gate.
+- **In progress:** implementation is active and evidence is incomplete.
+- **Shipped:** merged implementation passes its deterministic gate.
+- **Qualified:** the declared authenticated environment produced a complete,
+  redacted and reproducible acceptance receipt.
+- **Blocked externally:** implementation can make no further progress without
+  credentials, billing, DNS, a disposable project or another declared operator
+  input.
+
+A local emulator, scripted HTTP adapter or skipped credential test cannot
+qualify a cloud claim.
+
+## Product Direction
+
+The next phase optimizes for trust and adoption, not raw provider count. Ziac
+already covers the common platform surface. New resource families enter the
+roadmap only when they unblock a real architecture or arrive through the
+governed contract automation in M89.
+
+The target product remains local first:
+
+- agents edit and compile infrastructure beside application source;
+- humans monitor plans, evidence, topology and cost in the local dashboard;
+- the hosted Ziac Cloud plane supplies identity, entitlements, scheduled
+  discovery, billing intelligence, collaboration and reports; and
+- customer credentials and live mutation authority remain narrowly scoped,
+  explicit and auditable.
+
+Provider extensibility follows the same rule. Registry discovery is data-only;
+credentialed GCP and Cockroach lifecycle code runs behind the bounded
+`ziac.provider.rpc.v1` process boundary. Process pools, artifact signatures and
+OS sandbox profiles remain M87 reliability work.
+
+## Delivery Order
+
+| Milestone | Priority | Depends on | Outcome |
+| --- | --- | --- | --- |
+| M84 | P0 | Current baseline | Authenticated GCP and Cockroach qualification gauntlet |
+| M85 | P0 | M84 bootstrap lanes | Ziac Cloud deployed and operated using Ziac |
+| M86 | P0 | M84-M85 | Ten-minute clean-repository developer journey |
+| M87 | P1 | M84 evidence | Recovery, drift and provider reliability campaign |
+| M88 | P1 | M85-M87 | Paid Estate Pro and authoritative cost intelligence |
+| M89 | P2 | M87 contracts | Automated Google contract and provider evolution |
+| M90 | Release | M84-M89 | Evidence-backed private beta |
+
+M84, M85 and M86 may proceed in parallel where their authority boundaries do
+not overlap. M90 cannot pass with an incomplete predecessor.
+
+## M84: Authenticated Qualification Gauntlet
+
+**Status:** In progress. Fail-closed runners and the M84C Hermes Desktop Compute
+compatibility stack are shipped locally; operator authentication, a qualification
+hostname, and disposable environments are not currently available to automation.
+
+### Objective
+
+Produce reproducible real-cloud evidence for the provider and application
+claims already implemented. This milestone validates shipped code; it does not
+quietly add unrelated provider breadth.
+
+### Qualification Ladder
+
+- **M84A, provider canary:** deploy one small Ziac-owned Zig service with Secret
+  Manager, Storage and one event resource. This is the fast authentication,
+  service enablement, IAM, quota and provider-lifecycle diagnostic.
+- **M84B, golden global E2E:** create a separate repository, run `ziac init`,
+  check, plan and deploy a multi-region Cloud Run, global HTTPS, Cockroach,
+  storage/event fixture, then prove updates, traffic, interruption, resume,
+  drift, import, failure, dashboard evidence and cleanup.
+- **M84C, third-party compatibility:** deploy applications Ziac does not own
+  after the provider canary is reliable. Hermes Agent on Compute Engine is the
+  first lane; GKE or more demanding compatibility applications follow only when
+  they answer a distinct workload question.
+
+### M84C: Hermes On Compute
+
+**Deterministic status:** Shipped locally. `gcp.HermesCompute`, its external
+stack example, reviewed startup script, reserved-address and TLS-edge topology
+tests, fail-closed qualification runner and operator guide pass the
+credential-free gate.
+
+**Authenticated status:** Pending. Qualification requires a billed project
+ending in `-ziac-disposable`, an operator with IAP and OS Login authority, a
+non-production Hermes environment secret, a test hostname in Cloud DNS, and a
+Nous dashboard OAuth client registered for that hostname.
+
+The default is one `e2-medium` Shielded VM, a 30 GiB retained balanced disk, a
+reserved regional address, a pinned Caddy TLS edge, a dedicated service account,
+one secret-scoped accessor grant, and no direct public Hermes port. Hermes
+Desktop connects to the typed HTTPS output and authenticates with Nous OAuth.
+The live receipt must prove TLS, OAuth advertisement, rejected unauthenticated
+WebSocket upgrade, IAP recovery, localhost gateway/backend listeners, restart
+persistence, no-op plan and empty cleanup inventory. See
+[`hermes-compute.md`](hermes-compute.md).
+
+### Deliverables
+
+- Create a dedicated GCP qualification folder or organization boundary with
+  billed projects whose IDs end in `-ziac-disposable`.
+- Define least-privilege qualification identities, short-lived ADC/WIF access,
+  budgets, quotas, labels, TTLs and emergency cleanup.
+- Put the Google Cloud SDK and Ziac qualification toolchain on the declared
+  runner `PATH`; record versions without recording tokens.
+- Run create, read, update, import, no-op, drift, replacement, interruption,
+  resume and delete lanes for every hardened provider family.
+- Exercise Cloud Storage data, Pub/Sub delivery and retry, Tasks dispatch,
+  Eventarc delivery, Cloud Run jobs, worker pools, build and deploy promotion,
+  database migrations and Vertex governed actions.
+- Deploy a real multi-region Zig service through global HTTPS, prove certificate
+  readiness, regional failover, failback, rollback and reverse-order cleanup.
+- Provision or bind a disposable Cockroach cluster, prove verified-TLS SQL,
+  Secret Manager rotation, PSC or declared public egress, regional locality,
+  retained data and explicit cleanup.
+- Query Cloud Asset Inventory, Logging, Monitoring, IAM, org policy, quotas and
+  billing from the same graph and reconcile the results with Ziac's preflight.
+- Publish redacted Testing v2 and cloud qualification receipts with project,
+  region, resource, digest, operation and cleanup identities.
+- Run the Hermes Compute compatibility lane after the provider canary and retain
+  its TLS, OAuth, desktop-protocol, IAP recovery, restart, no-op and cleanup
+  receipt separately from core E2E evidence.
+
+### Evidence
+
+- one immutable manifest naming every qualification lane and authority;
+- one receipt per service family with no silent skips;
+- a global application receipt covering source, image, deploy, traffic,
+  database, failure and cleanup;
+- zero leaked credentials or plaintext secrets; and
+- a cleanup report proving no unapproved billable resource remains.
+
+### Exit Gate
+
+M84 is qualified only when all required lanes pass in freshly created
+disposable projects, every discovered test executes, all destructive operations
+are explicitly confirmed, and the cleanup inventory is empty except for
+declared retained fixtures.
+
+## M85: Self-Host Ziac Cloud With Ziac
+
+**Status:** Planned. The four-project typed workspace and credential-free
+self-host gate are shipped.
+
+### Objective
+
+Bootstrap, deploy and operate Ziac's own hosted product entirely from Ziac
+projects. This is the canonical proof that the product can manage a serious
+platform without a second IaC system hiding underneath it.
+
+### Deliverables
+
+- Split first-run bootstrap authority from steady-state Ziac-managed authority.
+- Apply APIs, Artifact Registry, KMS, retained GCS state and deployer IAM from a
+  guarded local bootstrap state, then migrate and verify remote state.
+- Deploy Cockroach schema, account/session/entitlement models, grants, secrets
+  and ordered control-plane and billing migrations.
+- Finish KMS request and response CRC32C integrity verification.
+- Make first-account creation, credential persistence and OAuth challenge
+  consumption atomic and replay-safe.
+- Add challenge cleanup, rate limiting, recoverable failures and bounded audit
+  retention.
+- Deploy the multi-region control plane and private billing worker from
+  immutable images produced by Ziac.
+- Connect global load balancing, DNS, certificates, service identity, Cloud
+  Scheduler OIDC, Logging, Monitoring, alerts and SLOs.
+- Add production project-connection creation and preflight.
+- Exchange vaulted Google refresh credentials for narrowly scoped access tokens
+  without exposing credentials to the local browser or causal artifacts.
+- Prove upgrade, rollback, state recovery, key rotation and bootstrap disaster
+  recovery from documented operator commands.
+
+### Evidence
+
+- bootstrap, state-migration, data, control-plane and billing plan receipts;
+- health, OAuth, entitlement, scheduler and billing worker probes;
+- a topology artifact showing only Ziac-managed and explicitly referenced
+  resources;
+- rollback and disaster-recovery receipts; and
+- a self-host bill-of-materials with image and contract digests.
+
+### Exit Gate
+
+A clean operator environment uses the installed Ziac CLI to create the hosted
+platform, migrate state, deploy all services, pass health and scheduled billing
+work, perform one safe upgrade and rollback, and recover from a simulated lost
+local bootstrap directory.
+
+## M86: Golden External Developer Journey
+
+**Status:** In progress. Installed-prefix and generated-project gates are
+shipped. M86A-M86C implement the local component and template ecosystem; the
+published global journey and hosted M86D-M86E surfaces are not yet qualified.
+
+### M86A-M86E: Reusable Infrastructure Ecosystem
+
+| Tranche | Status | Outcome |
+| --- | --- | --- |
+| M86A | Implemented at the local gate | Canonical package manifests, component descriptors and graph/visual provenance |
+| M86B | Implemented at the local gate | Independent `ziac-gcpx` package with Asset Bucket and Hermes Desktop components |
+| M86C | Implemented at the local gate | Three source templates, verified local registry, CLI discovery and installed-prefix scaffold qualification |
+| M86D | Planned | Signed hosted community registry, maintainer identity, revocation, attestations and structured dependency updates |
+| M86E | Planned | Local dashboard marketplace, expansion previews, cost and permission summaries, evidence badges and update/ejection UX |
+
+Provider remains a privileged term for cloud-authoritative CRUD code. Resources
+are one-to-one GCP declarations, components are unprivileged graph compilers,
+and templates become user-owned source. Community authors may publish
+components and templates; provider additions still require trusted code review
+and lifecycle conformance.
+
+M86A-M86C exit when an installed CLI can verify the bundled registry, scaffold
+all official templates into clean repositories, compile their programs and
+preserve component provenance without a Ziac source-checkout dependency. The
+detailed contract and hosted continuation are in
+[`ecosystem.md`](ecosystem.md).
+
+### Objective
+
+Take a developer from an empty Git repository to a globally deployed Zig API
+with a useful local canvas in under ten minutes, without any path back to the
+Ziac source checkout.
+
+### Deliverables
+
+- Publish versioned, checksummed and signed CLI artifacts for supported host
+  platforms with deterministic installation and uninstall instructions.
+- Run interactive `ziac init` inside an existing monorepo directory and support
+  multiple independently deployable Ziac projects beneath one Git root.
+- Install project-local Codex, Claude Code and Gemini skills, MCP configuration
+  and official GCP research capability without embedding credentials.
+- Make `ziac doctor` explain Zig, Google, Cockroach, billing, DNS, permissions,
+  quotas, entitlement and dashboard readiness with repair commands.
+- Make `ziac dev` start the local service, dashboard, affected-project compiler,
+  causal log stream and stable proxy with one command.
+- Show one merged canvas by default and project, dependency and connected slices
+  from the local filter menu.
+- Wire real preview, approval, deploy, watch, cancellation, logs, rollback and
+  recovery through the local dashboard and CLI.
+- Ship one production-grade scaffold for a globally routed Zig API with
+  CockroachDB, secrets, observability, CI and environment separation.
+- Exercise an application change, an infrastructure change, a failed build, a
+  failed readiness probe and a regional failure from the generated project.
+
+### Experience Budgets
+
+- first valid local plan within two minutes after prerequisites are present;
+- first local hot reload within one second for a small service;
+- no-op plan without provider mutation;
+- unchanged-image watch deploy uploads no existing blob;
+- every failure returns a stable diagnostic, causal evidence and next action;
+  and
+- no command requires editing generated registry code.
+
+### Exit Gate
+
+Three clean external repositories, including one multi-project monorepo, install
+the published CLI and independently complete init, local development, plan,
+global deployment, dashboard observation, update, rollback and cleanup. Median
+time to the first healthy global endpoint is under ten minutes after cloud
+prerequisites are ready.
+
+## M87: Provider And State Reliability Campaign
+
+**Status:** Planned.
+
+### Objective
+
+Turn broad provider coverage into boring, recoverable operational behaviour
+under failures, concurrency and Google eventual consistency.
+
+### Deliverables
+
+- Build a capability-derived conformance matrix so every managed resource runs
+  the lifecycle lanes it claims to support.
+- Test credential expiry, 401/403 refresh, quota exhaustion, rate limiting,
+  transient 5xx, malformed responses, LRO loss, cancellation and deadline
+  expiry.
+- Prove update-mask ownership, etag conflicts, immutable replacement,
+  create-before-destroy and retained cleanup for each hardened family.
+- Exercise concurrent writers, lock expiry, lease renewal, interrupted state
+  writes, checkpoint replay and remote-state migration.
+- Add bounded readiness stabilization for eventually consistent IAM, DNS,
+  certificates, Cloud Run revisions, service agents and Cloud Asset Inventory.
+- Prove import, refresh, external drift, missing resources, partial reads and
+  zero-change adoption.
+- Add versioned state migrations and provider contract upgrade fixtures with
+  backward compatibility and rollback.
+- Add signed provider artifact locks, revocation, process pools, cooperative
+  cancel frames and OS-level credential/network sandbox profiles on top of the
+  shipped `ziac.provider.rpc.v1` process boundary.
+- Define latency, memory, request-count and retry budgets for plan, refresh,
+  apply, watch and dashboard patch propagation.
+- Run multi-seed deterministic fault campaigns and scheduled real-cloud canaries.
+
+### Exit Gate
+
+Every catalog capability is backed by its declared conformance lane; the full
+fault matrix produces no corrupt state, leaked lease, unbounded retry or
+unexplained plan; and scheduled cloud canaries remain green for 30 consecutive
+days.
+
+## M88: Estate Pro And Cost Intelligence
+
+**Status:** Planned. Read-only discovery, ownership and cost kernels are
+shipped; the paid service is not.
+
+### Objective
+
+Deliver the paid local-first product: connect a Google account, understand an
+existing estate and its cost, compare it with Ziac-managed intent, and adopt
+resources deliberately.
+
+### Deliverables
+
+- Complete hosted Google OAuth callback, account creation, GCP connection
+  preflight, revocation and credential rotation.
+- Add subscription checkout, signed and replay-safe billing webhooks,
+  entitlement renewal/cancellation and operator grants.
+- Issue short-lived signed local feature leases that can be verified offline
+  without storing customer cloud credentials in the browser.
+- Schedule Cloud Asset Inventory snapshots and feeds with immutable history and
+  change causality.
+- Ingest detailed BigQuery billing exports, Catalog/Pricing data, credits,
+  contract pricing where authorized and resource attribution confidence.
+- Display actual billed cost, projected month end and configuration estimate as
+  visibly distinct values.
+- Explain what changed, why cost changed, attribution gaps and actionable waste
+  findings with evidence.
+- Merge observed, referenced and managed infrastructure in one local canvas,
+  preserving ownership and mutation isolation.
+- Generate reviewable Ziac code from observed assets and permit adoption only
+  after a zero-change import plan.
+- Add account, team, project, report, retention, export and deletion controls.
+- Build a separate least-privilege internal admin surface with append-only audit
+  evidence; never put admin authority in the customer dashboard.
+
+### Exit Gate
+
+A paid test customer signs in, connects and later revokes a disposable GCP
+project, scans its estate, sees authoritative and estimated cost with attribution
+coverage, receives a change report, generates Ziac code, adopts one supported
+resource with a zero-change plan and proves that observed-only resources cannot
+be mutated.
+
+## M89: Automated Google Contract And Provider Evolution
+
+**Status:** Planned.
+
+### Objective
+
+Keep 253-resource coverage current without turning generated schemas into an
+unsafe provider or requiring hand-maintained drift across every Google API.
+
+### Deliverables
+
+- Fetch and pin Google protobuf, Discovery and Cloud Asset contracts with
+  canonical digests and reproducible closure manifests.
+- Generate semantic diffs for fields, methods, resource names, scopes,
+  immutability, etags, update masks, LROs, IAM, API versions and deprecations.
+- Classify changes as additive, behaviour-changing, state-migrating, breaking or
+  preview-only and require explicit review for every non-additive change.
+- Generate low-level declarations, serializers, import parsers, capability
+  metadata, documentation stubs and conformance cases from one contract model.
+- Keep handwritten lifecycle adapters and high-level components separate from
+  regenerated code with stable ownership boundaries.
+- Make preview resources opt-in, versioned and accompanied by explicit state
+  and migration policy.
+- Produce a provider-upgrade report explaining new capabilities, permission and
+  API changes, state effects and required operator action.
+- Add demand telemetry that records unsupported resource kinds without customer
+  identifiers or configuration payloads.
+
+### Exit Gate
+
+Two consecutive upstream Google contract revisions regenerate deterministically,
+produce reviewed semantic reports, preserve handwritten provider behaviour and
+pass catalog parity, compile, lifecycle, migration and documentation gates with
+no unexplained state change.
+
+## M90: Private Beta Release
+
+**Status:** Planned.
+
+### Objective
+
+Release Ziac to design partners with evidence-backed claims, bounded support and
+a reversible upgrade path.
+
+### Deliverables
+
+- Freeze the supported host, Zig, GCP, Cockroach and browser compatibility
+  matrix.
+- Publish signed binaries, provenance, SBOMs, checksums, licenses, release notes
+  and upgrade/rollback instructions.
+- Document supported resources and capabilities directly from the catalog.
+- Publish honest service SLOs, status communication, data retention, deletion,
+  incident response and security disclosure policies.
+- Run onboarding with at least three external teams and capture structured time,
+  failure and support evidence.
+- Prove hosted control-plane backup, restore, key rotation, dependency outage and
+  regional failover.
+- Establish release promotion, canary, rollback and support ownership.
+
+### Beta Definition Of Done
+
+- M84-M89 exit gates pass without hidden skips.
+- Three external repositories deploy and operate real workloads for 30 days.
+- Ziac Cloud is deployed from Ziac code and restored from documented backups.
+- No known critical state-corruption, credential-leak or authority-escalation
+  defect remains open.
+- Cost surfaces never conflate actual, projected and estimated values.
+- Every supported mutation is tied to a saved plan, capability, approval and
+  causal receipt.
+- Every public claim maps to a reproducible evidence artifact.
+
+## Explicit Non-Goals Before Beta
+
+- competing with Terraform on every historical Google resource;
+- another browser-only cloud console;
+- implicit autonomous production mutation;
+- importing an estate directly into managed state without a zero-change gate;
+- calling configuration estimates live or actual spend;
+- enabling experimental protobuf-over-HTTP or unaudited HTTP/2 transports; and
+- adding Cloudflare or another primary cloud provider.
+
+## Canonical References
+
+- shipped capabilities: [`shipped.md`](shipped.md)
+- architecture: [`architecture.md`](architecture.md)
+- provider catalog: [`gcp-provider-coverage.md`](gcp-provider-coverage.md)
+- provider process protocol: [`provider-rpc.md`](provider-rpc.md)
+- self-host and paid boundary: [`estate-control-plane.md`](estate-control-plane.md)
+- local developer platform: [`agent-development.md`](agent-development.md)
+- visual tooling: [`visual-workbench.md`](visual-workbench.md)
+- releases and live gates: [`release.md`](release.md)
+- consolidation design:
+  `docs/superpowers/specs/2026-07-15-ziac-roadmap-consolidation-design.md`

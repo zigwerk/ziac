@@ -60,6 +60,7 @@ test "release manifest declares deterministic and authenticated acceptance gates
     }
 
     try expectLiveTest(manifest.live_tests, "gcp-global-container", true);
+    try expectLiveTest(manifest.live_tests, "gcp-hermes-compute", true);
     try expectLiveTest(manifest.live_tests, "cockroach-cloud-sql", true);
     try expectLiveTest(manifest.live_tests, "cockroach-local-verified-tls", false);
 }

@@ -1,5 +1,10 @@
 # Ziac Local-First SaaS And Self-Hosting Implementation Programme
 
+**Canonical status:** Superseded. Shipped local and self-host foundations are
+recorded in `packages/ziac/docs/shipped.md`; remaining production control-plane,
+paid-product and qualification work is consolidated into M84, M85 and M88 in
+`packages/ziac/docs/roadmap.md`.
+
 Date: 2026-07-12
 Design: `docs/superpowers/specs/2026-07-12-ziac-local-first-saas-self-hosting-design.md`
 

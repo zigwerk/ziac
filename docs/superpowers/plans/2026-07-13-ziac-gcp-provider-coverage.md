@@ -1,5 +1,9 @@
 # Ziac Comprehensive GCP Provider Coverage Plan
 
+**Canonical status:** Shipped through M83 with 253 managed resources. The
+remaining authenticated lanes are M84 and governed contract expansion is M89
+in `packages/ziac/docs/roadmap.md`.
+
 Date: 2026-07-13
 Design: `docs/superpowers/specs/2026-07-13-ziac-gcp-provider-coverage-design.md`
 
@@ -236,15 +240,14 @@ isolated serializer tests.
 - [x] M79 organization policy, tags, access policies and VPC Service Controls.
 - [x] M80 Security Command Center, Binary Authorization and CA Service.
 
-## M81+: Analytics, Integration And AI
+## M81-M83: Analytics, Integration And AI
 
 - [x] M81 Data Pipelines, Dataflow actions, Dataproc and Dataform.
 - [x] M82 Eventarc Advanced and Integration Connectors.
 - [x] M83 stable Vertex AI platform resources.
-- [ ] Keep preview resources opt-in and attach explicit migration policy.
-- [ ] Continue descriptor-driven expansion until every supported public GCP
-  resource is either managed, intentionally observed-only, or carries a visible
-  exclusion reason.
+
+Preview policy and further descriptor-driven expansion were deliberately moved
+to M89 rather than treated as incomplete M83 work.
 
 ## M68 Evidence
 

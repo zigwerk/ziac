@@ -631,6 +631,11 @@ function ResourceInspector(props: {
               <dt>Scope</dt><dd>{resource().region ?? resource().scope}</dd>
               <dt>Type</dt><dd><code>{resource().type}</code></dd>
               <dt>Resource ID</dt><dd><code>{resource().id}</code></dd>
+              <Show when={resource().component}>{(component) => <>
+                <dt>Component</dt><dd><strong>{component().name}</strong></dd>
+                <dt>Package</dt><dd><code>{component().package}@{component().version}</code></dd>
+                <dt>Instance</dt><dd><code>{component().instance}</code></dd>
+              </>}</Show>
               <Show when={resource().discovery}>{(discovery) => <>
                 <dt>Discovery source</dt><dd>{discovery().provider.replaceAll("_", " ")}</dd>
                 <dt>Project</dt><dd><code>{discovery().project_id}</code></dd>

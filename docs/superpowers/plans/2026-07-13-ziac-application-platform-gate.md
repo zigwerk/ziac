@@ -1,7 +1,8 @@
 # Ziac M62 Application Platform Gate Plan
 
 Date: 2026-07-13
-Status: in progress
+Status: shipped at the deterministic application-platform gate; authenticated
+service delivery is M84 in `packages/ziac/docs/roadmap.md`
 
 ## 1. Integrated Component
 

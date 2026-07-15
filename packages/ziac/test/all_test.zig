@@ -58,6 +58,7 @@ comptime {
     _ = @import("gcp_compute_workloads_components_test.zig");
     _ = @import("gcp_compute_workloads_product_test.zig");
     _ = @import("gcp_compute_workloads_test.zig");
+    _ = @import("gcp_hermes_compute_test.zig");
     _ = @import("gcp_application_services_product_test.zig");
     _ = @import("gcp_bigquery_live_provider_test.zig");
     _ = @import("gcp_bigquery_product_test.zig");
@@ -81,10 +82,13 @@ comptime {
     _ = @import("output_test.zig");
     _ = @import("binding_test.zig");
     _ = @import("resource_graph_test.zig");
+    _ = @import("component_test.zig");
+    _ = @import("ecosystem_test.zig");
     _ = @import("rollout_test.zig");
     _ = @import("state_test.zig");
     _ = @import("plan_test.zig");
     _ = @import("provider_apply_test.zig");
+    _ = @import("provider_rpc_test.zig");
     _ = @import("executor_test.zig");
     _ = @import("checkpoint_test.zig");
     _ = @import("lock_test.zig");

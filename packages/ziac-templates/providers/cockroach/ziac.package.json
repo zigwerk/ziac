@@ -1,0 +1,15 @@
+{
+  "schema": "ziac.package.v1",
+  "name": "ziac-provider/cockroach",
+  "version": "0.1.0",
+  "kind": "provider",
+  "summary": "CockroachDB Cloud and SQL resources for Ziac",
+  "license": "Apache-2.0",
+  "source": "https://github.com/ziac-run/ziac",
+  "entry": "ziac-provider-cockroach",
+  "compatibility": { "ziac": ">=0.1.0 <0.2.0", "zig": ">=0.16.0 <0.17.0" },
+  "providers": ["cockroach"],
+  "resource_types": ["cockroach.*"],
+  "maturity": "preview",
+  "provider_rpc": { "protocol": "ziac.provider.rpc.v1", "provider": "cockroach", "executable": "ziac-provider-cockroach", "max_inflight": 1 }
+}

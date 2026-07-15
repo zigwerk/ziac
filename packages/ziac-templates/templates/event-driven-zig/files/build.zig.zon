@@ -1,0 +1,11 @@
+.{
+    .name = .{{zig_package_name}},
+    .version = "0.1.0",
+    .fingerprint = 0x{{package_fingerprint}},
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ziac = .{ .path = {{ziac_path}} },
+        .ziac_gcpx = .{ .path = {{ziac_gcpx_path}} },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "ziac.stack.zig", "ziac_program.zig", "ziac.project.json" },
+}

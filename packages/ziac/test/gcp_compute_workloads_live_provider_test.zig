@@ -91,6 +91,7 @@ test "instances resolve startup scripts for mutation without retaining bytes" {
     var pending = try handler.create(&context, instance.node);
     defer pending.deinit();
     try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "#!/bin/sh\\necho ziac") != null);
+    try std.testing.expect(std.mem.indexOf(u8, harness.transport.requests.items[0].body, "\"natIP\":\"34.1.2.3\"") != null);
     const state_json = try pending.observed_inputs.canonicalJsonAlloc(std.testing.allocator);
     defer std.testing.allocator.free(state_json);
     try std.testing.expect(std.mem.indexOf(u8, state_json, "echo ziac") == null);
@@ -259,7 +260,12 @@ fn startupReference() ziac.SecretOutput(ziac.value.SecretReference) {
 }
 
 fn networkInterface() workloads.NetworkInterface {
-    return .{ .network = ziac.PublicOutput([]const u8).known("projects/ziac-dev/global/networks/api"), .subnetwork = ziac.PublicOutput([]const u8).known("projects/ziac-dev/regions/europe-west1/subnetworks/api"), .external_access = true };
+    return .{
+        .network = ziac.PublicOutput([]const u8).known("projects/ziac-dev/global/networks/api"),
+        .subnetwork = ziac.PublicOutput([]const u8).known("projects/ziac-dev/regions/europe-west1/subnetworks/api"),
+        .external_access = true,
+        .external_ip = ziac.PublicOutput([]const u8).known("34.1.2.3"),
+    };
 }
 
 fn buildInstance() !workloads.Instance {

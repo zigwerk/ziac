@@ -43,7 +43,7 @@ Status: locally complete; authenticated disposable-project qualification pending
 - [x] Add public example and installed documentation.
 - [x] Add local apply/import/refresh/no-op/cleanup receipt.
 - [x] Add fail-closed authenticated qualification runner.
-- [ ] Run Testing v2, examples, migration, typecheck and release gates.
+- [x] Run Testing v2, examples, migration, typecheck and release gates.
 - [x] Record evidence, update roadmaps and commit M72.
 
 ## Evidence

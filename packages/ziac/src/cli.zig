@@ -267,6 +267,20 @@ const provider_subcommands = [_]zstd.Cli.CommandSpec{
     .{ .name = "resources", .description = "report managed and planned GCP provider resources", .options = provider_resource_options[0..] },
 };
 
+const registry_options = [_]zstd.Cli.OptionSpec{
+    .{ .name = "kind", .kind = .string, .help = "filter by component or template" },
+    .{ .name = "json", .kind = .boolean, .help = "emit stable JSON" },
+};
+
+const registry_subcommands = [_]zstd.Cli.CommandSpec{
+    .{ .name = "list", .description = "list verified bundled components and templates", .options = registry_options[0..] },
+    .{ .name = "search", .description = "search verified bundled components and templates", .options = registry_options[0..] },
+};
+
+const package_subcommands = [_]zstd.Cli.CommandSpec{
+    .{ .name = "verify", .description = "validate and digest a Ziac package manifest" },
+};
+
 const agent_options = [_]zstd.Cli.OptionSpec{
     .{ .name = "stack", .kind = .string, .required = true, .help = "stack name" },
     .{ .name = "stage", .kind = .string, .required = true, .help = "deployment stage" },
@@ -420,6 +434,16 @@ const subcommands = [_]zstd.Cli.CommandSpec{
         .name = "provider",
         .description = "inspect provider contracts and resource coverage",
         .subcommands = provider_subcommands[0..],
+    },
+    .{
+        .name = "registry",
+        .description = "discover verified Ziac components and templates",
+        .subcommands = registry_subcommands[0..],
+    },
+    .{
+        .name = "package",
+        .description = "inspect Ziac ecosystem package manifests",
+        .subcommands = package_subcommands[0..],
     },
     .{
         .name = "agent",

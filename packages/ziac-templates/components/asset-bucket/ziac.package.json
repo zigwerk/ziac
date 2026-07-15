@@ -1,0 +1,14 @@
+{
+  "schema": "ziac.package.v1",
+  "name": "ziac-gcpx/asset-bucket",
+  "version": "0.1.0",
+  "kind": "component",
+  "summary": "A governed versioned Cloud Storage bucket and IAM graph",
+  "license": "Apache-2.0",
+  "source": "https://github.com/ziac-run/ziac-gcpx",
+  "entry": "src/asset_bucket.zig",
+  "compatibility": { "ziac": ">=0.1.0 <0.2.0", "zig": ">=0.16.0 <0.17.0" },
+  "providers": ["gcp"],
+  "resource_types": ["gcp.storage.Bucket", "gcp.storage.BucketIamMember"],
+  "maturity": "preview"
+}

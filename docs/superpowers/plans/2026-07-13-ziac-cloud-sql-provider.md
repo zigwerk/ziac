@@ -1,7 +1,8 @@
 # Ziac M65 Cloud SQL Provider Plan
 
 Date: 2026-07-13
-Status: in progress
+Status: shipped at the local provider gate; authenticated qualification is M84
+in `packages/ziac/docs/roadmap.md`
 
 ## 1. Contract And Typed Resources
 

@@ -26,6 +26,23 @@ test("parseZiacVisualArtifact validates the generated global topology", () => {
   expect(artifact.routes.every((route) => route.from_resource.endsWith("api-https"))).toBe(true);
 });
 
+test("parser preserves component provenance and rejects malformed source digests", () => {
+  const raw = JSON.parse(sampleJson());
+  raw.resources[0].component = {
+    package: "ziac-gcpx",
+    name: "HermesDesktop",
+    version: "0.1.0",
+    instance: "hermes",
+    source_digest: "a".repeat(64),
+  };
+
+  const parsed = parseZiacVisualArtifact(raw);
+  expect(parsed.resources[0]?.component).toEqual(raw.resources[0].component);
+
+  raw.resources[0].component.source_digest = "mutable-main";
+  expect(() => parseZiacVisualArtifact(raw)).toThrow("resources[0].component.source_digest");
+});
+
 test("deriveZiacVisualModel maps regions routes summaries and provider families", () => {
   const model = deriveZiacVisualModel(parseZiacVisualArtifact(JSON.parse(sampleJson())));
 

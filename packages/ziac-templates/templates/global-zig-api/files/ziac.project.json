@@ -1,0 +1,15 @@
+{
+  "schema": "ziac.project.v1",
+  "project": "{{project_name}}",
+  "source_roots": ["src", "ziac.stack.zig"],
+  "program": { "argv": ["zig", "build", "ziac-program", "--"], "max_output_bytes": 8388608 },
+  "dashboard": { "stack": "global-api", "stage": "dev" },
+  "components": [{ "id": "api", "resources": [] }],
+  "requirements": [{ "id": "global-api-healthy", "summary": "The global API compiles and remains healthy", "component": "api", "required": true }],
+  "acceptance_checks": [{ "id": "check-global-api", "requirement": "global-api-healthy", "argv": ["zig", "build", "test"] }],
+  "environments": [{ "id": "development", "stage_patterns": ["dev", "dev_*"], "providers": ["gcp"], "projects": ["*-ziac-disposable"], "regions": ["europe-west1", "us-central1", "asia-northeast1"], "max_monthly_cost_minor": 10000 }],
+  "adaptations": [{ "resource_type": "gcp.run.Service", "strategy": "local_process" }, { "resource_type": "gcp.compute.BackendService", "strategy": "local_proxy" }],
+  "development": { "source_root": ".", "build_argv": ["zig", "build"], "process_argv": ["./zig-out/bin/app"], "health_path": "/health/live", "proxy_port": 4318, "generation_base_port": 45000, "poll_millis": 75 },
+  "scenarios": [{ "id": "global-api-starts", "requirement": "global-api-healthy", "acceptance_check": "check-global-api", "seed": 42, "required": true }],
+  "authority": { "read": true, "plan": true, "apply": false, "delete": false, "secret_read": false, "live_network": false, "process": true }
+}

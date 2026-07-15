@@ -2,7 +2,8 @@
 
 Date: 2026-07-14
 Design: `docs/superpowers/specs/2026-07-14-ziac-monitoring-provider-design.md`
-Status: implementation in progress
+Status: shipped at the local provider gate; authenticated qualification is M84
+in `packages/ziac/docs/roadmap.md`
 
 ## Contract And Tests
 
@@ -55,8 +56,8 @@ errors. Public examples, fresh installation, monorepo scaffolding, dashboard
 production build, Testing v2 migration, root TypeScript, formatting and static
 secret checks pass.
 
-The aggregate container release step remains externally blocked because the
-local Docker engine is unavailable. Authenticated Monitoring qualification is
-also intentionally external: `scripts/qualify-monitoring.sh` exits with a
+The aggregate arm64 non-root container release step subsequently passed as part
+of the M83 release gate. Authenticated Monitoring qualification remains
+intentionally external: `scripts/qualify-monitoring.sh` exits with a
 structured skip unless ADC, an explicitly disposable project and the exact
 qualification graph are supplied.

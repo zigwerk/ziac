@@ -95,6 +95,30 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(mcp_server_executable);
 
+    const provider_gcp_module = b.createModule(.{
+        .root_source_file = b.path("src/provider_gcp_main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    provider_gcp_module.addImport("ziac", ziac);
+    const provider_gcp_executable = b.addExecutable(.{
+        .name = "ziac-provider-gcp",
+        .root_module = provider_gcp_module,
+    });
+    b.installArtifact(provider_gcp_executable);
+
+    const provider_cockroach_module = b.createModule(.{
+        .root_source_file = b.path("src/provider_cockroach_main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    provider_cockroach_module.addImport("ziac", ziac);
+    const provider_cockroach_executable = b.addExecutable(.{
+        .name = "ziac-provider-cockroach",
+        .root_module = provider_cockroach_module,
+    });
+    b.installArtifact(provider_cockroach_executable);
+
     const estate_control_plane_module = b.createModule(.{
         .root_source_file = b.path("src/estate_control_plane_main.zig"),
         .target = target,
@@ -152,6 +176,47 @@ pub fn build(b: *std.Build) void {
     });
     const run_receipt_check = b.addRunArtifact(receipt_check);
     run_receipt_check.step.dependOn(&run_unit_tests.step);
+    const unit_test_step = b.step("unit-test", "Run Ziac Testing v2 unit suite");
+    unit_test_step.dependOn(&run_receipt_check.step);
+
+    const provider_rpc_tests_module = b.createModule(.{
+        .root_source_file = b.path("test/provider_rpc_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    provider_rpc_tests_module.addImport("ziac", ziac);
+    provider_rpc_tests_module.addImport("zigeffect_std", zigeffect_std);
+    const provider_rpc_tests = addV2Test(b, testing_runner, .{
+        .name = "ziac-provider-rpc-tests",
+        .root_module = provider_rpc_tests_module,
+    });
+    const run_provider_rpc_tests = b.addRunArtifact(provider_rpc_tests);
+    const provider_rpc_test_step = b.step("provider-rpc-test", "Run Ziac Provider RPC contract tests");
+    provider_rpc_test_step.dependOn(&run_provider_rpc_tests.step);
+
+    const provider_rpc_fixture_module = b.createModule(.{
+        .root_source_file = b.path("test/provider_rpc_fixture_main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    provider_rpc_fixture_module.addImport("ziac", ziac);
+    const provider_rpc_fixture = b.addExecutable(.{
+        .name = "ziac-provider-rpc-fixture",
+        .root_module = provider_rpc_fixture_module,
+    });
+    const provider_rpc_process_module = b.createModule(.{
+        .root_source_file = b.path("test/provider_rpc_process_e2e_main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    provider_rpc_process_module.addImport("ziac", ziac);
+    const provider_rpc_process_e2e = b.addExecutable(.{
+        .name = "ziac-provider-rpc-process-e2e",
+        .root_module = provider_rpc_process_module,
+    });
+    const run_provider_rpc_process_e2e = b.addRunArtifact(provider_rpc_process_e2e);
+    run_provider_rpc_process_e2e.addArtifactArg(provider_rpc_fixture);
+    provider_rpc_test_step.dependOn(&run_provider_rpc_process_e2e.step);
 
     const dev_fixture_module = b.createModule(.{
         .root_source_file = b.path("test/dev_fixture_main.zig"),
@@ -177,6 +242,7 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run Ziac tests");
     test_step.dependOn(&run_receipt_check.step);
+    test_step.dependOn(&run_provider_rpc_process_e2e.step);
     test_step.dependOn(&run_dev_e2e.step);
     const compile_contracts = b.addSystemCommand(&.{"bash"});
     compile_contracts.addFileArg(b.path("test/compile_fail/run.sh"));
@@ -190,6 +256,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&scaffold_e2e.step);
     test_step.dependOn(&dashboard_host_executable.step);
     test_step.dependOn(&mcp_server_executable.step);
+    test_step.dependOn(&provider_gcp_executable.step);
+    test_step.dependOn(&provider_cockroach_executable.step);
     test_step.dependOn(&estate_control_plane_executable.step);
     test_step.dependOn(&billing_worker_executable.step);
 
@@ -217,6 +285,7 @@ pub fn build(b: *std.Build) void {
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "application-platform", "examples/application_platform.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "application-services", "examples/application_services.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "compute-workloads", "examples/compute_workloads.zig");
+    addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "hermes-compute", "examples/hermes_compute.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "network-delivery", "examples/network_delivery.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "secure-edge", "examples/secure_edge.zig");
     addExample(b, examples_step, target, optimize, testing_runner, ziac, zigeffect_std, "connectivity", "examples/connectivity.zig");
@@ -305,6 +374,18 @@ fn installClientDistribution(b: *std.Build, dashboard_build: *std.Build.Step) vo
         "build.zig",
         "build.zig.zon",
     }, &.{ "examples", "scripts", "src" });
+    installPackage(b, "ziac-gcpx", "../ziac-gcpx", &.{
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+        "ziac.package.json",
+    }, &.{ "components", "src", "test" });
+    const templates_install = b.addInstallDirectory(.{
+        .source_dir = b.path("../ziac-templates"),
+        .install_dir = .prefix,
+        .install_subdir = "share/ziac-templates",
+    });
+    b.getInstallStep().dependOn(&templates_install.step);
     const dashboard_install = b.addInstallDirectory(.{
         .source_dir = b.path("dashboard"),
         .install_dir = .prefix,

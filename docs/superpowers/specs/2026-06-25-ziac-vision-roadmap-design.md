@@ -2,7 +2,9 @@
 
 Date: 2026-06-25
 
-Status: user-approved design direction, written for review before implementation planning.
+Status: superseded as a roadmap. The product direction remains historical
+design context; shipped status is recorded in `packages/ziac/docs/shipped.md`
+and forward work in `packages/ziac/docs/roadmap.md`.
 
 ## Executive Summary
 

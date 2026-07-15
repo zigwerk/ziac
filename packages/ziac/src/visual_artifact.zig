@@ -174,6 +174,15 @@ fn appendResource(
     try appendNamedString(output, allocator, "provider", @tagName(item.node.provider), true);
     try appendNamedString(output, allocator, "type", item.node.type_name, true);
     try appendNamedString(output, allocator, "logical_id", item.node.logical_id, true);
+    if (item.node.component) |origin| {
+        try output.appendSlice(allocator, ",\"component\":{\"package\":");
+        try appendJsonString(output, allocator, origin.package);
+        try appendNamedString(output, allocator, "name", origin.name, true);
+        try appendNamedString(output, allocator, "version", origin.version, true);
+        try appendNamedString(output, allocator, "instance", origin.instance, true);
+        try appendNamedString(output, allocator, "source_digest", origin.source_digest, true);
+        try output.append(allocator, '}');
+    }
     try appendNamedString(output, allocator, "scope", scope, true);
     if (regions.items.len == 1) try appendNamedString(output, allocator, "region", regions.items[0], true);
     try output.appendSlice(allocator, ",\"regions\":");

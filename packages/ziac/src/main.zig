@@ -32,6 +32,24 @@ pub fn main(init: std.process.Init) !void {
             return;
         });
     }
+    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "registry")) {
+        const code = runRegistry(allocator, io, args.items[1..]);
+        std.process.exit(code catch |err| {
+            var error_buffer: [256]u8 = undefined;
+            const message = std.fmt.bufPrint(&error_buffer, "ziac registry: {s}\n", .{@errorName(err)}) catch "ziac registry failed\n";
+            std.Io.File.stderr().writeStreamingAll(io, message) catch {};
+            return;
+        });
+    }
+    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "package")) {
+        const code = runPackage(allocator, io, cwd, args.items[1..]);
+        std.process.exit(code catch |err| {
+            var error_buffer: [256]u8 = undefined;
+            const message = std.fmt.bufPrint(&error_buffer, "ziac package: {s}\n", .{@errorName(err)}) catch "ziac package failed\n";
+            std.Io.File.stderr().writeStreamingAll(io, message) catch {};
+            return;
+        });
+    }
     if (args.items.len >= 2 and std.mem.eql(u8, args.items[0], "mcp") and std.mem.eql(u8, args.items[1], "serve")) {
         const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
         defer allocator.free(executable_dir);
@@ -150,9 +168,10 @@ pub fn main(init: std.process.Init) !void {
     var token_cache: ?ziac.gcp.auth.TokenCache = null;
     defer if (token_cache) |*cache| cache.deinit(allocator);
     var google_client: ziac.gcp.client.Client = undefined;
-    var live_provider: ziac.gcp.live_provider.LiveProvider = undefined;
-    var cockroach_client: ziac.cockroach.client.Client = undefined;
-    var cockroach_provider: ziac.cockroach.live_provider.LiveProvider = undefined;
+    var gcp_process_provider: ?ziac.provider_rpc.ProcessProvider = null;
+    defer if (gcp_process_provider) |*process_provider| process_provider.deinit();
+    var cockroach_process_provider: ?ziac.provider_rpc.ProcessProvider = null;
+    defer if (cockroach_process_provider) |*process_provider| process_provider.deinit();
     var live_providers: ?ziac.provider.ProviderRegistry = null;
     if (requestsGoogleClient(args.items) or use_remote_state) {
         if (ziac.gcp.auth.resolveAdcAlloc(allocator, auth_env, &auth_files)) |resolved| {
@@ -164,14 +183,27 @@ pub fn main(init: std.process.Init) !void {
             );
             token_cache = ziac.gcp.auth.TokenCache.init(adc_source.tokenSource(), 300);
             google_client = ziac.gcp.client.Client.init(local_http.client(), &token_cache.?, .{});
-            live_provider = ziac.gcp.live_provider.LiveProvider.init(&google_client);
+            const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
+            defer allocator.free(executable_dir);
+            const gcp_provider_path = try std.fs.path.join(allocator, &.{ executable_dir, "ziac-provider-gcp" });
+            defer allocator.free(gcp_provider_path);
+            gcp_process_provider = try ziac.provider_rpc.ProcessProvider.init(allocator, io, &.{gcp_provider_path}, .{
+                .package_name = "ziac-provider/gcp",
+                .package_version = "0.1.0",
+                .provider = .gcp,
+            });
             var providers = ziac.provider.ProviderRegistry{};
-            providers.register(.gcp, live_provider.provider());
+            providers.register(.gcp, gcp_process_provider.?.provider());
             if (init.environ_map.get("COCKROACH_API_KEY")) |api_key| {
                 if (api_key.len > 0) {
-                    cockroach_client = ziac.cockroach.client.Client.init(local_http.client(), api_key, .{});
-                    cockroach_provider = ziac.cockroach.live_provider.LiveProvider.init(&cockroach_client);
-                    providers.register(.cockroach, cockroach_provider.provider());
+                    const cockroach_provider_path = try std.fs.path.join(allocator, &.{ executable_dir, "ziac-provider-cockroach" });
+                    defer allocator.free(cockroach_provider_path);
+                    cockroach_process_provider = try ziac.provider_rpc.ProcessProvider.init(allocator, io, &.{cockroach_provider_path}, .{
+                        .package_name = "ziac-provider/cockroach",
+                        .package_version = "0.1.0",
+                        .provider = .cockroach,
+                    });
+                    providers.register(.cockroach, cockroach_process_provider.?.provider());
                 }
             }
             live_providers = providers;
@@ -592,6 +624,7 @@ fn runInit(
         if (!std.mem.eql(u8, preset, "ziac-cloud")) return error.UnknownInitPreset;
         return runZiacCloudInit(allocator, io, cwd, args);
     }
+    if (optionValue(args, "--template")) |template| return runTemplateInit(allocator, io, cwd, args, template);
     const explicit_name = if (args.len > 0 and !std.mem.startsWith(u8, args[0], "--")) args[0] else null;
     const options = if (explicit_name == null) args else args[1..];
     const current_path = try cwd.realPathFileAlloc(io, ".", allocator);
@@ -644,6 +677,260 @@ fn runInit(
     defer allocator.free(message);
     try std.Io.File.stdout().writeStreamingAll(io, message);
     return ziac.cli.Exit.success;
+}
+
+const RegistryRecord = struct {
+    name: []const u8,
+    version: []const u8,
+    kind: []const u8,
+    summary: []const u8,
+    qualification: []const u8,
+    manifest_sha256: []const u8,
+};
+
+fn runRegistry(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8) !u8 {
+    if (args.len == 0 or (!std.mem.eql(u8, args[0], "list") and !std.mem.eql(u8, args[0], "search"))) return error.UnknownRegistryCommand;
+    const root_path = try ecosystemRootAlloc(allocator, io);
+    defer allocator.free(root_path);
+    var root = try std.Io.Dir.openDirAbsolute(io, root_path, .{});
+    defer root.close(io);
+    const index_bytes = try root.readFileAlloc(io, "index.json", allocator, .limited(4 * 1024 * 1024));
+    defer allocator.free(index_bytes);
+    var registry = try ziac.ecosystem.Registry.parseAlloc(allocator, index_bytes);
+    defer registry.deinit();
+    try verifyRegistryManifests(allocator, io, root, registry);
+
+    const kind = if (optionValue(args, "--kind")) |value|
+        std.meta.stringToEnum(ziac.ecosystem.Kind, value) orelse return error.InvalidPackageKind
+    else
+        null;
+    const query = if (std.mem.eql(u8, args[0], "search") and args.len > 1 and !std.mem.startsWith(u8, args[1], "--")) args[1] else "";
+    const matches = try registry.searchAlloc(allocator, .{ .query = query, .kind = kind, .limit = 100 });
+    defer allocator.free(matches);
+    const records = try allocator.alloc(RegistryRecord, matches.len);
+    defer allocator.free(records);
+    for (matches, 0..) |entry_index, index| {
+        const entry = registry.entries[entry_index];
+        records[index] = .{
+            .name = entry.name,
+            .version = entry.version,
+            .kind = @tagName(entry.kind),
+            .summary = entry.summary,
+            .qualification = @tagName(entry.qualification),
+            .manifest_sha256 = entry.manifest_sha256,
+        };
+    }
+    const artifact = try std.json.Stringify.valueAlloc(allocator, .{
+        .schema = "ziac.registry-search.v1",
+        .query = query,
+        .count = records.len,
+        .packages = records,
+    }, .{});
+    defer allocator.free(artifact);
+    try std.Io.File.stdout().writeStreamingAll(io, artifact);
+    try std.Io.File.stdout().writeStreamingAll(io, "\n");
+    return ziac.cli.Exit.success;
+}
+
+fn runPackage(allocator: std.mem.Allocator, io: std.Io, cwd: std.Io.Dir, args: []const []const u8) !u8 {
+    if (args.len < 2 or !std.mem.eql(u8, args[0], "verify")) return error.UnknownPackageCommand;
+    const requested = args[1];
+    const manifest_path = if (std.mem.endsWith(u8, requested, ".json"))
+        try allocator.dupe(u8, requested)
+    else
+        try std.fs.path.join(allocator, &.{ requested, "ziac.package.json" });
+    defer allocator.free(manifest_path);
+    const bytes = if (std.fs.path.isAbsolute(manifest_path))
+        try readAbsoluteFileAlloc(allocator, io, manifest_path, ziac.ecosystem.max_manifest_bytes)
+    else
+        try cwd.readFileAlloc(io, manifest_path, allocator, .limited(ziac.ecosystem.max_manifest_bytes));
+    defer allocator.free(bytes);
+    var manifest = try ziac.ecosystem.Manifest.parseAlloc(allocator, bytes);
+    defer manifest.deinit();
+    const digest = std.fmt.bytesToHex(manifest.digest(), .lower);
+    const artifact = try std.json.Stringify.valueAlloc(allocator, .{
+        .schema = "ziac.package-verification.v1",
+        .status = "valid",
+        .name = manifest.name,
+        .version = manifest.version,
+        .kind = @tagName(manifest.kind),
+        .manifest_sha256 = &digest,
+    }, .{});
+    defer allocator.free(artifact);
+    try std.Io.File.stdout().writeStreamingAll(io, artifact);
+    try std.Io.File.stdout().writeStreamingAll(io, "\n");
+    return ziac.cli.Exit.success;
+}
+
+fn runTemplateInit(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: std.Io.Dir,
+    args: []const []const u8,
+    template_name: []const u8,
+) !u8 {
+    const explicit_name = if (args.len > 0 and !std.mem.startsWith(u8, args[0], "--")) args[0] else null;
+    const options = if (explicit_name == null) args else args[1..];
+    const current_path = try cwd.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(current_path);
+    const inferred_name = if (explicit_name == null) try ziac.scaffold.projectNameAlloc(allocator, std.fs.path.basename(current_path)) else null;
+    defer if (inferred_name) |name| allocator.free(name);
+    const name = explicit_name orelse inferred_name.?;
+    const normalized = try ziac.scaffold.projectNameAlloc(allocator, name);
+    defer allocator.free(normalized);
+    if (!std.mem.eql(u8, normalized, name)) return error.InvalidProjectName;
+    const target = optionValue(options, "--dir") orelse if (explicit_name == null) "." else name;
+    const workspace_root = try workspaceRootAlloc(allocator, io, cwd, null);
+    defer allocator.free(workspace_root);
+    if (!hasFlag(options, "--yes") and try shouldPromptForInit(io)) {
+        const confirmed = try confirmTemplateInit(io, name, target, workspace_root, template_name);
+        if (!confirmed) return ziac.cli.Exit.success;
+    }
+
+    const package_path = if (optionValue(options, "--ziac-path")) |path| try allocator.dupe(u8, path) else try defaultPackagePathAlloc(allocator, io);
+    defer allocator.free(package_path);
+    const gcpx_path = if (optionValue(options, "--gcpx-path")) |path| try allocator.dupe(u8, path) else try defaultGcpxPathAlloc(allocator, io);
+    defer allocator.free(gcpx_path);
+    const ecosystem_path = try ecosystemRootAlloc(allocator, io);
+    defer allocator.free(ecosystem_path);
+    try cwd.createDirPath(io, target);
+    const target_path = try cwd.realPathFileAlloc(io, target, allocator);
+    defer allocator.free(target_path);
+    const package_absolute = try absolutePackagePathAlloc(allocator, io, cwd, package_path);
+    defer allocator.free(package_absolute);
+    const gcpx_absolute = try absolutePackagePathAlloc(allocator, io, cwd, gcpx_path);
+    defer allocator.free(gcpx_absolute);
+    const dependency_path = try std.fs.path.relative(allocator, ".", null, target_path, package_absolute);
+    defer allocator.free(dependency_path);
+    const gcpx_dependency_path = try std.fs.path.relative(allocator, ".", null, target_path, gcpx_absolute);
+    defer allocator.free(gcpx_dependency_path);
+    const dependency_json = try std.json.Stringify.valueAlloc(allocator, dependency_path, .{});
+    defer allocator.free(dependency_json);
+    const gcpx_dependency_json = try std.json.Stringify.valueAlloc(allocator, gcpx_dependency_path, .{});
+    defer allocator.free(gcpx_dependency_json);
+    const zig_name = try allocator.dupe(u8, name);
+    defer allocator.free(zig_name);
+    for (zig_name) |*char| {
+        if (char.* == '-') char.* = '_';
+    }
+    var name_digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(name, &name_digest, .{});
+    const package_id = std.mem.readInt(u32, name_digest[0..4], .little) | 1;
+    const fingerprint = (@as(u64, std.hash.Crc32.hash(zig_name)) << 32) | package_id;
+    var fingerprint_buffer: [16]u8 = undefined;
+    const fingerprint_text = try std.fmt.bufPrint(&fingerprint_buffer, "{x}", .{fingerprint});
+
+    var ecosystem_root = try std.Io.Dir.openDirAbsolute(io, ecosystem_path, .{});
+    defer ecosystem_root.close(io);
+    const index_bytes = try ecosystem_root.readFileAlloc(io, "index.json", allocator, .limited(4 * 1024 * 1024));
+    defer allocator.free(index_bytes);
+    var registry = try ziac.ecosystem.Registry.parseAlloc(allocator, index_bytes);
+    defer registry.deinit();
+    try verifyRegistryManifests(allocator, io, ecosystem_root, registry);
+    const qualified_name = if (std.mem.indexOfScalar(u8, template_name, '/') != null)
+        try allocator.dupe(u8, template_name)
+    else
+        try std.fmt.allocPrint(allocator, "ziac/{s}", .{template_name});
+    defer allocator.free(qualified_name);
+    const entry = findRegistryEntry(registry, qualified_name, .template) orelse return error.UnknownTemplate;
+    var template_root = try ecosystem_root.openDir(io, entry.path, .{});
+    defer template_root.close(io);
+    var target_dir = try cwd.openDir(io, target, .{});
+    defer target_dir.close(io);
+    try ziac.ecosystem.renderTemplate(allocator, io, template_root, target_dir, .{
+        .project_name = name,
+        .zig_package_name = zig_name,
+        .package_fingerprint = fingerprint_text,
+        .ziac_path_json = dependency_json,
+        .ziac_gcpx_path_json = gcpx_dependency_json,
+    }, hasFlag(options, "--force"));
+
+    var agent_files = try ziac.scaffold.renderAlloc(allocator, .{ .project_name = name, .ziac_path = dependency_path });
+    defer agent_files.deinit();
+    var workspace_dir = try std.Io.Dir.openDirAbsolute(io, workspace_root, .{});
+    defer workspace_dir.close(io);
+    try ziac.scaffold.writeWorkspaceAgentFiles(workspace_dir, io, agent_files);
+    try std.Io.File.stdout().writeStreamingAll(io, "Created Ziac project ");
+    try std.Io.File.stdout().writeStreamingAll(io, name);
+    try std.Io.File.stdout().writeStreamingAll(io, " from template ");
+    try std.Io.File.stdout().writeStreamingAll(io, entry.name);
+    try std.Io.File.stdout().writeStreamingAll(io, " in ");
+    try std.Io.File.stdout().writeStreamingAll(io, target);
+    try std.Io.File.stdout().writeStreamingAll(io, "\n");
+    return ziac.cli.Exit.success;
+}
+
+fn verifyRegistryManifests(allocator: std.mem.Allocator, io: std.Io, root: std.Io.Dir, registry: ziac.ecosystem.Registry) !void {
+    for (registry.entries) |entry| {
+        const manifest_path = try std.fs.path.join(allocator, &.{ entry.path, "ziac.package.json" });
+        defer allocator.free(manifest_path);
+        const bytes = try root.readFileAlloc(io, manifest_path, allocator, .limited(ziac.ecosystem.max_manifest_bytes));
+        defer allocator.free(bytes);
+        try registry.verifyManifest(entry, bytes);
+    }
+}
+
+fn findRegistryEntry(registry: ziac.ecosystem.Registry, name: []const u8, kind: ziac.ecosystem.Kind) ?ziac.ecosystem.RegistryEntry {
+    for (registry.entries) |entry| if (entry.kind == kind and std.mem.eql(u8, entry.name, name)) return entry;
+    return null;
+}
+
+fn confirmTemplateInit(io: std.Io, name: []const u8, target: []const u8, workspace_root: []const u8, template: []const u8) !bool {
+    var buffer: [2048]u8 = undefined;
+    const summary = try std.fmt.bufPrint(&buffer,
+        \\Ziac project setup
+        \\  Project        {s}
+        \\  Directory      {s}
+        \\  Workspace      {s}
+        \\  Template       {s}
+        \\  Agent skills   Ziac + GCP researcher for Codex, Claude, Gemini
+        \\
+        \\Create project? [Y/n]
+    , .{ name, target, workspace_root, template });
+    try std.Io.File.stdout().writeStreamingAll(io, summary);
+    var read_buffer: [128]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(io, &read_buffer);
+    const line = (try reader.interface.takeDelimiter('\n')) orelse return true;
+    const answer = std.mem.trim(u8, line, " \t\r\n");
+    return answer.len == 0 or std.ascii.eqlIgnoreCase(answer, "y") or std.ascii.eqlIgnoreCase(answer, "yes");
+}
+
+fn absolutePackagePathAlloc(allocator: std.mem.Allocator, io: std.Io, cwd: std.Io.Dir, path: []const u8) ![:0]u8 {
+    return if (std.fs.path.isAbsolute(path)) std.Io.Dir.realPathFileAbsoluteAlloc(io, path, allocator) else cwd.realPathFileAlloc(io, path, allocator);
+}
+
+fn ecosystemRootAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    return installedOrSourceRootAlloc(allocator, io, "ziac-templates", "index.json", "../ziac-templates");
+}
+
+fn defaultGcpxPathAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    return installedOrSourceRootAlloc(allocator, io, "ziac-gcpx", "build.zig.zon", "../ziac-gcpx");
+}
+
+fn installedOrSourceRootAlloc(allocator: std.mem.Allocator, io: std.Io, share_name: []const u8, marker: []const u8, source_relative: []const u8) ![]u8 {
+    const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
+    defer allocator.free(executable_dir);
+    const installed = try std.fs.path.resolve(allocator, &.{ executable_dir, "..", "share", share_name });
+    errdefer allocator.free(installed);
+    const installed_marker = try std.fs.path.join(allocator, &.{ installed, marker });
+    defer allocator.free(installed_marker);
+    var file = std.Io.Dir.openFileAbsolute(io, installed_marker, .{}) catch |err| switch (err) {
+        error.FileNotFound => {
+            allocator.free(installed);
+            return std.fs.path.resolve(allocator, &.{ build_options.package_root, source_relative });
+        },
+        else => return err,
+    };
+    file.close(io);
+    return installed;
+}
+
+fn readAbsoluteFileAlloc(allocator: std.mem.Allocator, io: std.Io, path: []const u8, limit: usize) ![]u8 {
+    const parent = std.fs.path.dirname(path) orelse return error.InvalidPackageEntry;
+    const basename = std.fs.path.basename(path);
+    var dir = try std.Io.Dir.openDirAbsolute(io, parent, .{});
+    defer dir.close(io);
+    return dir.readFileAlloc(io, basename, allocator, .limited(limit));
 }
 
 fn runZiacCloudInit(

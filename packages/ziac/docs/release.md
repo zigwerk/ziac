@@ -78,12 +78,20 @@ cd packages/ziac
 zig build
 zig-out/bin/ziac auth doctor
 bash scripts/live-global-gate.sh
+bash scripts/qualify-hermes-compute.sh
 ```
 
 The global script deploys, waits for HTTPS, verifies direct `run.app` ingress is
 denied, removes one regional Cloud Run service, verifies continued global
 availability, refreshes and restores it, checks a no-op plan, scans state for an
 optional secret sentinel, and destroys the stack through an exit trap.
+
+The Hermes Compute script runs the M84C third-party compatibility lane. It
+requires the additional hostname, Cloud DNS, OAuth and secret inputs documented
+in `docs/hermes-compute.md`. It proves valid public TLS, Nous OAuth provider
+advertisement, rejected unauthenticated WebSocket access, localhost-only Hermes
+ports, IAP recovery, restart persistence, a no-op plan, and empty cleanup
+inventory.
 
 Run the Cockroach SQL live test with the manifest environment set, then run the
 local verified-TLS container gate from the repository root.

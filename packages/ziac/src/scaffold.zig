@@ -491,6 +491,14 @@ const agent_skill =
     \\
     \\Resolve `.dependencies.ziac.path` from the owning project's `build.zig.zon`. That relocatable directory is the installed Ziac knowledge root; it must not be replaced with a source-checkout or machine-specific path. Read its `README.md`, `docs/agent-development-kit.md`, and `docs/gcp-provider-coverage.md` first, then load only the provider or workflow document relevant to the task. Run `ziac provider resources --json` for the exact managed and planned surface shipped by the installed CLI. Use local docs for the behavior and pinned contracts shipped with this CLI. Delegate current Google Cloud facts to `gcp-developer-researcher` before relying on them.
     \\
+    \\## Ecosystem layers
+    \\
+    \\- **Resources** are one-to-one GCP API objects implemented by the trusted provider. Use them when exact Google lifecycle control matters. Only provider code may perform cloud CRUD.
+    \\- **Components** are typed graph compilers from `ziac-gcpx`. They expand into declared resources and stamp every emitted node with package, version, instance, and source-digest provenance.
+    \\- **Templates** are deployable source projects. Inspect the generated Zig before planning or applying; templates never execute install hooks.
+    \\- Run `ziac registry search <query> --kind component --json` or `--kind template` before designing a new abstraction. Run `ziac package verify <package-dir>` before trusting a local or downloaded package.
+    \\- Prefer raw resources for uncommon topology, components for repeated governed topology, and templates for complete starting products. Never describe a component or template as a provider resource.
+    \\
     \\## Development loop
     \\
     \\1. From the workspace root, identify the owning project. Run project commands from that project root or select it explicitly with `--project` where supported.

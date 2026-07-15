@@ -1,5 +1,9 @@
 # Ziac Foundation Implementation Plan
 
+**Canonical status:** Shipped. This is a historical TDD execution record; its
+original task boxes were not maintained after delivery and are superseded by
+`packages/ziac/docs/shipped.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Create the first working `/packages/ziac` package: a zigeffect-backed IaC foundation with graph/output/state/planner/provider/apply primitives and fake-provider tests, without touching live GCP yet.

@@ -1,0 +1,14 @@
+{
+  "schema": "ziac.package.v1",
+  "name": "ziac/global-zig-api",
+  "version": "0.1.0",
+  "kind": "template",
+  "summary": "A source-built Zig API on globally routed Cloud Run",
+  "license": "Apache-2.0",
+  "source": "https://github.com/ziac-run/ziac-templates",
+  "entry": "files",
+  "compatibility": { "ziac": ">=0.1.0 <0.2.0", "zig": ">=0.16.0 <0.17.0" },
+  "providers": ["gcp"],
+  "resource_types": ["gcp.artifactregistry.Repository", "gcp.cloudbuild.Build", "gcp.compute.BackendService", "gcp.compute.GlobalAddress", "gcp.compute.GlobalForwardingRule", "gcp.compute.ManagedSslCertificate", "gcp.compute.TargetHttpsProxy", "gcp.compute.UrlMap", "gcp.dns.RecordSet", "gcp.iam.ProjectIamMember", "gcp.iam.ServiceAccount", "gcp.run.Service", "gcp.storage.Bucket", "gcp.storage.Object"],
+  "maturity": "preview"
+}

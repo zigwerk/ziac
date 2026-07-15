@@ -1,0 +1,14 @@
+{
+  "schema": "ziac.project.v1",
+  "project": "{{project_name}}",
+  "source_roots": ["ziac.stack.zig"],
+  "program": { "argv": ["zig", "build", "ziac-program", "--"], "max_output_bytes": 8388608 },
+  "dashboard": { "stack": "hermes-desktop", "stage": "dev" },
+  "components": [{ "id": "hermes", "resources": [] }],
+  "requirements": [{ "id": "hermes-graph-valid", "summary": "Hermes Desktop infrastructure compiles", "component": "hermes", "required": true }],
+  "acceptance_checks": [{ "id": "check-hermes", "requirement": "hermes-graph-valid", "argv": ["zig", "build", "test"] }],
+  "environments": [{ "id": "development", "stage_patterns": ["dev"], "providers": ["gcp"], "projects": ["*-ziac-disposable"], "regions": ["europe-west1"], "max_monthly_cost_minor": 10000 }],
+  "adaptations": [],
+  "scenarios": [{ "id": "hermes-compiles", "requirement": "hermes-graph-valid", "acceptance_check": "check-hermes", "seed": 42, "required": true }],
+  "authority": { "read": true, "plan": true, "apply": false, "delete": false, "secret_read": false, "live_network": false, "process": true }
+}

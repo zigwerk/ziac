@@ -1,4 +1,5 @@
 const std = @import("std");
+const provenance = @import("provenance.zig");
 const value_mod = @import("value.zig");
 
 pub const ResourceGraphError = error{
@@ -32,6 +33,7 @@ pub const ResourceNode = struct {
     inputs: value_mod.Value = .{ .object = &.{} },
     inputs_hash: [32]u8 = [_]u8{0} ** 32,
     lifecycle: Lifecycle = .{},
+    component: ?provenance.Origin = null,
 
     pub fn initOwned(
         allocator: std.mem.Allocator,
@@ -50,6 +52,8 @@ pub const ResourceNode = struct {
         errdefer inputs.deinit(allocator);
         const lifecycle = try cloneLifecycle(allocator, source.lifecycle);
         errdefer freeLifecycle(allocator, lifecycle);
+        var component = if (source.component) |origin| try provenance.Origin.cloneOwned(allocator, origin) else null;
+        errdefer if (component) |*origin| origin.deinit(allocator);
         const inputs_hash = inputs.sha256(allocator) catch |err| switch (err) {
             error.DuplicateField => unreachable,
             error.OutOfMemory => return error.OutOfMemory,
@@ -64,6 +68,7 @@ pub const ResourceNode = struct {
             .inputs = inputs,
             .inputs_hash = inputs_hash,
             .lifecycle = lifecycle,
+            .component = component,
         };
     }
 
@@ -73,6 +78,7 @@ pub const ResourceNode = struct {
         allocator.free(self.logical_id);
         self.inputs.deinit(allocator);
         freeLifecycle(allocator, self.lifecycle);
+        if (self.component) |*origin| origin.deinit(allocator);
         self.* = undefined;
     }
 };

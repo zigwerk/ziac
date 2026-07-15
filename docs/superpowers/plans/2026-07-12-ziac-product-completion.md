@@ -1,5 +1,9 @@
 # Ziac Product Completion Implementation Plan
 
+**Canonical status:** Superseded. Milestones 0-6 and 9 are shipped at their
+declared local gates; authenticated product qualification and beta release are
+now M84-M90 in `packages/ziac/docs/roadmap.md`.
+
 Date: 2026-07-12
 Design: `docs/superpowers/specs/2026-07-12-ziac-product-completion-design.md`
 
@@ -133,7 +137,7 @@ billing, GCP, KMS, and Cockroach configuration.
 
 ## Milestone 6: Cost Intelligence
 
-Status: pending
+Status: complete locally; authenticated billing qualification moved to M88
 
 - Add Cloud Billing Catalog/Pricing adapters and SKU-region matching.
 - Attach configuration estimate ranges and confidence/provenance to resources.
@@ -144,7 +148,7 @@ Status: pending
 
 ## Milestone 7: Authenticated Product Qualification
 
-Status: pending external environment
+Status: superseded by M84 authenticated qualification
 
 - Extend the live manifest to one clean-checkout source-to-image-to-global-service
   journey with a Cockroach read/write path.
@@ -157,7 +161,7 @@ Status: pending external environment
 
 ## Milestone 8: Beta Release
 
-Status: pending
+Status: superseded by M90 private beta release
 
 - Publish installation artifacts, versioned schemas, migration notes, operator
   runbooks, security model, pricing/entitlement terms, and support boundaries.

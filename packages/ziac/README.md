@@ -2,9 +2,10 @@
 
 ## Install And Start A Project
 
-Build and install the CLI, dashboard host, MCP server, control-plane executable,
-the Zig package sources, dashboard assets, provider documentation, and agent
-research protocols into one relocatable prefix:
+Build and install the CLI, isolated GCP and Cockroach provider processes,
+dashboard host, MCP server, control-plane executable, Zig package sources,
+dashboard assets, provider documentation, and agent research protocols into one
+relocatable prefix:
 
 ```sh
 cd packages/ziac
@@ -39,6 +40,30 @@ and workflow documentation shipped with that CLI version. Current Google Cloud
 claims are researched through the official Developer Knowledge connection; the
 local docs remain the implementation baseline rather than a substitute for
 current upstream documentation.
+
+## Resources, Components And Templates
+
+Ziac keeps raw GCP resources, opinionated components and deployable source
+templates deliberately separate. Providers perform trusted cloud lifecycle
+operations. Components from `ziac-gcpx` compile into visible concrete
+resources. Templates scaffold editable projects and never execute install
+hooks.
+
+```sh
+ziac registry list --json
+ziac registry search gcp --kind provider --json
+ziac registry search global --kind template --json
+ziac package verify path/to/ziac.package.json
+ziac init global-api --template global-zig-api
+```
+
+The installed distribution includes official GCP and verified Cockroach
+provider records, the official component package, three source templates and an
+immutable digest-pinned local registry. Provider CRUD runs through the bounded
+`ziac.provider.rpc.v1` process contract; registry discovery never launches
+code. Component origin survives program and visual artifacts without changing
+provider state identity. See [`docs/ecosystem.md`](docs/ecosystem.md) and
+[`docs/provider-rpc.md`](docs/provider-rpc.md).
 
 ## Monorepo Workspaces
 
@@ -120,8 +145,9 @@ replayable infrastructure scenarios, governed MCP tools, ephemeral leases and
 Cloud Run-to-Cockroach diagnosis. The Workbench Operations view presents the
 same session and evidence model. Dashboard watch deploys are host-supervised,
 status-addressable and cancellable without granting arbitrary process
-authority. Native long-running dev/proxy wiring and live cloud adapters remain
-explicitly tracked in `docs/roadmap.md`.
+authority. Native long-running dev/proxy wiring and live cloud adapters are
+shipped; authenticated production qualification is tracked in
+`docs/roadmap.md`.
 
 ## Quickstart
 
@@ -272,6 +298,7 @@ policy.
 - `docs/authentication.md`: native ADC and Workload Identity Federation
 - `docs/google-rpc.md`: protobuf contracts, transport policy, and GCP specialization
 - `docs/gcp-specialization.md`: architecture compiler, AIP planning, IAM/preflight, and qualification
+- `docs/hermes-compute.md`: low-cost Hermes Desktop backend on Compute Engine with OAuth-gated HTTPS
 - `docs/visual-workbench.md`: topology canvas, global map, artifact contract, and safety
 - `docs/agent-development.md`: agent sessions, hybrid dev, logs, MCP, watch deploy, and leases
 - `docs/remote-state.md`: GCS state, locking, migration, and recovery
@@ -279,4 +306,5 @@ policy.
 - `docs/keyless-ci.md`: preview stages and GitHub Actions
 - `docs/rollouts-recovery.md`: canary progression, rollback, and incidents
 - `docs/live-gcp.md`: provider selection and disposable-project safeguards
-- `docs/roadmap.md`: acceptance-gated delivery status
+- `docs/shipped.md`: consolidated M0-M83 shipped capability and evidence ledger
+- `docs/roadmap.md`: current M84-M90 qualification and product roadmap

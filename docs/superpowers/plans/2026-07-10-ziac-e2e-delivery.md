@@ -1,5 +1,10 @@
 # Ziac End-to-End Delivery Implementation Plan
 
+**Canonical status:** Shipped at the deterministic implementation gate. This
+historical programme is superseded for status by
+`packages/ziac/docs/shipped.md`; its authenticated acceptance debt is M84-M86
+in `packages/ziac/docs/roadmap.md`.
+
 Date: 2026-07-10
 
 Design:

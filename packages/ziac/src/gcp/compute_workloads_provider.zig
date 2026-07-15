@@ -676,6 +676,10 @@ fn networkInterfacesJson(allocator: std.mem.Allocator, context: *provider_mod.Op
             try access.put(allocator, "name", .{ .string = "External NAT" });
             try access.put(allocator, "type", .{ .string = "ONE_TO_ONE_NAT" });
             try access.put(allocator, "networkTier", .{ .string = "PREMIUM" });
+            const external_ip = try requiredValue(candidate, "external_ip");
+            if (external_ip != .string or external_ip.string.len > 0) {
+                try access.put(allocator, "natIP", .{ .string = try resolveString(context, external_ip) });
+            }
             try configs.append(.{ .object = access });
             try item.put(allocator, "accessConfigs", .{ .array = configs });
         }

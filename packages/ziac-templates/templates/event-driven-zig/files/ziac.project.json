@@ -1,0 +1,15 @@
+{
+  "schema": "ziac.project.v1",
+  "project": "{{project_name}}",
+  "source_roots": ["src", "ziac.stack.zig"],
+  "program": { "argv": ["zig", "build", "ziac-program", "--"], "max_output_bytes": 8388608 },
+  "dashboard": { "stack": "event-worker", "stage": "dev" },
+  "components": [{ "id": "events", "resources": [] }],
+  "requirements": [{ "id": "event-foundation-valid", "summary": "The event foundation compiles", "component": "events", "required": true }],
+  "acceptance_checks": [{ "id": "check-events", "requirement": "event-foundation-valid", "argv": ["zig", "build", "test"] }],
+  "environments": [{ "id": "development", "stage_patterns": ["dev"], "providers": ["gcp"], "projects": ["*-ziac-disposable"], "regions": ["europe-west1"], "max_monthly_cost_minor": 10000 }],
+  "adaptations": [],
+  "development": { "source_root": ".", "build_argv": ["zig", "build"], "process_argv": ["./zig-out/bin/worker"], "health_path": "/health/live", "proxy_port": 4318, "generation_base_port": 45000, "poll_millis": 75 },
+  "scenarios": [{ "id": "event-worker-starts", "requirement": "event-foundation-valid", "acceptance_check": "check-events", "seed": 42, "required": true }],
+  "authority": { "read": true, "plan": true, "apply": false, "delete": false, "secret_read": false, "live_network": false, "process": true }
+}

@@ -1,5 +1,8 @@
 # Ziac Cloud Run Workloads Implementation Plan
 
+**Canonical status:** Shipped at the local provider gate; authenticated workload
+qualification is M84 in `packages/ziac/docs/roadmap.md`.
+
 ## Contract And Declarations
 
 - [x] Add pinned Jobs, Executions and WorkerPools RPC descriptors and path tests.
@@ -28,7 +31,7 @@
 - [x] Add vCPU, memory, GPU and duration cost assumptions.
 - [x] Add installed documentation and generated-agent references.
 - [x] Run Testing v2, dashboard tests and provider-catalog verification.
-- [ ] Commit the credential-free M60 milestone.
+- [x] Commit the credential-free M60 milestone.
 - [ ] Run authenticated disposable-project qualification when credentials exist.
 
 Local completion keeps authenticated qualification open deliberately. Cloud

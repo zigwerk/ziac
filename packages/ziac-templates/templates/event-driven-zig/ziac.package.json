@@ -1,0 +1,14 @@
+{
+  "schema": "ziac.package.v1",
+  "name": "ziac/event-driven-zig",
+  "version": "0.1.0",
+  "kind": "template",
+  "summary": "A Zig event worker foundation with Storage and Pub/Sub",
+  "license": "Apache-2.0",
+  "source": "https://github.com/ziac-run/ziac-templates",
+  "entry": "files",
+  "compatibility": { "ziac": ">=0.1.0 <0.2.0", "zig": ">=0.16.0 <0.17.0" },
+  "providers": ["gcp"],
+  "resource_types": ["gcp.pubsub.Topic", "gcp.storage.Bucket", "gcp.storage.BucketIamMember"],
+  "maturity": "preview"
+}

@@ -62,6 +62,14 @@ export type ZiacVertexAiDetails = Record<string, unknown> & {
   kind: "dataset" | "model" | "prediction_endpoint" | "vector_index" | "vector_index_endpoint" | "feature_group" | "feature" | "feature_online_store" | "feature_view" | "tensorboard" | "metadata_store" | "vertex_ai_iam";
 };
 
+export type ZiacComponentOrigin = {
+  package: string;
+  name: string;
+  version: string;
+  instance: string;
+  source_digest: string;
+};
+
 export type ZiacVisualResource = {
   id: string;
   provider: ZiacProvider;
@@ -73,6 +81,7 @@ export type ZiacVisualResource = {
   operation: ZiacOperation;
   health: ZiacHealth;
   ownership: ZiacOwnership;
+  component?: ZiacComponentOrigin;
   discovery?: ZiacResourceDiscovery;
   cost?: ZiacResourceCost;
   iam?: ZiacIamDetails;
@@ -488,6 +497,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
   const discovery = value.discovery === undefined
     ? undefined
     : parseDiscovery(value.discovery, index);
+  const component = value.component === undefined ? undefined : parseComponent(value.component, index);
   const cost = value.cost === undefined ? undefined : parseCost(value.cost, index);
   const iam = value.iam === undefined ? undefined : parseIam(value.iam, index);
   const dataEngineering = value.data_engineering === undefined ? undefined : parseDataEngineering(value.data_engineering, index);
@@ -507,6 +517,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
     operation: enumValue(value.operation, `resources[${index}].operation`, operations),
     health: enumValue(value.health, `resources[${index}].health`, healthStates),
     ownership,
+    ...(component ? { component } : {}),
     ...(discovery ? { discovery } : {}),
     ...(cost ? { cost } : {}),
     ...(iam ? { iam } : {}),
@@ -520,6 +531,18 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
       replace_before_delete: booleanValue(lifecycle.replace_before_delete, "lifecycle.replace_before_delete"),
     },
     reasons: stringArray(value.reasons, `resources[${index}].reasons`),
+  };
+}
+
+function parseComponent(raw: unknown, index: number): ZiacComponentOrigin {
+  const path = `resources[${index}].component`;
+  const value = objectValue(raw, path);
+  return {
+    package: nonEmptyString(value.package, `${path}.package`),
+    name: nonEmptyString(value.name, `${path}.name`),
+    version: nonEmptyString(value.version, `${path}.version`),
+    instance: nonEmptyString(value.instance, `${path}.instance`),
+    source_digest: sha256Value(value.source_digest, `${path}.source_digest`),
   };
 }
 
@@ -720,8 +743,12 @@ function booleanValue(value: unknown, path: string): boolean {
 }
 
 function digestValue(value: unknown): string {
-  const digest = stringValue(value, "graph_digest");
-  if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error("graph_digest must be a lowercase SHA-256 digest");
+  return sha256Value(value, "graph_digest");
+}
+
+function sha256Value(value: unknown, path: string): string {
+  const digest = stringValue(value, path);
+  if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error(`${path} must be a lowercase SHA-256 digest`);
   return digest;
 }
 

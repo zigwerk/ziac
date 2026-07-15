@@ -8,16 +8,20 @@ required=(
   "README.md"
   "docs/architecture.md"
   "docs/authentication.md"
+  "docs/hermes-compute.md"
   "docs/keyless-ci.md"
   "docs/live-gcp.md"
   "docs/remote-state.md"
   "docs/rollouts-recovery.md"
   "examples/production_global_service.zig"
+  "examples/hermes_compute.zig"
   "release/live-tests.json"
   "proto/googleapis.lock.json"
   "proto/cloud-run-v2.contract.json"
   "src/gcp/generated/cloud-run-v2.pb"
   "scripts/live-global-gate.sh"
+  "scripts/hermes-compute-startup.sh"
+  "scripts/qualify-hermes-compute.sh"
 )
 for path in "${required[@]}"; do
   if [[ ! -f "${package_dir}/${path}" ]]; then

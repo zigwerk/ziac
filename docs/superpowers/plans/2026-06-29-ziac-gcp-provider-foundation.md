@@ -1,5 +1,10 @@
 # Ziac GCP Provider Foundation Implementation Plan
 
+**Canonical status:** Shipped. This is a historical TDD execution record; its
+original task boxes were not maintained after delivery and are superseded by
+`packages/ziac/docs/shipped.md`. Authenticated provider qualification is now
+M84 in `packages/ziac/docs/roadmap.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a plan-only GCP provider foundation with typed provider config, Artifact Registry and Cloud Run resource builders, and an upgraded `hello-global` fixture stack.

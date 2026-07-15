@@ -122,6 +122,19 @@ fn appendResource(result: *std.ArrayList(u8), allocator: std.mem.Allocator, node
     try appendJsonString(result, allocator, node.type_name);
     try result.print(allocator, ",\"schema_version\":{d},\"logical_id\":", .{node.schema_version});
     try appendJsonString(result, allocator, node.logical_id);
+    if (node.component) |origin| {
+        try result.appendSlice(allocator, ",\"component\":{\"package\":");
+        try appendJsonString(result, allocator, origin.package);
+        try result.appendSlice(allocator, ",\"name\":");
+        try appendJsonString(result, allocator, origin.name);
+        try result.appendSlice(allocator, ",\"version\":");
+        try appendJsonString(result, allocator, origin.version);
+        try result.appendSlice(allocator, ",\"instance\":");
+        try appendJsonString(result, allocator, origin.instance);
+        try result.appendSlice(allocator, ",\"source_digest\":");
+        try appendJsonString(result, allocator, origin.source_digest);
+        try result.append(allocator, '}');
+    }
     try result.appendSlice(allocator, ",\"inputs\":");
     const inputs = try node.inputs.canonicalJsonAlloc(allocator);
     defer allocator.free(inputs);
@@ -207,6 +220,7 @@ fn parseAndAddResource(allocator: std.mem.Allocator, graph: *resource.ResourceGr
         .schema_version = schema_version,
         .logical_id = try stringField(object, "logical_id"),
         .inputs = inputs,
+        .component = if (object.get("component")) |value| try parseComponentOrigin(value) else null,
         .lifecycle = .{
             .protect = try boolField(lifecycle_object, "protect"),
             .retain_on_delete = try boolField(lifecycle_object, "retain_on_delete"),
@@ -215,6 +229,20 @@ fn parseAndAddResource(allocator: std.mem.Allocator, graph: *resource.ResourceGr
             .operation_timeout_millis = timeout,
         },
     });
+}
+
+fn parseComponentOrigin(source: std.json.Value) Error!@import("provenance.zig").Origin {
+    const object = asObject(source) orelse return error.InvalidProgramArtifact;
+    if (object.count() != 5) return error.InvalidProgramArtifact;
+    const origin = @import("provenance.zig").Origin{
+        .package = try stringField(object, "package"),
+        .name = try stringField(object, "name"),
+        .version = try stringField(object, "version"),
+        .instance = try stringField(object, "instance"),
+        .source_digest = try stringField(object, "source_digest"),
+    };
+    origin.validate() catch return error.InvalidProgramArtifact;
+    return origin;
 }
 
 fn parseAndAppendOutput(allocator: std.mem.Allocator, outputs: *std.ArrayList(stack_registry.OutputDefinition), source: std.json.Value) Error!void {
