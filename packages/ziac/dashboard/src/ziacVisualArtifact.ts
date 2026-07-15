@@ -58,6 +58,10 @@ export type ZiacEventIntegrationDetails = Record<string, unknown> & {
   kind: "message_bus" | "event_pipeline" | "enrollment" | "google_api_source" | "connector_connection" | "connector_psc_endpoint" | "connector_event_subscription" | "connector_managed_zone" | "connector_regional_settings" | "event_integration_iam";
 };
 
+export type ZiacVertexAiDetails = Record<string, unknown> & {
+  kind: "dataset" | "model" | "prediction_endpoint" | "vector_index" | "vector_index_endpoint" | "feature_group" | "feature" | "feature_online_store" | "feature_view" | "tensorboard" | "metadata_store" | "vertex_ai_iam";
+};
+
 export type ZiacVisualResource = {
   id: string;
   provider: ZiacProvider;
@@ -74,6 +78,7 @@ export type ZiacVisualResource = {
   iam?: ZiacIamDetails;
   data_engineering?: ZiacDataEngineeringDetails;
   event_integration?: ZiacEventIntegrationDetails;
+  vertex_ai?: ZiacVertexAiDetails;
   inputs: Record<string, unknown>;
   lifecycle: {
     protect: boolean;
@@ -487,6 +492,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
   const iam = value.iam === undefined ? undefined : parseIam(value.iam, index);
   const dataEngineering = value.data_engineering === undefined ? undefined : parseDataEngineering(value.data_engineering, index);
   const eventIntegration = value.event_integration === undefined ? undefined : parseEventIntegration(value.event_integration, index);
+  const vertexAi = value.vertex_ai === undefined ? undefined : parseVertexAi(value.vertex_ai, index);
   if (ownership !== "managed" && discovery === undefined) {
     throw new Error(`resources[${index}].discovery is required for ${ownership} resources`);
   }
@@ -506,6 +512,7 @@ function parseResource(raw: unknown, index: number): ZiacVisualResource {
     ...(iam ? { iam } : {}),
     ...(dataEngineering ? { data_engineering: dataEngineering } : {}),
     ...(eventIntegration ? { event_integration: eventIntegration } : {}),
+    ...(vertexAi ? { vertex_ai: vertexAi } : {}),
     inputs,
     lifecycle: {
       protect: booleanValue(lifecycle.protect, "lifecycle.protect"),
@@ -575,6 +582,16 @@ function parseEventIntegration(raw: unknown, index: number): ZiacEventIntegratio
   return {
     ...value,
     kind: enumValue(value.kind, `${path}.kind`, ["message_bus", "event_pipeline", "enrollment", "google_api_source", "connector_connection", "connector_psc_endpoint", "connector_event_subscription", "connector_managed_zone", "connector_regional_settings", "event_integration_iam"]),
+  };
+}
+
+function parseVertexAi(raw: unknown, index: number): ZiacVertexAiDetails {
+  const path = `resources[${index}].vertex_ai`;
+  const value = objectValue(raw, path);
+  assertRedacted(value, path);
+  return {
+    ...value,
+    kind: enumValue(value.kind, `${path}.kind`, ["dataset", "model", "prediction_endpoint", "vector_index", "vector_index_endpoint", "feature_group", "feature", "feature_online_store", "feature_view", "tensorboard", "metadata_store", "vertex_ai_iam"]),
   };
 }
 

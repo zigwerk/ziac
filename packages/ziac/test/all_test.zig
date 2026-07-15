@@ -151,6 +151,13 @@ comptime {
     _ = @import("gcp_eventarc_test.zig");
     _ = @import("gcp_eventarc_advanced_test.zig");
     _ = @import("gcp_connectors_test.zig");
+    _ = @import("gcp_vertex_ai_test.zig");
+    _ = @import("gcp_vertex_ai_live_provider_test.zig");
+    _ = @import("gcp_vertex_ai_iam_test.zig");
+    _ = @import("gcp_vertex_ai_actions_test.zig");
+    _ = @import("gcp_vertex_ai_components_test.zig");
+    _ = @import("gcp_vertex_ai_product_test.zig");
+    _ = @import("gcp_vertex_ai_qualification_test.zig");
     _ = @import("gcp_eventarc_advanced_live_provider_test.zig");
     _ = @import("gcp_connectors_live_provider_test.zig");
     _ = @import("gcp_event_integration_iam_test.zig");

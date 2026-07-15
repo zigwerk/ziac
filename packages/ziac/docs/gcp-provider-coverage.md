@@ -27,7 +27,7 @@ before a contract lock changes.
 
 ## Managed Surface
 
-The current deterministic provider gate contains 237 managed GCP resource types.
+The current deterministic provider gate contains 253 managed GCP resource types.
 Authenticated qualification remains separate and is tracked in the roadmap.
 The live dispatcher exports the same sorted type registry, and tests compare it
 to the catalog in both directions so provider code and documentation cannot
@@ -525,6 +525,17 @@ event subscriptions, managed zones and regional settings. Additive IAM is
 available at resource boundaries. `AdvancedEventRoute`, `PrivateConnector` and
 `ConnectorEventBridge` compile production topology while publish, repair, retry
 and schema refresh remain governed actions. See `gcp-event-integration.md`.
+
+### Vertex AI platform
+
+M83 adds stable-v1 datasets, models, prediction endpoints, vector indexes and
+index endpoints, feature groups and features, online stores and views,
+Tensorboards, metadata stores and additive IAM on native resource boundaries.
+`OnlinePredictionPlatform`, `VectorSearchPlatform` and `FeaturePlatform`
+compile the common durable graphs. Deployment, pipeline and feature-sync
+operations remain payload-bound governed actions. Nine official Cloud Asset
+identities, regional endpoints, exact IAM and explicit usage-based cost
+semantics are synchronized. See `gcp-vertex-ai.md`.
 
 ## Next Application-Platform Tranche
 

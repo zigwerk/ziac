@@ -122,6 +122,12 @@ pub const ConnectorEstimateInput = struct {
     observed_at_millis: u64,
 };
 
+pub const VertexAiEstimateInput = struct {
+    resource_id: []const u8,
+    usage: []const UsageAssumption,
+    observed_at_millis: u64,
+};
+
 pub const BigqueryEstimateInput = struct {
     resource_id: []const u8,
     region: []const u8,
@@ -677,6 +683,11 @@ pub fn connectorConfigurationEstimate(prices: []const SkuPrice, input: Connector
     try appendUsage(&usage, &count, input.processed_data_sku_id, input.region, input.processed_gib -| input.free_processed_gib);
     if (count == 0) return error.InvalidUsageAssumption;
     return configurationEstimate(input.resource_id, prices, usage[0..count], input.observed_at_millis);
+}
+
+pub fn vertexAiConfigurationEstimate(prices: []const SkuPrice, input: VertexAiEstimateInput) !ResourceCost {
+    if (input.usage.len == 0) return error.InvalidUsageAssumption;
+    return configurationEstimate(input.resource_id, prices, input.usage, input.observed_at_millis);
 }
 
 pub fn applicationServicesConfigurationEstimate(

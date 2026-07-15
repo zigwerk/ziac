@@ -53,6 +53,7 @@ pub const Service = enum {
     sql_admin,
     storage,
     tasks,
+    vertex_ai,
     workflows,
 };
 
@@ -391,6 +392,22 @@ pub const resources = [_]Resource{
     managed("gcp.tags.TagValue", .resource_manager, .organization, .google_discovery, "M79", withProduct(full)),
     managed("gcp.tasks.Queue", .tasks, .location, .googleapis_proto, "M59", withProduct(full)),
     managed("gcp.tasks.QueueIamMember", .tasks, .location, .google_rest, "M59", withVisual(additive_iam)),
+    managed("gcp.vertex.Dataset", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
+    managed("gcp.vertex.DatasetIamMember", .vertex_ai, .location, .google_rest, "M83", withVisual(additive_iam)),
+    managed("gcp.vertex.Endpoint", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
+    managed("gcp.vertex.Feature", .vertex_ai, .location, .google_discovery, "M83", withVisualCost(full)),
+    managed("gcp.vertex.FeatureGroup", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
+    managed("gcp.vertex.FeatureGroupIamMember", .vertex_ai, .location, .google_rest, "M83", withVisual(additive_iam)),
+    managed("gcp.vertex.FeatureOnlineStore", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
+    managed("gcp.vertex.FeatureOnlineStoreIamMember", .vertex_ai, .location, .google_rest, "M83", withVisual(additive_iam)),
+    managed("gcp.vertex.FeatureView", .vertex_ai, .location, .google_discovery, "M83", withVisualCost(full)),
+    managed("gcp.vertex.FeatureViewIamMember", .vertex_ai, .location, .google_rest, "M83", withVisual(additive_iam)),
+    managed("gcp.vertex.Index", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
+    managed("gcp.vertex.IndexEndpoint", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
+    managed("gcp.vertex.MetadataStore", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
+    managed("gcp.vertex.Model", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
+    managed("gcp.vertex.ModelIamMember", .vertex_ai, .location, .google_rest, "M83", withVisual(additive_iam)),
+    managed("gcp.vertex.Tensorboard", .vertex_ai, .location, .google_discovery, "M83", withProduct(full)),
     managed("gcp.workflows.Workflow", .workflows, .location, .google_discovery, "M67", withProduct(full)),
 };
 

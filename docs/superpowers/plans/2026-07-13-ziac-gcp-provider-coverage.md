@@ -240,7 +240,7 @@ isolated serializer tests.
 
 - [x] M81 Data Pipelines, Dataflow actions, Dataproc and Dataform.
 - [x] M82 Eventarc Advanced and Integration Connectors.
-- [ ] M83 stable Vertex AI platform resources.
+- [x] M83 stable Vertex AI platform resources.
 - [ ] Keep preview resources opt-in and attach explicit migration policy.
 - [ ] Continue descriptor-driven expansion until every supported public GCP
   resource is either managed, intentionally observed-only, or carries a visible
@@ -476,3 +476,28 @@ Testing v2 package gate discovers and executes 941 tests: 940 pass, one
 credential-gated test skips, and none fail or remain pending; no leaks or logged
 errors are reported. Authenticated qualification remains an external
 disposable-project gate and excludes all governed runtime actions.
+
+## M83 Evidence
+
+M83 is locally complete with 253 managed resources. Sixteen Vertex AI types
+cover datasets, models, prediction endpoints, vector indexes and endpoints,
+feature groups and features, online stores and views, Tensorboards, metadata
+stores and additive IAM on the five native resource policy surfaces.
+
+`OnlinePredictionPlatform`, `VectorSearchPlatform` and `FeaturePlatform`
+provide the opinionated layer. Regional lifecycle adapters checkpoint Google
+operations, use exact masks and etags, replace immutable model/schema/network
+changes and preserve unrelated policy-v3 IAM bindings. Seven model, index,
+pipeline and feature-sync operations are target- and payload-bound actions
+outside ordinary reconciliation.
+
+Exact deployer/runtime authority, nine official Cloud Asset identities, typed
+canvas metadata, explicit usage-plus-rate estimates, installed docs, a public
+example and a fail-closed live runner are synchronized. Feature and FeatureView
+remain generic observed assets where CAI has no official support. Authenticated
+qualification remains an external disposable-project gate and excludes all
+governed actions and data-plane requests. The Testing v2 package gate discovers
+and executes 959 tests: 958 pass, one credential-gated test skips, and none fail
+or remain pending; no leaks or logged errors are reported. Examples, release
+checks, the non-root arm64 container probe, migration guard, dashboard checks
+and root TypeScript gate pass.

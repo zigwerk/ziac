@@ -1286,3 +1286,29 @@ runner are present. The Testing v2 package gate discovers and executes 941
 tests: 940 pass, one credential-gated test skips, and none fail or remain
 pending; no leaks or logged errors are reported. The catalog reports 237
 managed resources.
+
+M83 is locally implementation-complete and awaiting authenticated disposable-
+project qualification. Sixteen managed resources add stable-v1 Vertex AI
+datasets, models, prediction endpoints, vector indexes and endpoints, feature
+groups and features, online stores and views, Tensorboards, metadata stores and
+additive policy-v3 IAM wherever Google exposes native resource IAM.
+
+`OnlinePredictionPlatform`, `VectorSearchPlatform` and `FeaturePlatform`
+compile prediction, vector serving and feature topology. Model and index
+deployment, pipeline submission/cancellation and feature-view sync are seven
+payload-bound governed actions excluded from ordinary reconciliation. Regional
+provider adapters use exact masks, etags, resumable operations, immutable
+replacement and retained cleanup against the pinned `aiplatform:v1` revision
+`20260704` contract.
+
+Exact API and permission synthesis, nine official Cloud Asset identities,
+Vertex-specific canvas metadata and explicit usage-plus-rate cost estimates are
+synchronized. Feature and FeatureView remain generic observed assets because
+Cloud Asset Inventory does not expose them. See `docs/gcp-vertex-ai.md`. The
+deterministic qualification receipt, public example, installed documentation
+and fail-closed authenticated runner are present. The catalog reports 253
+managed resources. The Testing v2 package gate discovers and executes 959
+tests: 958 pass, one credential-gated test skips, and none fail or remain
+pending; no leaks or logged errors are reported. Examples, release checks, the
+non-root arm64 container probe, migration guard, dashboard tests/build/typecheck
+and root TypeScript gate pass.

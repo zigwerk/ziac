@@ -19,6 +19,15 @@ pub const sources = [_]Source{
         .document_sha256 = "88981fd8ecb1ec305364999172fdd6061843c97a373e78595883fc2b2da1c57a",
     },
     .{
+        .id = "aiplatform:v1",
+        .version = "v1",
+        .revision = "20260704",
+        .discovery_url = "https://aiplatform.googleapis.com/$discovery/rest?version=v1",
+        // Google varies response-object key order; hash compact,
+        // recursively key-sorted JSON rather than transport bytes.
+        .document_sha256 = "d71d9b40a874d02185acad480058d99d280749a219f2b6a85e36c61e8a7e431a",
+    },
+    .{
         .id = "apigateway:v1",
         .version = "v1",
         .revision = "20260625",

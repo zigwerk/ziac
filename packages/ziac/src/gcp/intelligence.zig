@@ -1069,6 +1069,67 @@ fn permissionForMethod(method: []const u8) ?[]const u8 {
         .{ .suffix = "ConnectorsManagedZones.Delete", .permission = "connectors.managedZones.delete" },
         .{ .suffix = "ConnectorsRegionalSettings.Get", .permission = "connectors.regionalSettings.get" },
         .{ .suffix = "ConnectorsRegionalSettings.Update", .permission = "connectors.regionalSettings.update" },
+        .{ .suffix = "DatasetService.GetDataset", .permission = "aiplatform.datasets.get" },
+        .{ .suffix = "DatasetService.CreateDataset", .permission = "aiplatform.datasets.create" },
+        .{ .suffix = "DatasetService.UpdateDataset", .permission = "aiplatform.datasets.update" },
+        .{ .suffix = "DatasetService.DeleteDataset", .permission = "aiplatform.datasets.delete" },
+        .{ .suffix = "DatasetService.GetIamPolicy", .permission = "aiplatform.datasets.getIamPolicy" },
+        .{ .suffix = "DatasetService.SetIamPolicy", .permission = "aiplatform.datasets.setIamPolicy" },
+        .{ .suffix = "ModelService.GetModel", .permission = "aiplatform.models.get" },
+        .{ .suffix = "ModelService.UploadModel", .permission = "aiplatform.models.upload" },
+        .{ .suffix = "ModelService.UpdateModel", .permission = "aiplatform.models.update" },
+        .{ .suffix = "ModelService.DeleteModel", .permission = "aiplatform.models.delete" },
+        .{ .suffix = "ModelService.GetIamPolicy", .permission = "aiplatform.models.getIamPolicy" },
+        .{ .suffix = "ModelService.SetIamPolicy", .permission = "aiplatform.models.setIamPolicy" },
+        .{ .suffix = "EndpointService.GetEndpoint", .permission = "aiplatform.endpoints.get" },
+        .{ .suffix = "EndpointService.CreateEndpoint", .permission = "aiplatform.endpoints.create" },
+        .{ .suffix = "EndpointService.UpdateEndpoint", .permission = "aiplatform.endpoints.update" },
+        .{ .suffix = "EndpointService.DeleteEndpoint", .permission = "aiplatform.endpoints.delete" },
+        .{ .suffix = "EndpointService.DeployModel", .permission = "aiplatform.endpoints.deploy" },
+        .{ .suffix = "EndpointService.UndeployModel", .permission = "aiplatform.endpoints.undeploy" },
+        .{ .suffix = "IndexService.GetIndex", .permission = "aiplatform.indexes.get" },
+        .{ .suffix = "IndexService.CreateIndex", .permission = "aiplatform.indexes.create" },
+        .{ .suffix = "IndexService.UpdateIndex", .permission = "aiplatform.indexes.update" },
+        .{ .suffix = "IndexService.DeleteIndex", .permission = "aiplatform.indexes.delete" },
+        .{ .suffix = "IndexEndpointService.GetIndexEndpoint", .permission = "aiplatform.indexEndpoints.get" },
+        .{ .suffix = "IndexEndpointService.CreateIndexEndpoint", .permission = "aiplatform.indexEndpoints.create" },
+        .{ .suffix = "IndexEndpointService.UpdateIndexEndpoint", .permission = "aiplatform.indexEndpoints.update" },
+        .{ .suffix = "IndexEndpointService.DeleteIndexEndpoint", .permission = "aiplatform.indexEndpoints.delete" },
+        .{ .suffix = "IndexEndpointService.DeployIndex", .permission = "aiplatform.indexEndpoints.deploy" },
+        .{ .suffix = "IndexEndpointService.UndeployIndex", .permission = "aiplatform.indexEndpoints.undeploy" },
+        .{ .suffix = "FeatureRegistryService.GetFeatureGroup", .permission = "aiplatform.featureGroups.get" },
+        .{ .suffix = "FeatureRegistryService.CreateFeatureGroup", .permission = "aiplatform.featureGroups.create" },
+        .{ .suffix = "FeatureRegistryService.UpdateFeatureGroup", .permission = "aiplatform.featureGroups.update" },
+        .{ .suffix = "FeatureRegistryService.DeleteFeatureGroup", .permission = "aiplatform.featureGroups.delete" },
+        .{ .suffix = "FeatureRegistryService.GetFeature", .permission = "aiplatform.features.get" },
+        .{ .suffix = "FeatureRegistryService.CreateFeature", .permission = "aiplatform.features.create" },
+        .{ .suffix = "FeatureRegistryService.UpdateFeature", .permission = "aiplatform.features.update" },
+        .{ .suffix = "FeatureRegistryService.DeleteFeature", .permission = "aiplatform.features.delete" },
+        .{ .suffix = "FeatureRegistryService.GetIamPolicy", .permission = "aiplatform.featureGroups.getIamPolicy" },
+        .{ .suffix = "FeatureRegistryService.SetIamPolicy", .permission = "aiplatform.featureGroups.setIamPolicy" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.GetFeatureOnlineStore", .permission = "aiplatform.featureOnlineStores.get" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.CreateFeatureOnlineStore", .permission = "aiplatform.featureOnlineStores.create" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.UpdateFeatureOnlineStore", .permission = "aiplatform.featureOnlineStores.update" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.DeleteFeatureOnlineStore", .permission = "aiplatform.featureOnlineStores.delete" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.GetFeatureView", .permission = "aiplatform.featureViews.get" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.CreateFeatureView", .permission = "aiplatform.featureViews.create" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.UpdateFeatureView", .permission = "aiplatform.featureViews.update" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.DeleteFeatureView", .permission = "aiplatform.featureViews.delete" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.SyncFeatureView", .permission = "aiplatform.featureViews.sync" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.GetIamPolicy", .permission = "aiplatform.featureOnlineStores.getIamPolicy" },
+        .{ .suffix = "FeatureOnlineStoreAdminService.SetIamPolicy", .permission = "aiplatform.featureOnlineStores.setIamPolicy" },
+        .{ .suffix = "FeatureViewIam.GetIamPolicy", .permission = "aiplatform.featureViews.getIamPolicy" },
+        .{ .suffix = "FeatureViewIam.SetIamPolicy", .permission = "aiplatform.featureViews.setIamPolicy" },
+        .{ .suffix = "TensorboardService.GetTensorboard", .permission = "aiplatform.tensorboards.get" },
+        .{ .suffix = "TensorboardService.CreateTensorboard", .permission = "aiplatform.tensorboards.create" },
+        .{ .suffix = "TensorboardService.UpdateTensorboard", .permission = "aiplatform.tensorboards.update" },
+        .{ .suffix = "TensorboardService.DeleteTensorboard", .permission = "aiplatform.tensorboards.delete" },
+        .{ .suffix = "MetadataService.GetMetadataStore", .permission = "aiplatform.metadataStores.get" },
+        .{ .suffix = "MetadataService.CreateMetadataStore", .permission = "aiplatform.metadataStores.create" },
+        .{ .suffix = "MetadataService.UpdateMetadataStore", .permission = "aiplatform.metadataStores.update" },
+        .{ .suffix = "MetadataService.DeleteMetadataStore", .permission = "aiplatform.metadataStores.delete" },
+        .{ .suffix = "PipelineService.CreatePipelineJob", .permission = "aiplatform.pipelineJobs.create" },
+        .{ .suffix = "PipelineService.CancelPipelineJob", .permission = "aiplatform.pipelineJobs.cancel" },
     };
     for (mappings) |mapping| if (std.mem.endsWith(u8, method, mapping.suffix)) return mapping.permission;
     return null;
@@ -1154,7 +1215,69 @@ pub fn eventIntegrationActionUsages() []const RpcUsage {
     return &usages;
 }
 
+pub fn vertexAiActionUsages() []const RpcUsage {
+    const usages = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.EndpointService.DeployModel" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.EndpointService.UndeployModel" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexEndpointService.DeployIndex" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexEndpointService.UndeployIndex" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.PipelineService.CreatePipelineJob" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.PipelineService.CancelPipelineJob" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.SyncFeatureView" },
+    };
+    return &usages;
+}
+
 fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
+    const vertex_dataset = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.DatasetService.GetDataset" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.DatasetService.CreateDataset" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.DatasetService.UpdateDataset" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.DatasetService.DeleteDataset" },
+    };
+    const vertex_dataset_iam = [_]RpcUsage{ .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.DatasetService.GetIamPolicy" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.DatasetService.SetIamPolicy" } };
+    const vertex_model = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.ModelService.GetModel" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.ModelService.UploadModel" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.ModelService.UpdateModel" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.ModelService.DeleteModel" },
+    };
+    const vertex_model_iam = [_]RpcUsage{ .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.ModelService.GetIamPolicy" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.ModelService.SetIamPolicy" } };
+    const vertex_endpoint = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.EndpointService.GetEndpoint" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.EndpointService.CreateEndpoint" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.EndpointService.UpdateEndpoint" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.EndpointService.DeleteEndpoint" },
+    };
+    const vertex_index = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexService.GetIndex" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexService.CreateIndex" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexService.UpdateIndex" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexService.DeleteIndex" },
+    };
+    const vertex_index_endpoint = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexEndpointService.GetIndexEndpoint" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexEndpointService.CreateIndexEndpoint" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexEndpointService.UpdateIndexEndpoint" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.IndexEndpointService.DeleteIndexEndpoint" },
+    };
+    const vertex_feature_group = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.GetFeatureGroup" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.CreateFeatureGroup" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.UpdateFeatureGroup" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.DeleteFeatureGroup" },
+    };
+    const vertex_feature = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.GetFeature" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.CreateFeature" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.UpdateFeature" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.DeleteFeature" },
+    };
+    const vertex_feature_group_iam = [_]RpcUsage{ .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.GetIamPolicy" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureRegistryService.SetIamPolicy" } };
+    const vertex_online_store = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.GetFeatureOnlineStore" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.CreateFeatureOnlineStore" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.UpdateFeatureOnlineStore" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.DeleteFeatureOnlineStore" },
+    };
+    const vertex_feature_view = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.GetFeatureView" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.CreateFeatureView" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.UpdateFeatureView" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.DeleteFeatureView" },
+    };
+    const vertex_online_iam = [_]RpcUsage{ .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.GetIamPolicy" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureOnlineStoreAdminService.SetIamPolicy" } };
+    const vertex_feature_view_iam = [_]RpcUsage{ .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureViewIam.GetIamPolicy" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.FeatureViewIam.SetIamPolicy" } };
+    const vertex_tensorboard = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.TensorboardService.GetTensorboard" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.TensorboardService.CreateTensorboard" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.TensorboardService.UpdateTensorboard" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.TensorboardService.DeleteTensorboard" },
+    };
+    const vertex_metadata = [_]RpcUsage{
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.MetadataService.GetMetadataStore" },    .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.MetadataService.CreateMetadataStore" },
+        .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.MetadataService.UpdateMetadataStore" }, .{ .service = "aiplatform.googleapis.com", .method = "google.cloud.aiplatform.v1.MetadataService.DeleteMetadataStore" },
+    };
     const data_pipeline = [_]RpcUsage{
         .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.GetPipeline" },
         .{ .service = "datapipelines.googleapis.com", .method = "google.cloud.datapipelines.v1.DataPipelines.CreatePipeline" },
@@ -2334,6 +2457,22 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
     if (std.mem.eql(u8, type_name, "gcp.pubsub.Schema")) return &pubsub_schema;
     if (std.mem.eql(u8, type_name, "gcp.tasks.Queue")) return &tasks_queue;
     if (std.mem.eql(u8, type_name, "gcp.tasks.QueueIamMember")) return &tasks_queue_iam;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.Dataset")) return &vertex_dataset;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.DatasetIamMember")) return &vertex_dataset_iam;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.Endpoint")) return &vertex_endpoint;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.Feature")) return &vertex_feature;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.FeatureGroup")) return &vertex_feature_group;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.FeatureGroupIamMember")) return &vertex_feature_group_iam;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.FeatureOnlineStore")) return &vertex_online_store;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.FeatureOnlineStoreIamMember")) return &vertex_online_iam;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.FeatureView")) return &vertex_feature_view;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.FeatureViewIamMember")) return &vertex_feature_view_iam;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.Index")) return &vertex_index;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.IndexEndpoint")) return &vertex_index_endpoint;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.MetadataStore")) return &vertex_metadata;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.Model")) return &vertex_model;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.ModelIamMember")) return &vertex_model_iam;
+    if (std.mem.eql(u8, type_name, "gcp.vertex.Tensorboard")) return &vertex_tensorboard;
     if (std.mem.eql(u8, type_name, "gcp.eventarc.Trigger")) return &eventarc_trigger;
     if (std.mem.eql(u8, type_name, "gcp.scheduler.Job")) return &scheduler_job;
     if (std.mem.eql(u8, type_name, "gcp.workflows.Workflow")) return &workflow;
@@ -2460,6 +2599,8 @@ fn rpcUsagesForType(type_name: []const u8) []const RpcUsage {
 fn permissionForRuntimeRole(role: []const u8) ?[]const u8 {
     const mappings = [_]struct { role: []const u8, permission: []const u8 }{
         .{ .role = "roles/artifactregistry.reader", .permission = "artifactregistry.repositories.downloadArtifacts" },
+        .{ .role = "roles/aiplatform.user", .permission = "aiplatform.endpoints.predict" },
+        .{ .role = "roles/aiplatform.featurestoreOnlineServingViewer", .permission = "aiplatform.featureOnlineStores.fetchFeatureValues" },
         .{ .role = "roles/bigquery.dataViewer", .permission = "bigquery.tables.getData" },
         .{ .role = "roles/bigquery.dataEditor", .permission = "bigquery.tables.updateData" },
         .{ .role = "roles/bigquery.jobUser", .permission = "bigquery.jobs.create" },

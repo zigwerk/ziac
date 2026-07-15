@@ -138,6 +138,20 @@ test("parser preserves bounded Eventarc and Connectors canvas metadata", () => {
   expect(() => parseZiacVisualArtifact(raw)).toThrow("resources[0].event_integration.kind");
 });
 
+test("parser preserves bounded Vertex AI canvas metadata", () => {
+  const raw = JSON.parse(sampleJson());
+  raw.resources[0].vertex_ai = {
+    kind: "prediction_endpoint",
+    location: "europe-west1",
+    connectivity: "private_service_connect",
+    dedicated_endpoint: true,
+  };
+  const parsed = parseZiacVisualArtifact(raw);
+  expect(parsed.resources[0]?.vertex_ai).toEqual(raw.resources[0].vertex_ai);
+  raw.resources[0].vertex_ai.kind = "unbounded_agent";
+  expect(() => parseZiacVisualArtifact(raw)).toThrow("resources[0].vertex_ai.kind");
+});
+
 test("estate ownership defaults to managed and filters existing infrastructure without dangling graph data", () => {
   const raw = JSON.parse(sampleJson());
   raw.resources.push({

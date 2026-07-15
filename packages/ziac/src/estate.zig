@@ -367,6 +367,24 @@ fn mappedTypeAlloc(allocator: std.mem.Allocator, asset_type: []const u8, locatio
         "gcp.dataform.ReleaseConfig"
     else if (std.mem.eql(u8, asset_type, "dataform.googleapis.com/WorkflowConfig"))
         "gcp.dataform.WorkflowConfig"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/Dataset"))
+        "gcp.vertex.Dataset"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/Endpoint"))
+        "gcp.vertex.Endpoint"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/FeatureGroup"))
+        "gcp.vertex.FeatureGroup"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/FeatureOnlineStore"))
+        "gcp.vertex.FeatureOnlineStore"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/Index"))
+        "gcp.vertex.Index"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/IndexEndpoint"))
+        "gcp.vertex.IndexEndpoint"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/MetadataStore"))
+        "gcp.vertex.MetadataStore"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/Model"))
+        "gcp.vertex.Model"
+    else if (std.mem.eql(u8, asset_type, "aiplatform.googleapis.com/Tensorboard"))
+        "gcp.vertex.Tensorboard"
     else if (std.mem.eql(u8, asset_type, "spanner.googleapis.com/Instance"))
         "gcp.spanner.Instance"
     else if (std.mem.eql(u8, asset_type, "spanner.googleapis.com/Database"))
@@ -688,6 +706,15 @@ fn managedPhysicalIdAlloc(allocator: std.mem.Allocator, asset_type: []const u8, 
         .{ .asset_type = "dataform.googleapis.com/Workspace", .prefix = "//dataform.googleapis.com/" },
         .{ .asset_type = "dataform.googleapis.com/ReleaseConfig", .prefix = "//dataform.googleapis.com/" },
         .{ .asset_type = "dataform.googleapis.com/WorkflowConfig", .prefix = "//dataform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/Dataset", .prefix = "//aiplatform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/Endpoint", .prefix = "//aiplatform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/FeatureGroup", .prefix = "//aiplatform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/FeatureOnlineStore", .prefix = "//aiplatform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/Index", .prefix = "//aiplatform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/IndexEndpoint", .prefix = "//aiplatform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/MetadataStore", .prefix = "//aiplatform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/Model", .prefix = "//aiplatform.googleapis.com/" },
+        .{ .asset_type = "aiplatform.googleapis.com/Tensorboard", .prefix = "//aiplatform.googleapis.com/" },
         .{ .asset_type = "apigateway.googleapis.com/Api", .prefix = "//apigateway.googleapis.com/" },
         .{ .asset_type = "apigateway.googleapis.com/ApiConfig", .prefix = "//apigateway.googleapis.com/" },
         .{ .asset_type = "apigateway.googleapis.com/Gateway", .prefix = "//apigateway.googleapis.com/" },

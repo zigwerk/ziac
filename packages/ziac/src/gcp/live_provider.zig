@@ -11,6 +11,8 @@ const data_engineering_iam_provider = @import("data_engineering_iam_provider.zig
 const eventarc_advanced_provider = @import("eventarc_advanced_provider.zig");
 const connectors_provider = @import("connectors_provider.zig");
 const event_integration_iam_provider = @import("event_integration_iam_provider.zig");
+const vertex_ai_provider = @import("vertex_ai_provider.zig");
+const vertex_ai_iam_provider = @import("vertex_ai_iam_provider.zig");
 const cloud_build_provider = @import("cloud_build_provider.zig");
 const container_platform_provider = @import("container_platform_provider.zig");
 const monitoring_provider = @import("monitoring_provider.zig");
@@ -298,6 +300,22 @@ pub const managed_type_names = [_][]const u8{
     "gcp.tags.TagValue",
     "gcp.tasks.Queue",
     "gcp.tasks.QueueIamMember",
+    "gcp.vertex.Dataset",
+    "gcp.vertex.DatasetIamMember",
+    "gcp.vertex.Endpoint",
+    "gcp.vertex.Feature",
+    "gcp.vertex.FeatureGroup",
+    "gcp.vertex.FeatureGroupIamMember",
+    "gcp.vertex.FeatureOnlineStore",
+    "gcp.vertex.FeatureOnlineStoreIamMember",
+    "gcp.vertex.FeatureView",
+    "gcp.vertex.FeatureViewIamMember",
+    "gcp.vertex.Index",
+    "gcp.vertex.IndexEndpoint",
+    "gcp.vertex.MetadataStore",
+    "gcp.vertex.Model",
+    "gcp.vertex.ModelIamMember",
+    "gcp.vertex.Tensorboard",
     "gcp.workflows.Workflow",
 };
 
@@ -351,6 +369,8 @@ pub const LiveProvider = struct {
         if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().read(context, node, null);
         if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().read(context, node, null);
         if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().read(context, node, null);
+        if (vertex_ai_provider.Handler.supports(node)) return self.vertexAiHandler().read(context, node, null);
+        if (vertex_ai_iam_provider.Handler.supports(node)) return self.vertexAiIamHandler().read(context, node, null);
         if (isType(node, artifact_repository_type)) return self.readArtifactRepository(context, node, null);
         if (isType(node, secret_type)) return self.readSecret(context, node, null);
         if (isType(node, secret_version_type)) return self.readSecretVersion(context, node, context.physical_id);
@@ -412,6 +432,8 @@ pub const LiveProvider = struct {
         if (eventarc_advanced_provider.Handler.supports(node)) return eventarc_advanced_provider.Handler.diff(context, node, observed);
         if (connectors_provider.Handler.supports(node)) return connectors_provider.Handler.diff(context, node, observed);
         if (event_integration_iam_provider.Handler.supports(node)) return event_integration_iam_provider.Handler.diff(context, node, observed);
+        if (vertex_ai_provider.Handler.supports(node)) return vertex_ai_provider.Handler.diff(context, node, observed);
+        if (vertex_ai_iam_provider.Handler.supports(node)) return vertex_ai_iam_provider.Handler.diff(context, node, observed);
         if (network_provider.supports(node)) return network_provider.Handler.diff(context, node, observed);
         if (connectivity_provider.supports(node)) return connectivity_provider.Handler.diff(context, node, observed);
         if (container_platform_provider.supports(node)) return container_platform_provider.Handler.diff(context, node, observed);
@@ -474,6 +496,8 @@ pub const LiveProvider = struct {
         if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().create(context, node);
         if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().create(context, node);
         if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().create(context, node);
+        if (vertex_ai_provider.Handler.supports(node)) return self.vertexAiHandler().create(context, node);
+        if (vertex_ai_iam_provider.Handler.supports(node)) return self.vertexAiIamHandler().create(context, node);
         if (isType(node, artifact_repository_type)) return self.createArtifactRepository(context, node);
         if (isType(node, secret_type)) return self.createSecret(context, node);
         if (isType(node, secret_version_type)) return self.createSecretVersion(context, node);
@@ -532,6 +556,8 @@ pub const LiveProvider = struct {
         if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().update(context, node, observed);
         if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().update(context, node, observed);
         if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().update(context, node, observed);
+        if (vertex_ai_provider.Handler.supports(node)) return self.vertexAiHandler().update(context, node, observed);
+        if (vertex_ai_iam_provider.Handler.supports(node)) return self.vertexAiIamHandler().update(context, node, observed);
         if (isType(node, artifact_repository_type)) return self.updateArtifactRepository(context, node, observed);
         if (isType(node, secret_type)) return self.updateSecret(context, node, observed);
         if (isType(node, secret_version_type)) return self.updateSecretVersion(context, node, observed.physical_id);
@@ -590,6 +616,8 @@ pub const LiveProvider = struct {
         if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().delete(context, node, physical_id);
         if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().delete(context, node, physical_id);
         if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().delete(context, node, physical_id);
+        if (vertex_ai_provider.Handler.supports(node)) return self.vertexAiHandler().delete(context, node, physical_id);
+        if (vertex_ai_iam_provider.Handler.supports(node)) return self.vertexAiIamHandler().delete(context, node, physical_id);
         if (isType(node, artifact_repository_type)) return self.deleteArtifactRepository(context, physical_id);
         if (isType(node, secret_type)) return self.deleteSecret(context, physical_id);
         if (isType(node, secret_version_type)) return self.removeSecretVersion(context, node, physical_id);
@@ -684,6 +712,8 @@ pub const LiveProvider = struct {
         if (eventarc_advanced_provider.Handler.supports(node)) return self.eventarcAdvancedHandler().importResource(context, node, physical_id);
         if (connectors_provider.Handler.supports(node)) return self.connectorsHandler().importResource(context, node, physical_id);
         if (event_integration_iam_provider.Handler.supports(node)) return self.eventIntegrationIamHandler().importResource(context, node, physical_id);
+        if (vertex_ai_provider.Handler.supports(node)) return self.vertexAiHandler().importResource(context, node, physical_id);
+        if (vertex_ai_iam_provider.Handler.supports(node)) return self.vertexAiIamHandler().importResource(context, node, physical_id);
         if (isType(node, artifact_repository_type)) {
             const result = try self.readArtifactRepository(context, node, physical_id);
             return switch (result) {
@@ -1591,6 +1621,14 @@ pub const LiveProvider = struct {
     }
 
     fn eventIntegrationIamHandler(self: *LiveProvider) event_integration_iam_provider.Handler {
+        return .{ .client = self.client };
+    }
+
+    fn vertexAiHandler(self: *LiveProvider) vertex_ai_provider.Handler {
+        return .{ .client = self.client, .operation_policy = self.operation_policy };
+    }
+
+    fn vertexAiIamHandler(self: *LiveProvider) vertex_ai_iam_provider.Handler {
         return .{ .client = self.client };
     }
 

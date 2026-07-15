@@ -197,6 +197,7 @@ fn appendResource(
     try appendSecurityFoundationDetails(output, allocator, item.node);
     try appendDataEngineeringDetails(output, allocator, item.node);
     try appendEventIntegrationDetails(output, allocator, item.node);
+    try appendVertexAiDetails(output, allocator, item.node);
     try appendOrganizationFoundationDetails(output, allocator, item.node);
     try appendKmsSecretDetails(output, allocator, item.node);
     try appendBigqueryDetails(output, allocator, item.node);
@@ -417,6 +418,52 @@ fn appendEventIntegrationDetails(output: *std.ArrayList(u8), allocator: std.mem.
     try output.append(allocator, '}');
 }
 
+fn appendVertexAiDetails(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode) !void {
+    const kind = if (std.mem.eql(u8, node.type_name, "gcp.vertex.Dataset"))
+        "dataset"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.Model"))
+        "model"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.Endpoint"))
+        "prediction_endpoint"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.Index"))
+        "vector_index"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.IndexEndpoint"))
+        "vector_index_endpoint"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.FeatureGroup"))
+        "feature_group"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.Feature"))
+        "feature"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.FeatureOnlineStore"))
+        "feature_online_store"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.FeatureView"))
+        "feature_view"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.Tensorboard"))
+        "tensorboard"
+    else if (std.mem.eql(u8, node.type_name, "gcp.vertex.MetadataStore"))
+        "metadata_store"
+    else if (std.mem.startsWith(u8, node.type_name, "gcp.vertex."))
+        "vertex_ai_iam"
+    else
+        return;
+    try output.appendSlice(allocator, ",\"vertex_ai\":{");
+    try appendNamedString(output, allocator, "kind", kind, false);
+    try appendOptionalStorageString(output, allocator, node, "location", "location");
+    try appendOptionalStorageString(output, allocator, node, "display_name", "display_name");
+    try appendOptionalStorageString(output, allocator, node, "artifact_uri", "artifact_uri");
+    try appendOptionalStorageString(output, allocator, node, "update_method", "update_method");
+    try appendOptionalStorageString(output, allocator, node, "bigquery_source", "bigquery_source");
+    try appendOptionalStorageString(output, allocator, node, "point_of_contact", "point_of_contact");
+    try appendOptionalStorageString(output, allocator, node, "role", "iam_role");
+    try appendOptionalStorageBool(output, allocator, node, "dedicated_endpoint", "dedicated_endpoint");
+    try appendOptionalStorageBool(output, allocator, node, "is_default", "is_default");
+    try appendOptionalStorageInteger(output, allocator, node, "sync_interval_seconds", "sync_interval_seconds");
+    try appendStorageListCount(output, allocator, node, "entity_id_columns", "entity_id_column_count");
+    try appendNestedDataEngineeringValue(output, allocator, node, "connectivity", "kind", "connectivity");
+    try appendNestedDataEngineeringValue(output, allocator, node, "storage", "kind", "storage");
+    try appendNestedDataEngineeringValue(output, allocator, node, "source", "kind", "source");
+    try output.append(allocator, '}');
+}
+
 fn appendNestedDataEngineeringValue(output: *std.ArrayList(u8), allocator: std.mem.Allocator, node: resource.ResourceNode, object_name: []const u8, field_name: []const u8, output_name: []const u8) !void {
     const object = objectField(node.inputs, object_name) orelse return;
     if (object != .object) return;
@@ -597,6 +644,7 @@ fn directRegion(node: resource.ResourceNode) ?[]const u8 {
         std.mem.startsWith(u8, node.type_name, "gcp.deploy.") or
         std.mem.startsWith(u8, node.type_name, "gcp.tasks.") or
         std.mem.startsWith(u8, node.type_name, "gcp.eventarc.") or
+        std.mem.startsWith(u8, node.type_name, "gcp.vertex.") or
         std.mem.startsWith(u8, node.type_name, "gcp.privateca.") or
         std.mem.startsWith(u8, node.type_name, "gcp.securitycenter."))
     {
