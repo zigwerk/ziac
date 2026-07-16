@@ -1,0 +1,57 @@
+{
+  "schema": "zigeffect.project.v1",
+  "name": "{{project_name}}",
+  "version": "0.1.0",
+  "kind": "application",
+  "components": [
+    {"id":"{{project_name}}","kind":"application","path":".","depends_on":[],"capabilities":["config","observability","agent","causal_graph"]}
+  ],
+  "commands": [
+    {"id":"build","argv":["zig","build"],"component":null},
+    {"id":"check","argv":["zig","build","test"],"component":null},
+    {"id":"check-debug","argv":["zig","build","test","-Doptimize=Debug"],"component":null},
+    {"id":"check-safe","argv":["zig","build","test","-Doptimize=ReleaseSafe"],"component":null},
+    {"id":"test","argv":["zig","build","test"],"component":null},
+    {"id":"dev","argv":["zig","build"],"component":null},
+    {"id":"doctor","argv":["zig","build","test"],"component":null},
+    {"id":"production-check","argv":["zig","build","test","-Doptimize=ReleaseSafe"],"component":null}
+  ],
+  "requirements": [
+    {"id":"runtime-causal-contract","summary":"The application composes typed services through one durable runtime","component":"{{project_name}}","status":"active"}
+  ],
+  "acceptance_checks": [
+    {"id":"check-runtime-causal-contract","requirement":"runtime-causal-contract","command":"test","expectation":"Testing v2 verifies the service map and durable causal graph","status":"pending"}
+  ],
+  "test_scenarios": [
+    {"id":"runtime-causal-contract","label":"runtime service and durable causal graph contract","requirement":"runtime-causal-contract","acceptance_check":"check-runtime-causal-contract","component":"{{project_name}}","command":"test","source_roots":["src","ziac.stack.zig","ziac.project.json","zigeffect.project.json"],"tags":["acceptance","causal","generated"],"native_test_filter":"runtime causal contract","default_seed":42,"fault_profile":"standard","required":true}
+  ],
+  "execution_posture":"local",
+  "capability_requirements":[],
+  "capability_descriptors":[],
+  "adapter_profiles":[],
+  "policy":{"allow_network":false,"require_approval_for_processes":true,"persist_raw_terminal":false},
+  "safety":{
+    "profile":"agent_safe_v1",
+    "safe_roots":["src","ziac.stack.zig"],
+    "audited_roots":[],
+    "allowances":[],
+    "gates":[
+      {"kind":"source_policy","required":true,"command":null},
+      {"kind":"compile_debug","required":true,"command":"check-debug"},
+      {"kind":"compile_release_safe","required":true,"command":"check-safe"},
+      {"kind":"allocation_failures","required":true,"command":"check-debug"},
+      {"kind":"leak_detection","required":true,"command":"check-debug"},
+      {"kind":"causal_invariants","required":true,"command":"check-debug"},
+      {"kind":"schedule_exploration","required":true,"command":"check-debug"},
+      {"kind":"executor_equivalence","required":true,"command":"check-debug"},
+      {"kind":"thread_sanitizer","required":false,"command":null},
+      {"kind":"c_undefined_behavior","required":false,"command":null},
+      {"kind":"stack_protection","required":false,"command":null},
+      {"kind":"fuzz","required":false,"command":null}
+    ],
+    "limits":{"max_source_bytes":8388608,"max_findings":1024,"max_diagnostics":1024,"max_schedules":10000,"max_fuzz_cases":100000,"max_artifact_bytes":16777216,"max_runtime_events":100000},
+    "production_posture":{"retain_generation_checks":true,"retain_critical_invariants":true,"retain_causal_findings":true}
+  },
+  "artifacts":{"sessions":".zigeffect/sessions","causal":".zigeffect/causal","receipts":".zigeffect/receipts","graph":".zigeffect/graph","statecharts":".zigeffect/statecharts"},
+  "dependencies":{"zigeffect":{{zigeffect_path}},"zigeffect_std":{{zigeffect_std_path}}}
+}

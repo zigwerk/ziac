@@ -17,8 +17,16 @@ Templates remain source projects, not hidden provider resources:
   global HTTPS endpoint.
 - `hermes-desktop`: a low-cost Hermes Agent backend on Compute Engine for a
   desktop client.
-- `event-driven-zig`: a Zig worker foundation with a governed asset bucket and
-  Pub/Sub topic.
+- `event-driven-zig`: a Zig worker foundation with a governed asset bucket,
+  Pub/Sub topic, typed finite-state control, durable activity replay, and
+  Testing v2 causal evidence.
 
 The CLI copies source and replaces only documented text tokens. Registry
 manifests and templates do not contain or run installation hooks.
+
+Application templates ship as canonical ZigEffect applications: each has
+colocated Ziac and ZigEffect manifests, tracked compatibility metadata, direct
+runtime dependencies, typed services/layers, one managed runtime, automatic
+embedded NenDB recording, and Testing v2 causal acceptance evidence. The
+Hermes infrastructure-only template remains a pure graph compiler and uses
+Testing v2 without inventing an unnecessary process runtime.

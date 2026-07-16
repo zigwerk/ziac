@@ -1,10 +1,27 @@
 const std = @import("std");
 const ziac = @import("ziac");
 const gcpx = @import("ziac_gcpx");
+const zstd = @import("zigeffect_std");
 
 const provider = ziac.gcp.ProviderConfig{ .project_id = "ziac-dev", .primary_region = "europe-west1" };
 
 test "official AssetBucket expands into cataloged resources with component provenance" {
+    var context = try zstd.Testing.TestContext.init(std.testing.allocator, .{
+        .project = "ziac-gcpx",
+        .suite = "ziac-gcpx-tests",
+        .scenario = .{
+            .id = "asset-bucket-provenance",
+            .label = "AssetBucket compiles deterministic typed provenance",
+            .requirement = "official-component-provenance",
+            .acceptance_check = "check-asset-bucket-provenance",
+            .component = "ziac-gcpx",
+            .command = "zig-build-test",
+        },
+        .seed = 42,
+    });
+    defer context.deinit();
+    const assertions = zstd.Testing.AssertionRecorder.init(&context);
+
     var bucket = try gcpx.AssetBucket.build(std.testing.allocator, provider, .{
         .name = "team-assets",
         .location = "EU",
@@ -21,6 +38,21 @@ test "official AssetBucket expands into cataloged resources with component prove
     }
     try std.testing.expect(bucket.name == .resource_ref);
     try std.testing.expect(bucket.url == .resource_ref);
+    try assertions.boolean(.{
+        .id = "asset-bucket.resource-count",
+        .label = "AssetBucket emits the governed resource set",
+        .repair_hint = "preserve the bucket and IAM graph contract",
+    }, bucket.graph.resources.items.len == 2);
+    try assertions.boolean(.{
+        .id = "asset-bucket.provenance",
+        .label = "AssetBucket resource provenance is queryable",
+        .repair_hint = "stamp every component-owned resource with package provenance",
+    }, std.mem.eql(u8, bucket.graph.resources.items[0].component.?.package, "ziac-gcpx"));
+    try assertions.noFindings(.{
+        .id = "asset-bucket.no-findings",
+        .label = "pure component compilation has no causal findings",
+        .repair_hint = "keep component compilation deterministic and side-effect free",
+    });
 }
 
 test "official AssetBucket leaves a caller base graph unattributed" {

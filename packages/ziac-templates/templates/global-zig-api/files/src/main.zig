@@ -1,36 +1,161 @@
 const std = @import("std");
+const zstd = @import("zigeffect_std");
+const kernel = zstd.fx.kernel;
 
-pub const Env = struct {};
-const ok = "{\"status\":\"ok\"}";
+pub const HealthApi = struct {
+    pub const operations: []const []const u8 = &.{"Health.route"};
+};
+pub const Health = kernel.Service("application/Health", HealthApi);
 
-pub fn main() !void {
-    const io = std.Io.Threaded.global_single_threaded.io();
-    var address = try std.Io.net.IpAddress.parseIp4("0.0.0.0", 8080);
-    var server = try address.listen(io, .{ .reuse_address = true });
-    defer server.deinit(io);
-    while (true) {
-        const stream = server.accept(io) catch continue;
-        handle(io, stream) catch {};
-    }
+const RouteResult = struct { status: std.http.Status, body: []const u8 };
+const RouteBase = kernel.Effect(RouteResult, error{}, .{Health});
+const Route = RouteBase.Stateful([]const u8);
+
+fn route(target: []const u8) Route {
+    return Route.init(target, struct {
+        fn run(path: []const u8, ctx: *Route.Context) error{}!RouteResult {
+            const found = std.mem.eql(u8, path, "/") or std.mem.eql(u8, path, "/health/live") or std.mem.eql(u8, path, "/health/startup");
+            _ = ctx.recordCausal(.{
+                .kind = .activity_completed,
+                .service_key = Health.service_key,
+                .label = "Health.route",
+                .status = if (found) "success" else "not_found",
+                .redacted_detail = path,
+            });
+            return .{
+                .status = if (found) .ok else .not_found,
+                .body = if (found) "{\"status\":\"ok\"}" else "{\"error\":\"not found\"}",
+            };
+        }
+    }.run);
 }
 
-fn handle(io: std.Io, stream: std.Io.net.Stream) !void {
+fn handleConnection(io: std.Io, stream: std.Io.net.Stream, runtime: anytype) void {
     defer stream.close(io);
     var read_buffer: [4096]u8 = undefined;
     var reader = stream.reader(io, &read_buffer);
     var write_buffer: [4096]u8 = undefined;
     var writer = stream.writer(io, &write_buffer);
     var server = std.http.Server.init(&reader.interface, &writer.interface);
-    var request = try server.receiveHead();
-    const found = routeFound(request.head.target);
-    try request.respond(if (found) ok else "{\"error\":\"not found\"}", .{ .status = if (found) .ok else .not_found, .keep_alive = false, .extra_headers = &.{.{ .name = "content-type", .value = "application/json" }} });
+    var request = server.receiveHead() catch return;
+    const result = runtime.run(route(request.head.target).named("http.health")) catch return;
+    request.respond(result.body, .{
+        .status = result.status,
+        .keep_alive = false,
+        .extra_headers = &.{.{ .name = "content-type", .value = "application/json" }},
+    }) catch {};
 }
 
-fn routeFound(target: []const u8) bool {
-    return std.mem.eql(u8, target, "/") or std.mem.eql(u8, target, "/health/live") or std.mem.eql(u8, target, "/health/startup");
+const ServeBase = kernel.Effect(void, anyerror, .{Health});
+const Serve = ServeBase.Stateful(std.process.Init);
+
+fn serve(init: std.process.Init) Serve {
+    return Serve.init(init, struct {
+        fn run(process: std.process.Init, ctx: *Serve.Context) anyerror!void {
+            const port = if (process.environ_map.get("PORT")) |value|
+                try std.fmt.parseInt(u16, value, 10)
+            else
+                8080;
+            var address = try std.Io.net.IpAddress.parseIp4("0.0.0.0", port);
+            var listener = try address.listen(process.io, .{ .reuse_address = true });
+            defer listener.deinit(process.io);
+            while (true) {
+                const stream = listener.accept(process.io) catch continue;
+                var runtime = ctx.runtime();
+                handleConnection(process.io, stream, &runtime);
+            }
+        }
+    }.run);
 }
 
-test "health endpoints are exact" {
-    try std.testing.expect(routeFound("/health/live"));
-    try std.testing.expect(!routeFound("/missing"));
+pub fn rootLayer() @TypeOf(kernel.Layer.succeed(Health, HealthApi{})) {
+    return kernel.Layer.succeed(Health, .{});
+}
+
+pub fn runWithOptions(init: std.process.Init, options: zstd.CausalRuntime.Options) !void {
+    const main_layer = rootLayer();
+    var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
+        init.gpa,
+        init.io,
+        std.Io.Dir.cwd(),
+        main_layer,
+        options,
+    );
+    defer runtime.deinit();
+    try runtime.run(serve(init).named("application.serve"));
+    try runtime.shutdown();
+}
+
+pub fn main(init: std.process.Init) !void {
+    return runWithOptions(init, .{});
+}
+
+test "runtime causal contract" {
+    var context = try zstd.Testing.TestContext.init(std.testing.allocator, .{
+        .project = "global-zig-api",
+        .suite = "app-tests",
+        .scenario = .{
+            .id = "runtime-causal-contract",
+            .label = "runtime causal contract",
+            .requirement = "runtime-causal-contract",
+            .acceptance_check = "check-runtime-causal-contract",
+            .component = "application",
+            .command = "test",
+        },
+        .seed = 42,
+    });
+    defer context.deinit();
+    const assertions = zstd.Testing.AssertionRecorder.init(&context);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const main_layer = rootLayer();
+    var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
+        std.testing.allocator,
+        std.testing.io,
+        tmp.dir,
+        main_layer,
+        .{
+            .causal_store = context.causalStore(),
+            .graph = .{ .path = ".zigeffect/graph", .max_records = 4096 },
+        },
+    );
+    defer runtime.deinit();
+
+    const result = try runtime.run(route("/health/live").named("test.health"));
+    try assertions.equal(.{
+        .id = "health-status",
+        .label = "health route succeeds",
+        .repair_hint = "preserve the typed health service",
+    }, @as(u16, 200), @intFromEnum(result.status));
+    _ = try assertions.event(.{
+        .id = "health-causal",
+        .label = "health operation is causal",
+        .repair_hint = "record Health.route through the runtime",
+    }, .{ .kind = .activity_completed, .label = "Health.route", .status = "success" });
+
+    var snapshot = try runtime.inspect(std.testing.allocator, .{ .max_recent_events = 128 });
+    defer snapshot.deinit();
+    try assertions.applicationService(.{
+        .id = "health-service",
+        .label = "health service is mapped",
+        .repair_hint = "provide Health from rootLayer",
+    }, &snapshot, Health.service_key, true);
+    try assertions.applicationOperation(.{
+        .id = "health-operation",
+        .label = "health operation is mapped",
+        .repair_hint = "declare Health.route",
+    }, &snapshot, Health.service_key, "Health.route");
+    try assertions.noFindings(.{
+        .id = "health-no-findings",
+        .label = "runtime is causally healthy",
+        .repair_hint = "close every effect and scope",
+    });
+    try assertions.noPendingFibers(.{
+        .id = "health-no-pending",
+        .label = "runtime has no pending fibers",
+        .repair_hint = "join every request child",
+    });
+    try context.mapCausalEventIds(&runtime);
+    try runtime.shutdown();
 }

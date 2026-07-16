@@ -13,14 +13,127 @@ pub const VerificationRunner = struct {
     }
 };
 
+pub const ContextProvider = struct {
+    pub const operations: []const []const u8 = &.{"DevelopmentContext.compile"};
+    ptr: *anyopaque,
+    compile_alloc: *const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]u8,
+
+    pub fn compileAlloc(self: ContextProvider, allocator: std.mem.Allocator, arguments_json: []const u8) ![]u8 {
+        return self.compile_alloc(self.ptr, allocator, arguments_json);
+    }
+};
+
+pub const ContextService = zstd.fx.kernel.Service("ziac/DevelopmentContext", ContextProvider);
+
+pub fn contextLayer(provider_value: ContextProvider) @TypeOf(zstd.fx.kernel.Layer.succeed(ContextService, provider_value)) {
+    return zstd.fx.kernel.Layer.succeed(ContextService, provider_value);
+}
+
+const CompileContextBase = zstd.fx.kernel.Effect([]u8, anyerror, .{ContextService});
+pub const CompileContextEffect = CompileContextBase.Stateful([]const u8);
+
+/// Compiles the canonical development context through the owning application
+/// runtime. Process roots and tests therefore share service discovery, causal
+/// context propagation, graph recording, and replaceable providers.
+pub fn compileContext(arguments_json: []const u8) CompileContextEffect {
+    return CompileContextEffect.init(arguments_json, struct {
+        fn run(arguments: []const u8, ctx: *CompileContextEffect.Context) anyerror![]u8 {
+            const provider = ctx.service(ContextService).*;
+            const result = provider.compileAlloc(ctx.allocator(), arguments) catch |failure| {
+                _ = ctx.recordCausal(.{
+                    .kind = .activity_completed,
+                    .service_key = ContextService.service_key,
+                    .label = "DevelopmentContext.compile",
+                    .status = "failure",
+                    .redacted_detail = @errorName(failure),
+                });
+                return failure;
+            };
+            _ = ctx.recordCausal(.{
+                .kind = .activity_completed,
+                .service_key = ContextService.service_key,
+                .label = "DevelopmentContext.compile",
+                .status = "success",
+                .redacted_detail = "bounded-proof-context",
+            });
+            return result;
+        }
+    }.run);
+}
+
+pub const ScriptedContextProvider = struct {
+    output: []const u8,
+    call_count: usize = 0,
+
+    pub fn init(output: []const u8) ScriptedContextProvider {
+        return .{ .output = output };
+    }
+
+    pub fn provider(self: *ScriptedContextProvider) ContextProvider {
+        return .{ .ptr = self, .compile_alloc = compileAlloc };
+    }
+
+    fn compileAlloc(raw: *anyopaque, allocator: std.mem.Allocator, _: []const u8) ![]u8 {
+        const self: *ScriptedContextProvider = @ptrCast(@alignCast(raw));
+        self.call_count += 1;
+        return allocator.dupe(u8, self.output);
+    }
+};
+
+/// Native implementation shared by the MCP server and future Ziac agent
+/// surfaces. It delegates collection, reconciliation, NenDB summarization, and
+/// budget enforcement to the ZigEffect Development standard-library service.
+pub const NativeContextProvider = struct {
+    io: std.Io,
+    project_dir: std.Io.Dir,
+    manifest_path: []const u8 = "zigeffect.project.json",
+
+    pub fn provider(self: *NativeContextProvider) ContextProvider {
+        return .{ .ptr = self, .compile_alloc = compileAlloc };
+    }
+
+    fn compileAlloc(raw: *anyopaque, allocator: std.mem.Allocator, arguments_json: []const u8) ![]u8 {
+        const self: *NativeContextProvider = @ptrCast(@alignCast(raw));
+        const Args = struct {
+            task: []const u8,
+            budget: usize = 32 * 1024,
+            changed_paths: []const []const u8 = &.{},
+        };
+        var args = std.json.parseFromSlice(Args, allocator, arguments_json, .{ .allocate = .alloc_always }) catch return error.InvalidAgentToolArguments;
+        defer args.deinit();
+        if (args.value.task.len == 0 or args.value.changed_paths.len > zstd.Development.max_changed_paths) return error.InvalidAgentToolArguments;
+
+        const manifest_json = try self.project_dir.readFileAlloc(self.io, self.manifest_path, allocator, .limited(4 * 1024 * 1024));
+        defer allocator.free(manifest_json);
+        var manifest = try zstd.Project.parseManifest(allocator, manifest_json);
+        defer manifest.deinit();
+        var source = try zstd.Development.sourceIdentityAlloc(allocator, self.io, self.project_dir, .{});
+        defer source.deinit();
+        return zstd.Development.compileProjectContextJsonAlloc(allocator, self.io, self.project_dir, manifest.value, .{
+            .task_id = args.value.task,
+            .source_revision = source.revision,
+            .source_dirty = source.dirty,
+            .changed_paths = args.value.changed_paths,
+            .byte_budget = args.value.budget,
+        });
+    }
+};
+
 pub const Kernel = struct {
     allocator: std.mem.Allocator,
     project: contract.Project,
     verification_runner: VerificationRunner,
+    context_provider: ?ContextProvider = null,
     last_artifact: ?[]u8 = null,
 
     pub fn init(allocator: std.mem.Allocator, project: contract.Project, verification_runner: VerificationRunner) Kernel {
         return .{ .allocator = allocator, .project = project, .verification_runner = verification_runner };
+    }
+
+    pub fn withContextProvider(self: Kernel, provider: ContextProvider) Kernel {
+        var configured = self;
+        configured.context_provider = provider;
+        return configured;
     }
 
     pub fn deinit(self: *Kernel) void {
@@ -33,7 +146,9 @@ pub const Kernel = struct {
     }
 
     pub fn invoke(self: *Kernel, tool: []const u8, arguments_json: []const u8) ![]const u8 {
-        const artifact = if (std.mem.eql(u8, tool, "ziac_simulate"))
+        const artifact = if (std.mem.eql(u8, tool, "ziac_context"))
+            try (self.context_provider orelse return error.DevelopmentContextUnavailable).compileAlloc(self.allocator, arguments_json)
+        else if (std.mem.eql(u8, tool, "ziac_simulate"))
             try self.simulateAlloc(arguments_json)
         else if (std.mem.eql(u8, tool, "ziac_propose"))
             try self.proposeAlloc(arguments_json)

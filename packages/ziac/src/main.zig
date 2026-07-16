@@ -2,7 +2,14 @@ const std = @import("std");
 const ziac = @import("ziac");
 const build_options = @import("build_options");
 
+const MainProgram = ziac.zstd.fx.kernel.Effect(u8, anyerror, .{}).Stateful(std.process.Init);
+
 pub fn main(init: std.process.Init) !void {
+    const code = try ziac.process_runtime.run(init, "ziac-cli", MainProgram.init(init, runMain));
+    std.process.exit(code);
+}
+
+fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !u8 {
     const allocator = init.gpa;
     const io = init.io;
 
@@ -24,31 +31,28 @@ pub fn main(init: std.process.Init) !void {
 
     var cwd = std.Io.Dir.cwd();
     if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "init")) {
-        const code = runInit(allocator, io, cwd, args.items[1..]);
-        std.process.exit(code catch |err| {
+        return runInit(allocator, io, cwd, args.items[1..]) catch |err| {
             var error_buffer: [256]u8 = undefined;
             const message = std.fmt.bufPrint(&error_buffer, "ziac init: {s}\n", .{@errorName(err)}) catch "ziac init failed\n";
             std.Io.File.stderr().writeStreamingAll(io, message) catch {};
-            return;
-        });
+            return ziac.cli.Exit.usage;
+        };
     }
     if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "registry")) {
-        const code = runRegistry(allocator, io, args.items[1..]);
-        std.process.exit(code catch |err| {
+        return runRegistry(allocator, io, args.items[1..]) catch |err| {
             var error_buffer: [256]u8 = undefined;
             const message = std.fmt.bufPrint(&error_buffer, "ziac registry: {s}\n", .{@errorName(err)}) catch "ziac registry failed\n";
             std.Io.File.stderr().writeStreamingAll(io, message) catch {};
-            return;
-        });
+            return ziac.cli.Exit.usage;
+        };
     }
     if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "package")) {
-        const code = runPackage(allocator, io, cwd, args.items[1..]);
-        std.process.exit(code catch |err| {
+        return runPackage(allocator, io, cwd, args.items[1..]) catch |err| {
             var error_buffer: [256]u8 = undefined;
             const message = std.fmt.bufPrint(&error_buffer, "ziac package: {s}\n", .{@errorName(err)}) catch "ziac package failed\n";
             std.Io.File.stderr().writeStreamingAll(io, message) catch {};
-            return;
-        });
+            return ziac.cli.Exit.usage;
+        };
     }
     if (args.items.len >= 2 and std.mem.eql(u8, args.items[0], "mcp") and std.mem.eql(u8, args.items[1], "serve")) {
         const executable_dir = try std.process.executableDirPathAlloc(io, allocator);
@@ -70,17 +74,22 @@ pub fn main(init: std.process.Init) !void {
             .exited => |exit_code| @intCast(exit_code),
             else => ziac.cli.Exit.agent_error,
         };
-        std.process.exit(code);
+        return code;
     }
     if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "dashboard")) {
-        const code = runWorkspaceDashboard(allocator, io, cwd, args.items[1..]);
-        std.process.exit(code catch |err| {
+        return runWorkspaceDashboard(allocator, io, cwd, args.items[1..]) catch |err| {
             var error_buffer: [256]u8 = undefined;
             const message = std.fmt.bufPrint(&error_buffer, "ziac dashboard: {s}\n", .{@errorName(err)}) catch "ziac dashboard failed\n";
             std.Io.File.stderr().writeStreamingAll(io, message) catch {};
-            return;
-        });
+            return ziac.cli.Exit.invalid_graph;
+        };
     }
+    if (cwd.access(io, "zigeffect.project.json", .{})) |_| {
+        try cwd.createDirPath(io, ziac.zstd.Statechart.default_path);
+        var statechart_dir = try cwd.openDir(io, ziac.zstd.Statechart.default_path, .{});
+        defer statechart_dir.close(io);
+        try ziac.watch_deploy.registerStatechart(allocator, io, statechart_dir, 16 * 1024 * 1024);
+    } else |_| {}
     var local_fs = ziac.zstd.FileSystem.LocalFileSystem.init(&cwd, io);
     var auth_files = ziac.gcp.auth.localFileReader(&local_fs);
     var auth_env = ziac.zstd.Env.EnvMap.init(allocator);
@@ -135,7 +144,7 @@ pub fn main(init: std.process.Init) !void {
                     try std.Io.File.stderr().writeStreamingAll(io, "ziac project compiler failed: ");
                     try std.Io.File.stderr().writeStreamingAll(io, @errorName(err));
                     try std.Io.File.stderr().writeStreamingAll(io, "\n");
-                    std.process.exit(ziac.cli.Exit.invalid_graph);
+                    return ziac.cli.Exit.invalid_graph;
                 };
                 project_loader = .{ .stack = target.stack, .stage = target.stage, .program = &project_program.? };
                 selected_program_loader = project_loader.loader();
@@ -145,7 +154,7 @@ pub fn main(init: std.process.Init) !void {
     if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "check")) {
         if (project_contract == null or project_program == null) {
             try std.Io.File.stderr().writeStreamingAll(io, "ziac check: project compiler is not configured\n");
-            std.process.exit(ziac.cli.Exit.invalid_graph);
+            return ziac.cli.Exit.invalid_graph;
         }
         const receipt = try std.json.Stringify.valueAlloc(allocator, .{
             .schema = "ziac.check.v1",
@@ -157,7 +166,7 @@ pub fn main(init: std.process.Init) !void {
         defer allocator.free(receipt);
         try std.Io.File.stdout().writeStreamingAll(io, receipt);
         try std.Io.File.stdout().writeStreamingAll(io, "\n");
-        std.process.exit(ziac.cli.Exit.success);
+        return ziac.cli.Exit.success;
     }
 
     var local_http = ziac.zstd.Http.LocalClient.init(allocator, io);
@@ -212,12 +221,12 @@ pub fn main(init: std.process.Init) !void {
     if (use_remote_state and token_cache == null) {
         try console.stderr.print(allocator, "state: {s}\n", .{@errorName(error.StateAuthenticationUnavailable)});
         try std.Io.File.stderr().writeStreamingAll(io, console.stderrText());
-        std.process.exit(ziac.cli.Exit.auth_error);
+        return ziac.cli.Exit.auth_error;
     }
     if (requestsEstateScan(args.items) and token_cache == null) {
         try console.stderr.print(allocator, "estate-access: {s}\n", .{@errorName(error.GoogleApplicationDefaultCredentialsRequired)});
         try std.Io.File.stderr().writeStreamingAll(io, console.stderrText());
-        std.process.exit(ziac.cli.Exit.auth_error);
+        return ziac.cli.Exit.auth_error;
     }
 
     var estate_context = ziac.provider.OperationContext.init(allocator);
@@ -239,7 +248,7 @@ pub fn main(init: std.process.Init) !void {
             ) catch |err| {
                 try console.stderr.print(allocator, "estate-access: {s}\n", .{@errorName(err)});
                 try std.Io.File.stderr().writeStreamingAll(io, console.stderrText());
-                std.process.exit(ziac.cli.Exit.auth_error);
+                return ziac.cli.Exit.auth_error;
             };
             estate_adapter = ziac.gcp.estate_client.Adapter.init(&google_client, &estate_context);
             estate_adapter_initialized = true;
@@ -272,6 +281,10 @@ pub fn main(init: std.process.Init) !void {
     defer if (live_watch_runtime) |*runtime| runtime.deinit();
     var watch_stages: [1][]const u8 = undefined;
     var watch_projects: [1][]const u8 = undefined;
+    var watch_workflow_dir: ?std.Io.Dir = null;
+    defer if (watch_workflow_dir) |*dir| dir.close(io);
+    var watch_workflow_store: ?ziac.zstd.fx.workflow.FileJournalStore = null;
+    defer if (watch_workflow_store) |*store| store.deinit();
     var watch_config: ?ziac.cli.WatchDeployConfig = null;
     if (requestsWatchDeploy(args.items) and token_cache != null and live_project != null and project_program != null) {
         live_watch_runtime = ziac.gcp.watch_runtime.LiveRuntime.initForProjectAlloc(
@@ -282,14 +295,30 @@ pub fn main(init: std.process.Init) !void {
         ) catch |err| {
             try console.stderr.print(allocator, "watch-deploy: {s}\n", .{@errorName(err)});
             try std.Io.File.stderr().writeStreamingAll(io, console.stderrText());
-            std.process.exit(ziac.cli.Exit.invalid_graph);
+            return ziac.cli.Exit.invalid_graph;
         };
         const stage = optionValue(args.items, "--stage") orelse "";
         watch_stages[0] = stage;
         watch_projects[0] = live_project.?;
         const now_millis: u64 = @intCast(std.Io.Clock.real.now(io).toMilliseconds());
+        try cwd.createDirPath(io, ".zigeffect/workflows/ziac-watch-deploy");
+        watch_workflow_dir = try cwd.openDir(io, ".zigeffect/workflows/ziac-watch-deploy", .{});
+        watch_workflow_store = try ziac.zstd.fx.workflow.FileJournalStore.open(
+            allocator,
+            io,
+            &watch_workflow_dir.?,
+            .{
+                .fsync_policy = .after_append,
+                .owner_id = "ziac-cli-watch-deploy",
+                .max_in_memory_events = 16 * 1024,
+            },
+        );
         watch_config = .{
             .runtime = live_watch_runtime.?.runtime(),
+            .workflow = .{
+                .journal = watch_workflow_store.?.asJournalStore(),
+                .causal_store = ctx.causalRecorder().store,
+            },
             .envelope = .{
                 .id = "ziac-cli-saved-plan-watch",
                 .stages = &watch_stages,
@@ -349,6 +378,20 @@ pub fn main(init: std.process.Init) !void {
     var verification_runner = ziac.agent_tools.NativeVerificationRunner{ .io = io };
     env.verification_runner = verification_runner.runner();
 
+    inline for (.{
+        .{ "ziac/ProjectCompiler", "project-program" },
+        .{ "ziac/StateStore", "selected-state-backend" },
+        .{ "ziac/ProviderRegistry", "acquired-provider-registry" },
+        .{ "ziac/ProcessSpawner", "bounded-native-process-runner" },
+    }) |service| {
+        _ = ctx.recordCausal(.{
+            .kind = .service_provided,
+            .service_key = service[0],
+            .label = service[1],
+            .status = "ready",
+            .redacted_detail = "process-owned",
+        });
+    }
     const code = try ziac.cli.run(allocator, args.items, &env);
     if (console.stdoutText().len > 0) {
         try std.Io.File.stdout().writeStreamingAll(io, console.stdoutText());
@@ -356,7 +399,7 @@ pub fn main(init: std.process.Init) !void {
     if (console.stderrText().len > 0) {
         try std.Io.File.stderr().writeStreamingAll(io, console.stderrText());
     }
-    std.process.exit(code);
+    return code;
 }
 
 fn runWorkspaceDashboard(
@@ -800,14 +843,27 @@ fn runTemplateInit(
     defer allocator.free(package_absolute);
     const gcpx_absolute = try absolutePackagePathAlloc(allocator, io, cwd, gcpx_path);
     defer allocator.free(gcpx_absolute);
+    const package_parent = std.fs.path.dirname(package_absolute) orelse return error.InvalidProjectPath;
+    const zigeffect_absolute = try std.fs.path.join(allocator, &.{ package_parent, "zigeffect" });
+    defer allocator.free(zigeffect_absolute);
+    const zigeffect_std_absolute = try std.fs.path.join(allocator, &.{ package_parent, "zigeffect-std" });
+    defer allocator.free(zigeffect_std_absolute);
     const dependency_path = try std.fs.path.relative(allocator, ".", null, target_path, package_absolute);
     defer allocator.free(dependency_path);
     const gcpx_dependency_path = try std.fs.path.relative(allocator, ".", null, target_path, gcpx_absolute);
     defer allocator.free(gcpx_dependency_path);
+    const zigeffect_dependency_path = try std.fs.path.relative(allocator, ".", null, target_path, zigeffect_absolute);
+    defer allocator.free(zigeffect_dependency_path);
+    const zigeffect_std_dependency_path = try std.fs.path.relative(allocator, ".", null, target_path, zigeffect_std_absolute);
+    defer allocator.free(zigeffect_std_dependency_path);
     const dependency_json = try std.json.Stringify.valueAlloc(allocator, dependency_path, .{});
     defer allocator.free(dependency_json);
     const gcpx_dependency_json = try std.json.Stringify.valueAlloc(allocator, gcpx_dependency_path, .{});
     defer allocator.free(gcpx_dependency_json);
+    const zigeffect_dependency_json = try std.json.Stringify.valueAlloc(allocator, zigeffect_dependency_path, .{});
+    defer allocator.free(zigeffect_dependency_json);
+    const zigeffect_std_dependency_json = try std.json.Stringify.valueAlloc(allocator, zigeffect_std_dependency_path, .{});
+    defer allocator.free(zigeffect_std_dependency_json);
     const zig_name = try allocator.dupe(u8, name);
     defer allocator.free(zig_name);
     for (zig_name) |*char| {
@@ -843,6 +899,8 @@ fn runTemplateInit(
         .package_fingerprint = fingerprint_text,
         .ziac_path_json = dependency_json,
         .ziac_gcpx_path_json = gcpx_dependency_json,
+        .zigeffect_path_json = zigeffect_dependency_json,
+        .zigeffect_std_path_json = zigeffect_std_dependency_json,
     }, hasFlag(options, "--force"));
 
     var agent_files = try ziac.scaffold.renderAlloc(allocator, .{ .project_name = name, .ziac_path = dependency_path });

@@ -12,6 +12,7 @@ pub const ToolSpec = struct {
 };
 
 const registry = [_]ToolSpec{
+    .{ .name = "ziac_context", .description = "Compile one bounded evidence-derived development context for a task", .authority = .read, .input_schema = "{\"type\":\"object\",\"properties\":{\"task\":{\"type\":\"string\"},\"budget\":{\"type\":\"integer\",\"minimum\":512,\"maximum\":4194304},\"changed_paths\":{\"type\":\"array\",\"maxItems\":256,\"items\":{\"type\":\"string\"}}},\"required\":[\"task\"],\"additionalProperties\":false}" },
     .{ .name = "ziac_simulate", .description = "Run a deterministic infrastructure scenario without mutation", .authority = .read, .input_schema = "{\"type\":\"object\",\"properties\":{\"scenario_id\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\"},\"seed\":{\"type\":\"integer\"},\"max_steps\":{\"type\":\"integer\"},\"target_resource\":{\"type\":\"string\"},\"requirement\":{\"type\":\"string\"},\"acceptance_check\":{\"type\":\"string\"}},\"required\":[\"scenario_id\",\"kind\",\"seed\",\"max_steps\",\"target_resource\",\"requirement\",\"acceptance_check\"],\"additionalProperties\":false}" },
     .{ .name = "ziac_propose", .description = "Create an immutable evidence-backed repair proposal", .authority = .plan, .input_schema = "{\"type\":\"object\",\"properties\":{\"scenario_id\":{\"type\":\"string\"},\"requirement\":{\"type\":\"string\"},\"resource_id\":{\"type\":\"string\"},\"finding_id\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\"},\"verification\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"scenario_id\",\"requirement\",\"resource_id\",\"finding_id\",\"operation\",\"verification\"],\"additionalProperties\":false}" },
     .{ .name = "ziac_verify", .description = "Run one manifest-declared fixed-argv acceptance check", .authority = .process, .input_schema = "{\"type\":\"object\",\"properties\":{\"acceptance_check\":{\"type\":\"string\"}},\"required\":[\"acceptance_check\"],\"additionalProperties\":false}" },
@@ -19,6 +20,42 @@ const registry = [_]ToolSpec{
 
 pub fn tools() []const ToolSpec {
     return &registry;
+}
+
+/// Best-effort extraction used only to seed fiber-local causal correlation.
+/// Protocol validation and authorization still happen in the normal request
+/// handler; failure to extract never grants authority or changes semantics.
+pub fn developmentTaskAlloc(allocator: std.mem.Allocator, request_json: []const u8) !?[]u8 {
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, request_json, .{}) catch return null;
+    defer parsed.deinit();
+    const root = switch (parsed.value) {
+        .object => |value| value,
+        else => return null,
+    };
+    const method = switch (root.get("method") orelse return null) {
+        .string => |value| value,
+        else => return null,
+    };
+    if (!std.mem.eql(u8, method, "tools/call")) return null;
+    const params = switch (root.get("params") orelse return null) {
+        .object => |value| value,
+        else => return null,
+    };
+    const name = switch (params.get("name") orelse return null) {
+        .string => |value| value,
+        else => return null,
+    };
+    if (!std.mem.eql(u8, name, "ziac_context")) return null;
+    const arguments = switch (params.get("arguments") orelse return null) {
+        .object => |value| value,
+        else => return null,
+    };
+    const task = switch (arguments.get("task") orelse return null) {
+        .string => |value| value,
+        else => return null,
+    };
+    if (task.len == 0 or task.len > 4096) return null;
+    return try allocator.dupe(u8, task);
 }
 
 pub const Call = struct {

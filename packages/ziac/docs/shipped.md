@@ -49,8 +49,9 @@ The following foundations are shipped:
 - immutable saved plans, graph and operation digests, destructive approval and
   secret-reference-only persistence;
 - typed public and secret outputs with automatic dependency derivation;
-- comptime application `Env`, binding, provider availability, scope and output
-  wiring validation with stable compile-fail diagnostics; and
+- canonical ZigEffect service tags, layers, one managed runtime per process,
+  requirements-typed command effects, durable NenDB causal recording, and
+  compile-time requirement/wiring diagnostics;
 - typed provider failures, long-running operations, retries, cancellation,
   deadlines, idempotency and redacted receipts; and
 - bounded `ziac.provider.rpc.v1` subprocess isolation with exact identity,
@@ -123,6 +124,8 @@ The local developer and agent loop ships:
 - `ziac init` for standalone and monorepo infrastructure projects;
 - generated Codex, Claude Code and Gemini skills and harness configuration;
 - the read-only official GCP Developer Knowledge researcher;
+- provider creator, maintainer and independent qualifier agents with shared
+  first-party and third-party RPC development skills;
 - MCP initialization, tool discovery, bounded stdio, capability envelopes and
   fixed-argv process authority;
 - manifest-owned local build, process, readiness and proxy supervision;
@@ -137,6 +140,7 @@ Primary references:
 
 - [`agent-development.md`](agent-development.md)
 - [`agent-development-kit.md`](agent-development-kit.md)
+- [`provider-development-kit.md`](provider-development-kit.md)
 - [`gcp-developer-research.md`](gcp-developer-research.md)
 - [`rapid-development.md`](rapid-development.md)
 

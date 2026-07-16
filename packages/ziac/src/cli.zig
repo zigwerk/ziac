@@ -39,6 +39,7 @@ pub const Exit = struct {
 
 pub const WatchDeployConfig = struct {
     runtime: watch_deploy_mod.Runtime,
+    workflow: watch_deploy_mod.WorkflowRuntime,
     envelope: agent_contract.CapabilityEnvelope,
     project: []const u8,
     now_millis: u64,
@@ -1265,7 +1266,7 @@ fn runWatchDeploy(allocator: std.mem.Allocator, env: *Env, args: Args) !u8 {
     };
     var envelope = configured.envelope;
     if (configured.require_saved_plan) envelope.approved_plan_digest = plan_digest;
-    const receipt = watch_deploy_mod.execute(configured.runtime, envelope, .{
+    const receipt = watch_deploy_mod.executeWorkflow(allocator, configured.workflow, configured.runtime, envelope, .{
         .now_millis = configured.now_millis,
         .stage = args.stage,
         .project = configured.project,

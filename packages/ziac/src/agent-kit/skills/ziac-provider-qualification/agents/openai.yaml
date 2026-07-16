@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ziac Provider Qualification"
+  short_description: "Independently qualify immutable Ziac provider candidates"
+  default_prompt: "Use $ziac-provider-qualification to independently verify an immutable candidate and its proof bundle."

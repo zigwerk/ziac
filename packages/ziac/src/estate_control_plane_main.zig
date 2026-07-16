@@ -1,7 +1,20 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
+const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(std.process.Init);
+
 pub fn main(init: std.process.Init) !void {
+    return ziac.process_runtime.run(init, "ziac-estate-control-plane", MainProgram.init(init, runMain));
+}
+
+fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !void {
+    _ = ctx.recordCausal(.{
+        .kind = .service_provided,
+        .service_key = "ziac/EstateControlPlane",
+        .label = "estate-http",
+        .status = "starting",
+        .redacted_detail = "oauth-kms-cockroach",
+    });
     const allocator = init.gpa;
     const io = init.io;
     const database_url = init.environ_map.get("DATABASE_URL") orelse return error.DatabaseUrlRequired;
@@ -58,8 +71,37 @@ pub fn main(init: std.process.Init) !void {
     defer listener.deinit(io);
     while (true) {
         const stream = listener.accept(io) catch continue;
-        handleConnection(allocator, io, stream, &service) catch {};
+        var handle = ctx.runtime();
+        _ = handle.run(requestEffect(.{
+            .allocator = allocator,
+            .io = io,
+            .stream = stream,
+            .service = &service,
+        })) catch {};
     }
+}
+
+const RequestState = struct {
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    stream: std.Io.net.Stream,
+    service: *ziac.estate_service.Service,
+};
+const RequestProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(RequestState);
+
+fn requestEffect(state: RequestState) RequestProgram {
+    return RequestProgram.init(state, struct {
+        fn run(request: RequestState, ctx: *RequestProgram.Context) anyerror!void {
+            _ = ctx.recordCausal(.{
+                .kind = .workflow_event_recorded,
+                .service_key = "ziac/EstateControlPlane",
+                .label = "http.request",
+                .status = "received",
+                .redacted_detail = "bounded-request",
+            });
+            try handleConnection(request.allocator, request.io, request.stream, request.service);
+        }
+    }.run);
 }
 
 fn handleConnection(

@@ -32,6 +32,18 @@ test "shared agent tool kernel executes declared verification through MCP" {
     try std.testing.expect(std.mem.indexOf(u8, response, "all checks passed") != null);
 }
 
+test "shared agent tool kernel delegates the context endpoint to one injected provider" {
+    var project = try ziac.agent_contract.Project.parseAlloc(std.testing.allocator, project_fixture);
+    defer project.deinit();
+    var runner = ziac.agent_tools.ScriptedVerificationRunner.init("unused");
+    var context = ziac.agent_tools.ScriptedContextProvider.init("{\"schema\":\"zigeffect.agent.development-context.v1\"}");
+    var kernel = ziac.agent_tools.Kernel.init(std.testing.allocator, project, runner.runner()).withContextProvider(context.provider());
+    defer kernel.deinit();
+    const artifact = try kernel.invoke("ziac_context", "{\"task\":\"task-ziac\",\"budget\":4096}");
+    try std.testing.expectEqual(@as(usize, 1), context.call_count);
+    try std.testing.expect(std.mem.indexOf(u8, artifact, "zigeffect.agent.development-context.v1") != null);
+}
+
 test "native verification accepts fixed argv and rejects shell or traversal executables" {
     try ziac.agent_tools.validateVerificationArgv(&.{ "zig", "build", "test" });
     try std.testing.expectError(error.ShellVerificationDenied, ziac.agent_tools.validateVerificationArgv(&.{ "/bin/sh", "-c", "echo unsafe" }));

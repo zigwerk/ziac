@@ -10,7 +10,20 @@ const Runtime = struct {
     currency: []const u8,
 };
 
+const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(std.process.Init);
+
 pub fn main(init: std.process.Init) !void {
+    return ziac.process_runtime.run(init, "ziac-billing-worker", MainProgram.init(init, runMain));
+}
+
+fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !void {
+    _ = ctx.recordCausal(.{
+        .kind = .service_provided,
+        .service_key = "ziac/BillingWorker",
+        .label = "billing-http",
+        .status = "starting",
+        .redacted_detail = "bigquery-cockroach",
+    });
     const allocator = init.gpa;
     const io = init.io;
     const database_url = init.environ_map.get("DATABASE_URL") orelse return error.DatabaseUrlRequired;
@@ -57,8 +70,37 @@ pub fn main(init: std.process.Init) !void {
     defer listener.deinit(io);
     while (true) {
         const stream = listener.accept(io) catch continue;
-        handleConnection(allocator, io, stream, &runtime) catch {};
+        var handle = ctx.runtime();
+        _ = handle.run(requestEffect(.{
+            .allocator = allocator,
+            .io = io,
+            .stream = stream,
+            .runtime = &runtime,
+        })) catch {};
     }
+}
+
+const RequestState = struct {
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    stream: std.Io.net.Stream,
+    runtime: *Runtime,
+};
+const RequestProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(RequestState);
+
+fn requestEffect(state: RequestState) RequestProgram {
+    return RequestProgram.init(state, struct {
+        fn run(request: RequestState, ctx: *RequestProgram.Context) anyerror!void {
+            _ = ctx.recordCausal(.{
+                .kind = .workflow_event_recorded,
+                .service_key = "ziac/BillingWorker",
+                .label = "http.request",
+                .status = "received",
+                .redacted_detail = "bounded-request",
+            });
+            try handleConnection(request.allocator, request.io, request.stream, request.runtime);
+        }
+    }.run);
 }
 
 fn handleConnection(allocator: std.mem.Allocator, io: std.Io, stream: std.Io.net.Stream, runtime: *Runtime) !void {

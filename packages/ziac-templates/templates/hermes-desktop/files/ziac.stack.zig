@@ -1,6 +1,7 @@
 const std = @import("std");
 const ziac = @import("ziac");
 const gcpx = @import("ziac_gcpx");
+const zstd = @import("zigeffect_std");
 
 pub fn build(allocator: std.mem.Allocator, init: std.process.Init, args: ziac.stack_registry.StackArgs) !ziac.stack_registry.StackProgram {
     if (!std.mem.eql(u8, args.stack, "hermes-desktop")) return error.UnknownStack;
@@ -27,5 +28,29 @@ pub fn build(allocator: std.mem.Allocator, init: std.process.Init, args: ziac.st
 }
 
 test "Hermes template uses the official component" {
-    try std.testing.expectEqualStrings("HermesDesktop", gcpx.hermes_desktop.descriptor.name);
+    var context = try zstd.Testing.TestContext.init(std.testing.allocator, .{
+        .project = "hermes-desktop",
+        .suite = "project-tests",
+        .scenario = .{
+            .id = "typed-component-contract",
+            .label = "Hermes uses the typed infrastructure component",
+            .requirement = "typed-hermes-component",
+            .acceptance_check = "check-typed-hermes-component",
+            .component = "infrastructure",
+            .command = "test",
+        },
+        .seed = 42,
+    });
+    defer context.deinit();
+    const assertions = zstd.Testing.AssertionRecorder.init(&context);
+    try assertions.equal(.{
+        .id = "hermes-component",
+        .label = "official Hermes component is selected",
+        .repair_hint = "compose the infrastructure graph from gcpx.HermesDesktop",
+    }, @as([]const u8, "HermesDesktop"), gcpx.hermes_desktop.descriptor.name);
+    try assertions.noFindings(.{
+        .id = "hermes-no-findings",
+        .label = "component contract is causally healthy",
+        .repair_hint = "keep the pure stack compiler deterministic",
+    });
 }

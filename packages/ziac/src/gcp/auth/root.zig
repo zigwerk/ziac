@@ -392,6 +392,7 @@ fn readMemoryFile(raw: *anyopaque, allocator: std.mem.Allocator, path: []const u
     return files.readFileAlloc(allocator, path) catch |err| switch (err) {
         error.FileNotFound => error.CredentialFileNotFound,
         error.OutOfMemory => error.OutOfMemory,
+        error.AccessDenied, error.InvalidPath, error.IoFailure => error.CredentialReadFailed,
     };
 }
 

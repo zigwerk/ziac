@@ -12,11 +12,9 @@ The component is specialized with three comptime types:
 ```zig
 const Providers = ziac.stack.ProviderSet(.{ziac.resource.ProviderId.gcp});
 
-const App = struct {
-    pub const Env = struct {
-        release: ziac.binding.Value([]const u8),
-        database_url: ziac.binding.Secret([]const u8),
-    };
+const DeploymentContract = struct {
+    release: ziac.binding.Value([]const u8),
+    database_url: ziac.binding.Secret([]const u8),
 };
 
 const Bindings = struct {
@@ -24,13 +22,19 @@ const Bindings = struct {
     database_url: ziac.Output(ziac.value.SecretReference, .secret),
 };
 
-const Service = ziac.gcp.global.ZigService(App, Bindings, Providers);
+const Service = ziac.gcp.global.ZigService(
+    DeploymentContract,
+    Bindings,
+    Providers,
+);
 ```
 
-Instantiation fails at compile time when `App.Env` is absent, GCP is not in the
-provider set, a binding is missing or extra, its public/secret class differs, or
-its value type cannot be represented as a Cloud Run environment variable.
-Environment field names become uppercase variables, for example
+The deployment contract is deliberately independent of the application's
+ZigEffect service registry and root layer. Instantiation fails at compile time
+when the contract is not a struct, GCP is not in the provider set, a binding is
+missing or extra, its public/secret class differs, or its value type cannot be
+represented as a Cloud Run environment variable.
+Deployment field names become uppercase variables, for example
 `database_url` becomes `DATABASE_URL`.
 
 ## Resource Graph

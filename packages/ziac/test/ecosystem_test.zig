@@ -155,6 +155,8 @@ test "template rendering is token-only bounded and never executes hooks" {
         .package_fingerprint = "1234abcd",
         .ziac_path_json = "\"../ziac\"",
         .ziac_gcpx_path_json = "\"../ziac-gcpx\"",
+        .zigeffect_path_json = "\"../zigeffect\"",
+        .zigeffect_std_path_json = "\"../zigeffect-std\"",
     }, false);
     const source = try target_tmp.dir.readFileAlloc(std.testing.io, "src/main.zig", std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(source);
@@ -170,6 +172,8 @@ test "template rendering is token-only bounded and never executes hooks" {
         .package_fingerprint = "1234abcd",
         .ziac_path_json = "\"../ziac\"",
         .ziac_gcpx_path_json = "\"../ziac-gcpx\"",
+        .zigeffect_path_json = "\"../zigeffect\"",
+        .zigeffect_std_path_json = "\"../zigeffect-std\"",
     }, true));
 }
 

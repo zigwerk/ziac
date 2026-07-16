@@ -6,6 +6,8 @@
     .dependencies = .{
         .ziac = .{ .path = {{ziac_path}} },
         .ziac_gcpx = .{ .path = {{ziac_gcpx_path}} },
+        .zigeffect = .{ .path = {{zigeffect_path}} },
+        .zigeffect_std = .{ .path = {{zigeffect_std_path}} },
     },
-    .paths = .{ "build.zig", "build.zig.zon", "src", "ziac.stack.zig", "ziac_program.zig", "ziac.project.json" },
+    .paths = .{ "build.zig", "build.zig.zon", "src", ".zigeffect/compatibility.json", "ziac.stack.zig", "ziac_program.zig", "ziac.project.json", "zigeffect.project.json" },
 }

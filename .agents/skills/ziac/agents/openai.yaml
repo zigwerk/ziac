@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ziac Development"
+  short_description: "Build effectful infrastructure with proof"
+  default_prompt: "Use $ziac to develop this infrastructure change with causal context and proof handoffs."

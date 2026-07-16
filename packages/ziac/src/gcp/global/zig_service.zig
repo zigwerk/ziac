@@ -25,14 +25,13 @@ pub const Source = struct {
 };
 
 pub fn ZigService(
-    comptime App: type,
+    comptime DeploymentContract: type,
     comptime Bindings: type,
     comptime Providers: type,
 ) type {
     comptime {
-        if (!hasDecl(App, "Env")) @compileError("ZIAC105 app type must declare Env");
         Providers.require(.gcp);
-        _ = binding_mod.validateBindings(App.Env, Bindings, .global);
+        _ = binding_mod.validateBindings(DeploymentContract, Bindings, .global);
         validateBindingTypes(Bindings);
     }
 
@@ -733,13 +732,6 @@ fn mapArchiveError(err: anyerror) provider_mod.ProviderError {
         error.Canceled => error.ProviderCancelled,
         error.FileNotFound, error.NotDir => error.NotFound,
         else => error.InvalidConfiguration,
-    };
-}
-
-fn hasDecl(comptime T: type, comptime name: []const u8) bool {
-    return switch (@typeInfo(T)) {
-        .@"struct", .@"union", .@"enum", .@"opaque" => @hasDecl(T, name),
-        else => false,
     };
 }
 

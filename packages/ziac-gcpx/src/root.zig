@@ -15,5 +15,5 @@ pub const global_zig_service = struct {
     pub const package = package_name;
     pub const name = "GlobalZigService";
     pub const version = package_version;
-    pub const compatibility_import = ziac.gcp.global.ZigService;
+    pub const Component = ziac.gcp.global.ZigService;
 };

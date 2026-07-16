@@ -62,8 +62,9 @@ provider records, the official component package, three source templates and an
 immutable digest-pinned local registry. Provider CRUD runs through the bounded
 `ziac.provider.rpc.v1` process contract; registry discovery never launches
 code. Component origin survives program and visual artifacts without changing
-provider state identity. See [`docs/ecosystem.md`](docs/ecosystem.md) and
-[`docs/provider-rpc.md`](docs/provider-rpc.md).
+provider state identity. See [`docs/ecosystem.md`](docs/ecosystem.md),
+[`docs/provider-rpc.md`](docs/provider-rpc.md) and
+[`docs/provider-development-kit.md`](docs/provider-development-kit.md).
 
 ## Monorepo Workspaces
 
@@ -113,9 +114,44 @@ Ziac is a comptime-checked Infrastructure-as-Code engine for globally deployed
 Zig services on Google Cloud, powered by zigeffect. It combines an Engine V2
 resource lifecycle with high-level GCP and CockroachDB components.
 
-The defining contract is static: an application `Env` struct, typed resource
-outputs, provider availability, secrecy, scope, and dependency wiring must agree
-before provider code can run.
+The defining contract is static: service requirements, typed resource outputs,
+provider availability, secrecy, scope, and dependency wiring must agree before
+provider code can run. Canonical engine programs use stable tagged services,
+explicit layers, requirements-typed Effects, and one managed runtime.
+
+## ZigEffect Application Composition
+
+Ziac's control plane runs on the canonical ZigEffect kernel. Every shipped
+process root owns one managed runtime with automatic durable NenDB recording.
+`ziac.application` exports stable `ProjectCompiler`, `StateStore`,
+`ProviderRegistry`, and `ProcessSpawner` tags plus requirements-typed
+plan/execute effects. Bounded executor work uses the owning runtime and causal
+recorder; it never creates a nested runtime.
+
+Pure resource declarations, graph validation, hashes and deterministic plan
+calculation remain ordinary Zig. State backends, locks, provider processes,
+cloud operations, watches and external diagnostics are the effect/layer
+boundaries. The CLI graph is directly queryable with:
+
+~~~sh
+zigeffect graph status --json
+zigeffect graph since 0 --limit 128 --json
+~~~
+
+Generated projects contain both `ziac.project.json` and
+`zigeffect.project.json`, compatibility metadata, typed service/layer code,
+one managed runtime, and Testing v2 causal acceptance tests. See
+[`docs/zigeffect-composition-roadmap.md`](docs/zigeffect-composition-roadmap.md)
+for the exact completed and remaining command/provider migration slices and
+[`docs/statecharts-and-workflows.md`](docs/statecharts-and-workflows.md) for the
+finite-state, durable activity, replay, catalog, and agent-debugging model.
+
+For agent development, the canonical first request is the MCP `ziac_context`
+tool. It uses ZigEffect's proof-carrying development compiler rather than a
+Ziac-specific status cache, so source identity, manifest digest, native test
+receipts, requirements, graph cursor, and next queries agree with
+`zigeffect agent context`. See
+[`../zigeffect/docs/proof-carrying-development-plane.md`](../zigeffect/docs/proof-carrying-development-plane.md).
 
 ## Status
 
@@ -244,7 +280,9 @@ Application Load Balancer.
 The complete example adopts an existing Standard or Advanced Cockroach cluster,
 creates the application database/user/grants/migrations, stores the generated
 `verify-full` connection URI in Secret Manager, provisions PSC and private DNS
-in each region, and binds the secret output into `App.Env.database_url`.
+in each region, and binds the secret output through the typed
+`DeploymentContract.database_url` field. Runtime dependency injection remains
+owned by the application's ZigEffect services and layers.
 
 Managed Basic, Standard, and Advanced cluster resources are also available.
 Managed clusters and databases are protected by default; deletion requires a

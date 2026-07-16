@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) void {
     });
     tests.addImport("ziac", ziac);
     tests.addImport("ziac_gcpx", gcpx);
+    tests.addImport("zigeffect_std", ziac_dependency.module("zigeffect_std"));
     const unit_tests = b.addTest(.{
         .name = "ziac-gcpx-tests",
         .root_module = tests,

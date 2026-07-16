@@ -1,7 +1,20 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
+const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(std.process.Init);
+
 pub fn main(init: std.process.Init) !void {
+    return ziac.process_runtime.run(init, "ziac-provider-cockroach", MainProgram.init(init, runMain));
+}
+
+fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !void {
+    _ = ctx.recordCausal(.{
+        .kind = .service_provided,
+        .service_key = "ziac/ProviderRegistry",
+        .label = "cockroach",
+        .status = "ready",
+        .redacted_detail = "ziac.provider.rpc.v1",
+    });
     const allocator = init.gpa;
     const api_key = init.environ_map.get("COCKROACH_API_KEY") orelse return error.AuthenticationFailed;
     if (api_key.len == 0) return error.AuthenticationFailed;
@@ -17,5 +30,5 @@ pub fn main(init: std.process.Init) !void {
         .capabilities = .all,
         .max_inflight = 1,
     }, live_provider.provider());
-    try ziac.provider_rpc.serveStdio(init.io, allocator, &session);
+    try ziac.provider_rpc.serveStdioEffectful(init.io, allocator, &session, ctx.runtime());
 }

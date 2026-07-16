@@ -1,8 +1,16 @@
 const std = @import("std");
 
+var test_filter_declared = false;
+var configured_test_filter: ?[]const u8 = null;
+
 fn addV2Test(b: *std.Build, runner: std.Build.LazyPath, options: std.Build.TestOptions) *std.Build.Step.Compile {
     var configured = options;
     configured.test_runner = .{ .path = runner, .mode = .server };
+    if (!test_filter_declared) {
+        configured_test_filter = b.option([]const u8, "test-filter", "Compile only native tests whose names contain this text");
+        test_filter_declared = true;
+    }
+    if (configured_test_filter) |filter| configured.filters = &.{filter};
     return b.addTest(configured);
 }
 
@@ -19,12 +27,10 @@ pub fn build(b: *std.Build) void {
 
     const zigeffect_std_dependency = b.dependency("zigeffect_std", .{});
     const zigeffect_std = zigeffect_std_dependency.module("zigeffect_std");
-    const testing_runner = zigeffect_std_dependency.module("zigeffect_test_runner").root_source_file.?;
-    _ = b.addModule("zigeffect_test_runner", .{
-        .root_source_file = testing_runner,
-        .target = target,
-        .optimize = optimize,
-    });
+    b.modules.put(b.graph.arena, b.dupe("zigeffect_std"), zigeffect_std) catch @panic("OOM");
+    const testing_runner_module = zigeffect_std_dependency.module("zigeffect_test_runner");
+    b.modules.put(b.graph.arena, b.dupe("zigeffect_test_runner"), testing_runner_module) catch @panic("OOM");
+    const testing_runner = testing_runner_module.root_source_file.?;
     const zigeffect_postgres = b.dependency("zigeffect_postgres", .{
         .openssl_include_path = b.option(std.Build.LazyPath, "openssl_include_path", "OpenSSL include directory for hosted Linux builds"),
     }).module("zigeffect_postgres");
@@ -36,6 +42,27 @@ pub fn build(b: *std.Build) void {
     });
     ziac.addImport("zigeffect_std", zigeffect_std);
     ziac.addImport("zigeffect_postgres", zigeffect_postgres);
+
+    const project_stack = b.createModule(.{
+        .root_source_file = b.path("ziac.stack.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    project_stack.addImport("ziac", ziac);
+    const project_compiler_module = b.createModule(.{
+        .root_source_file = b.path("ziac_program.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    project_compiler_module.addImport("ziac", ziac);
+    project_compiler_module.addImport("stack", project_stack);
+    const project_compiler = b.addExecutable(.{
+        .name = "ziac-program-compiler",
+        .root_module = project_compiler_module,
+    });
+    const run_project_compiler = b.addRunArtifact(project_compiler);
+    if (b.args) |args| run_project_compiler.addArgs(args);
+    b.step("ziac-program", "Compile the Ziac dogfood infrastructure program").dependOn(&run_project_compiler.step);
 
     const tests = b.createModule(.{
         .root_source_file = b.path("test/all_test.zig"),
@@ -358,6 +385,12 @@ fn installClientDistribution(b: *std.Build, dashboard_build: *std.Build.Step) vo
         "Dockerfile.self-host",
         "cloudbuild.self-host.yaml",
     }, &.{ "docs", "examples", "migrations", "proto", "scripts", "src", "test" });
+    const agent_kit_install = b.addInstallDirectory(.{
+        .source_dir = b.path("src/agent-kit"),
+        .install_dir = .prefix,
+        .install_subdir = "share/ziac/agent-kit",
+    });
+    b.getInstallStep().dependOn(&agent_kit_install.step);
     installPackage(b, "zigeffect", "../zigeffect", &.{
         "CHANGELOG.md",
         "README.md",

@@ -120,7 +120,18 @@ The initial official templates are:
 - `global-zig-api`, a source-built Zig API on globally routed Cloud Run;
 - `hermes-desktop`, an OAuth-gated Hermes backend on an economical Compute VM;
   and
-- `event-driven-zig`, a Zig worker with a governed bucket and Pub/Sub.
+- `event-driven-zig`, a Zig worker with a governed bucket, Pub/Sub, typed
+  finite-state event control, durable activity replay, and causal acceptance
+  evidence.
+
+## Provider Contribution Team
+
+`ziac init` installs creator, maintainer and independent qualifier skills and
+agents for Codex, Claude Code and Gemini. First-party and third-party providers
+use the same `ziac.provider.rpc.v1` authoring and conformance model. Third-party
+registry records remain non-executable until signed installation, revocation
+and sandboxing ship. See
+[`provider-development-kit.md`](provider-development-kit.md).
 
 ## Qualification Labels
 

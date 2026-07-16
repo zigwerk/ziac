@@ -2,3 +2,10 @@
 .ziac/
 .zig-cache/
 zig-out/
+.zigeffect/sessions/
+.zigeffect/causal/
+.zigeffect/graph/
+.zigeffect/graphs/
+.zigeffect/statecharts/
+.zigeffect/receipts/
+.zigeffect/tests/

@@ -4,6 +4,9 @@
     .minimum_zig_version = "0.16.0",
     .fingerprint = 0xca9d054f8192c606,
     .dependencies = .{
+        .zigeffect = .{
+            .path = "../zigeffect",
+        },
         .zig_webui = .{
             .url = "https://github.com/webui-dev/zig-webui/archive/c2fc94e23f8cf1b63a11b4d9aebdd530b10dfe67.tar.gz",
             .hash = "zig_webui-2.5.0-beta.4-M4z7zYaiAQCoeY3mDtQkPz_CC_fsFhV9aZol8UY29jPF",
@@ -28,5 +31,10 @@
         "scripts",
         "src",
         "test",
+        ".zigeffect/compatibility.json",
+        "ziac.project.json",
+        "zigeffect.project.json",
+        "ziac.stack.zig",
+        "ziac_program.zig",
     },
 }

@@ -251,6 +251,45 @@ pub const ProcessProvider = struct {
 };
 
 pub fn serveStdio(io: std.Io, allocator: std.mem.Allocator, session: *ServerSession) !void {
+    const DirectHandle = struct {
+        fn handle(_: *@This(), target: *ServerSession, frame: []const u8) anyerror![]u8 {
+            return target.handleAlloc(target.allocator, frame);
+        }
+    };
+    var direct = DirectHandle{};
+    return serveStdioWith(io, allocator, session, &direct, DirectHandle.handle);
+}
+
+/// Serve a provider process through one owning ManagedRuntime. Every protocol
+/// frame is a child effect, so handshake and lifecycle failures have their own
+/// scope, fiber, and durable causal lineage without rebuilding provider state.
+pub fn serveStdioEffectful(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    session: *ServerSession,
+    runtime: anytype,
+) !void {
+    const Handle = struct {
+        runtime: @TypeOf(runtime),
+
+        fn handle(self: *@This(), target: *ServerSession, frame: []const u8) anyerror![]u8 {
+            return self.runtime.run(frameEffect(.{
+                .session = target,
+                .frame = frame,
+            }).named("provider.rpc.frame"));
+        }
+    };
+    var handle = Handle{ .runtime = runtime };
+    return serveStdioWith(io, allocator, session, &handle, Handle.handle);
+}
+
+fn serveStdioWith(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    session: *ServerSession,
+    handler: anytype,
+    comptime handle: anytype,
+) !void {
     const read_buffer = try allocator.alloc(u8, max_frame_bytes + 1);
     defer allocator.free(read_buffer);
     var reader = std.Io.File.stdin().reader(io, read_buffer);
@@ -261,12 +300,33 @@ pub fn serveStdio(io: std.Io, allocator: std.mem.Allocator, session: *ServerSess
         else => return err,
     }) |line| {
         if (line.len == 0) continue;
-        const response = try session.handleAlloc(allocator, line);
+        const response = try handle(handler, session, line);
         defer allocator.free(response);
         try writer.interface.writeAll(response);
         try writer.interface.writeByte('\n');
         try writer.interface.flush();
     }
+}
+
+const FrameState = struct {
+    session: *ServerSession,
+    frame: []const u8,
+};
+const FrameProgram = fx.kernel.Effect([]u8, anyerror, .{}).Stateful(FrameState);
+
+fn frameEffect(frame_state: FrameState) FrameProgram {
+    return FrameProgram.init(frame_state, struct {
+        fn run(request: FrameState, ctx: *FrameProgram.Context) anyerror![]u8 {
+            _ = ctx.recordCausal(.{
+                .kind = .workflow_event_recorded,
+                .service_key = "ziac/ProviderRegistry",
+                .label = "provider.rpc.frame",
+                .status = "received",
+                .redacted_detail = "bounded-protocol-frame",
+            });
+            return request.session.handleAlloc(ctx.allocator(), request.frame);
+        }
+    }.run);
 }
 
 pub const ServerSession = struct {

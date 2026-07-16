@@ -1,10 +1,10 @@
 # GCP Compute Workloads
 
-M68 adds the general-purpose Compute Engine workload layer: persistent disks,
-regional disks, images, virtual machines, immutable instance templates, zonal
-and regional managed instance groups, and zonal and regional autoscalers. It
-uses Ziac's three provider layers: typed primitives, hardened lifecycle
-adapters, and opinionated components.
+The provider includes a general-purpose Compute Engine workload layer:
+persistent disks, regional disks, images, virtual machines, immutable instance
+templates, zonal and regional managed instance groups, and zonal and regional
+autoscalers. It uses Ziac's three provider layers: typed primitives, hardened
+lifecycle adapters, and opinionated components.
 
 ## Managed Resources
 

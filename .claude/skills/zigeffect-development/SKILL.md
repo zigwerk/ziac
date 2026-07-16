@@ -19,6 +19,33 @@ a bounded diagnostic artifact, not as the source of truth.
   gates, and update generated templates and compatibility snapshots when their
   public contract changes.
 
+## Run the proof-carrying causal loop
+
+1. Orient with `zigeffect agent context --task <id-or-summary> --budget 65536
+   --json`. Retain its source identity, manifest digest, graph cursor,
+   authority, omissions, affected scenarios, and proof references.
+2. Bind the request to a requirement, acceptance check, component, scenario,
+   and fixed command. State the expected before/action/after causal path and the
+   slice that must remain unchanged.
+3. If a coordinator supplies a work packet, obey its baseline, allowed and
+   excluded paths, dependencies, verification commands, graph cursor, lease,
+   and fencing token. Never invent missing coordination or authority.
+4. Add the failing deterministic native scenario, then make the smallest typed
+   service/layer change through the one managed runtime.
+5. Run the affected scenario. Treat
+   `.zigeffect/tests/process-receipts/<scenario>.json` and
+   `.zigeffect/handoffs/tests/<scenario>.json` as authoritative only when their
+   source, manifest, command, toolchain, and completeness identities match.
+   `.zigeffect/tests/raw-receipts/` and terminal output are diagnostic only.
+6. Compare `zigeffect graph since <cursor> --limit 256 --json` with the
+   counterfactual. Use `zigeffect graph path <from> <to> --limit 128 --json`
+   for exact relationships.
+7. Re-query `agent context` after the change. Reject stale proofs, undeclared or
+   overlapping paths, expired fencing tokens, missing dependency proofs, and
+   required gaps before integration.
+8. Run project gates and hand off exact receipt/proof paths, replay commands,
+   causal IDs, limitations, and any remaining authority requirement.
+
 ## Establish the application contract
 
 Before editing application behavior:
@@ -26,8 +53,9 @@ Before editing application behavior:
 1. Run `zigeffect compatibility --json` and read `zigeffect.project.json`.
    Inspect migrations with `zigeffect upgrade --dry-run --json`; never rewrite
    around a reported conflict.
-2. Run `zigeffect project validate --json`, `zigeffect agent status --json`,
-   `zigeffect agent next --json`, and `zigeffect test list --json`.
+2. After the context query, run `zigeffect compatibility --json`, `zigeffect
+   project validate --json`, `zigeffect agent status --json`, `zigeffect agent
+   next --json`, and `zigeffect test list --json`.
 3. Map the user's request to a requirement, acceptance check, component,
    manifest-owned command, and one or more `test_scenarios`. Add missing intent
    to the manifest before implementing code.
@@ -42,6 +70,25 @@ Before editing application behavior:
 - Import framework capabilities through `zigeffect_std` and application code
   through component public facades. Do not reach into another component's
   internals.
+- Compose new applications with `zstd.fx.kernel.Service`, `Effect`, `Layer`,
+  and one process-level `zstd.ManagedRuntime`. It automatically owns the
+  bounded in-memory recorder, embedded NenDB topology, durable property WAL,
+  agent map, and checked shutdown. Libraries export effects, service tags, and
+  default layers; they do not hide an independent runtime. The lower-level
+  `zstd.fx.kernel.ManagedRuntime` is only an explicit framework-test or embedded
+  memory-only choice. Domain operations return descriptions; only the process
+  root or a runtime-backed transport interprets them. Do not introduce
+  `EffectEnv`, `ServiceEnv`, provider tuples, `LayerGraphEnv`, `layerGraph`,
+  `ctx.runEffect`, direct `runIn` calls, per-endpoint runtimes, or manual causal
+  store/backend wiring.
+- In deterministic application acceptance tests, pass
+  `context.causalStore()` only at the canonical `zstd.ManagedRuntime` root.
+  Record semantic assertions against that execution, call
+  `context.mapCausalEventIds(&runtime)` while the runtime is live, then shut
+  down and publish. This produces graph-durable assertion IDs without a second
+  runtime or a detached test graph. Mount the runtime at the owning project or
+  component root. Query the project-mounted graph for at least one mapped ID
+  before publishing; an ID in a temporary graph is not CLI-queryable proof.
 - Model fallible work with typed effects, service layers, Schema, typed errors,
   scoped resources, and deterministic providers for config, clock, filesystem,
   process, HTTP, SQL, IDs, logging, and tracing.
@@ -71,24 +118,35 @@ TanStack Solid Query; browser code never receives native service credentials.
    `bunx @bufbuild/buf generate` from `packages/zigeffect-grpc` when the contract
    changes. Buf breaking compatibility must include the immutable baseline and
    negative fixture.
-3. Implement typed handlers through generated service bindings, effects,
-   layers, scoped resources and typed errors. Use a scoped persistent channel or
-   bounded channel pool for long-lived service clients.
-4. Declare connection, stream, header, message, queue, deadline, retry,
+3. Define the implementation as a stable service tag. Register generated
+   method effects with `Typed.generatedRoutesLayer`, own unary/streaming/
+   incremental registries with their scoped layers, and compose
+   `nativeServerLayer` into the application root. Generated libraries export
+   bindings and layers; they never construct a runtime.
+4. Use `Grpc.GrpcClient`/`Grpc.call` for portable unary calls and
+   `Typed.generatedClientLayer` for generated clients. Use the canonical scoped
+   persistent-channel or bounded-pool layers for long-lived native clients.
+5. Declare connection, stream, header, message, queue, deadline, retry,
    keepalive and shutdown limits. Transparent retry is legal only before HTTP/2
    response commitment. Use incremental streaming when production flow control
    and backpressure matter.
-5. Emit redacted causal facts for resolve, connect, pick, attempt, stream,
-   handler and drain. Export trace context, OTLP histograms, attempt/connection
-   instruments, propagation links and exemplars without payloads or credentials.
-6. Use `VirtualWorld`, `FaultMatrix` and `Schedules` for retry, GOAWAY, RST,
+6. The canonical channel, pool, and server layers install their runtime-owned
+   causal recorder automatically. Preserve bounded `x-request-id` and W3C
+   `traceparent` propagation so transport and handler facts share correlation
+   keys. Add semantic domain facts when useful; never record raw identifiers,
+   metadata values, payloads, or credentials.
+7. Use `VirtualWorld`, `FaultMatrix` and `Schedules` for retry, GOAWAY, RST,
    partition, certificate rotation, streaming and shutdown behavior. Run the
    applicable official gRPC and Connect conformance lanes and preserve explicit
    unsupported cases.
-7. For Cloud Run, bind `0.0.0.0:$PORT` using h2c behind platform TLS, install
-   health/reflection/Channelz before readiness, use audience-bound service
-   identity, and drain on SIGTERM.
-8. Profile before tuning transport internals. Benchmark grpc-go, Tonic, gRPC
+8. For Cloud Run, compose policy, implementation, generated routes, standard
+   health/reflection, Channelz, middleware, and the server as one root layer.
+   Build one `zstd.ManagedRuntime`, bind `0.0.0.0:$PORT` using h2c behind
+   platform TLS, use audience-bound service identity, and drain on SIGTERM.
+9. Run `bun run zigeffect:architecture:test` and
+   `bun run zigeffect:grpc:test`. The latter includes native Testing v2, the
+   Cloud Run build, schema compatibility, and browser Connect tests.
+10. Profile before tuning transport internals. Benchmark grpc-go, Tonic, gRPC
    C++, and ZigEffect only inside one complete receipt with identical payload,
    concurrency, connection, warm-up, container, and host settings. Preserve
    message, queue, retry, TLS, and malformed-peer defenses while optimizing.
@@ -216,27 +274,54 @@ visible in the receipt. Never translate them into a pass.
 Initialize through `initFromProject` and end with `publish`. The CLI writes the
 control document before starting the manifest command and only accepts a
 matching native process receipt. Exit zero without that receipt is incomplete.
-Attach advanced reports with `context.recordReport(.<kind>, report)`.
+Package-native runs publish raw receipts separately and cannot replace stable
+controlled proof. Attach advanced reports with
+`context.recordReport(.<kind>, report)`.
 
 ## Iterate from evidence
 
-1. Run `zigeffect test affected --changed <path> --json` for each relevant
+1. Before editing, run `zigeffect agent context --task <id> --budget 65536
+   --json`. Treat its content-addressed source identity, derived requirement
+   state, exact proof references, authority, omissions, and follow-up queries as
+   the compact orientation artifact. Retain its graph
+   `newest_durable_event_id` as the baseline. When the running application
+   exposes its guarded application-map endpoint, query it first: one response
+   identifies service topology, layer/runtime state, recent semantic events,
+   embedded NenDB health, the graph cursor, and bounded follow-up queries.
+2. Use that graph plus the requirement, contract, and scope to state a
+   counterfactual: which service calls, external boundaries, domain facts, and
+   causal descendants should appear after the change, and which slices must
+   remain unchanged. Never infer the whole application from filenames when the
+   runtime map is available.
+3. Run `zigeffect test affected --changed <path> --json` for each relevant
    changed path, then execute the selected scenario or requirement.
-2. Read `.zigeffect/tests/latest.json`. Validate its schema/version and require
-   discovered, selected, and status counts to agree.
-3. On failure, inspect the first failed assertion, source reference, repair hint,
-   and causal event IDs. Query `zigeffect graph event <id> --json` and
-   `zigeffect graph children <id> --json` before reconstructing the failure from
-   text.
-4. Copy the receipt's exact `zigeffect test replay` command. Preserve its seed,
+4. Read `.zigeffect/tests/latest.json`, then the stable native receipt at
+   `.zigeffect/tests/process-receipts/<scenario>.json` and proof handoff at
+   `.zigeffect/handoffs/tests/<scenario>.json`. Validate their schema/version,
+   source and manifest identities, command digest, native tool/target/optimize
+   identity, and require discovered, selected, and status counts to agree.
+5. Query `zigeffect graph since <baseline-event-id> --limit 256 --json`. Compare
+   the ordered causal delta with the counterfactual and acceptance contract.
+   Continue in bounded pages from `next_event_id` when `truncated` is true.
+   Empty, dropped, unhealthy, unexpectedly broad, or truncated-and-unread
+   evidence is not a pass.
+6. On failure, inspect the first failed assertion, source reference, repair hint,
+   causal event IDs, and `causal_event_id_space`. When the space is
+   `graph_durable`, query `zigeffect graph event <id> --json` and `zigeffect
+   graph children <id> --json` before reconstructing the failure from text.
+   When two events bound the suspected behavior, query `zigeffect graph path
+   <from> <to> --limit 128 --json` and use the returned path as the proof.
+   A `runtime_local` ID is not a durable graph cursor and must not be queried as
+   one.
+7. Copy the receipt's exact `zigeffect test replay` command. Preserve its seed,
    fault kind, fault index, root, and bounds while repairing the smallest
    responsible boundary.
-5. Use `zigeffect safety explain <finding-id>` for source-linked safety repairs.
+8. Use `zigeffect safety explain <finding-id>` for source-linked safety repairs.
    Do not add unmanaged roots or unaudited escape hatches.
-6. Compare with `zigeffect test snapshot <scenario> --json`. Apply only an
+9. Compare with `zigeffect test snapshot <scenario> --json`. Apply only an
    inspected intentional change with `--apply --json`; never bless an unexplained
    diff.
-7. Run `zigeffect test coverage --json` and `zigeffect test gaps --json`; close
+10. Run `zigeffect test coverage --json` and `zigeffect test gaps --json`; close
    every required gap. Use `zigeffect test stress --runs <n> --json` for bounded
    multi-seed evidence and `zigeffect test history --json` for introduced and
    resolved failure fingerprints.
@@ -254,7 +339,8 @@ zigeffect project test --json
 zigeffect project check --agent --json
 ```
 
-Then confirm `.zigeffect/tests/latest.json` is complete, required scenarios pass,
+Then confirm `.zigeffect/tests/latest.json` is complete, stable process receipts
+and proof handoffs match the current source/manifest, required scenarios pass,
 and receipts are bounded and redacted. Run `zigeffect agent handoff --provider
 <harness> --session <id> --json`, attaching changed requirements, acceptance
 status, receipt paths, replay commands, and relevant causal IDs.
@@ -263,3 +349,10 @@ State every failed or unrun gate plainly. Never mark a requirement satisfied
 without passing evidence, and never claim ZigEffect proves memory safety or
 schedule/input completeness beyond the compiler mode, platform, cases, and
 bounds recorded in the receipt.
+
+For multi-agent work, integrate proof rather than prose. Each implementer owns
+one non-overlapping work packet and returns a proof bundle bound to its source
+baseline, lease fencing token, changed paths, verification digests, receipts,
+and causal IDs. An independent reviewer or qualifier must not repair the
+candidate it evaluates. Repair memory may suggest a strategy, but it is never
+current evidence or authority.

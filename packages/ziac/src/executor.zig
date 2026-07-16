@@ -121,13 +121,16 @@ pub fn executePlan(
         .resumed_operations = resumed_operations,
     };
     try resumeIncompleteOperations(&environment);
-    var runtime = fx.Runtime(ExecutionEnvironment).init(allocator, &environment);
-    if (options.fiber_executor) |fiber_executor| {
-        runtime = runtime.withExecutor(fiber_executor);
-    }
-    if (options.causal_store) |causal_store| {
-        runtime = runtime.withCausalStore(causal_store);
-    }
+    // Execution is a child scope of the owning application runtime. The
+    // legacy implementation constructed a second Runtime here, which split
+    // lifecycle ownership and causal topology. Keep the proven structured
+    // parallel combinator, but interpret it in this command scope and attach
+    // it to the caller's recorder.
+    var command_scope = fx.Scope.init(allocator);
+    defer command_scope.deinit();
+    var context = fx.Context(ExecutionEnvironment).init(allocator, &environment, &command_scope);
+    context.executor = options.fiber_executor;
+    context.causal_store = options.causal_store;
 
     for (schedule.levels) |level| {
         var batch_start: usize = 0;
@@ -148,7 +151,7 @@ pub fn executePlan(
                 jobs,
                 ExecutionJob.run,
             );
-            const results = try runtime.run(program);
+            const results = try context.runEffect(program);
             allocator.free(results);
             batch_start = batch_end;
         }

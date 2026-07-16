@@ -1,10 +1,10 @@
 const ziac = @import("ziac");
 
-const Env = struct {
+const Contract = struct {
     region: ziac.binding.Value([]const u8),
 };
 const Bindings = struct {};
 
 comptime {
-    _ = ziac.binding.validateBindings(Env, Bindings, .global);
+    _ = ziac.binding.validateBindings(Contract, Bindings, .global);
 }

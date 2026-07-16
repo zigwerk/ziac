@@ -82,8 +82,9 @@ Experimental protobuf-over-HTTP and streaming `entries.tail` are never selected
 implicitly. The Workbench Operations view presents the same agent state, causal
 events, drop counters and resource identities.
 
-Diagnosis correlates request, revision, deployment digest, `App.Env`, binding,
-secret version, runtime identity, IAM, network path and Cockroach locality. A
+Diagnosis correlates request, revision, deployment digest, deployment binding,
+runtime service/layer topology, secret version, runtime identity, IAM, network
+path and Cockroach locality. A
 repair proposal is immutable and non-authorizing. Verification closes only
 when permission, binding, network and database checks all pass.
 
@@ -92,6 +93,14 @@ when permission, binding, network and database checks all pass.
 Run `ziac mcp serve --project ziac.project.json --stack global-api --stage dev`
 to start the newline-delimited stdio server. Scaffolded projects include
 `.mcp.json`, `.codex/config.toml`, and `.gemini/settings.json` launch contracts.
+
+Call the read-only `ziac_context` tool first. It delegates to
+`zstd.Development` and returns one bounded, versioned project bundle containing
+the content-addressed source identity, manifest digest, requirement/check
+state derived from stable native Testing v2 receipts, effect/layer topology,
+affected scenarios, exact focused filters, graph cursor, proof references,
+authority, and follow-up queries. Omitted optional context is explicit. The
+tool does not widen process or infrastructure authority.
 
 The MCP registry advertises only production-backed simulation, proposal and
 verification tools. Simulation is read authority, proposal is plan authority,

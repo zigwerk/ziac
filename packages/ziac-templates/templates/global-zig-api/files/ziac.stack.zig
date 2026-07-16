@@ -1,12 +1,12 @@
 const std = @import("std");
 const ziac = @import("ziac");
 const gcpx = @import("ziac_gcpx");
-const App = @import("app");
 
 const regions = [_][]const u8{ "europe-west1", "us-central1", "asia-northeast1" };
 const Providers = ziac.stack.ProviderSet(.{ziac.resource.ProviderId.gcp});
+const DeploymentBindings = struct {};
 const Bindings = struct {};
-const Service = gcpx.global_zig_service.compatibility_import(App, Bindings, Providers);
+const Service = gcpx.global_zig_service.Component(DeploymentBindings, Bindings, Providers);
 
 pub fn build(allocator: std.mem.Allocator, init: std.process.Init, args: ziac.stack_registry.StackArgs) !ziac.stack_registry.StackProgram {
     if (!std.mem.eql(u8, args.stack, "global-api")) return error.UnknownStack;

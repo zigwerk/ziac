@@ -2,6 +2,8 @@
   "schema": "ziac.project.v1",
   "project": "ziac",
   "source_roots": ["src", "test", "examples", "docs"],
+  "program": { "argv": ["zig", "build", "ziac-program", "--"], "max_output_bytes": 8388608 },
+  "dashboard": { "stack": "global-api", "stage": "dev" },
   "components": [
     {
       "id": "engine",
@@ -23,6 +25,12 @@
       "summary": "Existing GCP resources are visualized read-only and remain separate from Ziac ownership",
       "component": "engine",
       "required": true
+    },
+    {
+      "id": "zigeffect-composable-control-plane",
+      "summary": "Ziac control-plane programs compose planners, executors and boundaries as ZigEffect services and layers",
+      "component": "engine",
+      "required": true
     }
   ],
   "acceptance_checks": [
@@ -34,6 +42,11 @@
     {
       "id": "check-existing-estate-visualization",
       "requirement": "existing-estate-visualization",
+      "argv": ["zig", "build", "test"]
+    },
+    {
+      "id": "check-zigeffect-composable-control-plane",
+      "requirement": "zigeffect-composable-control-plane",
       "argv": ["zig", "build", "test"]
     }
   ],
@@ -67,6 +80,13 @@
       "requirement": "existing-estate-visualization",
       "acceptance_check": "check-existing-estate-visualization",
       "seed": 73,
+      "required": true
+    },
+    {
+      "id": "effect-native-plan-execute",
+      "requirement": "zigeffect-composable-control-plane",
+      "acceptance_check": "check-zigeffect-composable-control-plane",
+      "seed": 115,
       "required": true
     }
   ],

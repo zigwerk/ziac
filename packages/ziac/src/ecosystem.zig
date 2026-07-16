@@ -281,6 +281,8 @@ pub const TemplateContext = struct {
     package_fingerprint: []const u8,
     ziac_path_json: []const u8,
     ziac_gcpx_path_json: []const u8,
+    zigeffect_path_json: []const u8,
+    zigeffect_std_path_json: []const u8,
 };
 
 pub const TemplateError = std.mem.Allocator.Error || error{
@@ -302,7 +304,9 @@ pub fn renderTemplate(
     force: bool,
 ) !void {
     if (!provenance.validPackageName(context.project_name) or !provenance.validToken(context.zig_package_name, 128) or
-        !validHexToken(context.package_fingerprint) or !validJsonString(context.ziac_path_json) or !validJsonString(context.ziac_gcpx_path_json)) return error.InvalidTemplatePath;
+        !validHexToken(context.package_fingerprint) or !validJsonString(context.ziac_path_json) or
+        !validJsonString(context.ziac_gcpx_path_json) or !validJsonString(context.zigeffect_path_json) or
+        !validJsonString(context.zigeffect_std_path_json)) return error.InvalidTemplatePath;
     var files_dir = source.openDir(io, "files", .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return error.MissingTemplateFiles,
         else => return err,
@@ -356,6 +360,8 @@ pub fn renderTemplateTextAlloc(allocator: std.mem.Allocator, input: []const u8, 
         .{ "{{package_fingerprint}}", context.package_fingerprint },
         .{ "{{ziac_path}}", context.ziac_path_json },
         .{ "{{ziac_gcpx_path}}", context.ziac_gcpx_path_json },
+        .{ "{{zigeffect_path}}", context.zigeffect_path_json },
+        .{ "{{zigeffect_std_path}}", context.zigeffect_std_path_json },
     }) |replacement| {
         const next = try std.mem.replaceOwned(u8, allocator, current, replacement[0], replacement[1]);
         allocator.free(current);

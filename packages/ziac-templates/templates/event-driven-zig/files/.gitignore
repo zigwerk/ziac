@@ -1,4 +1,17 @@
 .zig-cache/
 zig-out/
 .ziac/
+.zigeffect/sessions/
+.zigeffect/causal/
+.zigeffect/graph/
+.zigeffect/graphs/
+.zigeffect/statecharts/
+.zigeffect/receipts/
+.zigeffect/tests/actual/
+.zigeffect/tests/raw/
+.zigeffect/tests/receipts/
+.zigeffect/tests/process-receipts/
+.zigeffect/tests/control.json
+.zigeffect/tests/history.jsonl
+.zigeffect/tests/latest.json
 .env

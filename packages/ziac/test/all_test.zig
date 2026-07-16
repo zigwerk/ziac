@@ -87,6 +87,10 @@ comptime {
     _ = @import("rollout_test.zig");
     _ = @import("state_test.zig");
     _ = @import("plan_test.zig");
+    _ = @import("application_composition_test.zig");
+    _ = @import("workflow_composition_test.zig");
+    _ = @import("runtime_architecture_test.zig");
+    _ = @import("development_context_test.zig");
     _ = @import("provider_apply_test.zig");
     _ = @import("provider_rpc_test.zig");
     _ = @import("executor_test.zig");

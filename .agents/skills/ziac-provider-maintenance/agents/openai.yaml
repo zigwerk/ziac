@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ziac Provider Maintenance"
+  short_description: "Maintain provider contracts, state, drift, and releases safely"
+  default_prompt: "Use $ziac-provider-maintenance to upgrade a provider with migration and proof-carrying compatibility evidence."

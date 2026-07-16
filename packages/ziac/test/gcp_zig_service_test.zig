@@ -4,11 +4,9 @@ const ziac = @import("ziac");
 const regions = [_][]const u8{ "europe-west1", "us-central1" };
 const Providers = ziac.stack.ProviderSet(.{ziac.resource.ProviderId.gcp});
 
-const App = struct {
-    pub const Env = struct {
-        release: ziac.binding.Value([]const u8),
-        database_url: ziac.binding.Secret([]const u8),
-    };
+const DeploymentContract = struct {
+    release: ziac.binding.Value([]const u8),
+    database_url: ziac.binding.Secret([]const u8),
 };
 
 const Bindings = struct {
@@ -30,7 +28,7 @@ test "global ZigService composes source build bindings identities and global rou
     var base = ziac.ResourceGraph.init(std.testing.allocator);
     defer base.deinit();
     try base.addResource(version.node);
-    const Service = ziac.gcp.global.ZigService(App, Bindings, Providers);
+    const Service = ziac.gcp.global.ZigService(DeploymentContract, Bindings, Providers);
     var component = try Service.build(std.testing.allocator, provider(), .{
         .base_graph = &base,
         .source = .{ .io = std.testing.io, .root = tmp.dir },
@@ -100,11 +98,9 @@ test "global ZigService ignores excluded noise and changes identity for source e
     try writeSource(tmp.dir, "ignored.txt", "first\n");
     try writeSource(tmp.dir, "src/main.zig", "pub fn main() void {}\n");
     try writeSource(tmp.dir, "build.zig", "pub fn build() void {}\n");
-    const EmptyApp = struct {
-        pub const Env = struct {};
-    };
+    const EmptyDeploymentContract = struct {};
     const EmptyBindings = struct {};
-    const Service = ziac.gcp.global.ZigService(EmptyApp, EmptyBindings, Providers);
+    const Service = ziac.gcp.global.ZigService(EmptyDeploymentContract, EmptyBindings, Providers);
     const args = Service.Args{
         .source = .{ .io = std.testing.io, .root = tmp.dir },
         .name = "api",
@@ -149,11 +145,9 @@ test "global ZigService rejects a conflicting project API in a base graph" {
     var base = ziac.ResourceGraph.init(std.testing.allocator);
     defer base.deinit();
     try base.addResource(api.node);
-    const EmptyApp = struct {
-        pub const Env = struct {};
-    };
+    const EmptyDeploymentContract = struct {};
     const EmptyBindings = struct {};
-    const Service = ziac.gcp.global.ZigService(EmptyApp, EmptyBindings, Providers);
+    const Service = ziac.gcp.global.ZigService(EmptyDeploymentContract, EmptyBindings, Providers);
 
     try std.testing.expectError(error.DuplicateResource, Service.build(std.testing.allocator, provider(), .{
         .base_graph = &base,
@@ -171,7 +165,7 @@ test "global ZigService rejects non-GCP and cross-project secret references" {
     defer tmp.cleanup();
     try writeSource(tmp.dir, "src/main.zig", "pub fn main() void {}\n");
     try writeSource(tmp.dir, "build.zig", "pub fn build() void {}\n");
-    const Service = ziac.gcp.global.ZigService(App, Bindings, Providers);
+    const Service = ziac.gcp.global.ZigService(DeploymentContract, Bindings, Providers);
     const common = Service.Args{
         .source = .{ .io = std.testing.io, .root = tmp.dir },
         .name = "api",

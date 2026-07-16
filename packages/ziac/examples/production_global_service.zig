@@ -18,11 +18,9 @@ const Providers = ziac.stack.ProviderSet(.{
     ziac.resource.ProviderId.cockroach,
 });
 
-const App = struct {
-    pub const Env = struct {
-        database_url: ziac.binding.Secret([]const u8),
-        release: ziac.binding.Value([]const u8),
-    };
+const DeploymentContract = struct {
+    database_url: ziac.binding.Secret([]const u8),
+    release: ziac.binding.Value([]const u8),
 };
 
 const Bindings = struct {
@@ -30,7 +28,7 @@ const Bindings = struct {
     release: ziac.PublicOutput([]const u8),
 };
 
-const Service = ziac.gcp.global.ZigService(App, Bindings, Providers);
+const Service = ziac.gcp.global.ZigService(DeploymentContract, Bindings, Providers);
 const migrations = [_]ziac.cockroach.migration.Spec{.{
     .id = "001_health_events",
     .sql = "CREATE TABLE health_events (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), created_at TIMESTAMPTZ NOT NULL DEFAULT now())",

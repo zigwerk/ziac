@@ -231,8 +231,11 @@ test "cli deploy watch streams timed immutable deployment events through the sha
     runtime.revision_millis = 20;
     runtime.readiness_millis = 30;
     runtime.traffic_millis = 10;
+    var workflow_journal = ziac.zstd.fx.workflow.InMemoryJournalStore.init(std.testing.allocator);
+    defer workflow_journal.deinit();
     env.watch_deploy = .{
         .runtime = runtime.runtime(),
+        .workflow = .{ .journal = workflow_journal.asJournalStore() },
         .envelope = .{
             .id = "cli-watch",
             .stages = &.{"dev"},

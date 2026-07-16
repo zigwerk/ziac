@@ -1,9 +1,9 @@
 # GCP Application Services
 
-M67 adds a focused application-services layer for orchestration, API ingress,
-customer identity and versioned runtime configuration. It follows the same
-three-layer model as the rest of the provider: typed primitives, hardened
-lifecycle adapters and opinionated components.
+This package provides a focused application-services layer for orchestration,
+API ingress, customer identity, and versioned runtime configuration. It follows
+the same three-layer model as the rest of the provider: typed primitives,
+hardened lifecycle adapters and opinionated components.
 
 ## Managed Resources
 

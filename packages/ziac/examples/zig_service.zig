@@ -4,17 +4,15 @@ const ziac = @import("ziac");
 const regions = [_][]const u8{ "europe-west1", "us-central1" };
 const Providers = ziac.stack.ProviderSet(.{ziac.resource.ProviderId.gcp});
 
-const App = struct {
-    pub const Env = struct {
-        release: ziac.binding.Value([]const u8),
-    };
+const DeploymentContract = struct {
+    release: ziac.binding.Value([]const u8),
 };
 
 const Bindings = struct {
     release: ziac.PublicOutput([]const u8),
 };
 
-const Service = ziac.gcp.global.ZigService(App, Bindings, Providers);
+const Service = ziac.gcp.global.ZigService(DeploymentContract, Bindings, Providers);
 
 pub fn buildZigService(
     allocator: std.mem.Allocator,

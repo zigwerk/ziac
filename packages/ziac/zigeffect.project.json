@@ -1,0 +1,92 @@
+{
+  "schema": "zigeffect.project.v1",
+  "name": "ziac",
+  "version": "0.1.0",
+  "kind": "application",
+  "components": [
+    {"id":"ziac","kind":"application","path":".","depends_on":[],"capabilities":["cli","config","observability","agent","workbench","causal_graph"]}
+  ],
+  "commands": [
+    {"id":"build","argv":["zig","build"],"component":null},
+    {"id":"check","argv":["zig","build","unit-test"],"component":null},
+    {"id":"check-debug","argv":["zig","build","unit-test","-Doptimize=Debug"],"component":null},
+    {"id":"check-safe","argv":["zig","build","unit-test","-Doptimize=ReleaseSafe"],"component":null},
+    {"id":"test","argv":["zig","build","unit-test"],"component":null},
+    {"id":"dev","argv":["zig","build","unit-test"],"component":null},
+    {"id":"doctor","argv":["zig","build","unit-test"],"component":null},
+    {"id":"production-check","argv":["zig","build","test","-Doptimize=ReleaseSafe"],"component":null}
+  ],
+  "requirements": [
+    {"id":"zigeffect-composable-control-plane","summary":"Ziac commands and workers compose through one durable managed runtime","component":"ziac","status":"active"},
+    {"id":"ziac-durable-workflow-control","summary":"Infrastructure control flow uses typed statecharts and replay-safe durable workflows","component":"ziac","status":"active"},
+    {"id":"ziac-proof-carrying-development-context","summary":"Ziac exposes one bounded evidence-derived causal development context through its agent endpoint","component":"ziac","status":"active"}
+  ],
+  "acceptance_checks": [
+    {"id":"check-zigeffect-composable-control-plane","requirement":"zigeffect-composable-control-plane","command":"test","expectation":"canonical services execute with queryable causal evidence and complete Testing v2 receipts","status":"pending"},
+    {"id":"check-ziac-durable-workflow-control","requirement":"ziac-durable-workflow-control","command":"test","expectation":"rollout statechart decisions and idempotent workflow activities are durable and queryable in the causal graph","status":"pending"},
+    {"id":"check-ziac-proof-carrying-development-context","requirement":"ziac-proof-carrying-development-context","command":"test","expectation":"the native MCP context endpoint compiles bounded reconciled Testing v2 and NenDB evidence","status":"pending"}
+  ],
+  "test_scenarios": [
+    {"id":"effect-native-plan-execute","label":"plan and execute through canonical Ziac services","requirement":"zigeffect-composable-control-plane","acceptance_check":"check-zigeffect-composable-control-plane","component":"ziac","command":"test","source_roots":["src","test","ziac.project.json","zigeffect.project.json"],"tags":["acceptance","causal","runtime"],"native_test_filter":"Ziac planning and execution compose","default_seed":115,"fault_profile":"standard","required":true},
+    {"id":"watch-deploy-statechart-workflow","label":"watch deployment is a replay-safe statechart workflow","requirement":"ziac-durable-workflow-control","acceptance_check":"check-ziac-durable-workflow-control","component":"ziac","command":"test","source_roots":["src/watch_deploy.zig","src/main.zig","src/cli.zig","test/workflow_composition_test.zig","zigeffect.project.json"],"tags":["acceptance","causal","statechart","workflow","replay"],"native_test_filter":"watch deployment composes","default_seed":216,"fault_profile":"standard","required":true},
+    {"id":"ziac-agent-development-context","label":"Ziac exposes one proof-carrying development context endpoint","requirement":"ziac-proof-carrying-development-context","acceptance_check":"check-ziac-proof-carrying-development-context","component":"ziac","command":"test","source_roots":["src/agent_tools.zig","src/mcp.zig","src/mcp_server_main.zig","test/development_context_test.zig","zigeffect.project.json"],"tags":["acceptance","agent","causal","context"],"native_test_filter":"Ziac native development context endpoint","default_seed":317,"fault_profile":"standard","required":true}
+  ],
+  "execution_posture": "local",
+  "capability_requirements": [],
+  "capability_descriptors": [],
+  "adapter_profiles": [],
+  "policy": {"allow_network":false,"require_approval_for_processes":true,"persist_raw_terminal":false},
+  "safety": {
+    "profile":"agent_safe_v1",
+    "safe_roots":["test/application_composition_test.zig","test/workflow_composition_test.zig","test/development_context_test.zig"],
+    "audited_roots":["src/application.zig","src/process_runtime.zig","src/agent_tools.zig","src/mcp.zig","src/mcp_server_main.zig"],
+    "allowances":[
+      {"id":"ziac-verification-runner-state","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:f9ec71b0c6dbf25cf015cb38f1ba4f8a9692f227d5a02b4f9e0b267c172abe51","justification":"VerificationRunner stores one caller-owned implementation pointer behind a bounded vtable; construction and invocation remain paired.","required_check":"check-safe"},
+      {"id":"ziac-verification-runner-vtable","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:e611ce3a28dd2f0532770d014468902672b2483d385beefded3870b4b0d23911","justification":"The verification function receives only the state pointer captured by the corresponding constructor and returns an owned bounded result.","required_check":"check-safe"},
+      {"id":"ziac-context-provider-state","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:8d934827af0b49c4ce24fa9ab5d7b3a70357620c81879c7b9544ba660455629c","justification":"ContextProvider uses one caller-owned implementation pointer so live and deterministic providers share the typed ContextService API.","required_check":"check-safe"},
+      {"id":"ziac-scripted-context-state","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:ae21903f0349cdc9b2ccfad2b494bf0ddfaf3e3f0e5b64795af1d9bc4c154926","justification":"The scripted context adapter receives only the ScriptedContextProvider pointer installed by provider().","required_check":"check-safe"},
+      {"id":"ziac-scripted-context-cast","path":"src/agent_tools.zig","construct":"pointer_cast","fingerprint":"sha256:e493c6c96dfd4811938bed7bd141b2d65919671fa2cb78bebca54f3dd2a656aa","justification":"The paired ptrCast and alignCast restore the exact ScriptedContextProvider type captured by provider().","required_check":"check-safe"},
+      {"id":"ziac-context-result-copy","path":"src/agent_tools.zig","construct":"manual_allocator_escape","fingerprint":"sha256:72c5e6ebbe4a922eba1e780b1cf942fd47fa4d8f8d729322ec8b910d81c91143","justification":"Scripted context and verification adapters return a caller-owned bounded copy through the vtable ownership contract.","required_check":"check-safe"},
+      {"id":"ziac-native-context-state","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:2b5785e89fe09be080d009d61909c876948ce71ad535ff9c8966ba4fce149bcc","justification":"The native context adapter receives only the NativeContextProvider pointer installed by provider().","required_check":"check-safe"},
+      {"id":"ziac-native-context-cast","path":"src/agent_tools.zig","construct":"pointer_cast","fingerprint":"sha256:190601300c1157c7693278419d687b33c062f0bcc23dc78c9a6f06f9babce0c1","justification":"The paired ptrCast and alignCast restore the exact NativeContextProvider type captured by provider().","required_check":"check-safe"},
+      {"id":"ziac-agent-kernel-deinit-poison","path":"src/agent_tools.zig","construct":"undefined_escape","fingerprint":"sha256:4b0d5766409f8385e3b6027a3d23c293a2990f2da23ba07d75d07ec423d842f0","justification":"Kernel deinit poisons the fully released value after freeing its optional owned artifact; no field is read afterward.","required_check":"check-safe"},
+      {"id":"ziac-agent-kernel-state","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:2f23716b945c642b6812e8e344743c966b7cd0c9c588e2f3dab1cceda470a407","justification":"The MCP Kernel borrows the owning agent Kernel through its explicit vtable for request serving.","required_check":"check-safe"},
+      {"id":"ziac-agent-kernel-cast","path":"src/agent_tools.zig","construct":"pointer_cast","fingerprint":"sha256:36a091b45ce46a3e97a25af6d02d23ef14e8aef4a8a664cc4af7417d717f33b6","justification":"The paired ptrCast and alignCast restore the exact agent Kernel installed by kernel().","required_check":"check-safe"},
+      {"id":"ziac-simulation-artifact-copy","path":"src/agent_tools.zig","construct":"manual_allocator_escape","fingerprint":"sha256:f494f4790738560489e8f7501e25ba50bd4675142038b89b9d69a3cf68cf42e2","justification":"Simulation copies the bounded receipt before its temporary owner is released and transfers the copy to Kernel.last_artifact.","required_check":"check-safe"},
+      {"id":"ziac-proposal-artifact-copy","path":"src/agent_tools.zig","construct":"manual_allocator_escape","fingerprint":"sha256:2a02b51815cf8848897d66d3d7c4f3f5416ebccbc8b8df5d51bdbe235f47e061","justification":"Proposal generation copies the bounded receipt before its temporary owner is released and transfers the copy to Kernel.last_artifact.","required_check":"check-safe"},
+      {"id":"ziac-scripted-verifier-state","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:d297bda324468468bc8db5c4f36e735df8b075835d77b7c74c6cea5771714eef","justification":"The scripted verification adapter receives only the ScriptedVerificationRunner pointer installed by runner().","required_check":"check-safe"},
+      {"id":"ziac-scripted-verifier-cast","path":"src/agent_tools.zig","construct":"pointer_cast","fingerprint":"sha256:e6ea50fb18aa9e6d81268ea3cc6d5254f2a30a2f8e7bb97b15202dd3c0806988","justification":"The paired ptrCast and alignCast restore the exact ScriptedVerificationRunner type captured by runner().","required_check":"check-safe"},
+      {"id":"ziac-unavailable-verifier-state","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:9e2905f85d1e10523b482364d32563112e628e6aa316a2d6213c99ea8499c48f","justification":"The unavailable verifier keeps the vtable ABI but never dereferences its borrowed state pointer.","required_check":"check-safe"},
+      {"id":"ziac-native-verifier-state","path":"src/agent_tools.zig","construct":"opaque_pointer","fingerprint":"sha256:0761c1cae121c81fdcabf28dedf2aad743c4b702cc551da1389a2e87e2f06ef1","justification":"The native verification adapter receives only the NativeVerificationRunner pointer installed by runner().","required_check":"check-safe"},
+      {"id":"ziac-native-verifier-cast","path":"src/agent_tools.zig","construct":"pointer_cast","fingerprint":"sha256:00d741a2a524a12224b61993db30a93e42005202c72ce5ea132dfeb8f011ea64","justification":"The paired ptrCast and alignCast restore the exact NativeVerificationRunner type captured by runner().","required_check":"check-safe"},
+      {"id":"ziac-mcp-task-copy","path":"src/mcp.zig","construct":"manual_allocator_escape","fingerprint":"sha256:866025db765ce87e2d8e407dd691b5e106c0a6c4f08955779c7a29f17c59e197","justification":"The parser returns one bounded 4096-byte task identifier with explicit ownership at the MCP request boundary.","required_check":"check-safe"},
+      {"id":"ziac-mcp-kernel-state","path":"src/mcp.zig","construct":"opaque_pointer","fingerprint":"sha256:88be06acdc0a126243083a18c4ce69d90b1fc5cbd47d04a5533ca3dae6956d0a","justification":"MCP Kernel is a bounded borrowed vtable used only for registered tool invocation.","required_check":"check-safe"},
+      {"id":"ziac-mcp-kernel-vtable","path":"src/mcp.zig","construct":"opaque_pointer","fingerprint":"sha256:3029383957400056a28df0a8d1f65bf7590d127b6ac15b63b498b2b4a627e385","justification":"The MCP invoke function receives only the state pointer captured with the same Kernel value.","required_check":"check-safe"},
+      {"id":"ziac-scripted-mcp-state","path":"src/mcp.zig","construct":"opaque_pointer","fingerprint":"sha256:5f4982c214d29be1992eced48871b1ade69f01bf815d2b2b42b338536fb37a13","justification":"The scripted MCP adapter receives only the ScriptedKernel pointer installed by kernel().","required_check":"check-safe"},
+      {"id":"ziac-scripted-mcp-cast","path":"src/mcp.zig","construct":"pointer_cast","fingerprint":"sha256:c281fe0651ee52ee6e96fedc7efc5d7d1e27dab2dbb86b0462a6e7e0d5f979b8","justification":"The paired ptrCast and alignCast restore the exact ScriptedKernel type captured by kernel().","required_check":"check-safe"},
+      {"id":"ziac-mcp-read-buffer","path":"src/mcp_server_main.zig","construct":"manual_allocator_escape","fingerprint":"sha256:39ba8cd1990a42a9789e3c4968fd7ae94d3117b0666414bd96eb74b1c9825b60","justification":"The MCP process allocates one fixed 1 MiB stdin frame buffer and releases it when the process root exits.","required_check":"check-safe"},
+      {"id":"ziac-mcp-write-buffer","path":"src/mcp_server_main.zig","construct":"undefined_escape","fingerprint":"sha256:366a465d5410d08367eedd305327e8ecae3b8256f7a42e2d29927b5ff4695c7d","justification":"The 16 KiB stack buffer is passed immediately to the standard writer, which initializes bytes before reading or flushing them.","required_check":"check-safe"},
+      {"id":"ziac-project-compiler-state","path":"src/application.zig","construct":"opaque_pointer","fingerprint":"sha256:b7cf134595a94a6caac72b56c8586d26ee2551af5bf2159323a5b3a49253c654","justification":"ProjectCompiler centralizes its bounded type-erased state in one alias; construction binds it to the concrete implementation type and command programs never receive the pointer.","required_check":"check-safe"},
+      {"id":"ziac-project-compiler-cast","path":"src/application.zig","construct":"pointer_cast","fingerprint":"sha256:bdbdab2569a8e5a7371aa7a257591b012bd6a4a80c42a1256b21f573d73f7b0f","justification":"The cast is paired with alignCast inside the generic constructor that captured the original implementation type.","required_check":"check-safe"},
+      {"id":"ziac-runtime-graph-path-allocation","path":"src/process_runtime.zig","construct":"manual_allocator_escape","fingerprint":"sha256:9d56d0dd49471337a17da9a6274747a1bd4252d92e8b0eab71f2316dedc8d860","justification":"The managed process boundary allocates one bounded graph path and releases it before returning.","required_check":"check-safe"}
+    ],
+    "gates":[
+      {"kind":"source_policy","required":true,"command":null},
+      {"kind":"compile_debug","required":true,"command":"check-debug"},
+      {"kind":"compile_release_safe","required":true,"command":"check-safe"},
+      {"kind":"allocation_failures","required":true,"command":"check-debug"},
+      {"kind":"leak_detection","required":true,"command":"check-debug"},
+      {"kind":"causal_invariants","required":true,"command":"check-debug"},
+      {"kind":"schedule_exploration","required":true,"command":"check-debug"},
+      {"kind":"executor_equivalence","required":true,"command":"check-debug"},
+      {"kind":"thread_sanitizer","required":false,"command":null},
+      {"kind":"c_undefined_behavior","required":false,"command":null},
+      {"kind":"stack_protection","required":false,"command":null},
+      {"kind":"fuzz","required":false,"command":null}
+    ],
+    "limits":{"max_source_bytes":8388608,"max_findings":1024,"max_diagnostics":1024,"max_schedules":10000,"max_fuzz_cases":100000,"max_artifact_bytes":16777216,"max_runtime_events":100000},
+    "production_posture":{"retain_generation_checks":true,"retain_critical_invariants":true,"retain_causal_findings":true}
+  },
+  "artifacts":{"sessions":".zigeffect/sessions","causal":".zigeffect/causal","receipts":".zigeffect/receipts","graph":".zigeffect/graph","statecharts":".zigeffect/statecharts"},
+  "dependencies":{"zigeffect":"../zigeffect","zigeffect_std":"../zigeffect-std"}
+}

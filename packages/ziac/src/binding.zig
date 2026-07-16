@@ -21,32 +21,32 @@ fn Field(comptime T: type, comptime secrecy_kind: output.Secrecy) type {
 }
 
 pub fn validateBindings(
-    comptime Env: type,
+    comptime Contract: type,
     comptime Bindings: type,
     comptime service_scope: output.Scope,
 ) type {
-    const env_info = structInfo(Env, "ZIAC102 app Env must be a struct");
+    const contract_info = structInfo(Contract, "ZIAC102 deployment binding contract must be a struct");
     const bindings_info = structInfo(Bindings, "ZIAC102 bindings must be a struct");
 
-    inline for (env_info.fields) |env_field| {
+    inline for (contract_info.fields) |contract_field| {
         comptime var matched = false;
         inline for (bindings_info.fields) |binding_field| {
-            if (std.mem.eql(u8, env_field.name, binding_field.name)) {
+            if (std.mem.eql(u8, contract_field.name, binding_field.name)) {
                 matched = true;
-                validatePair(env_field.name, env_field.type, binding_field.type, service_scope);
+                validatePair(contract_field.name, contract_field.type, binding_field.type, service_scope);
             }
         }
-        if (!matched and !isOptional(env_field.type)) {
-            @compileError("ZIAC100 missing app binding: " ++ env_field.name);
+        if (!matched and !isOptional(contract_field.type)) {
+            @compileError("ZIAC100 missing deployment binding: " ++ contract_field.name);
         }
     }
 
     inline for (bindings_info.fields) |binding_field| {
         comptime var matched = false;
-        inline for (env_info.fields) |env_field| {
-            if (std.mem.eql(u8, binding_field.name, env_field.name)) matched = true;
+        inline for (contract_info.fields) |contract_field| {
+            if (std.mem.eql(u8, binding_field.name, contract_field.name)) matched = true;
         }
-        if (!matched) @compileError("ZIAC101 unknown app binding: " ++ binding_field.name);
+        if (!matched) @compileError("ZIAC101 unknown deployment binding: " ++ binding_field.name);
     }
 
     return Bindings;
@@ -54,25 +54,25 @@ pub fn validateBindings(
 
 fn validatePair(
     comptime field_name: []const u8,
-    comptime raw_env_type: type,
+    comptime raw_contract_type: type,
     comptime binding_type: type,
     comptime service_scope: output.Scope,
 ) void {
-    const env_type = optionalChild(raw_env_type);
-    if (!hasBindingMetadata(env_type)) {
-        @compileError("ZIAC102 app Env field is not a Value/Secret descriptor: " ++ field_name);
+    const contract_type = optionalChild(raw_contract_type);
+    if (!hasBindingMetadata(contract_type)) {
+        @compileError("ZIAC102 deployment field is not a Value/Secret descriptor: " ++ field_name);
     }
     if (!hasOutputMetadata(binding_type)) {
         @compileError("ZIAC102 binding is not a typed Ziac output: " ++ field_name);
     }
-    const secret_reference_string = env_type.secrecy == .secret and
+    const secret_reference_string = contract_type.secrecy == .secret and
         binding_type.secrecy == .secret and
-        env_type.ValueType == []const u8 and
+        contract_type.ValueType == []const u8 and
         binding_type.ValueType == value.SecretReference;
-    if (env_type.ValueType != binding_type.ValueType and !secret_reference_string) {
+    if (contract_type.ValueType != binding_type.ValueType and !secret_reference_string) {
         @compileError("ZIAC102 binding value type mismatch: " ++ field_name);
     }
-    if (env_type.secrecy != binding_type.secrecy) {
+    if (contract_type.secrecy != binding_type.secrecy) {
         @compileError("ZIAC103 binding secrecy mismatch: " ++ field_name);
     }
     if (binding_type.scope == .regional and service_scope != .regional) {

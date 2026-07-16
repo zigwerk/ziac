@@ -16,6 +16,10 @@ test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/agent-development-kit.md"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-developer-research.md"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-provider-coverage.md"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-organization-foundation.md"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/agent-kit/skills/ziac-provider-development/SKILL.md"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/agent-kit/skills/ziac-provider-maintenance/SKILL.md"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/agent-kit/skills/ziac-provider-qualification/SKILL.md"
+test -f "$(dirname "${ziac_bin}")/../share/ziac/agent-kit/agents/codex/ziac-provider-creator.toml"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-connectivity.md"
 test -x "$(dirname "${ziac_bin}")/../share/ziac/scripts/qualify-connectivity.sh"
 test -f "$(dirname "${ziac_bin}")/../share/ziac/docs/gcp-container-platform.md"
@@ -52,6 +56,9 @@ cd "${workspace}/global-api"
 git init -q
 "${ziac_bin}" init
 grep -Fq 'share/ziac' build.zig.zon
+test -f zigeffect.project.json
+test -f .zigeffect/compatibility.json
+grep -Fq '"template_version":13' .zigeffect/compatibility.json
 test -f .git/HEAD
 test -f .agents/skills/ziac/SKILL.md
 test -f .claude/skills/ziac/SKILL.md
@@ -62,6 +69,18 @@ test -f .gemini/skills/gcp-developer-research/SKILL.md
 test -f .codex/agents/gcp-developer-researcher.toml
 test -f .claude/agents/gcp-developer-researcher.md
 test -f .gemini/agents/gcp-developer-researcher.md
+for skill in ziac-provider-development ziac-provider-maintenance ziac-provider-qualification; do
+  test -f ".agents/skills/${skill}/SKILL.md"
+  test -f ".claude/skills/${skill}/SKILL.md"
+  test -f ".gemini/skills/${skill}/SKILL.md"
+  cmp ".agents/skills/${skill}/SKILL.md" ".claude/skills/${skill}/SKILL.md"
+  cmp ".agents/skills/${skill}/SKILL.md" ".gemini/skills/${skill}/SKILL.md"
+done
+for agent in ziac-provider-creator ziac-provider-maintainer ziac-provider-qualifier; do
+  test -f ".codex/agents/${agent}.toml"
+  test -f ".claude/agents/${agent}.md"
+  test -f ".gemini/agents/${agent}.md"
+done
 test -f .env.example
 grep -Fq 'name: ziac' .agents/skills/ziac/SKILL.md
 grep -Fq 'build.zig.zon' .agents/skills/ziac/SKILL.md
@@ -71,6 +90,14 @@ grep -Fq 'ziac provider resources --json' .agents/skills/ziac/SKILL.md
 grep -Fq '## Ecosystem layers' .agents/skills/ziac/SKILL.md
 grep -Fq 'ziac registry search' .agents/skills/ziac/SKILL.md
 grep -Fq 'ziac package verify' .agents/skills/ziac/SKILL.md
+grep -Fq 'ziac_context' .agents/skills/ziac/SKILL.md
+grep -Fq 'zigeffect agent context' .agents/skills/ziac/SKILL.md
+grep -Fq '.zigeffect/tests/process-receipts/' .agents/skills/ziac/SKILL.md
+grep -Fq '.zigeffect/tests/raw-receipts/' .agents/skills/ziac/SKILL.md
+grep -Fq '.zigeffect/handoffs/tests/' .agents/skills/ziac/SKILL.md
+grep -Fq 'zigeffect graph path' .agents/skills/ziac/SKILL.md
+grep -Fq 'work packet' .agents/skills/ziac/SKILL.md
+grep -Fq 'Re-query' .agents/skills/ziac/SKILL.md
 grep -Fq 'docs/gcp-specialization.md' .agents/skills/gcp-developer-research/SKILL.md
 cmp .agents/skills/ziac/SKILL.md .claude/skills/ziac/SKILL.md
 cmp .agents/skills/ziac/SKILL.md .gemini/skills/ziac/SKILL.md
@@ -80,6 +107,10 @@ grep -Fq 'https://developerknowledge.googleapis.com/mcp' .mcp.json
 grep -Fq 'DEVELOPERKNOWLEDGE_API_KEY' .codex/config.toml
 grep -Fq 'search_documents' .gemini/settings.json
 grep -Fq 'permissionMode: plan' .claude/agents/gcp-developer-researcher.md
+grep -Fq 'ziac.provider.rpc.v1' .agents/skills/ziac-provider-development/SKILL.md
+grep -Fq 'semantic upgrade report' .agents/skills/ziac-provider-maintenance/SKILL.md
+grep -Fq 'immutable package digest' .agents/skills/ziac-provider-qualification/SKILL.md
+grep -Fq 'agents.ziac_provider_creator' .codex/config.toml
 "${ziac_bin}" provider resources --service storage --json > "${workspace}/provider-resources.json"
 grep -Fq '"schema":"ziac.gcp.provider-coverage.v1"' "${workspace}/provider-resources.json"
 grep -Fq 'gcp.storage.Bucket' "${workspace}/provider-resources.json"
@@ -138,6 +169,8 @@ mkdir -p "${workspace}/templates/global-zig-api"
   git init -q
   "${ziac_bin}" init global-template --template global-zig-api --dir . --yes
   test -f .agents/skills/ziac/SKILL.md
+  test -f zigeffect.project.json
+  test -f .zigeffect/compatibility.json
   zig build test --summary failures
   zig build ziac-program -- --stack global-api --stage dev > "${workspace}/template-global-program.json"
 )
@@ -149,6 +182,8 @@ mkdir -p "${workspace}/templates/hermes-desktop"
   cd "${workspace}/templates/hermes-desktop"
   git init -q
   "${ziac_bin}" init hermes-template --template hermes-desktop --dir . --yes
+  test -f zigeffect.project.json
+  test -f .zigeffect/compatibility.json
   zig build test --summary failures
   zig build ziac-program -- --stack hermes-desktop --stage dev > "${workspace}/template-hermes-program.json"
 )
@@ -160,6 +195,8 @@ mkdir -p "${workspace}/templates/event-driven-zig"
   cd "${workspace}/templates/event-driven-zig"
   git init -q
   "${ziac_bin}" init events-template --template event-driven-zig --dir . --yes
+  test -f zigeffect.project.json
+  test -f .zigeffect/compatibility.json
   zig build test --summary failures
   zig build ziac-program -- --stack event-worker --stage dev > "${workspace}/template-events-program.json"
 )
@@ -184,6 +221,9 @@ test -f .agents/skills/gcp-developer-research/SKILL.md
 test -f .claude/agents/gcp-developer-researcher.md
 test -f .gemini/agents/gcp-developer-researcher.md
 test -f .codex/agents/gcp-developer-researcher.toml
+test -f .agents/skills/ziac-provider-development/SKILL.md
+test -f .claude/agents/ziac-provider-maintainer.md
+test -f .gemini/agents/ziac-provider-qualifier.md
 grep -Fq 'google-developer-knowledge' .mcp.json
 if grep -Fq 'ziac.project.json' .mcp.json; then
   echo 'workspace root MCP configuration points at a child project' >&2

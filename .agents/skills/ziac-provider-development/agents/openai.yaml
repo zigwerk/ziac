@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ziac Provider Development"
+  short_description: "Create typed first-party or third-party Ziac providers safely"
+  default_prompt: "Use $ziac-provider-development to build a typed provider change with proof-carrying causal evidence."

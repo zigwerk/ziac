@@ -1,6 +1,6 @@
 const ziac = @import("ziac");
 
-const Env = struct {
+const Contract = struct {
     database_url: ziac.binding.Secret([]const u8),
     region: ziac.binding.Value([]const u8),
     release: ?ziac.binding.Value([]const u8),
@@ -11,5 +11,5 @@ const Bindings = struct {
 };
 
 comptime {
-    _ = ziac.binding.validateBindings(Env, Bindings, .regional);
+    _ = ziac.binding.validateBindings(Contract, Bindings, .regional);
 }

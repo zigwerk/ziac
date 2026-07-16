@@ -33,6 +33,8 @@ Initial source domains:
   and cleanup policy.
 - `rollout.zig`: complete-graph Cloud Run rollback transformation and immutable
   image-history validation.
+- `watch_deploy.zig`: pure typed rollout statechart plus replay-safe durable
+  workflow activities for immutable development deployment.
 - `refresh.zig`: read-only provider refresh into observed state.
 - `importer.zig`: validated adoption of existing provider resources.
 
@@ -42,6 +44,13 @@ receives an `OperationContext` containing its allocator, clock, absolute
 deadline, cooperative cancellation handle, and read-only access to dependency
 outputs in the current state snapshot. Providers must not retain the context or
 borrowed output values after returning.
+
+Long-lived control flow uses the complementary statechart/workflow boundary
+documented in `statecharts-and-workflows.md`. Statecharts own legal decisions
+and emit commands; durable journals own activity outcomes and replay. The CLI
+provides the journal as a root application dependency and the process runtime
+records both kinds of event into embedded NenDB. Synchronous graph compilation
+and plan derivation stay pure and do not become workflows merely for uniformity.
 
 Operation contexts can also publish a bounded provider diagnostic to a shared,
 thread-safe recorder. GCP maps redacted HTTP status, request ID, retry delay,
@@ -131,11 +140,13 @@ and rolls back every inserted node and edge on conflict. CockroachDB's
 `ApplicationDatabase` uses this ownership model to order existing topology,
 generated credentials, administrator bootstrap, grants, and migration outputs.
 
-Application `Env` structs use `binding.Value(T)` and `binding.Secret(T)` field
-descriptors. `validateBindings` reflects over the environment and supplied output
-struct types to enforce required and optional names, value types, secrecy, and
-regional scope. It returns the normalized binding struct type and emits stable
-`ZIAC100` through `ZIAC104` diagnostics for static contract failures.
+Deployment binding contracts use `binding.Value(T)` and
+`binding.Secret(T)` field descriptors. They are infrastructure schemas, not
+application dependency-injection environments. `validateBindings` reflects
+over the contract and supplied output struct types to enforce required and
+optional names, value types, secrecy, and regional scope. It returns the
+normalized binding struct type and emits stable `ZIAC100` through `ZIAC104`
+diagnostics for static contract failures.
 
 `stack.ProviderSet` canonicalizes a comptime provider tuple and rejects
 duplicates. `stack.Context(Set)` exposes GCP, CockroachDB, and local namespaces
@@ -143,9 +154,12 @@ only when declared, with `ZIAC110` and `ZIAC111` diagnostics for missing cloud
 providers. The runtime provider registry is derived by iterating that same static
 set, so undeclared provider implementations cannot become available by accident.
 
-`gcp.global.ZigService(App, Bindings, Providers)` closes the application and
-infrastructure type boundary. Instantiating the component requires `App.Env`, a
-declared GCP provider, and a binding struct accepted by `validateBindings`.
+`gcp.global.ZigService(DeploymentContract, Bindings, Providers)` closes the
+runtime/infrastructure boundary without importing an application type.
+Instantiating the component requires an explicit deployment binding contract,
+a declared GCP provider, and a binding struct accepted by `validateBindings`.
+The deployed application independently composes its runtime services and
+layers through ZigEffect.
 Public and secret bindings lower to typed Cloud Run output references, so the
 resource graph derives producer edges before any provider runs. Secret values
 must resolve through GCP Secret Manager; foreign-provider, cross-project, and

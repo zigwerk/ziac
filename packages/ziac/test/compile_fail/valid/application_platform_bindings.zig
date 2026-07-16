@@ -1,6 +1,6 @@
 const ziac = @import("ziac");
 
-const Env = struct {
+const Contract = struct {
     uploads_bucket: ziac.binding.Value([]const u8),
     events_topic: ziac.binding.Value([]const u8),
     tasks_queue: ziac.binding.Value([]const u8),
@@ -15,5 +15,5 @@ const Bindings = struct {
 };
 
 comptime {
-    _ = ziac.binding.validateBindings(Env, Bindings, .global);
+    _ = ziac.binding.validateBindings(Contract, Bindings, .global);
 }

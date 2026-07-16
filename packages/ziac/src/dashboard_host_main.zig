@@ -7,6 +7,9 @@ var host: ziac.dashboard_host.Host = undefined;
 var config: ziac.dashboard_host.Config = undefined;
 var host_io: std.Io = undefined;
 var observer_stop = std.atomic.Value(bool).init(false);
+const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(std.process.Init);
+const DashboardRuntime = ziac.zstd.fx.kernel.RuntimeHandle(.{});
+var dashboard_runtime: DashboardRuntime = undefined;
 
 fn returnStatic(event: *webui.Event, value: [:0]const u8) void {
     event.returnValue(value);
@@ -22,7 +25,7 @@ fn returnOwned(event: *webui.Event, bytes: []u8) void {
     event.returnValue(terminated);
 }
 
-fn loadArtifact(event: *webui.Event) void {
+fn loadArtifactImpl(event: *webui.Event) void {
     returnOwned(event, host.loadArtifactAlloc() catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-error.v1\",\"code\":\"artifact_unavailable\"}");
         return;
@@ -72,21 +75,21 @@ fn observeWorkspace(window: *webui) void {
     }
 }
 
-fn loadSession(event: *webui.Event) void {
+fn loadSessionImpl(event: *webui.Event) void {
     returnOwned(event, host.loadSessionAlloc() catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-error.v1\",\"code\":\"session_unavailable\"}");
         return;
     });
 }
 
-fn loadLogs(event: *webui.Event) void {
+fn loadLogsImpl(event: *webui.Event) void {
     returnOwned(event, host.loadLogAlloc() catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-error.v1\",\"code\":\"logs_unavailable\"}");
         return;
     });
 }
 
-fn scanEstate(event: *webui.Event) void {
+fn scanEstateImpl(event: *webui.Event) void {
     const executable = config.estate_scan_executable orelse {
         returnStatic(event, "{\"schema\":\"ziac.estate-scan-error.v1\",\"code\":\"host_not_configured\"}");
         return;
@@ -120,36 +123,120 @@ fn scanEstate(event: *webui.Event) void {
     returnOwned(event, payload);
 }
 
-fn requestEstateAccess(event: *webui.Event) void {
+fn requestEstateAccessImpl(event: *webui.Event) void {
     returnStatic(event, "{\"schema\":\"ziac.estate-access.v1\",\"status\":\"control_plane_required\"}");
 }
 
-fn runOperation(event: *webui.Event) void {
+fn runOperationImpl(event: *webui.Event) void {
     returnOwned(event, host.runOperationAlloc(event.getString()) catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-operation-error.v1\",\"code\":\"host_failure\"}");
         return;
     });
 }
 
-fn startWatch(event: *webui.Event) void {
+fn startWatchImpl(event: *webui.Event) void {
     returnOwned(event, host.startWatchAlloc(event.getString()) catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-operation-error.v1\",\"code\":\"host_failure\"}");
         return;
     });
 }
 
-fn operationStatus(event: *webui.Event) void {
+fn operationStatusImpl(event: *webui.Event) void {
     returnOwned(event, host.operationStatusAlloc(event.getString()) catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-operation-error.v1\",\"code\":\"host_failure\"}");
         return;
     });
 }
 
-fn cancelOperation(event: *webui.Event) void {
+fn cancelOperationImpl(event: *webui.Event) void {
     returnOwned(event, host.cancelOperationAlloc(event.getString()) catch {
         returnStatic(event, "{\"schema\":\"ziac.dashboard-operation-error.v1\",\"code\":\"host_failure\"}");
         return;
     });
+}
+
+const CallbackKind = enum {
+    load_artifact,
+    load_session,
+    load_logs,
+    scan_estate,
+    request_estate_access,
+    run_operation,
+    start_watch,
+    operation_status,
+    cancel_operation,
+};
+const CallbackState = struct {
+    kind: CallbackKind,
+    event: *webui.Event,
+};
+const CallbackProgram = ziac.zstd.fx.kernel.Effect(void, error{}, .{}).Stateful(CallbackState);
+
+fn callbackEffect(state: CallbackState) CallbackProgram {
+    return CallbackProgram.init(state, struct {
+        fn run(callback: CallbackState, ctx: *CallbackProgram.Context) error{}!void {
+            _ = ctx.recordCausal(.{
+                .kind = .workflow_event_recorded,
+                .service_key = "ziac/DashboardHost",
+                .label = @tagName(callback.kind),
+                .status = "received",
+                .redacted_detail = "bounded-dashboard-bridge-call",
+            });
+            switch (callback.kind) {
+                .load_artifact => loadArtifactImpl(callback.event),
+                .load_session => loadSessionImpl(callback.event),
+                .load_logs => loadLogsImpl(callback.event),
+                .scan_estate => scanEstateImpl(callback.event),
+                .request_estate_access => requestEstateAccessImpl(callback.event),
+                .run_operation => runOperationImpl(callback.event),
+                .start_watch => startWatchImpl(callback.event),
+                .operation_status => operationStatusImpl(callback.event),
+                .cancel_operation => cancelOperationImpl(callback.event),
+            }
+        }
+    }.run);
+}
+
+fn runCallback(kind: CallbackKind, event: *webui.Event) void {
+    dashboard_runtime.run(callbackEffect(.{ .kind = kind, .event = event }).named(@tagName(kind))) catch {
+        returnStatic(event, "{\"schema\":\"ziac.dashboard-error.v1\",\"code\":\"runtime_failure\"}");
+    };
+}
+
+fn loadArtifact(event: *webui.Event) void {
+    runCallback(.load_artifact, event);
+}
+
+fn loadSession(event: *webui.Event) void {
+    runCallback(.load_session, event);
+}
+
+fn loadLogs(event: *webui.Event) void {
+    runCallback(.load_logs, event);
+}
+
+fn scanEstate(event: *webui.Event) void {
+    runCallback(.scan_estate, event);
+}
+
+fn requestEstateAccess(event: *webui.Event) void {
+    runCallback(.request_estate_access, event);
+}
+
+fn runOperation(event: *webui.Event) void {
+    runCallback(.run_operation, event);
+}
+
+fn startWatch(event: *webui.Event) void {
+    runCallback(.start_watch, event);
+}
+
+fn operationStatus(event: *webui.Event) void {
+    runCallback(.operation_status, event);
+}
+
+fn cancelOperation(event: *webui.Event) void {
+    runCallback(.cancel_operation, event);
 }
 
 fn configureWindow(window: *webui) !void {
@@ -168,11 +255,23 @@ fn configureWindow(window: *webui) !void {
 }
 
 pub fn main(init: std.process.Init) !void {
+    return ziac.process_runtime.run(init, "ziac-dashboard-host", MainProgram.init(init, runMain));
+}
+
+fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     const options = ziac.dashboard_host.parseLaunchArgs(args) orelse {
         std.debug.print("usage: ziac-dashboard-host [--server-only] [--root path] [--session path] [--logs path] <artifact.json>\n", .{});
-        std.process.exit(2);
+        return error.InvalidArguments;
     };
+    _ = ctx.recordCausal(.{
+        .kind = .service_provided,
+        .service_key = "ziac/DashboardHost",
+        .label = "dashboard-session",
+        .status = "starting",
+        .redacted_detail = "bounded-workspace-artifact",
+    });
+    dashboard_runtime = ctx.runtime();
     host_io = init.io;
     const installed_root = if (std.mem.eql(u8, options.root_path, "dashboard/dist"))
         try installedDashboardRootAlloc(init.gpa, init.io)

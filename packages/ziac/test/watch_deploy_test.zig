@@ -1,6 +1,18 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
+fn execute(
+    runtime: ziac.watch_deploy.Runtime,
+    envelope: ziac.agent_contract.CapabilityEnvelope,
+    input: ziac.watch_deploy.ExecuteInput,
+) !ziac.watch_deploy.Receipt {
+    var journal = ziac.zstd.fx.workflow.InMemoryJournalStore.init(std.testing.allocator);
+    defer journal.deinit();
+    return ziac.watch_deploy.executeWorkflow(std.testing.allocator, .{
+        .journal = journal.asJournalStore(),
+    }, runtime, envelope, input);
+}
+
 test "watch deploy coalesces rapid saves and converges to newest digest" {
     var controller = ziac.watch_deploy.Controller.init(std.testing.allocator);
     defer controller.deinit();
@@ -31,7 +43,7 @@ test "watch deployment is capability gated and promotes only ready immutable rev
         .approved_plan_digest = "watch-plan",
     };
     var runtime = ziac.watch_deploy.ScriptedRuntime.init();
-    const receipt = try ziac.watch_deploy.execute(runtime.runtime(), envelope, .{
+    const receipt = try execute(runtime.runtime(), envelope, .{
         .now_millis = 10_000,
         .stage = "dev_sean",
         .project = "project-dev",
@@ -46,7 +58,7 @@ test "watch deployment is capability gated and promotes only ready immutable rev
     try std.testing.expectEqual(@as(usize, 1), runtime.traffic_count);
     try std.testing.expect(receipt.no_traffic_verified);
 
-    try std.testing.expectError(error.WatchProductionForbidden, ziac.watch_deploy.execute(runtime.runtime(), envelope, .{
+    try std.testing.expectError(error.WatchProductionForbidden, execute(runtime.runtime(), envelope, .{
         .now_millis = 10_000,
         .stage = "prod",
         .project = "project-dev",
@@ -54,7 +66,7 @@ test "watch deployment is capability gated and promotes only ready immutable rev
         .image_ref = "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         .regions = 1,
     }));
-    try std.testing.expectError(error.WatchDestructiveChange, ziac.watch_deploy.execute(runtime.runtime(), envelope, .{
+    try std.testing.expectError(error.WatchDestructiveChange, execute(runtime.runtime(), envelope, .{
         .now_millis = 10_000,
         .stage = "dev_sean",
         .project = "project-dev",
@@ -78,7 +90,7 @@ test "watch deployment preserves traffic when readiness fails" {
     };
     var runtime = ziac.watch_deploy.ScriptedRuntime.init();
     runtime.ready = false;
-    const receipt = try ziac.watch_deploy.execute(runtime.runtime(), envelope, .{
+    const receipt = try execute(runtime.runtime(), envelope, .{
         .now_millis = 10_000,
         .stage = "dev",
         .project = "project-dev",
@@ -107,7 +119,7 @@ test "watch deployment records phase timings and emits a JSON event stream" {
     runtime.revision_millis = 300;
     runtime.readiness_millis = 500;
     runtime.traffic_millis = 80;
-    const receipt = try ziac.watch_deploy.execute(runtime.runtime(), envelope, .{
+    const receipt = try execute(runtime.runtime(), envelope, .{
         .now_millis = 1_000,
         .stage = "dev",
         .project = "project-dev",
