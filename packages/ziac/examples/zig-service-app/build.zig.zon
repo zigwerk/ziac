@@ -1,0 +1,10 @@
+.{
+    .name = .ziac_sample_api,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.16.0",
+    .fingerprint = 0xedcaa73dcb06096e,
+    .dependencies = .{
+        .zigeffect_std = .{ .path = "../../../zigeffect-std" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}

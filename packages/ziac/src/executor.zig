@@ -121,38 +121,33 @@ pub fn executePlan(
         .resumed_operations = resumed_operations,
     };
     try resumeIncompleteOperations(&environment);
-    // Execution is a child scope of the owning application runtime. The
-    // legacy implementation constructed a second Runtime here, which split
-    // lifecycle ownership and causal topology. Keep the proven structured
-    // parallel combinator, but interpret it in this command scope and attach
-    // it to the caller's recorder.
-    var command_scope = fx.Scope.init(allocator);
-    defer command_scope.deinit();
-    var context = fx.Context(ExecutionEnvironment).init(allocator, &environment, &command_scope);
-    context.executor = options.fiber_executor;
-    context.causal_store = options.causal_store;
-
     for (schedule.levels) |level| {
         var batch_start: usize = 0;
         while (batch_start < level.operation_indexes.len) {
             const batch_end = @min(batch_start + options.max_concurrency, level.operation_indexes.len);
             const indexes = level.operation_indexes[batch_start..batch_end];
-            const jobs = try allocator.alloc(ExecutionJob, indexes.len);
+            const jobs = try allocator.alloc(ExecutionJobState, indexes.len);
             defer allocator.free(jobs);
+            const handles = try allocator.alloc(?*anyopaque, indexes.len);
+            defer allocator.free(handles);
+            @memset(handles, null);
             for (indexes, 0..) |operation_index, index| {
-                jobs[index] = .{ .operation_index = operation_index };
+                jobs[index] = .{ .environment = &environment, .operation_index = operation_index };
             }
 
-            const program = fx.forEachPar(
-                ExecutionJob,
-                void,
-                ExecuteError,
-                ExecutionEnvironment,
-                jobs,
-                ExecutionJob.run,
-            );
-            const results = try context.runEffect(program);
-            allocator.free(results);
+            for (jobs, 0..) |*job, index| {
+                if (options.fiber_executor) |executor| {
+                    handles[index] = executor.vtable.spawn(executor.context, .{ .context = job, .run = ExecutionJobState.runOpaque });
+                    if (handles[index] == null) job.run();
+                } else job.run();
+            }
+            if (options.fiber_executor) |executor| {
+                for (handles) |maybe_handle| if (maybe_handle) |handle| {
+                    executor.vtable.join(executor.context, handle);
+                    executor.vtable.destroy(executor.context, handle);
+                };
+            }
+            for (jobs) |job| if (job.failure) |failure| return failure;
             batch_start = batch_end;
         }
     }
@@ -195,33 +190,42 @@ const ExecutionEnvironment = struct {
     }
 };
 
-const ExecutionJob = struct {
+const ExecutionJobState = struct {
+    environment: *ExecutionEnvironment,
     operation_index: usize,
+    failure: ?ExecuteError = null,
 
-    fn run(
-        self: ExecutionJob,
-        context: *fx.Context(ExecutionEnvironment),
-    ) ExecuteError!void {
-        const environment = context.env;
+    fn run(self: *ExecutionJobState) void {
+        self.runFallible() catch |failure| {
+            self.failure = failure;
+        };
+    }
+
+    fn runOpaque(raw: ?*anyopaque) void {
+        const self: *ExecutionJobState = @ptrCast(@alignCast(raw.?));
+        self.run();
+    }
+
+    fn runFallible(self: *ExecutionJobState) ExecuteError!void {
+        const environment = self.environment;
         if (environment.isCancelled()) return error.ProviderCancelled;
         const operation = environment.planned.operations[self.operation_index];
         if (environment.resumed_operations[self.operation_index]) {
-            recordFact(context, operation, "resumed");
+            recordFact(environment, operation, "resumed");
             return;
         }
-        recordFact(context, operation, "started");
-        executeWithRetry(environment, context, operation) catch |err| {
+        recordFact(environment, operation, "started");
+        executeWithRetry(environment, operation) catch |err| {
             environment.internal_cancellation.cancel();
-            recordFact(context, operation, if (err == error.OperationPending) "incomplete" else "failure");
+            recordFact(environment, operation, if (err == error.OperationPending) "incomplete" else "failure");
             return err;
         };
-        recordFact(context, operation, "success");
+        recordFact(environment, operation, "success");
     }
 };
 
 fn executeWithRetry(
     environment: *ExecutionEnvironment,
-    context: *fx.Context(ExecutionEnvironment),
     operation: plan_mod.PlanOperation,
 ) ExecuteError!void {
     if (operation.kind == .noop or operation.kind == .read) return;
@@ -244,7 +248,7 @@ fn executeWithRetry(
             const delay_millis = environment.options.retry_schedule.nextDelay(retry_index) orelse return err;
             const elapsed = environment.clock.nowMs() -| started_at;
             if (elapsed >= timeout_millis or delay_millis > timeout_millis - elapsed) return error.ProviderTimeout;
-            _ = context.recordCausal(.{
+            recordCausal(environment, .{
                 .kind = .schedule_decision,
                 .label = operation.resource.id,
                 .status = "retry",
@@ -373,16 +377,21 @@ fn executionCancelled(raw: *const anyopaque) bool {
 }
 
 fn recordFact(
-    context: *fx.Context(ExecutionEnvironment),
+    environment: *ExecutionEnvironment,
     operation: plan_mod.PlanOperation,
     status: []const u8,
 ) void {
-    _ = context.recordCausal(.{
+    recordCausal(environment, .{
         .kind = .workflow_event_recorded,
         .label = operation.resource.id,
         .status = status,
         .type_name = @tagName(operation.kind),
     });
+}
+
+fn recordCausal(environment: *ExecutionEnvironment, event: fx.CausalEvent) void {
+    const store = environment.options.causal_store orelse return;
+    _ = store.record(event) catch {};
 }
 
 fn isRetryable(err: apply_mod.ApplyError) bool {

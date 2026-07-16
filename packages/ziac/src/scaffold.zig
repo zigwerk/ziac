@@ -347,7 +347,7 @@ const effect_project_json =
 ;
 
 const effect_compatibility_json =
-    \\{{"schema":"zigeffect.compatibility.v1","schema_version":1,"project":"{s}","kind":"application","project_schema":"zigeffect.project.v1","template_schema":"zigeffect.scaffold-template.v1","template_version":13,"cli_version":"0.7.0","minimum_zig_version":"0.16.0","maximum_zig_version_exclusive":"0.17.0","zigeffect_api":"0.1.x","zigeffect_std_api":"0.1.x"}}
+    \\{{"schema":"zigeffect.compatibility.v1","schema_version":1,"project":"{s}","kind":"application","project_schema":"zigeffect.project.v1","template_schema":"zigeffect.scaffold-template.v1","template_version":14,"cli_version":"0.7.0","minimum_zig_version":"0.16.0","maximum_zig_version_exclusive":"0.17.0","zigeffect_api":"0.1.x","zigeffect_std_api":"0.1.x"}}
 ;
 
 const self_host_project_json =
@@ -528,12 +528,14 @@ const app_zig =
     \\    request.respond(result.body, .{ .status = result.status, .keep_alive = false, .extra_headers = &.{.{ .name = "content-type", .value = "application/json" }} }) catch {};
     \\}
     \\
-    \\const ServeBase = kernel.Effect(void, anyerror, .{Health});
-    \\const Serve = ServeBase.Stateful(std.process.Init);
-    \\fn serve(init: std.process.Init) Serve {
-    \\    return Serve.init(init, struct {
-    \\        fn run(process: std.process.Init, ctx: *Serve.Context) anyerror!void {
-    \\            var address = try std.Io.net.IpAddress.parseIp4("0.0.0.0", 8080);
+    \\const ProcessInputs = struct { io: std.Io, port: u16 };
+    \\const ProcessInputsService = kernel.Service("application/ProcessInputs", ProcessInputs);
+    \\const Serve = kernel.Effect(void, anyerror, .{ Health, ProcessInputsService });
+    \\fn serve() Serve {
+    \\    return Serve.fromFn(struct {
+    \\        fn run(ctx: *Serve.Context) anyerror!void {
+    \\            const process = ctx.service(ProcessInputsService);
+    \\            var address = try std.Io.net.IpAddress.parseIp4("0.0.0.0", process.port);
     \\            var listener = try address.listen(process.io, .{ .reuse_address = true });
     \\            defer listener.deinit(process.io);
     \\            while (true) {
@@ -545,15 +547,15 @@ const app_zig =
     \\    }.run);
     \\}
     \\
-    \\pub fn rootLayer() @TypeOf(kernel.Layer.succeed(Health, HealthApi{})) {
-    \\    return kernel.Layer.succeed(Health, .{});
+    \\pub fn rootLayer(inputs: ProcessInputs) @TypeOf(kernel.Layer.mergeAll(.{ kernel.Layer.succeed(Health, HealthApi{}), kernel.Layer.succeed(ProcessInputsService, inputs) })) {
+    \\    return kernel.Layer.mergeAll(.{ kernel.Layer.succeed(Health, .{}), kernel.Layer.succeed(ProcessInputsService, inputs) });
     \\}
     \\
     \\pub fn runWithOptions(init: std.process.Init, options: zstd.CausalRuntime.Options) !void {
-    \\    const main_layer = rootLayer();
+    \\    const main_layer = rootLayer(.{ .io = init.io, .port = 8080 });
     \\    var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(init.gpa, init.io, std.Io.Dir.cwd(), main_layer, options);
     \\    defer runtime.deinit();
-    \\    try runtime.run(serve(init).named("application.serve"));
+    \\    try runtime.run(serve().named("application.serve"));
     \\    try runtime.shutdown();
     \\}
     \\
@@ -565,7 +567,7 @@ const app_zig =
     \\    var context = try zstd.Testing.TestContext.initFromProject(std.testing.allocator, std.testing.io, std.Io.Dir.cwd(), .{ .project = "__PROJECT_NAME__", .suite = "app-tests", .scenario = .{ .id = "runtime-causal-contract", .label = "runtime causal contract", .requirement = "req-runtime", .acceptance_check = "check-runtime", .component = "__PROJECT_NAME__", .command = "test" }, .seed = 42 });
     \\    defer context.deinit();
     \\    const assertions = zstd.Testing.AssertionRecorder.init(&context);
-    \\    const main_layer = rootLayer();
+    \\    const main_layer = rootLayer(.{ .io = std.testing.io, .port = 8080 });
     \\    var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(std.testing.allocator, std.testing.io, std.Io.Dir.cwd(), main_layer, .{ .causal_store = context.causalStore() });
     \\    defer runtime.deinit();
     \\    const result = try runtime.run(route("/health/live").named("test.health"));

@@ -120,6 +120,7 @@ pub fn executeEffect(planned: *const plan_mod.Plan) ExecuteEffect {
             const providers = ctx.service(ProviderRegistry);
             var options = providers.options;
             options.causal_store = ctx.causalRecorder().store;
+            options.fiber_executor = ctx.executor();
             executor_mod.executePlan(ctx.allocator(), value, state, providers.registry, options) catch |failure| {
                 _ = ctx.recordCausal(.{
                     .kind = .activity_completed,

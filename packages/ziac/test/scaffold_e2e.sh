@@ -58,7 +58,12 @@ git init -q
 grep -Fq 'share/ziac' build.zig.zon
 test -f zigeffect.project.json
 test -f .zigeffect/compatibility.json
-grep -Fq '"template_version":13' .zigeffect/compatibility.json
+grep -Fq '"template_version":14' .zigeffect/compatibility.json
+grep -Fq 'ProcessInputs' src/main.zig
+if grep -Fq 'Stateful(std.process.Init)' src/main.zig; then
+  echo 'scaffold captured process init inside an effect' >&2
+  exit 1
+fi
 test -f .git/HEAD
 test -f .agents/skills/ziac/SKILL.md
 test -f .claude/skills/ziac/SKILL.md

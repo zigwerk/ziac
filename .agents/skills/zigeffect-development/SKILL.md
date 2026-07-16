@@ -104,6 +104,17 @@ Before editing application behavior:
   terminal scrollback in manifests, facts, receipts, fixtures, snapshots, or
   Workbench payloads.
 
+## Compose state machines and workflows
+
+- Provide typed finite-state definitions with `zstd.Statechart.Effect.layer`
+  and execute decisions with `zstd.Statechart.Effect.step`; the pure decision
+  remains testable while the runtime records service and statechart facts.
+- Provide durable journals with `zstd.Workflow.journalLayer`; use
+  `zstd.Workflow.append` and `readAll` through the owning runtime. Long-lived
+  workers derive a bounded `ctx.runtime()` handle for each job.
+- Install `zstd.Application.Lifecycle.signalLayer()` at the process root and
+  execute start, ready, drain, and stop as effects.
+
 ## Build gRPC and Cloud Run services
 
 For canonical Yachdee backend communication, use `zigeffect-grpc` through the

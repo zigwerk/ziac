@@ -2,14 +2,15 @@ const std = @import("std");
 const ziac = @import("ziac");
 const build_options = @import("build_options");
 
-const MainProgram = ziac.zstd.fx.kernel.Effect(u8, anyerror, .{}).Stateful(std.process.Init);
+const MainProgram = ziac.zstd.fx.kernel.Effect(u8, anyerror, .{ziac.process_runtime.ProcessInputs});
 
 pub fn main(init: std.process.Init) !void {
-    const code = try ziac.process_runtime.run(init, "ziac-cli", MainProgram.init(init, runMain));
+    const code = try ziac.process_runtime.run(init, "ziac-cli", MainProgram.fromFn(runMain));
     std.process.exit(code);
 }
 
-fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !u8 {
+fn runMain(ctx: *MainProgram.Context) !u8 {
+    const init = ctx.service(ziac.process_runtime.ProcessInputs).init;
     const allocator = init.gpa;
     const io = init.io;
 

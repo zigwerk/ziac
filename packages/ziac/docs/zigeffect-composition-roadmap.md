@@ -2,16 +2,15 @@
 
 **Audited and implemented:** 2026-07-16
 **Status:** the canonical runtime foundation, external tags, plan/execute
-effects, process roots, durable NenDB graph, project intent, and generated
-application roots are implemented. Command adapters and provider/state
-lifecycle are intentionally tracked as the remaining migration rather than
-being misrepresented as complete.
+effects, injected process-input layers, owning runtimes, durable NenDB graph,
+project intent, and generated application roots are implemented. Provider and
+state-client acquisition inside the large CLI adapter remains explicit debt.
 
 | Surface | Status | Use for new Ziac composition? |
 | --- | --- | --- |
 | `fx.kernel.Service`, `Effect`, `Layer`, `ManagedRuntime` | Canonical foundation | Yes |
 | `zstd.FileSystem`, `Process`, Config, Console canonical operations | Z0 available | Yes |
-| `cli.Env` adapter record and legacy executor combinator | Transitional internals | No new use |
+| `cli.Env` adapter record | Transitional command adapter | No new use |
 | Canonical ProjectCompiler, StateStore, ProviderRegistry, ProcessSpawner tags | Implemented | Yes |
 | Canonical plan/execute Effects and root layer | Implemented | Yes |
 | Scoped provider-process and state-backend layers | Pending Z2-Z3 | Not yet complete |
@@ -27,8 +26,8 @@ allowing multiple daemons to corrupt one WAL.
 
 `src/application.zig` defines the stable external tags and canonical
 requirements-typed plan/execute effects. `executor.executePlan` no longer
-constructs a nested runtime: bounded parallel operations execute in the owning
-command scope with the caller's fiber executor and causal recorder.
+constructs a nested context or calls the retired interpreter: bounded batches
+use the owning runtime's executor and causal recorder directly.
 
 The resource model should not be rewritten. Typed declarations, graph
 validation, hashes, binding resolution, diff calculation, operation ordering,
@@ -195,10 +194,10 @@ Delete `cli.Env`, `application.EffectEnv`, provider tuples, standalone
 `Runtime(ExecutionEnvironment)`, and legacy layer graphs. Keep provider RPC and
 state schemas stable unless a separately qualified change requires migration.
 
-**Current:** nested runtimes, the prototype application environment, and
-production legacy layer graphs are removed. `cli.Env` and the executor's
-proven structured parallel combinator remain until Z2-Z5 replace their adapter
-surfaces.
+**Current:** nested runtimes, the prototype application environment, production
+legacy layer graphs, and the executor's hidden `ctx.runEffect` path are removed.
+`cli.Env` remains the final broad command-adapter record until Z2-Z5 split its
+state/provider/filesystem capabilities into scoped layers.
 
 ### Z9 — Inspectable durable control flow
 

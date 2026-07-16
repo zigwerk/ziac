@@ -4,7 +4,7 @@ fn readSource(path: []const u8) ![]u8 {
     return std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(2 * 1024 * 1024));
 }
 
-test "every shipped Ziac process root is owned by the canonical managed runtime" {
+test "every shipped Ziac process root declares injected process inputs and one owning runtime" {
     const roots = [_][]const u8{
         "src/main.zig",
         "src/mcp_server_main.zig",
@@ -18,7 +18,16 @@ test "every shipped Ziac process root is owned by the canonical managed runtime"
         const source = try readSource(path);
         defer std.testing.allocator.free(source);
         try std.testing.expect(std.mem.indexOf(u8, source, "ziac.process_runtime.run") != null);
+        try std.testing.expect(std.mem.indexOf(u8, source, "ziac.process_runtime.ProcessInputs") != null);
+        try std.testing.expect(std.mem.indexOf(u8, source, "MainProgram.fromFn") != null);
+        try std.testing.expect(std.mem.indexOf(u8, source, ").Stateful(std.process.Init)") == null);
     }
+
+    const runtime = try readSource("src/process_runtime.zig");
+    defer std.testing.allocator.free(runtime);
+    try std.testing.expect(std.mem.indexOf(u8, runtime, "const main_layer") != null);
+    try std.testing.expect(std.mem.indexOf(u8, runtime, "zstd.ManagedRuntime") != null);
+    try std.testing.expect(std.mem.indexOf(u8, runtime, "ProcessInputs") != null);
 }
 
 test "Ziac production roots do not create legacy or nested runtimes" {
@@ -39,6 +48,7 @@ test "Ziac production roots do not create legacy or nested runtimes" {
         try std.testing.expect(std.mem.indexOf(u8, source, "fx.Runtime(") == null);
         try std.testing.expect(std.mem.indexOf(u8, source, "fx.layerGraph") == null);
         try std.testing.expect(std.mem.indexOf(u8, source, "zstd.fx.layerGraph") == null);
+        try std.testing.expect(std.mem.indexOf(u8, source, "ctx.runEffect") == null);
     }
 }
 
@@ -89,6 +99,8 @@ test "registry templates preserve the effectful application and pure compiler bo
         try std.testing.expect(std.mem.indexOf(u8, source, "kernel.Service(") != null);
         try std.testing.expect(std.mem.indexOf(u8, source, "zstd.ManagedRuntime") != null);
         try std.testing.expect(std.mem.indexOf(u8, source, "TestContext") != null);
+        try std.testing.expect(std.mem.indexOf(u8, source, "ProcessInputs") != null);
+        try std.testing.expect(std.mem.indexOf(u8, source, "Stateful(std.process.Init)") == null);
     }
     const hermes = try readSource("../ziac-templates/templates/hermes-desktop/files/ziac.stack.zig");
     defer std.testing.allocator.free(hermes);
@@ -103,7 +115,7 @@ test "registry templates preserve the effectful application and pure compiler bo
         const compatibility = try readSource(compatibility_path);
         defer std.testing.allocator.free(compatibility);
         try std.testing.expect(std.mem.indexOf(u8, manifest, "{{project_name}}") != null);
-        try std.testing.expect(std.mem.indexOf(u8, compatibility, "\"template_version\":11") != null);
+        try std.testing.expect(std.mem.indexOf(u8, compatibility, "\"template_version\":14") != null);
     }
 }
 
@@ -122,6 +134,7 @@ test "event driven projects scaffold typed durable workflow control" {
     defer std.testing.allocator.free(main);
     try std.testing.expect(std.mem.indexOf(u8, main, "FileJournalStore.open") != null);
     try std.testing.expect(std.mem.indexOf(u8, main, "EventWorkflow") != null);
+    try std.testing.expect(std.mem.indexOf(u8, main, "ProcessInputs") != null);
 
     const manifest = try readSource("../ziac-templates/templates/event-driven-zig/files/zigeffect.project.json");
     defer std.testing.allocator.free(manifest);

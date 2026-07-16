@@ -46,17 +46,15 @@ fn handleConnection(io: std.Io, stream: std.Io.net.Stream, runtime: anytype) voi
     }) catch {};
 }
 
-const ServeBase = kernel.Effect(void, anyerror, .{Health});
-const Serve = ServeBase.Stateful(std.process.Init);
+const ProcessInputs = struct { io: std.Io, port: u16 };
+const ProcessInputsService = kernel.Service("application/ProcessInputs", ProcessInputs);
+const Serve = kernel.Effect(void, anyerror, .{ Health, ProcessInputsService });
 
-fn serve(init: std.process.Init) Serve {
-    return Serve.init(init, struct {
-        fn run(process: std.process.Init, ctx: *Serve.Context) anyerror!void {
-            const port = if (process.environ_map.get("PORT")) |value|
-                try std.fmt.parseInt(u16, value, 10)
-            else
-                8080;
-            var address = try std.Io.net.IpAddress.parseIp4("0.0.0.0", port);
+fn serve() Serve {
+    return Serve.fromFn(struct {
+        fn run(ctx: *Serve.Context) anyerror!void {
+            const process = ctx.service(ProcessInputsService);
+            var address = try std.Io.net.IpAddress.parseIp4("0.0.0.0", process.port);
             var listener = try address.listen(process.io, .{ .reuse_address = true });
             defer listener.deinit(process.io);
             while (true) {
@@ -68,12 +66,19 @@ fn serve(init: std.process.Init) Serve {
     }.run);
 }
 
-pub fn rootLayer() @TypeOf(kernel.Layer.succeed(Health, HealthApi{})) {
-    return kernel.Layer.succeed(Health, .{});
+pub fn rootLayer(inputs: ProcessInputs) @TypeOf(kernel.Layer.mergeAll(.{
+    kernel.Layer.succeed(Health, HealthApi{}),
+    kernel.Layer.succeed(ProcessInputsService, inputs),
+})) {
+    return kernel.Layer.mergeAll(.{
+        kernel.Layer.succeed(Health, .{}),
+        kernel.Layer.succeed(ProcessInputsService, inputs),
+    });
 }
 
 pub fn runWithOptions(init: std.process.Init, options: zstd.CausalRuntime.Options) !void {
-    const main_layer = rootLayer();
+    const port = if (init.environ_map.get("PORT")) |value| try std.fmt.parseInt(u16, value, 10) else 8080;
+    const main_layer = rootLayer(.{ .io = init.io, .port = port });
     var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
         init.gpa,
         init.io,
@@ -82,7 +87,7 @@ pub fn runWithOptions(init: std.process.Init, options: zstd.CausalRuntime.Option
         options,
     );
     defer runtime.deinit();
-    try runtime.run(serve(init).named("application.serve"));
+    try runtime.run(serve().named("application.serve"));
     try runtime.shutdown();
 }
 
@@ -109,7 +114,7 @@ test "runtime causal contract" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const main_layer = rootLayer();
+    const main_layer = rootLayer(.{ .io = std.testing.io, .port = 8080 });
     var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
         std.testing.allocator,
         std.testing.io,

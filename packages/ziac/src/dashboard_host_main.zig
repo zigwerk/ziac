@@ -7,8 +7,8 @@ var host: ziac.dashboard_host.Host = undefined;
 var config: ziac.dashboard_host.Config = undefined;
 var host_io: std.Io = undefined;
 var observer_stop = std.atomic.Value(bool).init(false);
-const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(std.process.Init);
-const DashboardRuntime = ziac.zstd.fx.kernel.RuntimeHandle(.{});
+const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{ziac.process_runtime.ProcessInputs});
+const DashboardRuntime = ziac.zstd.fx.kernel.RuntimeHandle(.{ziac.process_runtime.ProcessInputs});
 var dashboard_runtime: DashboardRuntime = undefined;
 
 fn returnStatic(event: *webui.Event, value: [:0]const u8) void {
@@ -255,10 +255,11 @@ fn configureWindow(window: *webui) !void {
 }
 
 pub fn main(init: std.process.Init) !void {
-    return ziac.process_runtime.run(init, "ziac-dashboard-host", MainProgram.init(init, runMain));
+    return ziac.process_runtime.run(init, "ziac-dashboard-host", MainProgram.fromFn(runMain));
 }
 
-fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !void {
+fn runMain(ctx: *MainProgram.Context) !void {
+    const init = ctx.service(ziac.process_runtime.ProcessInputs).init;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     const options = ziac.dashboard_host.parseLaunchArgs(args) orelse {
         std.debug.print("usage: ziac-dashboard-host [--server-only] [--root path] [--session path] [--logs path] <artifact.json>\n", .{});

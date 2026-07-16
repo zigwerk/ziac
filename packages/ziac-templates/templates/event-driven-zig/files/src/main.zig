@@ -68,17 +68,15 @@ fn handleConnection(io: std.Io, stream: std.Io.net.Stream, runtime: anytype) voi
     }) catch {};
 }
 
-const ServeBase = kernel.Effect(void, anyerror, .{EventWorker});
-const Serve = ServeBase.Stateful(std.process.Init);
+const ProcessInputs = struct { io: std.Io, port: u16 };
+const ProcessInputsService = kernel.Service("application/ProcessInputs", ProcessInputs);
+const Serve = kernel.Effect(void, anyerror, .{ EventWorker, ProcessInputsService });
 
-fn serve(init: std.process.Init) Serve {
-    return Serve.init(init, struct {
-        fn run(process: std.process.Init, ctx: *Serve.Context) anyerror!void {
-            const port = if (process.environ_map.get("PORT")) |value|
-                try std.fmt.parseInt(u16, value, 10)
-            else
-                8080;
-            var address = try std.Io.net.IpAddress.parseIp4("0.0.0.0", port);
+fn serve() Serve {
+    return Serve.fromFn(struct {
+        fn run(ctx: *Serve.Context) anyerror!void {
+            const process = ctx.service(ProcessInputsService);
+            var address = try std.Io.net.IpAddress.parseIp4("0.0.0.0", process.port);
             var listener = try address.listen(process.io, .{ .reuse_address = true });
             defer listener.deinit(process.io);
             while (true) {
@@ -90,13 +88,15 @@ fn serve(init: std.process.Init) Serve {
     }.run);
 }
 
-pub fn rootLayer(workflow: event_workflow.EventWorkflowApi) @TypeOf(kernel.Layer.mergeAll(.{
+pub fn rootLayer(workflow: event_workflow.EventWorkflowApi, inputs: ProcessInputs) @TypeOf(kernel.Layer.mergeAll(.{
     kernel.Layer.succeed(EventWorker, EventWorkerApi{}),
     kernel.Layer.succeed(event_workflow.EventWorkflow, workflow),
+    kernel.Layer.succeed(ProcessInputsService, inputs),
 })) {
     return kernel.Layer.mergeAll(.{
         kernel.Layer.succeed(EventWorker, .{}),
         kernel.Layer.succeed(event_workflow.EventWorkflow, workflow),
+        kernel.Layer.succeed(ProcessInputsService, inputs),
     });
 }
 
@@ -117,7 +117,8 @@ pub fn runWithOptions(init: std.process.Init, options: zstd.CausalRuntime.Option
     try event_workflow.registerDefinitionAtomic(init.gpa, init.io, statechart_dir, 16 * 1024 * 1024);
 
     var worker = event_workflow.LocalWorker{ .io = init.io };
-    const main_layer = rootLayer(.{ .journal = journal.asJournalStore(), .worker = worker.runtime() });
+    const port = if (init.environ_map.get("PORT")) |value| try std.fmt.parseInt(u16, value, 10) else 8080;
+    const main_layer = rootLayer(.{ .journal = journal.asJournalStore(), .worker = worker.runtime() }, .{ .io = init.io, .port = port });
     var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
         init.gpa,
         init.io,
@@ -126,7 +127,7 @@ pub fn runWithOptions(init: std.process.Init, options: zstd.CausalRuntime.Option
         options,
     );
     defer runtime.deinit();
-    try runtime.run(serve(init).named("application.serve"));
+    try runtime.run(serve().named("application.serve"));
     try runtime.shutdown();
 }
 
@@ -156,7 +157,7 @@ test "runtime causal contract" {
     var journal = zstd.fx.workflow.InMemoryJournalStore.init(std.testing.allocator);
     defer journal.deinit();
     var worker = event_workflow.ScriptedWorker{};
-    const main_layer = rootLayer(.{ .journal = journal.asJournalStore(), .worker = worker.runtime() });
+    const main_layer = rootLayer(.{ .journal = journal.asJournalStore(), .worker = worker.runtime() }, .{ .io = std.testing.io, .port = 8080 });
     var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
         std.testing.allocator,
         std.testing.io,
@@ -247,7 +248,7 @@ test "event workflow replays activities and records statechart decisions" {
     var journal = zstd.fx.workflow.InMemoryJournalStore.init(std.testing.allocator);
     defer journal.deinit();
     var worker = event_workflow.ScriptedWorker{};
-    const main_layer = rootLayer(.{ .journal = journal.asJournalStore(), .worker = worker.runtime() });
+    const main_layer = rootLayer(.{ .journal = journal.asJournalStore(), .worker = worker.runtime() }, .{ .io = std.testing.io, .port = 8080 });
     var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
         std.testing.allocator,
         std.testing.io,

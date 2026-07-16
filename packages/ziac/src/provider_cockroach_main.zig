@@ -1,13 +1,14 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
-const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(std.process.Init);
+const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{ziac.process_runtime.ProcessInputs});
 
 pub fn main(init: std.process.Init) !void {
-    return ziac.process_runtime.run(init, "ziac-provider-cockroach", MainProgram.init(init, runMain));
+    return ziac.process_runtime.run(init, "ziac-provider-cockroach", MainProgram.fromFn(runMain));
 }
 
-fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !void {
+fn runMain(ctx: *MainProgram.Context) !void {
+    const init = ctx.service(ziac.process_runtime.ProcessInputs).init;
     _ = ctx.recordCausal(.{
         .kind = .service_provided,
         .service_key = "ziac/ProviderRegistry",

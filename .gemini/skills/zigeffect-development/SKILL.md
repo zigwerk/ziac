@@ -50,6 +50,10 @@ bounded diagnostic artifact, never acceptance proof.
   workflow, statechart, artifact, and acceptance boundaries.
 - Use typed statecharts for inspectable control and durable workflows for
   replayable idempotent activities.
+- Compose statecharts with `zstd.Statechart.Effect.layer`/`step`, journals with
+  `zstd.Workflow.journalLayer`/`append`, and process signals with
+  `zstd.Application.Lifecycle.signalLayer()`. Child requests and jobs use
+  bounded `ctx.runtime()` handles, never a second runtime.
 - Never persist credentials, personal data, raw payloads, or terminal
   scrollback in causal or proof artifacts.
 

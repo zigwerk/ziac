@@ -3,6 +3,17 @@ const zstd = @import("zigeffect_std");
 
 pub const max_process_name_bytes: usize = 64;
 
+pub const ProcessInputsApi = struct {
+    pub const operations: []const []const u8 = &.{"ProcessInputs.read"};
+    init: std.process.Init,
+    process_name: []const u8,
+};
+pub const ProcessInputs = zstd.fx.kernel.Service("ziac/ProcessInputs", ProcessInputsApi);
+
+pub fn processLayer(init: std.process.Init, process_name: []const u8) @TypeOf(zstd.fx.kernel.Layer.succeed(ProcessInputs, .{ .init = init, .process_name = process_name })) {
+    return zstd.fx.kernel.Layer.succeed(ProcessInputs, .{ .init = init, .process_name = process_name });
+}
+
 /// Run one process program through the canonical durable ZigEffect runtime.
 /// The caller supplies an ordinary canonical Effect; services are composed in
 /// `runWithLayer` when a process has external capabilities.
@@ -11,8 +22,7 @@ pub fn run(
     process_name: []const u8,
     program: anytype,
 ) !@TypeOf(program).SuccessType {
-    const empty = zstd.fx.kernel.Layer.empty();
-    return runWithLayer(init, process_name, empty, program, .{});
+    return runWithLayer(init, process_name, zstd.fx.kernel.Layer.empty(), program, .{});
 }
 
 pub fn runWithLayer(
@@ -28,11 +38,12 @@ pub fn runWithLayer(
 
     var runtime_options = options;
     runtime_options.graph.path = graph_path;
-    var runtime = try zstd.ManagedRuntime(@TypeOf(root_layer)).make(
+    const main_layer = zstd.fx.kernel.Layer.mergeAll(.{ processLayer(init, process_name), root_layer });
+    var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
         init.gpa,
         init.io,
         std.Io.Dir.cwd(),
-        root_layer,
+        main_layer,
         runtime_options,
     );
     defer runtime.deinit();

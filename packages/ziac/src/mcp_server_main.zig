@@ -1,7 +1,7 @@
 const std = @import("std");
 const ziac = @import("ziac");
 
-const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{ziac.agent_tools.ContextService}).Stateful(std.process.Init);
+const MainProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{ ziac.process_runtime.ProcessInputs, ziac.agent_tools.ContextService });
 
 pub fn main(init: std.process.Init) !void {
     const raw_args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -11,10 +11,11 @@ pub fn main(init: std.process.Init) !void {
         .manifest_path = optionValue(raw_args[1..], "--development-project") orelse "zigeffect.project.json",
     };
     const root_layer = ziac.agent_tools.contextLayer(native_context.provider());
-    return ziac.process_runtime.runWithLayer(init, "ziac-mcp", root_layer, MainProgram.init(init, runMain), .{});
+    return ziac.process_runtime.runWithLayer(init, "ziac-mcp", root_layer, MainProgram.fromFn(runMain), .{});
 }
 
-fn runMain(init: std.process.Init, ctx: *MainProgram.Context) !void {
+fn runMain(ctx: *MainProgram.Context) !void {
+    const init = ctx.service(ziac.process_runtime.ProcessInputs).init;
     _ = ctx.recordCausal(.{
         .kind = .service_provided,
         .service_key = "ziac/ProcessSpawner",
