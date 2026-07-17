@@ -43,6 +43,10 @@ bounded diagnostic artifact, never acceptance proof.
   they never hide a runtime.
 - Applications compose one root layer and one managed runtime. Recording,
   embedded NenDB, application maps, and checked shutdown are runtime-owned.
+- Standard-library, transport and domain-framework adapters automatically emit
+  config, Schema, HTTP, gRPC, SQL, process, retry, workflow, statechart and
+  infrastructure semantics. Application code contains business logic and only
+  genuinely domain-specific typed events.
 - Controlled acceptance runtimes use the owning project or component root.
   Query at least one mapped assertion ID through the project-mounted graph
   before publishing; a temporary graph cannot support CLI proof.
@@ -56,6 +60,11 @@ bounded diagnostic artifact, never acceptance proof.
   bounded `ctx.runtime()` handles, never a second runtime.
 - Never persist credentials, personal data, raw payloads, or terminal
   scrollback in causal or proof artifacts.
+- Never use `CausalStore.init*`, `attachBackend`, `withCausalStore`,
+  `ctx.recordCausal`, `CausalJournalStore`, or `recordDecisionCausal` in product
+  code. Direct stores are framework-test fixtures; `context.causalStore()` is a
+  deterministic root-runtime test injection only. Follow
+  `packages/zigeffect/docs/runtime-owned-causal-applications.md`.
 
 ## Verification and handoff
 

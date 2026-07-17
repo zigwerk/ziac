@@ -152,6 +152,7 @@ test "runtime causal contract" {
         tmp.dir,
         main_layer,
         .{
+            // Test-only injection keeps assertions and the project graph on one runtime.
             .causal_store = context.causalStore(),
             .graph = .{ .path = ".zigeffect/graph", .max_records = 4096 },
         },
@@ -242,6 +243,7 @@ test "event workflow replays activities and records statechart decisions" {
         std.testing.io,
         tmp.dir,
         main_layer,
+        // Test-only injection keeps assertions and the project graph on one runtime.
         .{ .causal_store = context.causalStore(), .graph = .{ .path = ".zigeffect/graph", .max_records = 4096 } },
     );
     defer runtime.deinit();
@@ -284,7 +286,7 @@ test "event workflow replays activities and records statechart decisions" {
         .id = "statechart-causal",
         .label = "event statechart transition is causal",
         .source = workflow_contract_source,
-        .repair_hint = "record every statechart decision through the runtime causal store",
+        .repair_hint = "run decisions through the reusable workflow execution adapter",
     }, .{ .kind = .statechart_event_recorded, .label = "event-acknowledged", .status = "committed" });
     var causal_snapshot = try context.causalStore().snapshot(std.testing.allocator);
     defer causal_snapshot.deinit();

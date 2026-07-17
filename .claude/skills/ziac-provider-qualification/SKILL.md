@@ -35,7 +35,9 @@ causal ID, environment bound, limitation, and pass/fail/incomplete verdict.
 4. Verify deterministic read/diff/create/update/delete/import fixtures,
    replacement decisions, output secrecy, redaction, deadline behavior,
    interrupted-operation resume, import followed by no-op, drift repair and
-   versioned state migration where supported.
+   versioned state migration where supported. Reject candidate product code
+   that constructs causal stores, calls low-level recording APIs or accepts a
+   recorder instead of relying on the reusable provider adapter.
 5. Inspect the Testing v2 receipt. Discovered and executed counts must match;
    required tests, failures, pending tests, leaks and logged errors must be zero.
 6. Test from outside the Ziac source checkout against the declared Zig and Ziac

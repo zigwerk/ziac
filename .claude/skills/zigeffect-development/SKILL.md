@@ -60,7 +60,7 @@ Before editing application behavior:
    manifest-owned command, and one or more `test_scenarios`. Add missing intent
    to the manifest before implementing code.
 4. Read the component's public facade, service layers, schemas, existing tests,
-   and causal helpers. Do not infer a boundary from filenames alone.
+   and reusable boundary adapters. Do not infer a boundary from filenames alone.
 5. Ask for user direction only when the missing requirement or authority would
    materially change behavior. Treat invalid, unsupported, or conflicting
    contracts as blocking evidence.
@@ -94,9 +94,12 @@ Before editing application behavior:
   process, HTTP, SQL, IDs, logging, and tracing.
 - Use `zigeffect add` and `zigeffect generate` for conventional structure before
   hand-writing framework wiring.
-- Emit semantic application facts at CLI, config, schema, HTTP, SQL, process,
-  dependency, artifact, workflow, statechart, and acceptance boundaries. Attach
-  domain references and causal parents when they help an agent locate a fault.
+- Use standard-library, transport and domain-framework adapters for CLI,
+  config, Schema, HTTP, gRPC, SQL, process, dependency, artifact, workflow and
+  statechart facts. They derive a narrow recorder from the effect context and
+  emit automatically. Application code adds only genuinely domain-specific
+  events through a typed domain service when stable effect/service names cannot
+  preserve the meaning.
 - Use typed statecharts for inspectable long-lived control flow and durable
   statecharts for replayable workflows. Keep pure decisions separate from
   effectful commands.
@@ -104,14 +107,30 @@ Before editing application behavior:
   terminal scrollback in manifests, facts, receipts, fixtures, snapshots, or
   Workbench payloads.
 
+### Causal ownership anti-patterns
+
+- Never call `CausalStore.init*`, `attachBackend`, `withCausalStore`,
+  `ctx.recordCausal`, `CausalJournalStore`, or `recordDecisionCausal` from
+  application, handler, worker or provider code.
+- Never mirror lifecycle, logging, metric, tracing, retry, transport, workflow
+  or statechart events that the runtime or owning adapter already records.
+- Preserve direct store construction only in framework/backend conformance
+  tests. Preserve `context.causalStore()` injection only at a deterministic
+  acceptance test's one root managed runtime; that is test injection only.
+- When causal plumbing appears in product code, move structural recording into
+  ZigEffect and protocol/domain semantics into the reusable owning adapter.
+  Follow `packages/zigeffect/docs/runtime-owned-causal-applications.md`.
+
 ## Compose state machines and workflows
 
 - Provide typed finite-state definitions with `zstd.Statechart.Effect.layer`
   and execute decisions with `zstd.Statechart.Effect.step`; the pure decision
   remains testable while the runtime records service and statechart facts.
 - Provide durable journals with `zstd.Workflow.journalLayer`; use
-  `zstd.Workflow.append` and `readAll` through the owning runtime. Long-lived
-  workers derive a bounded `ctx.runtime()` handle for each job.
+  `zstd.Workflow.append` and `readAll` through the owning runtime. Use
+  `zstd.Workflow.execution` when directly interpreting a statechart workflow so
+  journal and decision recording are derived automatically. Long-lived workers
+  derive a bounded `ctx.runtime()` handle for each job.
 - Install `zstd.Application.Lifecycle.signalLayer()` at the process root and
   execute start, ready, drain, and stop as effects.
 

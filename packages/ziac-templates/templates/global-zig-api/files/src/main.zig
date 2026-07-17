@@ -115,6 +115,7 @@ test "runtime causal contract" {
         tmp.dir,
         main_layer,
         .{
+            // Test-only injection keeps assertions and the project graph on one runtime.
             .causal_store = context.causalStore(),
             .graph = .{ .path = ".zigeffect/graph", .max_records = 4096 },
         },

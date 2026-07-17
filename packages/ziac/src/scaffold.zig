@@ -568,6 +568,7 @@ const app_zig =
     \\    defer context.deinit();
     \\    const assertions = zstd.Testing.AssertionRecorder.init(&context);
     \\    const main_layer = rootLayer(.{ .io = std.testing.io, .port = 8080 });
+    \\    // Test-only injection keeps assertions and the project graph on one runtime.
     \\    var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(std.testing.allocator, std.testing.io, std.Io.Dir.cwd(), main_layer, .{ .causal_store = context.causalStore() });
     \\    defer runtime.deinit();
     \\    const result = try runtime.run(route("/health/live").named("test.health"));
@@ -665,7 +666,7 @@ const agent_skill =
     \\   affected scenarios, and proof references; state the counterfactual.
     \\3. Run `ziac check --stack global-api --stage dev --json` in the owning project.
     \\4. Add a failing deterministic Testing v2 scenario with `TestContext`, stable assertion IDs, test-only controlled causal-store injection, `noFindings`/`noPendingFibers`, and `mapCausalEventIds`. Mount the runtime at the owning project or component root and prove a mapped assertion ID through the project-mounted graph.
-    \\5. Make the smallest change through public Ziac and `zigeffect_std` APIs. Compose canonical applications with `Ziac.Application.layer` and `Ziac.Application.run`. Keep graph compilers pure; place external boundaries behind services and scoped layers. One executable owns one managed runtime and each request/job/command is a child effect. Application and provider code never create a causal store or call low-level causal APIs; runtime and Ziac adapters automatically emit infrastructure semantics.
+    \\5. Make the smallest change through public Ziac and `zigeffect_std` APIs. Compose canonical applications with `Ziac.Application.layer` and `Ziac.Application.run`. Keep graph compilers pure; place external boundaries behind services and scoped layers. One executable owns one managed runtime and each request/job/command is a child effect. Application and provider code never use `CausalStore.init*`, `attachBackend`, `withCausalStore`, `ctx.recordCausal`, `CausalJournalStore`, `recordDecisionCausal`, or recorders threaded through provider APIs; runtime and Ziac adapters automatically emit infrastructure semantics. Test-only root-runtime store injection remains valid.
     \\6. Run the affected requirement scenario and full package gate. Require
     \\   stable evidence under `.zigeffect/tests/process-receipts/` and
     \\   `.zigeffect/handoffs/tests/`; `.zigeffect/tests/raw-receipts/` is

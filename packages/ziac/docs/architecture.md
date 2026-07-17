@@ -7,6 +7,10 @@ application-facing standard library facade that Ziac imports as its substrate.
 Ziac provides the IaC product layer: stacks, resources, outputs, providers,
 state, plans, applies, and component libraries.
 
+The division between runtime structure, reusable adapter semantics, application
+intent and test-only injection is defined in
+[`../../zigeffect/docs/runtime-owned-causal-applications.md`](../../zigeffect/docs/runtime-owned-causal-applications.md).
+
 The agent-first control loop, hybrid development runtime, causal log plane,
 immutable OCI watch path, MCP authority boundary and ephemeral lease model are
 documented in `agent-development.md`. They reuse the resource graph, provider

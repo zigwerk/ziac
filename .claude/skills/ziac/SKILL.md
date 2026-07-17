@@ -40,6 +40,13 @@ Resolve `.dependencies.ziac.path` from the owning project's `build.zig.zon`. Tha
 8. Open `ziac dashboard` from the repository root to inspect the merged canvas. Filter to the changed project, its dependencies, or its consumers while retaining workspace context.
 9. Apply only an integrity-checked saved plan under an explicit capability envelope. Never expand apply, delete, secret, live-network, project, stage, region, or cost authority implicitly.
 
+The causal ownership boundary is defined in
+`packages/zigeffect/docs/runtime-owned-causal-applications.md`. Treat
+`CausalStore.init*`, `attachBackend`, `withCausalStore`, `ctx.recordCausal`,
+`CausalJournalStore`, `recordDecisionCausal`, and recorders threaded through
+provider APIs as product-code defects. Test-only root-runtime injection and
+framework conformance fixtures remain valid.
+
 For coordinated work, obey the work packet, allowed/excluded paths,
 dependencies, verification commands, graph baseline, lease, and fencing token.
 Re-query `ziac_context` or `agent context` before integration. Reject stale or

@@ -170,6 +170,8 @@ causal-store injection is confined to tests. See
 for the exact completed and remaining command/provider migration slices and
 [`docs/statecharts-and-workflows.md`](docs/statecharts-and-workflows.md) for the
 finite-state, durable activity, replay, catalog, and agent-debugging model.
+The cross-framework ownership rule is documented in
+[`../zigeffect/docs/runtime-owned-causal-applications.md`](../zigeffect/docs/runtime-owned-causal-applications.md).
 
 For agent development, the canonical first request is the MCP `ziac_context`
 tool. It uses ZigEffect's proof-carrying development compiler rather than a

@@ -56,9 +56,12 @@ commands, receipt/proof paths, causal IDs, limitations, and remaining authority.
    types, process loss, redaction, import followed by no-op and interrupted
    operation resume where applicable.
 6. Implement through public Ziac contracts. The engine retains graph order,
-   plan integrity, approvals, state commits, leases and checkpoints. Provider
-   stdout contains protocol frames only; bounded redacted diagnostics use the
-   defined error channel.
+   plan integrity, approvals, state commits, leases and checkpoints. Reusable
+   provider adapters automatically record provider RPC, retry/LRO, drift and
+   state semantics; provider implementations must not construct causal stores,
+   call low-level recording APIs or accept recorders as business parameters.
+   Provider stdout contains protocol frames only; bounded redacted diagnostics
+   use the defined error channel.
 7. Run `ziac package verify .`, `zig build provider-rpc-test` and
    `zig build test --summary failures` or the package's manifest-owned
    equivalents. Inspect the complete Testing v2 receipt.

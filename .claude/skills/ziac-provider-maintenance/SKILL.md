@@ -44,8 +44,11 @@ and remaining authenticated gates.
    no-op plans for unchanged resources, stable imports, typed errors, redaction,
    interrupted-operation recovery and downgrade diagnostics where supported.
 6. Implement the smallest adapter or generated-contract change. Handwritten
-   lifecycle policy wins over a blind generated rewrite. Never rewrite state in
-   place or silently broaden permissions.
+   lifecycle policy wins over a blind generated rewrite. Preserve the reusable
+   provider adapter's automatic RPC, retry/LRO, drift and state recording; do
+   not add causal stores, low-level recording calls or recorder parameters to
+   provider implementations. Never rewrite state in place or silently broaden
+   permissions.
 7. Run `ziac package verify .`, `zig build provider-rpc-test` and
    `zig build test --summary failures` or package-owned equivalents. Inspect the
    Testing v2 receipt and compare the compatibility matrix.
