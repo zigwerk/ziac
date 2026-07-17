@@ -47,6 +47,13 @@ bounded diagnostic artifact, never acceptance proof.
   config, Schema, HTTP, gRPC, SQL, process, retry, workflow, statechart and
   infrastructure semantics. Application code contains business logic and only
   genuinely domain-specific typed events.
+- For a product, order, tenant, user or workflow identity that must be
+  queryable, declare a privacy-classified `zstd.Lineage.Key` and scope the
+  owning effect with `.track(Key, value)`. Never pass lineage references through
+  business APIs or write raw identity values/baggage; runtime and gRPC adapters
+  propagate opaque references. Tests prove the raw value is absent. Authorized
+  queries use `runtime.lineageReference` and `runtime.graphLineageJsonAlloc`.
+  Follow `packages/zigeffect/docs/typed-data-lineage.md`.
 - Controlled acceptance runtimes use the owning project or component root.
   Query at least one mapped assertion ID through the project-mounted graph
   before publishing; a temporary graph cannot support CLI proof.

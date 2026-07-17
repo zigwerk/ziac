@@ -168,7 +168,7 @@ test "registry templates preserve the effectful application and pure compiler bo
         const compatibility = try readSource(compatibility_path);
         defer std.testing.allocator.free(compatibility);
         try std.testing.expect(std.mem.indexOf(u8, manifest, "{{project_name}}") != null);
-        try std.testing.expect(std.mem.indexOf(u8, compatibility, "\"template_version\":15") != null);
+        try std.testing.expect(std.mem.indexOf(u8, compatibility, "\"template_version\":16") != null);
     }
 }
 

@@ -347,7 +347,7 @@ const effect_project_json =
 ;
 
 const effect_compatibility_json =
-    \\{{"schema":"zigeffect.compatibility.v1","schema_version":1,"project":"{s}","kind":"application","project_schema":"zigeffect.project.v1","template_schema":"zigeffect.scaffold-template.v1","template_version":15,"cli_version":"0.7.0","minimum_zig_version":"0.16.0","maximum_zig_version_exclusive":"0.17.0","zigeffect_api":"0.1.x","zigeffect_std_api":"0.1.x"}}
+    \\{{"schema":"zigeffect.compatibility.v1","schema_version":1,"project":"{s}","kind":"application","project_schema":"zigeffect.project.v1","template_schema":"zigeffect.scaffold-template.v1","template_version":16,"cli_version":"0.7.0","minimum_zig_version":"0.16.0","maximum_zig_version_exclusive":"0.17.0","zigeffect_api":"0.1.x","zigeffect_std_api":"0.1.x"}}
 ;
 
 const self_host_project_json =
@@ -667,6 +667,7 @@ const agent_skill =
     \\3. Run `ziac check --stack global-api --stage dev --json` in the owning project.
     \\4. Add a failing deterministic Testing v2 scenario with `TestContext`, stable assertion IDs, test-only controlled causal-store injection, `noFindings`/`noPendingFibers`, and `mapCausalEventIds`. Mount the runtime at the owning project or component root and prove a mapped assertion ID through the project-mounted graph.
     \\5. Make the smallest change through public Ziac and `zigeffect_std` APIs. Compose canonical applications with `Ziac.Application.layer` and `Ziac.Application.run`. Keep graph compilers pure; place external boundaries behind services and scoped layers. One executable owns one managed runtime and each request/job/command is a child effect. Application and provider code never use `CausalStore.init*`, `attachBackend`, `withCausalStore`, `ctx.recordCausal`, `CausalJournalStore`, `recordDecisionCausal`, or recorders threaded through provider APIs; runtime and Ziac adapters automatically emit infrastructure semantics. Test-only root-runtime store injection remains valid.
+    \\   When a plan, resource, provider operation, or workflow identity must be queryable by value, the owning reusable Ziac adapter attaches a privacy-classified `zstd.Lineage.Key` with `.track(Key, value)`. Stack and application declarations never pass lineage references or baggage. Guarded queries use `runtime.lineageReference` and `runtime.graphLineageJsonAlloc`.
     \\6. Run the affected requirement scenario and full package gate. Require
     \\   stable evidence under `.zigeffect/tests/process-receipts/` and
     \\   `.zigeffect/handoffs/tests/`; `.zigeffect/tests/raw-receipts/` is

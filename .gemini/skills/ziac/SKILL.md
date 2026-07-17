@@ -32,6 +32,11 @@ Resolve `.dependencies.ziac.path` from the owning project's `build.zig.zon`. Tha
    Mount controlled acceptance runtimes at the owning project or component root
    and prove a mapped assertion ID through the project-mounted graph.
 5. Make the smallest typed change through public Ziac APIs and `zigeffect_std`. Compose canonical applications with `Ziac.Application.layer` and `Ziac.Application.run`. Keep pure resource/component graph compilers pure; place state, provider, process, network, clock, and filesystem boundaries behind services and scoped layers. One executable owns one managed runtime, and each request/job/command is a child effect. Application and provider code must not create a causal store or call low-level causal APIs; runtime and Ziac adapters automatically emit plan, resource, provider, retry/LRO, workflow, drift, and state semantics.
+   When a plan, resource, provider operation or workflow identity must be
+   queryable by value, the owning reusable Ziac adapter attaches a
+   privacy-classified `zstd.Lineage.Key` with `.track(Key, value)`. Stack and
+   application declarations never pass lineage references or baggage. Guarded
+   queries use `runtime.lineageReference` and `runtime.graphLineageJsonAlloc`.
 6. Run the affected requirement scenario and full package gate. Require stable
    evidence under `.zigeffect/tests/process-receipts/` and
    `.zigeffect/handoffs/tests/`; `.zigeffect/tests/raw-receipts/` is diagnostic.

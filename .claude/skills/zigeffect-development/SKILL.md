@@ -100,6 +100,17 @@ Before editing application behavior:
   emit automatically. Application code adds only genuinely domain-specific
   events through a typed domain service when stable effect/service names cannot
   preserve the meaning.
+- When a requirement calls for product, order, tenant, user or workflow data
+  lineage, declare a stable `zstd.Lineage.Key` and scope the business effect
+  with `.track(Key, value)`. Select `public`, `internal` or `personal` privacy,
+  `fiber` or `distributed` propagation, and `graph_only` or `otel` export at the
+  key declaration. Personal keys are graph-only. Never pass `Lineage.Set` or
+  `Lineage.Ref` through business service APIs and never add lineage baggage by
+  hand; the runtime, standard gRPC call and generated handlers propagate opaque
+  references automatically. Tests must prove the raw value is absent. Guarded
+  agent endpoints derive a reference with `runtime.lineageReference` and page
+  the durable slice with `runtime.graphLineageJsonAlloc` before graph path or
+  child queries. Follow `packages/zigeffect/docs/typed-data-lineage.md`.
 - Use typed statecharts for inspectable long-lived control flow and durable
   statecharts for replayable workflows. Keep pure decisions separate from
   effectful commands.
