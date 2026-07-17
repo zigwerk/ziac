@@ -316,10 +316,10 @@ fn runMain(ctx: *MainProgram.Context) !u8 {
         );
         watch_config = .{
             .runtime = live_watch_runtime.?.runtime(),
-            .workflow = .{
-                .journal = watch_workflow_store.?.asJournalStore(),
-                .causal_store = ctx.causalRecorder().store,
-            },
+            .workflow = ziac.watch_deploy.WorkflowRuntime.init(
+                ctx,
+                watch_workflow_store.?.asJournalStore(),
+            ),
             .envelope = .{
                 .id = "ziac-cli-saved-plan-watch",
                 .stages = &watch_stages,
@@ -379,20 +379,6 @@ fn runMain(ctx: *MainProgram.Context) !u8 {
     var verification_runner = ziac.agent_tools.NativeVerificationRunner{ .io = io };
     env.verification_runner = verification_runner.runner();
 
-    inline for (.{
-        .{ "ziac/ProjectCompiler", "project-program" },
-        .{ "ziac/StateStore", "selected-state-backend" },
-        .{ "ziac/ProviderRegistry", "acquired-provider-registry" },
-        .{ "ziac/ProcessSpawner", "bounded-native-process-runner" },
-    }) |service| {
-        _ = ctx.recordCausal(.{
-            .kind = .service_provided,
-            .service_key = service[0],
-            .label = service[1],
-            .status = "ready",
-            .redacted_detail = "process-owned",
-        });
-    }
     const code = try ziac.cli.run(allocator, args.items, &env);
     if (console.stdoutText().len > 0) {
         try std.Io.File.stdout().writeStreamingAll(io, console.stdoutText());

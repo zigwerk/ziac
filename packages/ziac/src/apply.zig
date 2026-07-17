@@ -37,12 +37,20 @@ pub fn applyOperationWithContext(
     checkpoint: ?checkpoint_mod.Checkpoint,
 ) ApplyError!void {
     context.state = store;
-    switch (operation.kind) {
-        .create => try applyCreate(context, store, provider, operation, checkpoint, .created),
-        .update => try applyUpdate(context, store, provider, operation, checkpoint),
-        .replace => try applyReplace(context, store, provider, operation, checkpoint),
-        .delete => try applyDelete(context, store, provider, operation, checkpoint),
+    const applied: ApplyError!void = switch (operation.kind) {
+        .create => applyCreate(context, store, provider, operation, checkpoint, .created),
+        .update => applyUpdate(context, store, provider, operation, checkpoint),
+        .replace => applyReplace(context, store, provider, operation, checkpoint),
+        .delete => applyDelete(context, store, provider, operation, checkpoint),
         .read, .noop => {},
+    };
+    applied catch |failure| {
+        context.recordStateFailure(operation.resource, failure);
+        return failure;
+    };
+    if (operation.kind != .read and operation.kind != .noop) {
+        const committed_status = if (store.get(operation.resource.id)) |record| @tagName(record.status) else "absent";
+        context.recordStateCommit(operation.resource, committed_status);
     }
 }
 
@@ -173,6 +181,7 @@ fn completePendingMutation(
 ) ApplyError!void {
     context.physical_id = pending.physical_id;
     context.operation_handle = pending.operation_handle;
+    context.recordLongRunningOperation(operation.resource, @tagName(operation.kind), "polling");
     var read = try provider.readWithContext(context, operation.resource);
     defer read.deinit();
     switch (read) {

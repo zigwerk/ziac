@@ -15,15 +15,20 @@ layer.
 
 One process owns one `ManagedRuntime`. The root layer provides domain services
 and workflow services. A process-level `FileJournalStore` is opened before the
-runtime, passed into the workflow service, and released after the runtime. The
-runtime's causal recorder wraps journal writes and records every statechart
-decision, so workflow and machine facts enter the same embedded NenDB graph as
-effects, layers, scopes, logs, traces, and provider boundaries.
+runtime, passed into the workflow service, and released after the runtime.
+Workflow code calls `zstd.Workflow.execution(ctx, allocator, journal)` and uses
+the returned journal and decision methods. That standard adapter obtains the
+runtime recorder internally, wraps journal writes, and records statechart
+decisions, so application code never receives a causal store or recorder.
+Workflow and machine facts enter the same embedded NenDB graph as effects,
+layers, scopes, logs, traces, plans and provider boundaries.
 
 The statechart decision produced from an activity result is parented to that
 activity's latest durable causal event. This joins both models into one
 traversable graph rather than leaving agents to correlate unrelated streams by
-timestamp.
+timestamp. Ziac adds infrastructure checkpoint meanings through its reusable
+workflow adapter; the application supplies only the journal, typed machine,
+activities and domain policy.
 
 Every durable activity needs:
 

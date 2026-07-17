@@ -1,0 +1,1 @@
+{"schema":"zigeffect.compatibility.v1","schema_version":1,"project":"{{project_name}}","kind":"package","project_schema":"zigeffect.project.v1","template_schema":"zigeffect.scaffold-template.v1","template_version":15,"cli_version":"0.7.0","minimum_zig_version":"0.16.0","maximum_zig_version_exclusive":"0.17.0","zigeffect_api":"0.1.x","zigeffect_std_api":"0.1.x"}

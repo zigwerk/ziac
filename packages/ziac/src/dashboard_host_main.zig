@@ -174,14 +174,7 @@ const CallbackProgram = ziac.zstd.fx.kernel.Effect(void, error{}, .{}).Stateful(
 
 fn callbackEffect(state: CallbackState) CallbackProgram {
     return CallbackProgram.init(state, struct {
-        fn run(callback: CallbackState, ctx: *CallbackProgram.Context) error{}!void {
-            _ = ctx.recordCausal(.{
-                .kind = .workflow_event_recorded,
-                .service_key = "ziac/DashboardHost",
-                .label = @tagName(callback.kind),
-                .status = "received",
-                .redacted_detail = "bounded-dashboard-bridge-call",
-            });
+        fn run(callback: CallbackState, _: *CallbackProgram.Context) error{}!void {
             switch (callback.kind) {
                 .load_artifact => loadArtifactImpl(callback.event),
                 .load_session => loadSessionImpl(callback.event),
@@ -265,13 +258,6 @@ fn runMain(ctx: *MainProgram.Context) !void {
         std.debug.print("usage: ziac-dashboard-host [--server-only] [--root path] [--session path] [--logs path] <artifact.json>\n", .{});
         return error.InvalidArguments;
     };
-    _ = ctx.recordCausal(.{
-        .kind = .service_provided,
-        .service_key = "ziac/DashboardHost",
-        .label = "dashboard-session",
-        .status = "starting",
-        .redacted_detail = "bounded-workspace-artifact",
-    });
     dashboard_runtime = ctx.runtime();
     host_io = init.io;
     const installed_root = if (std.mem.eql(u8, options.root_path, "dashboard/dist"))

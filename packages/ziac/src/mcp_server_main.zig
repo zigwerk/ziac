@@ -16,13 +16,6 @@ pub fn main(init: std.process.Init) !void {
 
 fn runMain(ctx: *MainProgram.Context) !void {
     const init = ctx.service(ziac.process_runtime.ProcessInputs).init;
-    _ = ctx.recordCausal(.{
-        .kind = .service_provided,
-        .service_key = "ziac/ProcessSpawner",
-        .label = "mcp-verification-runner",
-        .status = "ready",
-        .redacted_detail = "manifest-fixed-argv-only",
-    });
     const allocator = init.gpa;
     const raw_args = try init.minimal.args.toSlice(init.arena.allocator());
     const project_path = optionValue(raw_args[1..], "--project") orelse "ziac.project.json";
@@ -103,13 +96,6 @@ const RequestProgram = ziac.zstd.fx.kernel.Effect(?[]u8, anyerror, .{}).Stateful
 fn requestEffect(state: RequestState) RequestProgram {
     return RequestProgram.init(state, struct {
         fn run(request: RequestState, ctx: *RequestProgram.Context) anyerror!?[]u8 {
-            _ = ctx.recordCausal(.{
-                .kind = .workflow_event_recorded,
-                .service_key = "ziac/McpServer",
-                .label = "mcp.request",
-                .status = "received",
-                .redacted_detail = "bounded-jsonrpc-line",
-            });
             return ziac.mcp.handleProtocolRequestAlloc(
                 ctx.allocator(),
                 request.line,

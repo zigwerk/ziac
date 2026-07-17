@@ -28,10 +28,10 @@ Resolve `.dependencies.ziac.path` from the owning project's `build.zig.zon`. Tha
    Retain source/manifest identity, graph cursor, authority, omissions, affected
    scenarios, and proof references; state the causal counterfactual.
 3. Run `ziac check --stack global-api --stage dev --json` in the owning project.
-4. Add or update a deterministic Testing v2 scenario before behavior. Use `TestContext`, stable assertion IDs, the runtime's causal store, `noFindings`/`noPendingFibers`, and `mapCausalEventIds`.
+4. Add or update a deterministic Testing v2 scenario before behavior. Use `TestContext`, stable assertion IDs, test-only controlled causal-store injection, `noFindings`/`noPendingFibers`, and `mapCausalEventIds`.
    Mount controlled acceptance runtimes at the owning project or component root
    and prove a mapped assertion ID through the project-mounted graph.
-5. Make the smallest typed change through public Ziac APIs and `zigeffect_std`. Keep pure resource/component graph compilers pure; place state, provider, process, network, clock, and filesystem boundaries behind services and scoped layers. One executable owns one managed runtime, and each request/job/command is a child effect.
+5. Make the smallest typed change through public Ziac APIs and `zigeffect_std`. Compose canonical applications with `Ziac.Application.layer` and `Ziac.Application.run`. Keep pure resource/component graph compilers pure; place state, provider, process, network, clock, and filesystem boundaries behind services and scoped layers. One executable owns one managed runtime, and each request/job/command is a child effect. Application and provider code must not create a causal store or call low-level causal APIs; runtime and Ziac adapters automatically emit plan, resource, provider, retry/LRO, workflow, drift, and state semantics.
 6. Run the affected requirement scenario and full package gate. Require stable
    evidence under `.zigeffect/tests/process-receipts/` and
    `.zigeffect/handoffs/tests/`; `.zigeffect/tests/raw-receipts/` is diagnostic.
@@ -48,7 +48,7 @@ conflicting proof and hand off exact receipt/proof paths and causal IDs.
 ## Durable control flow
 
 - Use a typed finite statechart when a process has long-lived branching, retry, cancellation, approval, or recovery states that agents must inspect. Statechart context contains bounded values only; actions update context and emit typed commands without I/O.
-- Execute emitted commands as idempotent `WorkflowContext.activity` operations behind services from the root layer. Derive keys from immutable execution identity, use bounded codecs and typed failures, and keep the caller responsible for the journal lifetime.
+- Execute emitted commands as idempotent `WorkflowContext.activity` operations behind services from the root layer. Derive keys from immutable execution identity, use bounded codecs and typed failures, and keep the caller responsible for the journal lifetime. Use `zstd.Workflow.execution` for automatic journal and statechart recording; do not pass a causal store into the workflow.
 - Production roots use a crash-safe `FileJournalStore`; deterministic unit tests may use `InMemoryJournalStore`, but acceptance must prove replay or reopen without repeating completed external work.
 - Register definitions with `zstd.Statechart.registerDefinitionAtomic`. Inspect `zigeffect statechart list --json`, the affected machine, and NenDB workflow/statechart events before and after a change.
 

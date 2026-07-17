@@ -90,8 +90,8 @@ test "Ziac native development context endpoint compiles bounded reconciled proje
         .label = "context compilation is recorded by the owning managed runtime",
         .repair_hint = "interpret ContextService through the process managed runtime",
     }, .{
-        .kind = .activity_completed,
-        .label = "DevelopmentContext.compile",
+        .kind = .effect_completed,
+        .label = "ziac.context.compile",
         .status = "success",
     });
     try assertions.noPendingFibers(.{
@@ -116,7 +116,7 @@ test "Ziac native development context endpoint compiles bounded reconciled proje
         for (assertion.causal_event_ids) |event_id| {
             const record = try project_graph.recordJsonAlloc(std.testing.allocator, event_id);
             defer std.testing.allocator.free(record);
-            if (std.mem.indexOf(u8, record, "DevelopmentContext.compile") != null) {
+            if (std.mem.indexOf(u8, record, "ziac.context.compile") != null) {
                 mapped_context_event_is_queryable = true;
             }
         }

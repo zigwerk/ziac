@@ -26,15 +26,17 @@ Each generated application also contains `zigeffect.project.json` and tracked
 compatibility metadata. Its Zig entry point declares typed services and a root
 layer, constructs one managed runtime, and runs requests or jobs as child
 effects. The runtime automatically records structural and semantic events into
-the embedded NenDB graph. Tests use Testing v2 with the same causal store and
-map assertion-local event IDs to durable graph IDs before handoff.
+the embedded NenDB graph. Generated application code does not call causal APIs.
+Testing v2 alone may inject a controlled store, inspect semantic facts, and map
+assertion-local event IDs to durable graph IDs before handoff.
 
 Event-driven projects additionally generate a typed finite statechart and a
 durable `EventWorkflow` service. The process opens one crash-safe journal, the
 root layer provides it, activities isolate external work, and replay never
 repeats a completed activity. Machine definitions and portable projections are
 registered under `.zigeffect/statecharts`; live workflow and transition facts
-remain queryable in the same NenDB graph. See
+are projected automatically through `zstd.Workflow.execution` and remain
+queryable in the same NenDB graph. See
 [`statecharts-and-workflows.md`](statecharts-and-workflows.md).
 
 ## Generated Agent Surfaces

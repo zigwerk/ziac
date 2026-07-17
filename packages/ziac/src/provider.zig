@@ -2,6 +2,7 @@ const std = @import("std");
 const fx = @import("zigeffect_std").fx;
 const provider_error = @import("provider_error.zig");
 const resource = @import("resource.zig");
+const runtime_events = @import("runtime_events.zig");
 const state = @import("state.zig");
 const value = @import("value.zig");
 
@@ -129,6 +130,8 @@ pub const OperationContext = struct {
     operation_handle: ?[]const u8 = null,
     destructive_confirmation: bool = false,
     diagnostics: ?*provider_error.DiagnosticRecorder = null,
+    runtime_events: runtime_events.Recorder = .disabled,
+    last_runtime_event_id: ?u64 = null,
 
     pub fn init(allocator: std.mem.Allocator) OperationContext {
         return .{ .allocator = allocator };
@@ -161,6 +164,38 @@ pub const OperationContext = struct {
     pub fn recordDiagnostic(self: *OperationContext, source: provider_error.DiagnosticSource) void {
         const recorder = self.diagnostics orelse return;
         recorder.record(source) catch {};
+    }
+
+    pub fn beginProviderCall(self: *OperationContext, node: resource.ResourceNode, method: []const u8) void {
+        self.linkRuntimeEvent(self.runtime_events.child(self.last_runtime_event_id).providerRpc(node.id, method, "started"));
+    }
+
+    pub fn completeProviderCall(self: *OperationContext, node: resource.ResourceNode, method: []const u8, status: []const u8) void {
+        self.linkRuntimeEvent(self.runtime_events.child(self.last_runtime_event_id).providerRpc(node.id, method, status));
+    }
+
+    pub fn recordRetry(self: *OperationContext, node: resource.ResourceNode, operation: []const u8) void {
+        self.linkRuntimeEvent(self.runtime_events.child(self.last_runtime_event_id).retry(node.id, operation, "scheduled"));
+    }
+
+    pub fn recordLongRunningOperation(self: *OperationContext, node: resource.ResourceNode, operation: []const u8, status: []const u8) void {
+        self.linkRuntimeEvent(self.runtime_events.child(self.last_runtime_event_id).longRunningOperation(node.id, operation, status));
+    }
+
+    pub fn recordDrift(self: *OperationContext, node: resource.ResourceNode, status: []const u8) void {
+        self.linkRuntimeEvent(self.runtime_events.child(self.last_runtime_event_id).drift(node.id, status, "provider-diff"));
+    }
+
+    pub fn recordStateCommit(self: *OperationContext, node: resource.ResourceNode, status: []const u8) void {
+        self.linkRuntimeEvent(self.runtime_events.child(self.last_runtime_event_id).stateCommit(node.id, status, "success"));
+    }
+
+    pub fn recordStateFailure(self: *OperationContext, node: resource.ResourceNode, failure: anyerror) void {
+        self.linkRuntimeEvent(self.runtime_events.child(self.last_runtime_event_id).stateCommit(node.id, @errorName(failure), "failure"));
+    }
+
+    fn linkRuntimeEvent(self: *OperationContext, event_id: ?u64) void {
+        self.last_runtime_event_id = event_id orelse self.last_runtime_event_id;
     }
 
     pub fn resolveOutputString(
@@ -219,7 +254,13 @@ pub const Provider = struct {
         context: *OperationContext,
         node: resource.ResourceNode,
     ) ProviderError!ReadResult {
-        return self.readFn(self.ptr, context, node);
+        context.beginProviderCall(node, "read");
+        const result = self.readFn(self.ptr, context, node) catch |failure| {
+            context.completeProviderCall(node, "read", "failure");
+            return failure;
+        };
+        context.completeProviderCall(node, "read", "success");
+        return result;
     }
 
     pub fn diff(
@@ -238,7 +279,14 @@ pub const Provider = struct {
         node: resource.ResourceNode,
         observed: *const ResourceResult,
     ) ProviderError!DiffResult {
-        return self.diffFn(self.ptr, context, node, observed);
+        context.beginProviderCall(node, "diff");
+        const result = self.diffFn(self.ptr, context, node, observed) catch |failure| {
+            context.completeProviderCall(node, "diff", "failure");
+            return failure;
+        };
+        context.completeProviderCall(node, "diff", "success");
+        context.recordDrift(node, @tagName(result.kind));
+        return result;
     }
 
     pub fn create(
@@ -255,7 +303,14 @@ pub const Provider = struct {
         context: *OperationContext,
         node: resource.ResourceNode,
     ) ProviderError!ResourceResult {
-        return self.createFn(self.ptr, context, node);
+        context.beginProviderCall(node, "create");
+        const result = self.createFn(self.ptr, context, node) catch |failure| {
+            context.completeProviderCall(node, "create", "failure");
+            return failure;
+        };
+        context.completeProviderCall(node, "create", "success");
+        if (!result.completed) context.recordLongRunningOperation(node, "create", "pending");
+        return result;
     }
 
     pub fn update(
@@ -274,7 +329,14 @@ pub const Provider = struct {
         node: resource.ResourceNode,
         observed: *const ResourceResult,
     ) ProviderError!ResourceResult {
-        return self.updateFn(self.ptr, context, node, observed);
+        context.beginProviderCall(node, "update");
+        const result = self.updateFn(self.ptr, context, node, observed) catch |failure| {
+            context.completeProviderCall(node, "update", "failure");
+            return failure;
+        };
+        context.completeProviderCall(node, "update", "success");
+        if (!result.completed) context.recordLongRunningOperation(node, "update", "pending");
+        return result;
     }
 
     pub fn delete(self: Provider, node: resource.ResourceNode, physical_id: []const u8) ProviderError!void {
@@ -288,7 +350,12 @@ pub const Provider = struct {
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!void {
-        return self.deleteFn(self.ptr, context, node, physical_id);
+        context.beginProviderCall(node, "delete");
+        self.deleteFn(self.ptr, context, node, physical_id) catch |failure| {
+            context.completeProviderCall(node, "delete", "failure");
+            return failure;
+        };
+        context.completeProviderCall(node, "delete", "success");
     }
 
     pub fn importResource(
@@ -307,7 +374,14 @@ pub const Provider = struct {
         node: resource.ResourceNode,
         physical_id: []const u8,
     ) ProviderError!ResourceResult {
-        return self.importFn(self.ptr, context, node, physical_id);
+        context.beginProviderCall(node, "import");
+        const result = self.importFn(self.ptr, context, node, physical_id) catch |failure| {
+            context.completeProviderCall(node, "import", "failure");
+            return failure;
+        };
+        context.completeProviderCall(node, "import", "success");
+        if (!result.completed) context.recordLongRunningOperation(node, "import", "pending");
+        return result;
     }
 };
 

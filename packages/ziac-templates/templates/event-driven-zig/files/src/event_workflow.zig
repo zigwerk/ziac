@@ -221,14 +221,9 @@ pub fn process(input: EventInput) Process {
             const execution_key = try std.fmt.allocPrint(allocator, "event:{s}", .{event_input.id});
             defer allocator.free(execution_key);
 
-            var causal_journal = fx.workflow.CausalJournalStore.init(
-                allocator,
-                service.journal,
-                effect_context.causalRecorder().store,
-                null,
-            );
-            defer causal_journal.deinit();
-            const journal = causal_journal.asJournalStore();
+            var execution = zstd.Workflow.execution(effect_context, allocator, service.journal);
+            defer execution.deinit();
+            const journal = execution.journal();
             try ensureStarted(allocator, journal, workflow_id, execution_id, execution_key, service.worker.nowMillis());
             var workflow = try fx.workflow.WorkflowContext.init(allocator, journal, .{
                 .workflow_id = workflow_id,
@@ -250,13 +245,11 @@ pub fn process(input: EventInput) Process {
                 transition_count += 1;
                 const decision = try Machine.step(&definition, snapshot, next_event);
                 if (decision.outcome != .transitioned) return error.WorkflowEventIgnored;
-                parent_id = try fx.statechart.recordDecisionCausal(
+                parent_id = try execution.decision(
                     Definition,
-                    effect_context.causalRecorder().store,
-                    allocator,
                     &definition,
                     &decision,
-                    causal_journal.latestCausalId() orelse parent_id,
+                    parent_id,
                 );
                 snapshot = decision.next;
                 if (snapshot.status != .active) break;

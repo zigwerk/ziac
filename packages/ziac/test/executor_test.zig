@@ -226,15 +226,138 @@ test "retryable failures use the configured deterministic zigeffect schedule" {
     fake.fail_next = error.TransientFailure;
     const registry = registryFor(&fake);
     var clock = ziac.fx.Clock.fake(100);
+    var causal = ziac.fx.CausalStore.init(std.testing.allocator);
+    defer causal.deinit();
 
-    try ziac.executor.executePlan(std.testing.allocator, &plan, &state, registry, .{
-        .clock = &clock,
-        .retry_schedule = ziac.fx.Schedule.fixed(.{ .max_retries = 2, .delay_ms = 25 }),
-    });
+    try ziac.executor.executePlanObserved(
+        std.testing.allocator,
+        &plan,
+        &state,
+        registry,
+        .{
+            .clock = &clock,
+            .retry_schedule = ziac.fx.Schedule.fixed(.{ .max_retries = 2, .delay_ms = 25 }),
+        },
+        ziac.runtime_events.Recorder.fromStore(&causal),
+    );
 
     try std.testing.expectEqual(@as(usize, 2), fake.operationAttempts());
     try std.testing.expectEqual(@as(u64, 125), clock.nowMs());
     try std.testing.expectEqual(ziac.ResourceStatus.created, state.get("service").?.status);
+    var retry_snapshot = try causal.snapshot(std.testing.allocator);
+    defer retry_snapshot.deinit();
+    var saw_retry = false;
+    for (retry_snapshot.events) |event| {
+        if (ziac.runtime_events.kindFromEvent(event) == .retry) saw_retry = true;
+    }
+    try std.testing.expect(saw_retry);
+}
+
+test "long-running provider operations join polling to the terminal state commit" {
+    var graph = ziac.ResourceGraph.init(std.testing.allocator);
+    defer graph.deinit();
+    try addNode(&graph, "service");
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    var plan = try ziac.plan.buildPlan(std.testing.allocator, &graph, &state);
+    defer plan.deinit();
+    var fake = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.result_operation_handle = "operations/create-service";
+    fake.result_completed = false;
+    var causal = ziac.fx.CausalStore.init(std.testing.allocator);
+    defer causal.deinit();
+
+    try ziac.executor.executePlanObserved(
+        std.testing.allocator,
+        &plan,
+        &state,
+        registryFor(&fake),
+        .{},
+        ziac.runtime_events.Recorder.fromStore(&causal),
+    );
+
+    var snapshot = try causal.snapshot(std.testing.allocator);
+    defer snapshot.deinit();
+    var saw_lro = false;
+    var saw_commit = false;
+    for (snapshot.events) |event| {
+        const kind = ziac.runtime_events.kindFromEvent(event) orelse continue;
+        if (kind == .long_running_operation) saw_lro = true;
+        if (kind == .state_commit and std.mem.eql(u8, event.status, "success")) saw_commit = true;
+    }
+    try std.testing.expect(saw_lro);
+    try std.testing.expect(saw_commit);
+}
+
+test "planned updates automatically record drift before provider work and state commit" {
+    var initial = ziac.ResourceGraph.init(std.testing.allocator);
+    defer initial.deinit();
+    try initial.addResource(.{
+        .id = "service",
+        .provider = .gcp,
+        .type_name = "gcp.test.Resource",
+        .logical_id = "service",
+        .inputs = .{ .object = &.{.{ .name = "revision", .value = .{ .string = "one" } }} },
+    });
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    var fake = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer fake.deinit();
+    var initial_plan = try ziac.plan.buildPlan(std.testing.allocator, &initial, &state);
+    defer initial_plan.deinit();
+    try ziac.executor.executePlan(std.testing.allocator, &initial_plan, &state, registryFor(&fake), .{});
+
+    var changed = ziac.ResourceGraph.init(std.testing.allocator);
+    defer changed.deinit();
+    try changed.addResource(.{
+        .id = "service",
+        .provider = .gcp,
+        .type_name = "gcp.test.Resource",
+        .logical_id = "service",
+        .inputs = .{ .object = &.{.{ .name = "revision", .value = .{ .string = "two" } }} },
+    });
+    var changed_plan = try ziac.plan.buildPlan(std.testing.allocator, &changed, &state);
+    defer changed_plan.deinit();
+    var causal = ziac.fx.CausalStore.init(std.testing.allocator);
+    defer causal.deinit();
+    try ziac.executor.executePlanObserved(
+        std.testing.allocator,
+        &changed_plan,
+        &state,
+        registryFor(&fake),
+        .{},
+        ziac.runtime_events.Recorder.fromStore(&causal),
+    );
+
+    var snapshot = try causal.snapshot(std.testing.allocator);
+    defer snapshot.deinit();
+    var drift_id: ?u64 = null;
+    var commit_parent: ?u64 = null;
+    for (snapshot.events) |event| {
+        const kind = ziac.runtime_events.kindFromEvent(event) orelse continue;
+        if (kind == .drift and std.mem.eql(u8, event.status, "update")) drift_id = event.id;
+        if (kind == .state_commit and std.mem.eql(u8, event.status, "success")) commit_parent = event.parent_id;
+    }
+    try std.testing.expect(drift_id != null);
+    try std.testing.expect(commit_parent != null);
+    var cursor = commit_parent;
+    var drift_is_ancestor = false;
+    while (cursor) |event_id| {
+        if (event_id == drift_id.?) {
+            drift_is_ancestor = true;
+            break;
+        }
+        var parent: ?u64 = null;
+        for (snapshot.events) |event| {
+            if (event.id == event_id) {
+                parent = event.parent_id;
+                break;
+            }
+        }
+        cursor = parent;
+    }
+    try std.testing.expect(drift_is_ancestor);
 }
 
 test "non-retryable failures stop immediately" {
@@ -380,15 +503,20 @@ test "execution records redacted causal operation facts" {
     var causal = ziac.fx.CausalStore.init(std.testing.allocator);
     defer causal.deinit();
 
-    try ziac.executor.executePlan(std.testing.allocator, &plan, &state, registry, .{
-        .causal_store = &causal,
-    });
+    try ziac.executor.executePlanObserved(
+        std.testing.allocator,
+        &plan,
+        &state,
+        registry,
+        .{},
+        ziac.runtime_events.Recorder.fromStore(&causal),
+    );
     var snapshot = try causal.snapshot(std.testing.allocator);
     defer snapshot.deinit();
 
     var operation_events: usize = 0;
     for (snapshot.events) |event| {
-        if (event.kind != .workflow_event_recorded) continue;
+        if (ziac.runtime_events.kindFromEvent(event) == null) continue;
         operation_events += 1;
         try std.testing.expect(std.mem.indexOf(u8, event.label, "never-record-me") == null);
     }

@@ -33,6 +33,12 @@ are `ziac-provider-creator`, `ziac-provider-maintainer` and
 6. Verify the package and RPC process, then hand one immutable candidate digest
    to the independent qualifier.
 
+Provider implementations return typed lifecycle results and diagnostics; they
+do not record causal facts themselves. Ziac's provider and executor adapters
+automatically bracket every read/diff/create/update/delete/import call, accepted
+retry, long-running-operation checkpoint and state commit. Tests may inject a
+controlled runtime store to prove those facts and their parent path.
+
 The creator and maintainer work in source. The qualifier works from a frozen
 candidate and returns `pass`, `fail` or `incomplete`; it never fixes the
 candidate during the same run.

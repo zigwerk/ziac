@@ -125,8 +125,31 @@ Ziac's control plane runs on the canonical ZigEffect kernel. Every shipped
 process root owns one managed runtime with automatic durable NenDB recording.
 `ziac.application` exports stable `ProjectCompiler`, `StateStore`,
 `ProviderRegistry`, and `ProcessSpawner` tags plus requirements-typed
-plan/execute effects. Bounded executor work uses the owning runtime and causal
-recorder; it never creates a nested runtime.
+plan/execute effects. `Ziac.Application` is the public composition facade:
+
+```zig
+const live = Ziac.Application.layer(.{
+    .stack = &stack,
+    .state = &state,
+    .providers = providers,
+});
+var runtime = try zstd.ManagedRuntime(@TypeOf(live)).make(
+    allocator,
+    io,
+    project_dir,
+    live,
+    .{},
+);
+try Ziac.Application.run(&runtime);
+```
+
+The state capability remains explicit because it is infrastructure authority,
+not observability plumbing; it may be a deterministic test store or a
+production state layer. Application code never creates a causal store, calls a
+causal recorder, or describes graph persistence. The managed runtime owns that
+lifecycle, while reusable Ziac planner, executor, provider and state adapters
+automatically emit the semantic path `plan -> resource operation -> provider
+RPC -> retry/LRO -> state commit`.
 
 Pure resource declarations, graph validation, hashes and deterministic plan
 calculation remain ordinary Zig. State backends, locks, provider processes,
@@ -140,7 +163,9 @@ zigeffect graph since 0 --limit 128 --json
 
 Generated projects contain both `ziac.project.json` and
 `zigeffect.project.json`, compatibility metadata, typed service/layer code,
-one managed runtime, and Testing v2 causal acceptance tests. See
+one managed runtime, and Testing v2 causal acceptance tests. Generated
+application sections contain domain services and effects only; controlled
+causal-store injection is confined to tests. See
 [`docs/zigeffect-composition-roadmap.md`](docs/zigeffect-composition-roadmap.md)
 for the exact completed and remaining command/provider migration slices and
 [`docs/statecharts-and-workflows.md`](docs/statecharts-and-workflows.md) for the

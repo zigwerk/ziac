@@ -83,10 +83,16 @@ test "watch deployment composes a typed statechart with replay-safe workflow act
             .owner_id = "ziac-workflow-acceptance-first",
         });
         defer journal.deinit();
-        break :first_execution try ziac.watch_deploy.executeWorkflow(std.testing.allocator, .{
-            .journal = journal.asJournalStore(),
-            .causal_store = evidence.causalStore(),
-        }, provider.runtime(), envelope(), input);
+        break :first_execution try ziac.watch_deploy.executeWorkflow(
+            std.testing.allocator,
+            ziac.watch_deploy.WorkflowRuntime.initTest(
+                journal.asJournalStore(),
+                ziac.runtime_events.Recorder.fromStore(evidence.causalStore()),
+            ),
+            provider.runtime(),
+            envelope(),
+            input,
+        );
     };
     const replayed = replay_execution: {
         var reopened = try zstd.fx.workflow.FileJournalStore.open(std.testing.allocator, std.testing.io, &journal_dir.dir, .{
@@ -94,10 +100,16 @@ test "watch deployment composes a typed statechart with replay-safe workflow act
             .owner_id = "ziac-workflow-acceptance-reopened",
         });
         defer reopened.deinit();
-        break :replay_execution try ziac.watch_deploy.executeWorkflow(std.testing.allocator, .{
-            .journal = reopened.asJournalStore(),
-            .causal_store = evidence.causalStore(),
-        }, provider.runtime(), envelope(), input);
+        break :replay_execution try ziac.watch_deploy.executeWorkflow(
+            std.testing.allocator,
+            ziac.watch_deploy.WorkflowRuntime.initTest(
+                reopened.asJournalStore(),
+                ziac.runtime_events.Recorder.fromStore(evidence.causalStore()),
+            ),
+            provider.runtime(),
+            envelope(),
+            input,
+        );
     };
 
     try assertions.boolean(.{

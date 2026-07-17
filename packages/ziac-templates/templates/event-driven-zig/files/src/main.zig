@@ -16,14 +16,8 @@ const Validate = ValidateBase.Stateful([]const u8);
 fn validateEvent(name: []const u8) Validate {
     return Validate.init(name, struct {
         fn run(event_name: []const u8, ctx: *Validate.Context) error{}!bool {
+            _ = ctx.service(EventWorker);
             const valid = event_name.len > 0 and std.mem.indexOfAny(u8, event_name, "\r\n") == null;
-            _ = ctx.recordCausal(.{
-                .kind = .activity_completed,
-                .service_key = EventWorker.service_key,
-                .label = "EventWorker.validate",
-                .status = if (valid) "success" else "invalid",
-                .redacted_detail = "event-envelope",
-            });
             return valid;
         }
     }.run);
@@ -36,14 +30,8 @@ const Route = RouteBase.Stateful([]const u8);
 fn route(target: []const u8) Route {
     return Route.init(target, struct {
         fn run(path: []const u8, ctx: *Route.Context) error{}!RouteResult {
+            _ = ctx.service(EventWorker);
             const found = std.mem.eql(u8, path, "/") or std.mem.eql(u8, path, "/health/live") or std.mem.eql(u8, path, "/health/startup");
-            _ = ctx.recordCausal(.{
-                .kind = .activity_completed,
-                .service_key = EventWorker.service_key,
-                .label = "EventWorker.route",
-                .status = if (found) "success" else "not_found",
-                .redacted_detail = path,
-            });
             return .{
                 .status = if (found) .ok else .not_found,
                 .body = if (found) "{\"status\":\"ok\"}" else "{\"error\":\"not found\"}",
@@ -188,14 +176,14 @@ test "runtime causal contract" {
         .id = "event-causal",
         .label = "event validation is causal",
         .source = runtime_contract_source,
-        .repair_hint = "record EventWorker.validate through the runtime",
-    }, .{ .kind = .activity_completed, .label = "EventWorker.validate", .status = "success" });
+        .repair_hint = "run event validation as a named effect",
+    }, .{ .kind = .effect_completed, .label = "test.event", .status = "success" });
     _ = try assertions.event(.{
         .id = "health-causal",
         .label = "health operation is causal",
         .source = runtime_contract_source,
-        .repair_hint = "record EventWorker.route through the runtime",
-    }, .{ .kind = .activity_completed, .label = "EventWorker.route", .status = "success" });
+        .repair_hint = "run the health route as a named effect",
+    }, .{ .kind = .effect_completed, .label = "test.health", .status = "success" });
 
     var snapshot = try runtime.inspect(std.testing.allocator, .{ .max_recent_events = 128 });
     defer snapshot.deinit();

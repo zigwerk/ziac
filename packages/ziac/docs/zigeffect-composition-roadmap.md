@@ -1,10 +1,10 @@
 # Ziac Canonical ZigEffect Composition Roadmap
 
-**Audited and implemented:** 2026-07-16
-**Status:** the canonical runtime foundation, external tags, plan/execute
-effects, injected process-input layers, owning runtimes, durable NenDB graph,
-project intent, and generated application roots are implemented. Provider and
-state-client acquisition inside the large CLI adapter remains explicit debt.
+**Audited and implemented:** 2026-07-17
+**Status:** `Ziac.Application`, runtime-owned causal recording, semantic
+planner/executor/provider/state adapters, generated application roots and
+automatic workflow recording are implemented. Provider and state-client
+acquisition inside the large CLI adapter remains explicit debt.
 
 | Surface | Status | Use for new Ziac composition? |
 | --- | --- | --- |
@@ -12,7 +12,8 @@ state-client acquisition inside the large CLI adapter remains explicit debt.
 | `zstd.FileSystem`, `Process`, Config, Console canonical operations | Z0 available | Yes |
 | `cli.Env` adapter record | Transitional command adapter | No new use |
 | Canonical ProjectCompiler, StateStore, ProviderRegistry, ProcessSpawner tags | Implemented | Yes |
-| Canonical plan/execute Effects and root layer | Implemented | Yes |
+| `Ziac.Application.layer`, program and checked run lifecycle | Implemented | Yes |
+| Automatic plan/resource/provider/retry/LRO/state causal path | Implemented | Yes |
 | Scoped provider-process and state-backend layers | Pending Z2-Z3 | Not yet complete |
 
 ## Finding
@@ -24,10 +25,13 @@ database deliberately holds an exclusive process lock. `zigeffect graph ...`
 therefore gives agents a stable default view of command execution without
 allowing multiple daemons to corrupt one WAL.
 
-`src/application.zig` defines the stable external tags and canonical
-requirements-typed plan/execute effects. `executor.executePlan` no longer
-constructs a nested context or calls the retired interpreter: bounded batches
-use the owning runtime's executor and causal recorder directly.
+`src/application.zig` defines the stable external tags, the public
+`Ziac.Application` facade and canonical requirements-typed plan/execute
+effects. `executor.executePlan` no longer constructs a nested context or calls
+the retired interpreter: bounded batches use the owning runtime's executor.
+`src/runtime_events.zig` is the only bridge from Ziac infrastructure semantics
+to the runtime recorder. Application roots and provider implementations contain
+no causal plumbing.
 
 The resource model should not be rewritten. Typed declarations, graph
 validation, hashes, binding resolution, diff calculation, operation ordering,
@@ -90,13 +94,13 @@ std defaults + filesystem/process layers
                  |
  state-client layer + provider-process layers + project compiler layer
                  |
-            process MainLayer
+       Ziac.Application.layer + process services
                  |
              ManagedRuntime
                  |
  CLI / MCP / dashboard / worker request -> command Effect -> child scopes
                  |
-      pure plan + effectful refresh/execute/checkpoint
+ pure plan -> resource -> provider RPC -> retry/LRO -> state commit
 ```
 
 ## Ordered Gates

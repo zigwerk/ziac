@@ -39,24 +39,7 @@ pub fn compileContext(arguments_json: []const u8) CompileContextEffect {
     return CompileContextEffect.init(arguments_json, struct {
         fn run(arguments: []const u8, ctx: *CompileContextEffect.Context) anyerror![]u8 {
             const provider = ctx.service(ContextService).*;
-            const result = provider.compileAlloc(ctx.allocator(), arguments) catch |failure| {
-                _ = ctx.recordCausal(.{
-                    .kind = .activity_completed,
-                    .service_key = ContextService.service_key,
-                    .label = "DevelopmentContext.compile",
-                    .status = "failure",
-                    .redacted_detail = @errorName(failure),
-                });
-                return failure;
-            };
-            _ = ctx.recordCausal(.{
-                .kind = .activity_completed,
-                .service_key = ContextService.service_key,
-                .label = "DevelopmentContext.compile",
-                .status = "success",
-                .redacted_detail = "bounded-proof-context",
-            });
-            return result;
+            return provider.compileAlloc(ctx.allocator(), arguments);
         }
     }.run);
 }

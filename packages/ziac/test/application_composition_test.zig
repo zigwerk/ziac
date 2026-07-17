@@ -51,13 +51,19 @@ test "Ziac planning and execution compose as services in one durable runtime" {
     providers.register(.gcp, fake.provider());
     var compiler = FakeCompiler{};
 
-    const main_layer = ziac.application.rootLayer(
-        ziac.application.ProjectCompilerApi.from(FakeCompiler, &compiler),
-        &state,
-        providers,
-        .{},
-        .{},
-    );
+    const application_layer = ziac.Application.layer(.{
+        .stack = &desired,
+        .state = &state,
+        .providers = providers,
+    });
+    const main_layer = zstd.fx.kernel.Layer.mergeAll(.{
+        application_layer,
+        zstd.fx.kernel.Layer.succeed(
+            ziac.application.ProjectCompiler,
+            ziac.application.ProjectCompilerApi.from(FakeCompiler, &compiler),
+        ),
+        zstd.fx.kernel.Layer.succeed(ziac.application.ProcessSpawner, .{}),
+    });
     var runtime = try zstd.ManagedRuntime(@TypeOf(main_layer)).make(
         std.testing.allocator,
         std.testing.io,
@@ -70,9 +76,7 @@ test "Ziac planning and execution compose as services in one durable runtime" {
     );
     defer runtime.deinit();
 
-    var planned = try runtime.run(ziac.application.planEffect(&desired).named("ziac.command.plan"));
-    defer planned.deinit();
-    try runtime.run(ziac.application.executeEffect(&planned).named("ziac.command.execute"));
+    try runtime.run(ziac.Application.program().named("ziac.application.acceptance"));
 
     var snapshot = try runtime.inspect(std.testing.allocator, .{ .max_recent_events = 256 });
     defer snapshot.deinit();
@@ -121,14 +125,34 @@ test "Ziac planning and execution compose as services in one durable runtime" {
         .id = "ziac.composition.plan-causal",
         .label = "planning records semantic causal evidence",
         .source = .{ .id = "ziac-composition-test", .path = "packages/ziac/test/application_composition_test.zig", .line = 91, .column = 1 },
-        .repair_hint = "record the pure plan boundary through the runtime recorder",
-    }, .{ .kind = .activity_completed, .label = "ziac.plan.build", .status = "success" });
+        .repair_hint = "derive plan semantics from Ziac.Application",
+    }, .{ .kind = .span_recorded, .type_name = "ziac.plan", .status = "success" });
     _ = try assertions.event(.{
-        .id = "ziac.composition.execute-causal",
-        .label = "execution records semantic causal evidence",
+        .id = "ziac.composition.provider-causal",
+        .label = "provider invocation records semantic causal evidence",
         .source = .{ .id = "ziac-composition-test", .path = "packages/ziac/test/application_composition_test.zig", .line = 98, .column = 1 },
-        .repair_hint = "record the provider execution boundary through the runtime recorder",
-    }, .{ .kind = .activity_completed, .label = "ziac.plan.execute", .status = "success" });
+        .repair_hint = "instrument provider methods in the reusable Provider adapter",
+    }, .{ .kind = .span_recorded, .type_name = "ziac.provider.rpc", .status = "success" });
+    _ = try assertions.event(.{
+        .id = "ziac.composition.state-commit-causal",
+        .label = "state commit records terminal semantic causal evidence",
+        .repair_hint = "record state only after mutation and checkpoint success",
+    }, .{ .kind = .span_recorded, .type_name = "ziac.state.commit", .status = "success" });
+    try assertions.eventPath(.{
+        .id = "ziac.composition.plan-to-state-path",
+        .label = "plan, resource, provider and state semantics form one queryable path",
+        .repair_hint = "preserve the per-resource parent chain through executor and provider adapters",
+    }, .{ .kind = .span_recorded, .type_name = "ziac.plan", .status = "success" }, .{ .kind = .span_recorded, .type_name = "ziac.state.commit", .status = "success" }, 32);
+    try assertions.counterfactual(.{
+        .id = "ziac.composition.plan-resource-provider-path",
+        .label = "a plan causes a resource operation that reaches its provider boundary",
+        .repair_hint = "derive each resource recorder from the completed plan event",
+    }, .{ .kind = .span_recorded, .type_name = "ziac.plan", .status = "success" }, .{ .kind = .span_recorded, .type_name = "ziac.resource.operation", .status = "started" }, .{ .kind = .span_recorded, .type_name = "ziac.provider.rpc", .status = "success" }, 32);
+    try assertions.counterfactual(.{
+        .id = "ziac.composition.resource-provider-state-path",
+        .label = "a resource operation reaches state only through its provider boundary",
+        .repair_hint = "parent state commits to the terminal provider event for the resource",
+    }, .{ .kind = .span_recorded, .type_name = "ziac.resource.operation", .status = "started" }, .{ .kind = .span_recorded, .type_name = "ziac.provider.rpc", .status = "success" }, .{ .kind = .span_recorded, .type_name = "ziac.state.commit", .status = "success" }, 32);
     try assertions.noPendingFibers(.{
         .id = "ziac.composition.no-pending-fibers",
         .label = "composed control plane joins all fibers",
@@ -153,4 +177,41 @@ test "Ziac planning and execution compose as services in one durable runtime" {
     try std.testing.expect(saw_queryable_assertion);
     try runtime.shutdown();
     try evidence.publish(std.testing.io, std.Io.Dir.cwd(), 1);
+}
+
+test "Ziac Application run owns causal health and checked shutdown" {
+    var desired = ziac.ResourceGraph.init(std.testing.allocator);
+    defer desired.deinit();
+    try desired.addResource(.{
+        .id = "gcp.test.Resource.application-run",
+        .provider = .gcp,
+        .type_name = "gcp.test.Resource",
+        .logical_id = "application-run",
+        .inputs = .{ .object = &.{
+            .{ .name = "name", .value = .{ .string = "application-run" } },
+        } },
+    });
+    var state = ziac.InMemoryStateStore.init(std.testing.allocator);
+    defer state.deinit();
+    var fake = ziac.provider.FakeProvider.init(std.testing.allocator);
+    defer fake.deinit();
+    var providers = ziac.provider.ProviderRegistry{};
+    providers.register(.gcp, fake.provider());
+    const live = ziac.Application.layer(.{
+        .stack = &desired,
+        .state = &state,
+        .providers = providers,
+    });
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var runtime = try zstd.ManagedRuntime(@TypeOf(live)).make(
+        std.testing.allocator,
+        std.testing.io,
+        tmp.dir,
+        live,
+        .{},
+    );
+
+    try ziac.Application.run(&runtime);
+    try std.testing.expect(state.get("gcp.test.Resource.application-run") != null);
 }

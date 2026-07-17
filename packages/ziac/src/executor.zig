@@ -4,6 +4,7 @@ const apply_mod = @import("apply.zig");
 const checkpoint_mod = @import("checkpoint.zig");
 const plan_mod = @import("plan.zig");
 const provider_mod = @import("provider.zig");
+const runtime_events_mod = @import("runtime_events.zig");
 const state_mod = @import("state.zig");
 
 pub const ScheduleError = error{
@@ -44,7 +45,6 @@ pub const ExecuteOptions = struct {
     }),
     clock: ?*fx.Clock = null,
     cancellation: ?*CancellationToken = null,
-    causal_store: ?*fx.CausalStore = null,
     checkpoint: ?checkpoint_mod.Checkpoint = null,
     destructive_confirmation: bool = false,
     diagnostics: ?*provider_mod.ProviderDiagnosticRecorder = null,
@@ -92,6 +92,20 @@ pub fn executePlan(
     providers: provider_mod.ProviderRegistry,
     options: ExecuteOptions,
 ) ExecuteError!void {
+    return executePlanObserved(allocator, planned, store, providers, options, .disabled);
+}
+
+/// Framework entry point used by `Ziac.Application`. The semantic recorder is
+/// derived from the owning effect runtime and is deliberately separate from
+/// public execution policy so application authors cannot receive a store.
+pub fn executePlanObserved(
+    allocator: std.mem.Allocator,
+    planned: *const plan_mod.Plan,
+    store: *state_mod.InMemoryStateStore,
+    providers: provider_mod.ProviderRegistry,
+    options: ExecuteOptions,
+    runtime_events: runtime_events_mod.Recorder,
+) ExecuteError!void {
     if (options.max_concurrency == 0) return error.InvalidConcurrency;
     try validatePreconditions(allocator, planned, store, options);
     if (options.cancellation) |token| {
@@ -119,6 +133,7 @@ pub fn executePlan(
         .clock = options.clock orelse &system_clock,
         .internal_cancellation = &internal_cancellation,
         .resumed_operations = resumed_operations,
+        .runtime_events = runtime_events,
     };
     try resumeIncompleteOperations(&environment);
     for (schedule.levels) |level| {
@@ -182,6 +197,7 @@ const ExecutionEnvironment = struct {
     clock: *fx.Clock,
     internal_cancellation: *CancellationToken,
     resumed_operations: []bool,
+    runtime_events: runtime_events_mod.Recorder,
 
     fn isCancelled(self: *const ExecutionEnvironment) bool {
         if (self.internal_cancellation.isCancelled()) return true;
@@ -211,28 +227,30 @@ const ExecutionJobState = struct {
         if (environment.isCancelled()) return error.ProviderCancelled;
         const operation = environment.planned.operations[self.operation_index];
         if (environment.resumed_operations[self.operation_index]) {
-            recordFact(environment, operation, "resumed");
+            _ = recordFact(environment, operation, "resumed", null);
             return;
         }
-        recordFact(environment, operation, "started");
-        executeWithRetry(environment, operation) catch |err| {
+        const operation_id = recordFact(environment, operation, "started", null);
+        const semantic_parent = recordPlannedDrift(environment, operation, operation_id);
+        const completed_parent = executeWithRetry(environment, operation, semantic_parent) catch |err| {
             environment.internal_cancellation.cancel();
-            recordFact(environment, operation, if (err == error.OperationPending) "incomplete" else "failure");
+            _ = recordFact(environment, operation, if (err == error.OperationPending) "incomplete" else "failure", operation_id);
             return err;
         };
-        recordFact(environment, operation, "success");
+        _ = recordFact(environment, operation, "success", completed_parent);
     }
 };
 
 fn executeWithRetry(
     environment: *ExecutionEnvironment,
     operation: plan_mod.PlanOperation,
-) ExecuteError!void {
-    if (operation.kind == .noop or operation.kind == .read) return;
+    operation_id: ?u64,
+) ExecuteError!?u64 {
+    if (operation.kind == .noop or operation.kind == .read) return operation_id;
     const provider = try environment.providers.get(operation.resource.provider);
     const started_at = environment.clock.nowMs();
     const timeout_millis = operation.resource.lifecycle.operation_timeout_millis;
-    var operation_context = operationContext(environment, operation, started_at);
+    var operation_context = operationContext(environment, operation, started_at, operation_id);
     var retry_index: usize = 0;
 
     while (true) {
@@ -248,17 +266,12 @@ fn executeWithRetry(
             const delay_millis = environment.options.retry_schedule.nextDelay(retry_index) orelse return err;
             const elapsed = environment.clock.nowMs() -| started_at;
             if (elapsed >= timeout_millis or delay_millis > timeout_millis - elapsed) return error.ProviderTimeout;
-            recordCausal(environment, .{
-                .kind = .schedule_decision,
-                .label = operation.resource.id,
-                .status = "retry",
-                .type_name = @tagName(operation.kind),
-            });
+            operation_context.recordRetry(operation.resource, @tagName(operation.kind));
             environment.clock.sleep(delay_millis);
             retry_index += 1;
             continue;
         };
-        return;
+        return operation_context.last_runtime_event_id;
     }
 }
 
@@ -277,7 +290,7 @@ fn resumeIncompleteOperations(environment: *ExecutionEnvironment) ExecuteError!v
 
         const provider = try environment.providers.get(operation.resource.provider);
         const started_at = environment.clock.nowMs();
-        var operation_context = operationContext(environment, operation, started_at);
+        var operation_context = operationContext(environment, operation, started_at, null);
         operation_context.physical_id = existing.physical_id;
         operation_context.operation_handle = existing.operation_handle;
         var read = try provider.readWithContext(&operation_context, operation.resource);
@@ -291,6 +304,7 @@ fn resumeIncompleteOperations(environment: *ExecutionEnvironment) ExecuteError!v
                         operation,
                         environment.options.checkpoint,
                     );
+                    operation_context.recordStateCommit(operation.resource, "deleted");
                     environment.resumed_operations[operation_index] = true;
                 } else if (existing.operation_handle != null) {
                     return error.OperationPending;
@@ -307,6 +321,7 @@ fn resumeIncompleteOperations(environment: *ExecutionEnvironment) ExecuteError!v
                         observed.*,
                         environment.options.checkpoint,
                     );
+                    operation_context.recordStateCommit(operation.resource, "adopted");
                     environment.resumed_operations[operation_index] = true;
                 }
             },
@@ -321,7 +336,7 @@ fn adoptUntrackedNoop(
 ) ExecuteError!void {
     const provider = try environment.providers.get(operation.resource.provider);
     const started_at = environment.clock.nowMs();
-    var operation_context = operationContext(environment, operation, started_at);
+    var operation_context = operationContext(environment, operation, started_at, null);
     var read = try provider.readWithContext(&operation_context, operation.resource);
     defer read.deinit();
     switch (read) {
@@ -336,6 +351,7 @@ fn adoptUntrackedNoop(
                 observed.*,
                 environment.options.checkpoint,
             );
+            operation_context.recordStateCommit(operation.resource, "adopted");
             environment.resumed_operations[operation_index] = true;
         },
     }
@@ -345,6 +361,7 @@ fn operationContext(
     environment: *ExecutionEnvironment,
     operation: plan_mod.PlanOperation,
     started_at: u64,
+    parent_id: ?u64,
 ) provider_mod.OperationContext {
     return .{
         .allocator = environment.allocator,
@@ -361,6 +378,8 @@ fn operationContext(
         ) catch std.math.maxInt(u64),
         .destructive_confirmation = environment.options.destructive_confirmation,
         .diagnostics = environment.options.diagnostics,
+        .runtime_events = environment.runtime_events.child(parent_id),
+        .last_runtime_event_id = parent_id,
     };
 }
 
@@ -380,18 +399,28 @@ fn recordFact(
     environment: *ExecutionEnvironment,
     operation: plan_mod.PlanOperation,
     status: []const u8,
-) void {
-    recordCausal(environment, .{
-        .kind = .workflow_event_recorded,
-        .label = operation.resource.id,
-        .status = status,
-        .type_name = @tagName(operation.kind),
-    });
+    parent_id: ?u64,
+) ?u64 {
+    return environment.runtime_events.child(parent_id).resourceOperation(
+        operation.resource.id,
+        @tagName(operation.kind),
+        status,
+    );
 }
 
-fn recordCausal(environment: *ExecutionEnvironment, event: fx.CausalEvent) void {
-    const store = environment.options.causal_store orelse return;
-    _ = store.record(event) catch {};
+fn recordPlannedDrift(
+    environment: *ExecutionEnvironment,
+    operation: plan_mod.PlanOperation,
+    parent_id: ?u64,
+) ?u64 {
+    return switch (operation.kind) {
+        .update, .replace, .delete => environment.runtime_events.child(parent_id).drift(
+            operation.resource.id,
+            @tagName(operation.kind),
+            "planned-change",
+        ) orelse parent_id,
+        .create, .read, .noop => parent_id,
+    };
 }
 
 fn isRetryable(err: apply_mod.ApplyError) bool {

@@ -347,7 +347,7 @@ const effect_project_json =
 ;
 
 const effect_compatibility_json =
-    \\{{"schema":"zigeffect.compatibility.v1","schema_version":1,"project":"{s}","kind":"application","project_schema":"zigeffect.project.v1","template_schema":"zigeffect.scaffold-template.v1","template_version":14,"cli_version":"0.7.0","minimum_zig_version":"0.16.0","maximum_zig_version_exclusive":"0.17.0","zigeffect_api":"0.1.x","zigeffect_std_api":"0.1.x"}}
+    \\{{"schema":"zigeffect.compatibility.v1","schema_version":1,"project":"{s}","kind":"application","project_schema":"zigeffect.project.v1","template_schema":"zigeffect.scaffold-template.v1","template_version":15,"cli_version":"0.7.0","minimum_zig_version":"0.16.0","maximum_zig_version_exclusive":"0.17.0","zigeffect_api":"0.1.x","zigeffect_std_api":"0.1.x"}}
 ;
 
 const self_host_project_json =
@@ -509,8 +509,8 @@ const app_zig =
     \\fn route(target: []const u8) Route {
     \\    return Route.init(target, struct {
     \\        fn run(path: []const u8, ctx: *Route.Context) error{}!RouteResult {
+    \\            _ = ctx.service(Health);
     \\            const found = std.mem.eql(u8, path, "/health/startup") or std.mem.eql(u8, path, "/health/live") or std.mem.eql(u8, path, "/");
-    \\            _ = ctx.recordCausal(.{ .kind = .activity_completed, .service_key = Health.service_key, .label = "Health.route", .status = if (found) "success" else "not_found", .redacted_detail = path });
     \\            return .{ .status = if (found) .ok else .not_found, .body = if (found) "{\"status\":\"ok\"}" else "{\"error\":\"not found\"}" };
     \\        }
     \\    }.run);
@@ -572,7 +572,7 @@ const app_zig =
     \\    defer runtime.deinit();
     \\    const result = try runtime.run(route("/health/live").named("test.health"));
     \\    try assertions.equal(.{ .id = "health-status", .label = "health route succeeds", .repair_hint = "preserve the typed health service" }, @as(u16, 200), @intFromEnum(result.status));
-    \\    _ = try assertions.event(.{ .id = "health-causal", .label = "health operation is causal", .repair_hint = "record Health.route through the runtime" }, .{ .kind = .activity_completed, .label = "Health.route", .status = "success" });
+    \\    _ = try assertions.event(.{ .id = "health-causal", .label = "health operation is causal", .repair_hint = "run the route as a named effect" }, .{ .kind = .effect_completed, .label = "test.health", .status = "success" });
     \\    var snapshot = try runtime.inspect(std.testing.allocator, .{ .max_recent_events = 128 });
     \\    defer snapshot.deinit();
     \\    try assertions.applicationService(.{ .id = "health-service", .label = "health service is mapped", .repair_hint = "provide Health from rootLayer" }, &snapshot, Health.service_key, true);
@@ -588,7 +588,7 @@ const app_zig =
     \\        for (assertion.causal_event_ids) |event_id| {
     \\            const record = try project_graph.recordJsonAlloc(std.testing.allocator, event_id);
     \\            defer std.testing.allocator.free(record);
-    \\            if (std.mem.indexOf(u8, record, "Health.route") != null) mapped_health_event_is_queryable = true;
+    \\            if (std.mem.indexOf(u8, record, "test.health") != null) mapped_health_event_is_queryable = true;
     \\        }
     \\    }
     \\    try std.testing.expect(mapped_health_event_is_queryable);
@@ -664,8 +664,8 @@ const agent_skill =
     \\   Retain source/manifest identity, graph cursor, authority, omissions,
     \\   affected scenarios, and proof references; state the counterfactual.
     \\3. Run `ziac check --stack global-api --stage dev --json` in the owning project.
-    \\4. Add a failing deterministic Testing v2 scenario with `TestContext`, stable assertion IDs, the runtime causal store, `noFindings`/`noPendingFibers`, and `mapCausalEventIds`. Mount the runtime at the owning project or component root and prove a mapped assertion ID through the project-mounted graph.
-    \\5. Make the smallest change through public Ziac and `zigeffect_std` APIs. Keep graph compilers pure; place external boundaries behind services and scoped layers. One executable owns one managed runtime and each request/job/command is a child effect.
+    \\4. Add a failing deterministic Testing v2 scenario with `TestContext`, stable assertion IDs, test-only controlled causal-store injection, `noFindings`/`noPendingFibers`, and `mapCausalEventIds`. Mount the runtime at the owning project or component root and prove a mapped assertion ID through the project-mounted graph.
+    \\5. Make the smallest change through public Ziac and `zigeffect_std` APIs. Compose canonical applications with `Ziac.Application.layer` and `Ziac.Application.run`. Keep graph compilers pure; place external boundaries behind services and scoped layers. One executable owns one managed runtime and each request/job/command is a child effect. Application and provider code never create a causal store or call low-level causal APIs; runtime and Ziac adapters automatically emit infrastructure semantics.
     \\6. Run the affected requirement scenario and full package gate. Require
     \\   stable evidence under `.zigeffect/tests/process-receipts/` and
     \\   `.zigeffect/handoffs/tests/`; `.zigeffect/tests/raw-receipts/` is
@@ -684,7 +684,7 @@ const agent_skill =
     \\## Durable control flow
     \\
     \\- Use a typed finite statechart when a process has long-lived branching, retry, cancellation, approval, or recovery states that agents must inspect. Statechart context contains bounded values only; actions update context and emit typed commands without I/O.
-    \\- Execute emitted commands as idempotent `WorkflowContext.activity` operations behind services from the root layer. Derive keys from immutable execution identity, use bounded codecs and typed failures, and keep the caller responsible for the journal lifetime.
+    \\- Execute emitted commands as idempotent `WorkflowContext.activity` operations behind services from the root layer. Derive keys from immutable execution identity, use bounded codecs and typed failures, and keep the caller responsible for the journal lifetime. Use `zstd.Workflow.execution` for automatic journal and statechart recording; do not pass a causal store into the workflow.
     \\- Production roots use a crash-safe `FileJournalStore`; deterministic unit tests may use `InMemoryJournalStore`, but acceptance must prove replay or reopen without repeating completed external work.
     \\- Register definitions with `zstd.Statechart.registerDefinitionAtomic`. Inspect `zigeffect statechart list --json`, the affected machine, and NenDB workflow/statechart events before and after a change.
     \\

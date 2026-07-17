@@ -317,13 +317,6 @@ const FrameProgram = fx.kernel.Effect([]u8, anyerror, .{}).Stateful(FrameState);
 fn frameEffect(frame_state: FrameState) FrameProgram {
     return FrameProgram.init(frame_state, struct {
         fn run(request: FrameState, ctx: *FrameProgram.Context) anyerror![]u8 {
-            _ = ctx.recordCausal(.{
-                .kind = .workflow_event_recorded,
-                .service_key = "ziac/ProviderRegistry",
-                .label = "provider.rpc.frame",
-                .status = "received",
-                .redacted_detail = "bounded-protocol-frame",
-            });
             return request.session.handleAlloc(ctx.allocator(), request.frame);
         }
     }.run);

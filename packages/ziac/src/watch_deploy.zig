@@ -3,6 +3,7 @@ const zstd = @import("zigeffect_std");
 const contract = @import("agent_contract.zig");
 
 const fx = zstd.fx;
+const runtime_events = @import("runtime_events.zig");
 
 pub const ActiveResult = enum { complete, cancelled, failed };
 
@@ -294,8 +295,21 @@ pub fn registerStatechart(
 
 pub const WorkflowRuntime = struct {
     journal: fx.workflow.JournalStore,
-    causal_store: ?*fx.CausalStore = null,
-    causal_run_id: ?u64 = null,
+    events: runtime_events.Recorder = .disabled,
+
+    /// Application-facing constructor. The caller supplies the durable
+    /// journal; Ziac derives semantic recording from the owning effect runtime.
+    pub fn init(ctx: anytype, journal: fx.workflow.JournalStore) WorkflowRuntime {
+        return .{
+            .journal = journal,
+            .events = runtime_events.Recorder.fromContext(ctx),
+        };
+    }
+
+    /// Controlled test constructor used to inspect and publish causal proof.
+    pub fn initTest(journal: fx.workflow.JournalStore, events: runtime_events.Recorder) WorkflowRuntime {
+        return .{ .journal = journal, .events = events };
+    }
 };
 
 const ActivityFailure = error{PhaseFailed};
@@ -416,14 +430,12 @@ pub fn executeWorkflow(
     const workflow_id = fx.workflow.workflowId(rollout_definition.id);
     const execution_id = fx.workflow.executionId(rollout_definition.id, execution_key);
 
-    var causal_journal = if (workflow_runtime.causal_store) |causal_store|
-        fx.workflow.CausalJournalStore.init(allocator, workflow_runtime.journal, causal_store, workflow_runtime.causal_run_id)
-    else
-        null;
-    defer if (causal_journal) |*journal| journal.deinit();
-    const journal = if (causal_journal) |*value| value.asJournalStore() else workflow_runtime.journal;
+    var recording = workflow_runtime.events.workflow(allocator, workflow_runtime.journal);
+    defer recording.deinit();
+    const journal = recording.journal();
 
     const started = try ensureWorkflowStarted(allocator, journal, workflow_id, execution_id, execution_key, runtime.nowMillis());
+    const workflow_started = workflow_runtime.events.workflowCheckpoint(rollout_definition.id, "started", execution_key);
     var workflow = try fx.workflow.WorkflowContext.init(allocator, journal, .{
         .workflow_id = workflow_id,
         .execution_id = execution_id,
@@ -440,20 +452,12 @@ pub fn executeWorkflow(
         transitions += 1;
         const decision = try RolloutMachine.step(&rollout_definition, snapshot, event);
         if (decision.outcome != .transitioned) return error.RolloutEventIgnored;
-        if (workflow_runtime.causal_store) |causal_store| {
-            const decision_parent = if (causal_journal) |*journal_store|
-                journal_store.latestCausalId() orelse causal_parent
-            else
-                causal_parent;
-            causal_parent = try fx.statechart.recordDecisionCausal(
-                RolloutDefinition,
-                causal_store,
-                allocator,
-                &rollout_definition,
-                &decision,
-                decision_parent,
-            );
-        }
+        causal_parent = try recording.recordDecision(
+            RolloutDefinition,
+            &rollout_definition,
+            &decision,
+            causal_parent orelse workflow_started,
+        );
         snapshot = decision.next;
         if (snapshot.status != .active) break;
         if (decision.commands().len != 1) return error.InvalidRolloutCommandCount;
@@ -481,6 +485,11 @@ pub fn executeWorkflow(
         ),
     );
     try ensureWorkflowTerminal(allocator, journal, workflow_id, execution_id, execution_key, result.status);
+    _ = workflow_runtime.events.child(recording.latestCausalId() orelse causal_parent).workflowCheckpoint(
+        rollout_definition.id,
+        "committed",
+        @tagName(result.status),
+    );
     return result;
 }
 

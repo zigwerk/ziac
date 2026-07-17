@@ -69,7 +69,7 @@ test "scaffold renders a complete agent-first global Zig project" {
     try std.testing.expect(std.mem.indexOf(u8, app_source, "project_graph.recordJsonAlloc") != null);
     try std.testing.expect(std.mem.indexOf(u8, app_source, "tmp.dir, main_layer") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered.file("build.zig.zon").?, "../../opt/ziac") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered.file(".zigeffect/compatibility.json").?, "\"template_version\":14") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered.file(".zigeffect/compatibility.json").?, "\"template_version\":15") != null);
     const codex_skill = rendered.file(".agents/skills/ziac/SKILL.md").?;
     try std.testing.expect(std.mem.startsWith(u8, codex_skill, "---\nname: ziac\n"));
     try std.testing.expect(std.mem.indexOf(u8, codex_skill, "ziac check --stack global-api --stage dev --json") != null);

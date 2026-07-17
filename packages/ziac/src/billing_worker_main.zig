@@ -18,13 +18,6 @@ pub fn main(init: std.process.Init) !void {
 
 fn runMain(ctx: *MainProgram.Context) !void {
     const init = ctx.service(ziac.process_runtime.ProcessInputs).init;
-    _ = ctx.recordCausal(.{
-        .kind = .service_provided,
-        .service_key = "ziac/BillingWorker",
-        .label = "billing-http",
-        .status = "starting",
-        .redacted_detail = "bigquery-cockroach",
-    });
     const allocator = init.gpa;
     const io = init.io;
     const database_url = init.environ_map.get("DATABASE_URL") orelse return error.DatabaseUrlRequired;
@@ -77,7 +70,7 @@ fn runMain(ctx: *MainProgram.Context) !void {
             .io = io,
             .stream = stream,
             .runtime = &runtime,
-        })) catch {};
+        }).named("billing.http.request")) catch {};
     }
 }
 
@@ -91,14 +84,7 @@ const RequestProgram = ziac.zstd.fx.kernel.Effect(void, anyerror, .{}).Stateful(
 
 fn requestEffect(state: RequestState) RequestProgram {
     return RequestProgram.init(state, struct {
-        fn run(request: RequestState, ctx: *RequestProgram.Context) anyerror!void {
-            _ = ctx.recordCausal(.{
-                .kind = .workflow_event_recorded,
-                .service_key = "ziac/BillingWorker",
-                .label = "http.request",
-                .status = "received",
-                .redacted_detail = "bounded-request",
-            });
+        fn run(request: RequestState, _: *RequestProgram.Context) anyerror!void {
             try handleConnection(request.allocator, request.io, request.stream, request.runtime);
         }
     }.run);

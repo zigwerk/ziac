@@ -17,17 +17,17 @@
     {"id":"production-check","argv":["zig","build","test","-Doptimize=ReleaseSafe"],"component":null}
   ],
   "requirements": [
-    {"id":"zigeffect-composable-control-plane","summary":"Ziac commands and workers compose through one durable managed runtime","component":"ziac","status":"active"},
+    {"id":"zigeffect-composable-control-plane","summary":"Ziac applications compose infrastructure intent through one runtime-owned causal control plane","component":"ziac","status":"active"},
     {"id":"ziac-durable-workflow-control","summary":"Infrastructure control flow uses typed statecharts and replay-safe durable workflows","component":"ziac","status":"active"},
     {"id":"ziac-proof-carrying-development-context","summary":"Ziac exposes one bounded evidence-derived causal development context through its agent endpoint","component":"ziac","status":"active"}
   ],
   "acceptance_checks": [
-    {"id":"check-zigeffect-composable-control-plane","requirement":"zigeffect-composable-control-plane","command":"test","expectation":"canonical services execute with queryable causal evidence and complete Testing v2 receipts","status":"pending"},
+    {"id":"check-zigeffect-composable-control-plane","requirement":"zigeffect-composable-control-plane","command":"test","expectation":"application code contains no causal plumbing and plan, resource, provider, retry or LRO, and state commit semantics are linked and queryable","status":"pending"},
     {"id":"check-ziac-durable-workflow-control","requirement":"ziac-durable-workflow-control","command":"test","expectation":"rollout statechart decisions and idempotent workflow activities are durable and queryable in the causal graph","status":"pending"},
     {"id":"check-ziac-proof-carrying-development-context","requirement":"ziac-proof-carrying-development-context","command":"test","expectation":"the native MCP context endpoint compiles bounded reconciled Testing v2 and NenDB evidence","status":"pending"}
   ],
   "test_scenarios": [
-    {"id":"effect-native-plan-execute","label":"plan and execute through canonical Ziac services","requirement":"zigeffect-composable-control-plane","acceptance_check":"check-zigeffect-composable-control-plane","component":"ziac","command":"test","source_roots":["src","test","ziac.project.json","zigeffect.project.json"],"tags":["acceptance","causal","runtime"],"native_test_filter":"Ziac planning and execution compose","default_seed":115,"fault_profile":"standard","required":true},
+    {"id":"effect-native-plan-execute","label":"runtime-owned causal plan and execute through canonical Ziac services","requirement":"zigeffect-composable-control-plane","acceptance_check":"check-zigeffect-composable-control-plane","component":"ziac","command":"test","source_roots":["src","test","ziac.project.json","zigeffect.project.json"],"tags":["acceptance","causal","runtime","composition"],"native_test_filter":"Ziac planning and execution compose","default_seed":115,"fault_profile":"standard","required":true},
     {"id":"watch-deploy-statechart-workflow","label":"watch deployment is a replay-safe statechart workflow","requirement":"ziac-durable-workflow-control","acceptance_check":"check-ziac-durable-workflow-control","component":"ziac","command":"test","source_roots":["src/watch_deploy.zig","src/main.zig","src/cli.zig","test/workflow_composition_test.zig","zigeffect.project.json"],"tags":["acceptance","causal","statechart","workflow","replay"],"native_test_filter":"watch deployment composes","default_seed":216,"fault_profile":"standard","required":true},
     {"id":"ziac-agent-development-context","label":"Ziac exposes one proof-carrying development context endpoint","requirement":"ziac-proof-carrying-development-context","acceptance_check":"check-ziac-proof-carrying-development-context","component":"ziac","command":"test","source_roots":["src/agent_tools.zig","src/mcp.zig","src/mcp_server_main.zig","test/development_context_test.zig","zigeffect.project.json"],"tags":["acceptance","agent","causal","context"],"native_test_filter":"Ziac native development context endpoint","default_seed":317,"fault_profile":"standard","required":true}
   ],

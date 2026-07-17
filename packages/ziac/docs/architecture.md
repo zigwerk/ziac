@@ -26,7 +26,10 @@ Initial source domains:
 - `provider.zig`: provider lifecycle vtable and fake provider.
 - `apply.zig`: one-operation lifecycle and state transitions.
 - `executor.zig`: stable dependency levels, bounded zigeffect execution, retry,
-  deadlines, cancellation, and causal operation facts.
+  deadlines and cancellation.
+- `runtime_events.zig`: the recording-only Ziac semantic adapter that turns
+  plan, resource, provider, retry/LRO, drift, workflow and state boundaries
+  into runtime-owned causal facts without exposing the store to applications.
 - `checkpoint.zig`: serialized state checkpoint interface and local-state
   adapter.
 - `ci.zig`: repository-bound preview identity, provider name/domain scoping,
@@ -43,7 +46,10 @@ engine can be tested without live cloud credentials. Every provider operation
 receives an `OperationContext` containing its allocator, clock, absolute
 deadline, cooperative cancellation handle, and read-only access to dependency
 outputs in the current state snapshot. Providers must not retain the context or
-borrowed output values after returning.
+borrowed output values after returning. The context also carries a
+recording-only Ziac semantic capability installed by the executor. The provider
+adapter, not each provider implementation, emits RPC, retry, LRO and state
+facts.
 
 Long-lived control flow uses the complementary statechart/workflow boundary
 documented in `statecharts-and-workflows.md`. Statecharts own legal decisions

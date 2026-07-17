@@ -9,13 +9,6 @@ pub fn main(init: std.process.Init) !void {
 
 fn runMain(ctx: *MainProgram.Context) !void {
     const init = ctx.service(ziac.process_runtime.ProcessInputs).init;
-    _ = ctx.recordCausal(.{
-        .kind = .service_provided,
-        .service_key = "ziac/ProviderRegistry",
-        .label = "gcp",
-        .status = "ready",
-        .redacted_detail = "ziac.provider.rpc.v1",
-    });
     const allocator = init.gpa;
     var cwd = std.Io.Dir.cwd();
     var local_fs = ziac.zstd.FileSystem.LocalFileSystem.init(&cwd, init.io);
