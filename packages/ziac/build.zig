@@ -33,6 +33,7 @@ pub fn build(b: *std.Build) void {
     const testing_runner = testing_runner_module.root_source_file.?;
     const zigeffect_postgres = b.dependency("zigeffect_postgres", .{
         .openssl_include_path = b.option(std.Build.LazyPath, "openssl_include_path", "OpenSSL include directory for hosted Linux builds"),
+        .openssl_lib_path = b.option(std.Build.LazyPath, "openssl_lib_path", "OpenSSL library directory for hosted Linux builds"),
     }).module("zigeffect_postgres");
 
     const ziac = b.addModule("ziac", .{
