@@ -17,6 +17,15 @@ fn addV2Test(b: *std.Build, runner: std.Build.LazyPath, options: std.Build.TestO
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    // Tests default to ReleaseSafe; binaries keep -Doptimize. A bare
+    // `zig build test` in Debug spends most of its time in the harness, which
+    // captures ten stack frames per allocation in every optimize mode.
+    // -Dtest-optimize=Debug restores those traces.
+    const test_optimize = b.option(
+        std.builtin.OptimizeMode,
+        "test-optimize",
+        "Optimize mode for test artifacts (default ReleaseSafe)",
+    ) orelse .ReleaseSafe;
 
     const zig_webui = b.dependency("zig_webui", .{
         .target = target,
@@ -68,7 +77,7 @@ pub fn build(b: *std.Build) void {
     const tests = b.createModule(.{
         .root_source_file = b.path("test/all_test.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = test_optimize,
     });
     tests.addImport("ziac", ziac);
     tests.addImport("zigeffect_std", zigeffect_std);
@@ -195,7 +204,7 @@ pub fn build(b: *std.Build) void {
     const receipt_check_module = b.createModule(.{
         .root_source_file = b.path("test/verify_suite_receipt.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = test_optimize,
     });
     receipt_check_module.addImport("ziac", ziac);
     const receipt_check = b.addExecutable(.{
@@ -210,7 +219,7 @@ pub fn build(b: *std.Build) void {
     const provider_rpc_tests_module = b.createModule(.{
         .root_source_file = b.path("test/provider_rpc_test.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = test_optimize,
     });
     provider_rpc_tests_module.addImport("ziac", ziac);
     provider_rpc_tests_module.addImport("zigeffect_std", zigeffect_std);
@@ -225,7 +234,7 @@ pub fn build(b: *std.Build) void {
     const provider_rpc_fixture_module = b.createModule(.{
         .root_source_file = b.path("test/provider_rpc_fixture_main.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = test_optimize,
     });
     provider_rpc_fixture_module.addImport("ziac", ziac);
     const provider_rpc_fixture = b.addExecutable(.{
@@ -235,7 +244,7 @@ pub fn build(b: *std.Build) void {
     const provider_rpc_process_module = b.createModule(.{
         .root_source_file = b.path("test/provider_rpc_process_e2e_main.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = test_optimize,
     });
     provider_rpc_process_module.addImport("ziac", ziac);
     const provider_rpc_process_e2e = b.addExecutable(.{
@@ -249,7 +258,7 @@ pub fn build(b: *std.Build) void {
     const dev_fixture_module = b.createModule(.{
         .root_source_file = b.path("test/dev_fixture_main.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = test_optimize,
     });
     const dev_fixture = b.addExecutable(.{
         .name = "ziac-dev-fixture",
@@ -258,7 +267,7 @@ pub fn build(b: *std.Build) void {
     const dev_e2e_module = b.createModule(.{
         .root_source_file = b.path("test/dev_native_e2e_main.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = test_optimize,
     });
     dev_e2e_module.addImport("ziac", ziac);
     const dev_e2e = b.addExecutable(.{
