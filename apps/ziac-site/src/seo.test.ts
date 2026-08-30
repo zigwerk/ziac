@@ -7,7 +7,7 @@ async function source(relativePath: string): Promise<string> {
 
 const appConfig = await source("../app.config.ts");
 const packageSource = await source("../package.json");
-const appRoot = await source("./app.tsx");
+const appRoot = await source("./App.tsx");
 const routeSource = await source("./routes/index.tsx");
 const robotsSource = await source("../public/robots.txt");
 const sitemapSource = await source("../public/sitemap.xml");
