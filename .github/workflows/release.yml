@@ -38,7 +38,7 @@ jobs:
         run: |
           scripts/package_distribution.sh "${GITHUB_REF_NAME#v}" packages/ziac/zig-out dist/release
           scripts/test_distribution_package.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ziac-${{ runner.os }}-${{ runner.arch }}
           path: dist/release/*
