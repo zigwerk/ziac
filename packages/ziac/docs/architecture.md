@@ -9,7 +9,7 @@ state, plans, applies, and component libraries.
 
 The division between runtime structure, reusable adapter semantics, application
 intent and test-only injection is defined in
-[`../../zigeffect/docs/runtime-owned-causal-applications.md`](../../zigeffect/docs/runtime-owned-causal-applications.md).
+[`runtime-owned-causal-applications.md`](https://github.com/zigwerk/zigeffect/blob/v0.1.0/packages/zigeffect/docs/runtime-owned-causal-applications.md).
 
 The agent-first control loop, hybrid development runtime, causal log plane,
 immutable OCI watch path, MCP authority boundary and ephemeral lease model are

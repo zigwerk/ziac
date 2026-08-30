@@ -39,7 +39,7 @@ automatically bracket every read/diff/create/update/delete/import call, accepted
 retry, long-running-operation checkpoint and state commit. Tests may inject a
 controlled runtime store to prove those facts and their parent path.
 The complete cross-framework boundary is documented in
-[`../../zigeffect/docs/runtime-owned-causal-applications.md`](../../zigeffect/docs/runtime-owned-causal-applications.md).
+[`runtime-owned-causal-applications.md`](https://github.com/zigwerk/zigeffect/blob/v0.1.0/packages/zigeffect/docs/runtime-owned-causal-applications.md).
 
 The creator and maintainer work in source. The qualifier works from a frozen
 candidate and returns `pass`, `fail` or `incomplete`; it never fixes the

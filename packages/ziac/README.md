@@ -171,14 +171,14 @@ for the exact completed and remaining command/provider migration slices and
 [`docs/statecharts-and-workflows.md`](docs/statecharts-and-workflows.md) for the
 finite-state, durable activity, replay, catalog, and agent-debugging model.
 The cross-framework ownership rule is documented in
-[`../zigeffect/docs/runtime-owned-causal-applications.md`](../zigeffect/docs/runtime-owned-causal-applications.md).
+[`runtime-owned-causal-applications.md`](https://github.com/zigwerk/zigeffect/blob/v0.1.0/packages/zigeffect/docs/runtime-owned-causal-applications.md).
 
 For agent development, the canonical first request is the MCP `ziac_context`
 tool. It uses ZigEffect's proof-carrying development compiler rather than a
 Ziac-specific status cache, so source identity, manifest digest, native test
 receipts, requirements, graph cursor, and next queries agree with
 `zigeffect agent context`. See
-[`../zigeffect/docs/proof-carrying-development-plane.md`](../zigeffect/docs/proof-carrying-development-plane.md).
+[`proof-carrying-development-plane.md`](https://github.com/zigwerk/zigeffect/blob/v0.1.0/packages/zigeffect/docs/proof-carrying-development-plane.md).
 
 ## Status
 

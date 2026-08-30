@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ZIG_VERSION: 0.16.0
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2.2.1
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpq-dev libssl-dev
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+      - name: Test Ziac against released ZigEffect packages
+        working-directory: packages/ziac
+        run: zig build test --summary all
+      - name: Verify paired CLIs
+        working-directory: packages/ziac
+        run: |
+          test -x zig-out/bin/ziac
+          test -x zig-out/bin/zigeffect
+          zig-out/bin/zigeffect --version
+      - name: Test GCPx components
+        working-directory: packages/ziac-gcpx
+        run: zig build test --summary all
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run check:frontend

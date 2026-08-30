@@ -1,0 +1,46 @@
+{
+  "name": "@zigwerk/ziac-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "bun run test:ziac && bun run check:frontend",
+    "check:frontend": "bun run typecheck && bun run test:frontend && bun run build:frontend",
+    "typecheck": "bun run ziac:dashboard:typecheck && bun run ziac-site:typecheck",
+    "test:frontend": "bun run ziac:dashboard:test && bun run ziac-site:test",
+    "build:frontend": "bun run ziac:dashboard:build && bun run ziac-site:build",
+    "test:ziac": "cd packages/ziac && zig build test",
+    "test:gcpx": "cd packages/ziac-gcpx && zig build test",
+    "test:distribution": "scripts/test_distribution_package.sh",
+    "release": "cd packages/ziac && zig build release-gate",
+    "ziac:dashboard:dev": "vite --config packages/ziac/dashboard/vite.config.ts --host 127.0.0.1",
+    "ziac:dashboard:build": "vite build --config packages/ziac/dashboard/vite.config.ts",
+    "ziac:dashboard:typecheck": "tsc --noEmit -p packages/ziac/dashboard/tsconfig.json",
+    "ziac:dashboard:test": "bun test --timeout 30000 packages/ziac/dashboard/src packages/ziac/dashboard/test",
+    "ziac-site:dev": "bun run --cwd apps/ziac-site dev",
+    "ziac-site:build": "bun run --cwd apps/ziac-site build",
+    "ziac-site:preview": "bun run --cwd apps/ziac-site preview",
+    "ziac-site:typecheck": "bun run --cwd apps/ziac-site typecheck",
+    "ziac-site:test": "bun run --cwd apps/ziac-site test"
+  },
+  "dependencies": {
+    "@deck.gl/core": "9.3.6",
+    "@deck.gl/layers": "9.3.6",
+    "@deck.gl/mapbox": "9.3.6",
+    "@dschz/solid-g6": "0.1.1",
+    "lucide-solid": "1.24.0",
+    "maplibre-gl": "5.24.0",
+    "solid-js": "1.9.13",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/three": "0.185.1",
+    "typescript": "5.9.3",
+    "vite": "8.0.16",
+    "vite-plugin-solid": "2.11.12"
+  }
+}

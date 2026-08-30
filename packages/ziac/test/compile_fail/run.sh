@@ -3,7 +3,8 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 package_dir="$(cd "${script_dir}/../.." && pwd)"
-repo_dir="$(cd "${package_dir}/../.." && pwd)"
+zigeffect_std_root="${1:?missing zigeffect_std source path}"
+zigeffect_root="${2:?missing zigeffect source path}"
 zig_bin="${ZIG:-zig}"
 output_file="$(mktemp)"
 trap 'rm -f "${output_file}"' EXIT
@@ -16,8 +17,8 @@ compile_fixture() {
     --dep zigeffect_std \
     -Mziac="${package_dir}/src/ziac.zig" \
     --dep zigeffect \
-    -Mzigeffect_std="${repo_dir}/packages/zigeffect-std/src/root.zig" \
-    -Mzigeffect="${repo_dir}/packages/zigeffect/src/zigeffect.zig" \
+    -Mzigeffect_std="${zigeffect_std_root}" \
+    -Mzigeffect="${zigeffect_root}" \
     -fno-emit-bin
 }
 

@@ -5,17 +5,24 @@
     .fingerprint = 0xca9d054f8192c606,
     .dependencies = .{
         .zigeffect = .{
-            .path = "../zigeffect",
+            .url = "https://github.com/zigwerk/zigeffect/releases/download/v0.1.0/zigeffect-0.1.0.tar.gz",
+            .hash = "zigeffect-0.1.0-adsmjrQGbADuTftqSJjwsWu0oWgG499XuZPB_tZ7Zi09",
         },
         .zig_webui = .{
             .url = "https://github.com/webui-dev/zig-webui/archive/c2fc94e23f8cf1b63a11b4d9aebdd530b10dfe67.tar.gz",
             .hash = "zig_webui-2.5.0-beta.4-M4z7zYaiAQCoeY3mDtQkPz_CC_fsFhV9aZol8UY29jPF",
         },
         .zigeffect_std = .{
-            .path = "../zigeffect-std",
+            .url = "https://github.com/zigwerk/zigeffect/releases/download/v0.1.0/zigeffect-std-0.1.0.tar.gz",
+            .hash = "zigeffect_std-0.1.0-zUag0QwzHQDMo0OFxXeLDhIIgCKj2XtHV12txGxMwCxw",
+        },
+        .zigeffect_cli = .{
+            .url = "https://github.com/zigwerk/zigeffect/releases/download/v0.1.0/zigeffect-cli-0.1.0.tar.gz",
+            .hash = "zigeffect_cli-0.5.0-bzY_igpdBgA9IDcv3-h3m95S-MlZHB7DoVAzAi-ClQFc",
         },
         .zigeffect_postgres = .{
-            .path = "../zigeffect-postgres",
+            .url = "https://github.com/zigwerk/zigeffect/releases/download/v0.1.0/zigeffect-postgres-0.1.0.tar.gz",
+            .hash = "zigeffect_postgres-0.1.0-5OmD2cDcAAD5FowkuU9PkTfed-g_I9SlNHgr7aA1FjAN",
         },
     },
     .paths = .{
@@ -28,6 +35,7 @@
         "docs",
         "examples",
         "migrations",
+        "proto",
         "scripts",
         "src",
         "test",

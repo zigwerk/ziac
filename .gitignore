@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+.output/
+.vinxi/
+dist/
+.zig-cache/
+.zigeffect/
+zig-out/
+zig-pkg/
+coverage/
+*.log
+gha-creds-*.json

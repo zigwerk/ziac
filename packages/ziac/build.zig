@@ -34,16 +34,22 @@ pub fn build(b: *std.Build) void {
         .is_static = true,
     });
 
+    const zigeffect_dependency = b.dependency("zigeffect", .{});
     const zigeffect_std_dependency = b.dependency("zigeffect_std", .{});
+    const zigeffect_cli_dependency = b.dependency("zigeffect_cli", .{
+        .target = target,
+        .optimize = optimize,
+    });
     const zigeffect_std = zigeffect_std_dependency.module("zigeffect_std");
     b.modules.put(b.graph.arena, b.dupe("zigeffect_std"), zigeffect_std) catch @panic("OOM");
     const testing_runner_module = zigeffect_std_dependency.module("zigeffect_test_runner");
     b.modules.put(b.graph.arena, b.dupe("zigeffect_test_runner"), testing_runner_module) catch @panic("OOM");
     const testing_runner = testing_runner_module.root_source_file.?;
-    const zigeffect_postgres = b.dependency("zigeffect_postgres", .{
+    const zigeffect_postgres_dependency = b.dependency("zigeffect_postgres", .{
         .openssl_include_path = b.option(std.Build.LazyPath, "openssl_include_path", "OpenSSL include directory for hosted Linux builds"),
         .openssl_lib_path = b.option(std.Build.LazyPath, "openssl_lib_path", "OpenSSL library directory for hosted Linux builds"),
-    }).module("zigeffect_postgres");
+    });
+    const zigeffect_postgres = zigeffect_postgres_dependency.module("zigeffect_postgres");
 
     const ziac = b.addModule("ziac", .{
         .root_source_file = b.path("src/ziac.zig"),
@@ -103,6 +109,7 @@ pub fn build(b: *std.Build) void {
         .root_module = main_module,
     });
     b.installArtifact(executable);
+    b.installArtifact(zigeffect_cli_dependency.artifact("zigeffect"));
 
     const dashboard_host_module = b.createModule(.{
         .root_source_file = b.path("src/dashboard_host_main.zig"),
@@ -180,7 +187,14 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(billing_worker_executable);
     const dashboard_ui_build = b.addSystemCommand(&.{ "bun", "run", "ziac:dashboard:build" });
     dashboard_ui_build.setCwd(.{ .cwd_relative = "../.." });
-    installClientDistribution(b, &dashboard_ui_build.step);
+    installClientDistribution(
+        b,
+        &dashboard_ui_build.step,
+        zigeffect_dependency,
+        zigeffect_std_dependency,
+        zigeffect_cli_dependency,
+        zigeffect_postgres_dependency,
+    );
     const run_dashboard_host = b.addRunArtifact(dashboard_host_executable);
     run_dashboard_host.step.dependOn(&dashboard_ui_build.step);
     if (b.args) |args| run_dashboard_host.addArgs(args);
@@ -283,6 +297,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_dev_e2e.step);
     const compile_contracts = b.addSystemCommand(&.{"bash"});
     compile_contracts.addFileArg(b.path("test/compile_fail/run.sh"));
+    compile_contracts.addFileArg(zigeffect_std_dependency.path("src/root.zig"));
+    compile_contracts.addFileArg(zigeffect_dependency.path("src/zigeffect.zig"));
     test_step.dependOn(&compile_contracts.step);
     const scaffold_e2e = b.addSystemCommand(&.{"bash"});
     scaffold_e2e.addFileArg(b.path("test/scaffold_e2e.sh"));
@@ -387,7 +403,14 @@ pub fn build(b: *std.Build) void {
     self_host_binaries.dependOn(&install_billing_worker.step);
 }
 
-fn installClientDistribution(b: *std.Build, dashboard_build: *std.Build.Step) void {
+fn installClientDistribution(
+    b: *std.Build,
+    dashboard_build: *std.Build.Step,
+    zigeffect_dependency: *std.Build.Dependency,
+    zigeffect_std_dependency: *std.Build.Dependency,
+    zigeffect_cli_dependency: *std.Build.Dependency,
+    zigeffect_postgres_dependency: *std.Build.Dependency,
+) void {
     installPackage(b, "ziac", ".", &.{
         "README.md",
         "build.zig",
@@ -401,22 +424,27 @@ fn installClientDistribution(b: *std.Build, dashboard_build: *std.Build.Step) vo
         .install_subdir = "share/ziac/agent-kit",
     });
     b.getInstallStep().dependOn(&agent_kit_install.step);
-    installPackage(b, "zigeffect", "../zigeffect", &.{
+    installDependencyPackage(b, "zigeffect", zigeffect_dependency, &.{
         "CHANGELOG.md",
         "README.md",
         "build.zig",
         "build.zig.zon",
     }, &.{ "conformance", "examples", "scripts", "src", "test", "tools", "workbench" });
-    installPackage(b, "zigeffect-std", "../zigeffect-std", &.{
+    installDependencyPackage(b, "zigeffect-std", zigeffect_std_dependency, &.{
         "README.md",
         "build.zig",
         "build.zig.zon",
     }, &.{ "conformance", "examples", "src" });
-    installPackage(b, "zigeffect-postgres", "../zigeffect-postgres", &.{
+    installDependencyPackage(b, "zigeffect-cli", zigeffect_cli_dependency, &.{
         "README.md",
         "build.zig",
         "build.zig.zon",
-    }, &.{ "examples", "scripts", "src" });
+    }, &.{ "src", "test" });
+    installDependencyPackage(b, "zigeffect-postgres", zigeffect_postgres_dependency, &.{
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+    }, &.{"src"});
     installPackage(b, "ziac-gcpx", "../ziac-gcpx", &.{
         "README.md",
         "build.zig",
@@ -436,6 +464,28 @@ fn installClientDistribution(b: *std.Build, dashboard_build: *std.Build.Step) vo
     });
     dashboard_install.step.dependOn(dashboard_build);
     b.getInstallStep().dependOn(&dashboard_install.step);
+}
+
+fn installDependencyPackage(
+    b: *std.Build,
+    name: []const u8,
+    dependency: *std.Build.Dependency,
+    files: []const []const u8,
+    directories: []const []const u8,
+) void {
+    for (files) |file| {
+        const destination = b.pathJoin(&.{ "share", name, file });
+        const install = b.addInstallFileWithDir(dependency.path(file), .prefix, destination);
+        b.getInstallStep().dependOn(&install.step);
+    }
+    for (directories) |directory| {
+        const install = b.addInstallDirectory(.{
+            .source_dir = dependency.path(directory),
+            .install_dir = .prefix,
+            .install_subdir = b.pathJoin(&.{ "share", name, directory }),
+        });
+        b.getInstallStep().dependOn(&install.step);
+    }
 }
 
 fn installPackage(

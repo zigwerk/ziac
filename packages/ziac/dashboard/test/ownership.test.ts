@@ -25,8 +25,12 @@ test("Ziac owns a standalone dashboard entry point and stylesheet", () => {
   expect(styles).toContain("display: grid");
 });
 
-test("ZigEffect Workbench has no Ziac dashboard routes or source imports", () => {
+test("ZigEffect Workbench is external or has no Ziac dashboard imports", () => {
   const workbenchRoot = resolve(repositoryRoot, "packages/zigeffect/workbench");
+  if (!existsSync(workbenchRoot)) {
+    expect(existsSync(resolve(repositoryRoot, "packages/ziac/dashboard"))).toBe(true);
+    return;
+  }
   const app = readFileSync(resolve(workbenchRoot, "src/App.tsx"), "utf8");
   const bridge = readFileSync(resolve(workbenchRoot, "src/workbenchBridge.ts"), "utf8");
 
@@ -46,4 +50,3 @@ test("the two dashboard source trees do not import one another", () => {
   expect(ziacSources).not.toContain("packages/zigeffect");
   expect(ziacSources).not.toContain("zigeffect/workbench");
 });
-

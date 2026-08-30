@@ -30,7 +30,7 @@ the embedded NenDB graph. Generated application code does not call causal APIs.
 Testing v2 alone may inject a controlled store, inspect semantic facts, and map
 assertion-local event IDs to durable graph IDs before handoff.
 See the canonical
-[runtime-owned causal application boundary](../../zigeffect/docs/runtime-owned-causal-applications.md).
+[runtime-owned causal application boundary](https://github.com/zigwerk/zigeffect/blob/v0.1.0/packages/zigeffect/docs/runtime-owned-causal-applications.md).
 
 Event-driven projects additionally generate a typed finite statechart and a
 durable `EventWorkflow` service. The process opens one crash-safe journal, the

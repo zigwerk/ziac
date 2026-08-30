@@ -11,7 +11,7 @@ forward plan lives in [`roadmap.md`](roadmap.md).
 
 ## Evidence Vocabulary
 
-- **Shipped** means the implementation is merged to `master` and covered by its
+- **Shipped** means the implementation is merged to `main` and covered by its
   deterministic package or product gates.
 - **Shipped, qualification required** means the implementation, safety guards
   and fail-closed runner are shipped, but authenticated external evidence has
